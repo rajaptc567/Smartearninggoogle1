@@ -712,13 +712,32 @@ export const createUserTask = async (req, res) => {
         const adminBudgetAllocatedUSD = isCreatedByAdmin ? totalAmountUSD : 0;
 
         // Idempotency / Request Key logic
-        const clientIdempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey || req.body.requestId || req.body.requestKey;
-        const finalIdempotencyKey = clientIdempotencyKey || null;
+        const rawClientIdempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey || req.body.requestId || req.body.requestKey;
+        const finalIdempotencyKey = typeof rawClientIdempotencyKey === 'string' ? rawClientIdempotencyKey.trim() : (rawClientIdempotencyKey || null);
 
         if (finalIdempotencyKey) {
             const existingTx = await Transaction.findOne({ idempotencyKey: finalIdempotencyKey });
             if (existingTx) {
+                // Verify that this is the expected campaign-creation transaction
+                const isExpectedType = existingTx.type === 'Campaign Creation';
+                const hasValidCampaign = Boolean(existingTx.campaignId);
+                const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - totalAmountUSD) < 0.001;
+                const userMatches = String(existingTx.userId) === String(user._id);
+
+                if (!isExpectedType || !hasValidCampaign || !amountMatches || !userMatches) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `Idempotency key collision detected for ${finalIdempotencyKey}: transaction type, amount, or campaign mismatch.`
+                    });
+                }
+
                 const existingTask = await UserTask.findById(existingTx.campaignId);
+                if (!existingTask) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `Idempotency key collision detected for ${finalIdempotencyKey}: referenced campaign not found.`
+                    });
+                }
                 const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
                 return res.status(200).json({ success: true, data: { task: existingTask, user, settings: latestSettings, transaction: existingTx } });
             }
@@ -770,7 +789,19 @@ export const createUserTask = async (req, res) => {
             if (finalIdempotencyKey) {
                 const existingTx = await Transaction.findOne({ idempotencyKey: finalIdempotencyKey }).session(session || null);
                 if (existingTx) {
+                    const isExpectedType = existingTx.type === 'Campaign Creation';
+                    const hasValidCampaign = Boolean(existingTx.campaignId);
+                    const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - totalAmountUSD) < 0.001;
+                    const userMatches = String(existingTx.userId) === String(user._id);
+
+                    if (!isExpectedType || !hasValidCampaign || !amountMatches || !userMatches) {
+                        return { collision: true, existingTransaction: existingTx };
+                    }
+
                     const existingTask = await UserTask.findById(existingTx.campaignId).session(session || null);
+                    if (!existingTask) {
+                        return { collision: true, existingTransaction: existingTx };
+                    }
                     return { alreadyExists: true, task: existingTask, transaction: existingTx };
                 }
             }
@@ -1037,6 +1068,31 @@ export const createUserTask = async (req, res) => {
             return { task, transaction: tx };
         });
 
+        if (txResult.collision) {
+            if (adminBudgetReserved && reservedAmountUSD > 0) {
+                try {
+                    const targetSettingId = settingId || (await Setting.getSettings())?._id;
+                    if (targetSettingId) {
+                        await Setting.findOneAndUpdate(
+                            { _id: targetSettingId },
+                            {
+                                $inc: { 'adminCampaignBudget.remainingBudgetUSD': reservedAmountUSD },
+                                $set: { dataVersion: Date.now() }
+                            },
+                            { new: true }
+                        );
+                    }
+                } catch (refundErr) {
+                    console.error('Failed compensating refund for collision campaign creation:', refundErr);
+                }
+                adminBudgetReserved = false;
+            }
+            return res.status(409).json({
+                success: false,
+                error: `Idempotency key collision detected for ${finalIdempotencyKey}: transaction type, amount, or campaign mismatch.`
+            });
+        }
+
         if (txResult.alreadyExists) {
             if (adminBudgetReserved && reservedAmountUSD > 0) {
                 try {
@@ -1174,7 +1230,25 @@ export const createUserTask = async (req, res) => {
         if (finalIdempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
             const existingTx = await Transaction.findOne({ idempotencyKey: finalIdempotencyKey });
             if (existingTx) {
+                const isExpectedType = existingTx.type === 'Campaign Creation';
+                const hasValidCampaign = Boolean(existingTx.campaignId);
+                const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - totalAmountUSD) < 0.001;
+                const userMatches = String(existingTx.userId) === String(user._id);
+
+                if (!isExpectedType || !hasValidCampaign || !amountMatches || !userMatches) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `Idempotency key collision detected for ${finalIdempotencyKey}: transaction type, amount, or campaign mismatch.`
+                    });
+                }
+
                 const existingTask = await UserTask.findById(existingTx.campaignId);
+                if (!existingTask) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `Idempotency key collision detected for ${finalIdempotencyKey}: referenced campaign not found.`
+                    });
+                }
                 const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
                 return res.status(200).json({
                     success: true,
@@ -4486,31 +4560,36 @@ export const addAdminCampaignFunds = async (req, res) => {
         }
         const fundAmountUSD = Number(amountNum.toFixed(2));
 
-        const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey;
-        const effectiveIdempotencyKey = idempotencyKey || `admin_fund_${task._id}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const rawIdempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey;
+        const idempotencyKey = typeof rawIdempotencyKey === 'string' ? rawIdempotencyKey.trim() : '';
 
-        if (idempotencyKey) {
-            const existingTx = await Transaction.findOne({ idempotencyKey });
-            if (existingTx) {
-                // Verify amount and campaign matches
-                const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - fundAmountUSD) < 0.001;
-                const campaignMatches = String(existingTx.campaignId) === String(task._id);
-                if (!amountMatches || !campaignMatches) {
-                    return res.status(409).json({
-                        success: false,
-                        error: `Idempotency key collision detected for ${idempotencyKey}: amount or campaign mismatch.`
-                    });
-                }
-                const freshTask = await UserTask.findById(taskId);
-                const currentSettings = await Setting.getSettings();
-                return res.status(200).json({
-                    success: true,
-                    message: 'Funding request already processed (idempotent).',
-                    task: freshTask,
-                    transaction: existingTx,
-                    settings: currentSettings
+        if (!idempotencyKey) {
+            return res.status(400).json({
+                success: false,
+                error: 'Please provide a valid Idempotency-Key header or idempotencyKey in request body.'
+            });
+        }
+
+        const existingTx = await Transaction.findOne({ idempotencyKey });
+        if (existingTx) {
+            // Verify amount and campaign matches
+            const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - fundAmountUSD) < 0.001;
+            const campaignMatches = String(existingTx.campaignId) === String(task._id);
+            if (!amountMatches || !campaignMatches) {
+                return res.status(409).json({
+                    success: false,
+                    error: `Idempotency key collision detected for ${idempotencyKey}: amount or campaign mismatch.`
                 });
             }
+            const freshTask = await UserTask.findById(taskId);
+            const currentSettings = await Setting.getSettings();
+            return res.status(200).json({
+                success: true,
+                message: 'Funding request already processed (idempotent).',
+                task: freshTask,
+                transaction: existingTx,
+                settings: currentSettings
+            });
         }
 
         const settings = await Setting.getSettings();
@@ -4587,7 +4666,7 @@ export const addAdminCampaignFunds = async (req, res) => {
             destinationWallet: 'CampaignEscrow',
             description: `Added $${fundAmountUSD.toFixed(2)} USD funding to campaign: "${task.title}"`,
             status: 'Approved',
-            idempotencyKey: effectiveIdempotencyKey
+            idempotencyKey: idempotencyKey
         });
 
         return res.status(200).json({
@@ -4626,9 +4705,17 @@ export const addAdminCampaignFunds = async (req, res) => {
                 console.error('CRITICAL: Failed compensating refund to Admin Campaign Budget in addAdminCampaignFunds:', refundErr);
             }
         }
-        if (effectiveIdempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
-            const existingTx = await Transaction.findOne({ idempotencyKey: effectiveIdempotencyKey });
+        if (idempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
+            const existingTx = await Transaction.findOne({ idempotencyKey });
             if (existingTx) {
+                const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - fundAmountUSD) < 0.001;
+                const campaignMatches = String(existingTx.campaignId) === String(task._id);
+                if (!amountMatches || !campaignMatches) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `Idempotency key collision detected for ${idempotencyKey}: amount or campaign mismatch.`
+                    });
+                }
                 const freshTask = await UserTask.findById(taskId);
                 const currentSettings = await Setting.getSettings();
                 return res.status(200).json({
