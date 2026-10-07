@@ -369,6 +369,8 @@ export const AdminSurveyTemplates: React.FC = () => {
             const isZeroReward = safeReward === 0;
             const totalBudget = isZeroReward ? 0 : Number((safeReward * campaignWorkersNeeded).toFixed(2));
 
+            const isMandatoryForAll = usingTemplate.requirementConfig?.mode === 'mandatory_all';
+
             const userTaskPayload = {
                 title: campaignTitle.trim(),
                 description: campaignDescription.trim(),
@@ -381,6 +383,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                 isSurvey: true,
                 isSurveyCampaign: true,
                 isAdminResearchSurvey: true,
+                isMandatoryForAllUsers: isMandatoryForAll,
                 sourceAdminSurveyTemplateId: usingTemplate._id,
                 publishNow: true,
                 surveyCategory: usingTemplate.category || 'General Opinion Poll',
@@ -1045,9 +1048,12 @@ export const AdminSurveyTemplates: React.FC = () => {
                     <div className="p-6 max-w-5xl max-h-[90vh] overflow-y-auto space-y-6">
                         <div className="flex items-start justify-between border-b dark:border-gray-700 pb-4">
                             <div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                                         Use Template Flow
+                                    </span>
+                                    <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                                        Requirement: {usingTemplate.requirementConfig?.mode === 'mandatory_all' ? 'Mandatory for All Users' : usingTemplate.requirementConfig?.mode === 'mandatory_before_withdrawal' ? 'Pre-Withdrawal' : 'Optional'}
                                     </span>
                                     <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
                                         Launch Survey Campaign: {usingTemplate.name}

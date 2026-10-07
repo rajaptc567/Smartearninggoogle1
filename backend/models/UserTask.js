@@ -184,6 +184,10 @@ const UserTaskSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    isMandatoryForAllUsers: {
+        type: Boolean,
+        default: false
+    },
     sourceAdminSurveyTemplateId: {
         type: mongoose.Schema.ObjectId,
         ref: 'AdminSurveyTemplate',

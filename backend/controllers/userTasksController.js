@@ -163,6 +163,7 @@ const toWorkerSafeUserTask = (task) => {
         'surveyConfig',
         'surveyVersion',
         'isAdminResearchSurvey',
+        'isMandatoryForAllUsers',
         'sourceAdminSurveyTemplateId',
         'createdAt',
         'updatedAt',
@@ -269,11 +270,19 @@ export const getUserTasks = async (req, res) => {
 
         const tasks = await UserTask.find().sort({ createdAt: -1 }).lean();
 
+        // Check if worker tasks can be retrieved (either via normal Hub access or via mandatory-all Admin Surveys)
+        const hasMandatoryAllSurveys = tasks.some(t => Boolean(t.isAdminResearchSurvey && t.isMandatoryForAllUsers));
+        const shouldEvaluateWorkerTasks = (isHubAccessible && isTasksEnabled) || hasMandatoryAllSurveys;
+
         // E1: Preload worker submissions for tasks referenced in completionRules or surveyAnswerRules (N+1 protection)
         let workerSubmissions = [];
-        if (isHubAccessible && isTasksEnabled) {
+        if (shouldEvaluateWorkerTasks) {
             const referencedTaskIdsSet = new Set();
             for (const task of tasks) {
+                const isMandatoryAllAdminSurvey = Boolean(task.isAdminResearchSurvey && task.isMandatoryForAllUsers);
+                const isWorkerCandidate = isMandatoryAllAdminSurvey || (isHubAccessible && isTasksEnabled);
+                if (!isWorkerCandidate) continue;
+
                 const t = task.targeting;
                 if (t) {
                     if (Array.isArray(t.completionRules)) {
@@ -305,13 +314,18 @@ export const getUserTasks = async (req, res) => {
             if (isOwner) {
                 // Return full task for campaign owner
                 filteredTasks.push(task);
-            } else if (isHubAccessible && isTasksEnabled) {
-                const isLiveStatus = task.status === 'Approved' || task.status === 'Paid' || task.status === 'Active';
-                const hasAvailableSlots = (task.currentCompletions || 0) < (task.targetQuantity || 0);
+            } else {
+                const isMandatoryAllAdminSurvey = Boolean(task.isAdminResearchSurvey && task.isMandatoryForAllUsers);
+                const isWorkerAllowed = isMandatoryAllAdminSurvey || (isHubAccessible && isTasksEnabled);
 
-                if (isLiveStatus && hasAvailableSlots && isUserEligibleForUserTask(user, task, eligibilityContext)) {
-                    // Return sanitized worker-safe task for eligible non-owner
-                    filteredTasks.push(toWorkerSafeUserTask(task));
+                if (isWorkerAllowed) {
+                    const isLiveStatus = task.status === 'Approved' || task.status === 'Paid' || task.status === 'Active';
+                    const hasAvailableSlots = (task.currentCompletions || 0) < (task.targetQuantity || 0);
+
+                    if (isLiveStatus && hasAvailableSlots && isUserEligibleForUserTask(user, task, eligibilityContext)) {
+                        // Return sanitized worker-safe task for eligible non-owner
+                        filteredTasks.push(toWorkerSafeUserTask(task));
+                    }
                 }
             }
         }
@@ -340,8 +354,9 @@ export const createUserTask = async (req, res) => {
         } = req.body;
 
         const isCreatedByAdmin = Boolean(req.user && isUserAdmin(req.user));
-        // Server-side authoritative flag: A non-admin user can NEVER set isAdminResearchSurvey
+        // Server-side authoritative flag: A non-admin user can NEVER set isAdminResearchSurvey or isMandatoryForAllUsers
         const isAdminResearchSurvey = Boolean(isCreatedByAdmin && (req.body.isAdminResearchSurvey === true || req.body.sourceAdminSurveyTemplateId));
+        const isMandatoryForAllUsers = Boolean(isAdminResearchSurvey && req.body.isMandatoryForAllUsers === true);
         const sourceAdminSurveyTemplateId = (isAdminResearchSurvey && req.body.sourceAdminSurveyTemplateId) 
             ? req.body.sourceAdminSurveyTemplateId 
             : null;
@@ -805,6 +820,7 @@ export const createUserTask = async (req, res) => {
                 surveyConfig: isSurveyTask ? surveyConfig : null,
                 surveyVersion: effectiveSurveyVersion,
                 isAdminResearchSurvey: Boolean(isAdminResearchSurvey),
+                isMandatoryForAllUsers: Boolean(isMandatoryForAllUsers),
                 sourceAdminSurveyTemplateId: sourceAdminSurveyTemplateId || null,
                 targeting: normalizedTargeting,
                 status: initialStatus,

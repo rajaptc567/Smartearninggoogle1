@@ -826,6 +826,7 @@ export interface UserTask {
     surveyConfig?: SurveyConfig;
     surveyVersion?: number;
     isAdminResearchSurvey?: boolean;
+    isMandatoryForAllUsers?: boolean;
     sourceAdminSurveyTemplateId?: string;
     targeting?: {
         countries?: string[];
