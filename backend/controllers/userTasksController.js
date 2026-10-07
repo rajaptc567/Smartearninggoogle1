@@ -4572,13 +4572,16 @@ export const addAdminCampaignFunds = async (req, res) => {
 
         const existingTx = await Transaction.findOne({ idempotencyKey });
         if (existingTx) {
-            // Verify amount and campaign matches
-            const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - fundAmountUSD) < 0.001;
+            const typeMatches = existingTx.type === 'Admin Campaign Funding';
             const campaignMatches = String(existingTx.campaignId) === String(task._id);
-            if (!amountMatches || !campaignMatches) {
+            const userMatches = String(existingTx.userId) === String(req.user._id || req.user.id);
+            const txAmount = Number(existingTx.amountUSD != null ? existingTx.amountUSD : existingTx.amount);
+            const amountMatches = !isNaN(txAmount) && Math.abs(txAmount - fundAmountUSD) < 0.001;
+
+            if (!typeMatches || !campaignMatches || !userMatches || !amountMatches) {
                 return res.status(409).json({
                     success: false,
-                    error: `Idempotency key collision detected for ${idempotencyKey}: amount or campaign mismatch.`
+                    error: `Idempotency key collision detected for ${idempotencyKey}: type, campaign, user, or amount mismatch.`
                 });
             }
             const freshTask = await UserTask.findById(taskId);
@@ -4708,12 +4711,17 @@ export const addAdminCampaignFunds = async (req, res) => {
         if (idempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
             const existingTx = await Transaction.findOne({ idempotencyKey });
             if (existingTx) {
-                const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - fundAmountUSD) < 0.001;
-                const campaignMatches = String(existingTx.campaignId) === String(task._id);
-                if (!amountMatches || !campaignMatches) {
+                const currentCampaignId = (task && task._id) ? String(task._id) : String(req.params.id);
+                const typeMatches = existingTx.type === 'Admin Campaign Funding';
+                const campaignMatches = String(existingTx.campaignId) === currentCampaignId;
+                const userMatches = String(existingTx.userId) === String(req.user._id || req.user.id);
+                const txAmount = Number(existingTx.amountUSD != null ? existingTx.amountUSD : existingTx.amount);
+                const amountMatches = !isNaN(txAmount) && Math.abs(txAmount - fundAmountUSD) < 0.001;
+
+                if (!typeMatches || !campaignMatches || !userMatches || !amountMatches) {
                     return res.status(409).json({
                         success: false,
-                        error: `Idempotency key collision detected for ${idempotencyKey}: amount or campaign mismatch.`
+                        error: `Idempotency key collision detected for ${idempotencyKey}: type, campaign, user, or amount mismatch.`
                     });
                 }
                 const freshTask = await UserTask.findById(taskId);
