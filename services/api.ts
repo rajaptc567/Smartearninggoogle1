@@ -706,7 +706,11 @@ export const addAdminCampaignFunds = async (id: string, amount: number, idempote
         body: JSON.stringify({ amount, idempotencyKey }),
     });
     const result = await handleResponse(response);
-    return result.data;
+    return {
+        task: result.task || result.data?.task,
+        transaction: result.transaction || result.data?.transaction,
+        settings: result.settings || result.data?.settings
+    };
 };
 
 export const resumeAdminCampaign = async (id: string): Promise<{ task: UserTask }> => {
@@ -715,7 +719,9 @@ export const resumeAdminCampaign = async (id: string): Promise<{ task: UserTask 
         headers: getHeaders(),
     });
     const result = await handleResponse(response);
-    return result.data;
+    return {
+        task: result.task || result.data?.task || result.data
+    };
 };
 
 export const pauseAdminCampaign = async (id: string): Promise<{ task: UserTask }> => {
@@ -724,7 +730,9 @@ export const pauseAdminCampaign = async (id: string): Promise<{ task: UserTask }
         headers: getHeaders(),
     });
     const result = await handleResponse(response);
-    return result.data;
+    return {
+        task: result.task || result.data?.task || result.data
+    };
 };
 
 export const getUserTaskSubmissions = async (): Promise<any[]> => {

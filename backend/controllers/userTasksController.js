@@ -166,7 +166,6 @@ const toWorkerSafeUserTask = (task) => {
         'isMandatoryForAllUsers',
         'isUnlimitedResponses',
         'campaignFundingStatus',
-        'campaignAvailableBalanceUSD',
         'sourceAdminSurveyTemplateId',
         'createdAt',
         'updatedAt',
@@ -716,10 +715,55 @@ export const createUserTask = async (req, res) => {
         const clientIdempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey || req.body.requestId || req.body.requestKey;
         const finalIdempotencyKey = clientIdempotencyKey || null;
 
+        if (finalIdempotencyKey) {
+            const existingTx = await Transaction.findOne({ idempotencyKey: finalIdempotencyKey });
+            if (existingTx) {
+                const existingTask = await UserTask.findById(existingTx.campaignId);
+                const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
+                return res.status(200).json({ success: true, data: { task: existingTask, user, settings: latestSettings, transaction: existingTx } });
+            }
+        }
+
         let createdTask = null;
         let createdTransaction = null;
         let adminBudgetReserved = false;
         let reservedAmountUSD = 0;
+
+        if (isCreatedByAdmin) {
+            if (totalAmountUSD > 0) {
+                // Atomic conditional update on Setting: only succeeds if budget is enabled AND remainingBudgetUSD >= totalAmountUSD (NEVER with Mongo session)
+                const updatedSetting = await Setting.findOneAndUpdate(
+                    {
+                        _id: settings._id,
+                        'adminCampaignBudget.enabled': true,
+                        'adminCampaignBudget.remainingBudgetUSD': { $gte: totalAmountUSD }
+                    },
+                    {
+                        $inc: { 'adminCampaignBudget.remainingBudgetUSD': -totalAmountUSD },
+                        $set: { dataVersion: Date.now() }
+                    },
+                    { new: true }
+                );
+
+                if (!updatedSetting) {
+                    const currentSetting = await Setting.getSettings();
+                    if (!currentSetting.adminCampaignBudget?.enabled) {
+                        return res.status(400).json({ success: false, error: 'Admin Campaign Budget is currently disabled in System Settings.' });
+                    }
+                    const availableBudget = Number((currentSetting.adminCampaignBudget?.remainingBudgetUSD || 0).toFixed(2));
+                    return res.status(400).json({
+                        success: false,
+                        error: `Insufficient Admin Campaign Budget. Required: $${totalAmountUSD.toFixed(2)} USD, Available: $${availableBudget.toFixed(2)} USD.`
+                    });
+                }
+
+                adminBudgetReserved = true;
+                reservedAmountUSD = totalAmountUSD;
+            } else {
+                adminBudgetReserved = false;
+                reservedAmountUSD = 0;
+            }
+        }
 
         const txResult = await executeWithOptionalTransaction(async (session) => {
             // Step 1: Idempotency check inside transaction (only if key is provided by client)
@@ -736,38 +780,7 @@ export const createUserTask = async (req, res) => {
             let sourceFromRefunds = 0;
             let deductedFromTaskWallet = false;
 
-            if (isCreatedByAdmin) {
-                if (totalAmountUSD > 0) {
-                    // Atomic conditional update on Setting: only succeeds if budget is enabled AND remainingBudgetUSD >= totalAmountUSD
-                    const updatedSetting = await Setting.findOneAndUpdate(
-                        {
-                            _id: settings._id,
-                            'adminCampaignBudget.enabled': true,
-                            'adminCampaignBudget.remainingBudgetUSD': { $gte: totalAmountUSD }
-                        },
-                        {
-                            $inc: { 'adminCampaignBudget.remainingBudgetUSD': -totalAmountUSD },
-                            $set: { dataVersion: Date.now() }
-                        },
-                        { new: true, ...(session ? { session } : {}) }
-                    );
-
-                    if (!updatedSetting) {
-                        const currentSetting = await Setting.getSettings();
-                        if (!currentSetting.adminCampaignBudget?.enabled) {
-                            throw new Error('Admin Campaign Budget is currently disabled in System Settings.');
-                        }
-                        const availableBudget = Number((currentSetting.adminCampaignBudget?.remainingBudgetUSD || 0).toFixed(2));
-                        throw new Error(`Insufficient Admin Campaign Budget. Required: $${totalAmountUSD.toFixed(2)} USD, Available: $${availableBudget.toFixed(2)} USD.`);
-                    }
-
-                    adminBudgetReserved = true;
-                    reservedAmountUSD = totalAmountUSD;
-                } else {
-                    adminBudgetReserved = false;
-                    reservedAmountUSD = 0;
-                }
-            } else {
+            if (!isCreatedByAdmin) {
                 // Re-fetch user in transaction to ensure balance is strictly accurate and locked
                 const userInTx = await User.findById(user._id).session(session || null);
                 if (!userInTx) {
@@ -1424,7 +1437,7 @@ export const updateUserTaskStatus = async (req, res) => {
                                 $addToSet: { 'adminCampaignBudget.processedRefundKeys': refundKey },
                                 $set: { dataVersion: Date.now() }
                             },
-                            { new: true, ...(session ? { session } : {}) }
+                            { new: true }
                         );
 
                         await UserTask.updateOne(
@@ -2005,7 +2018,7 @@ export const deleteUserTask = async (req, res) => {
                                 $addToSet: { 'adminCampaignBudget.processedRefundKeys': refundKey },
                                 $set: { dataVersion: Date.now() }
                             },
-                            { new: true, ...(session ? { session } : {}) }
+                            { new: true }
                         );
 
                         // Durably mark budget_refunded
@@ -3009,7 +3022,8 @@ export const submitUserTaskProof = async (req, res) => {
                             sourceWallet: 'CampaignEscrow',
                             destinationWallet: 'TaskEarnings',
                             description: `Earned reward for completing survey: "${task.title}"`,
-                            status: 'Approved'
+                            status: 'Approved',
+                            idempotencyKey: `survey_reward_${submission._id}`
                         });
                         submission.rewardTransactionId = tx._id;
                         await submission.save();
@@ -3312,7 +3326,8 @@ export const updateSubmissionStatus = async (req, res) => {
                                 description: `Completed User Task: ${targetSubmission.taskTitle || 'Engagement Task'}`,
                                 status: 'Approved',
                                 submissionId: targetSubmission._id,
-                                campaignId: targetSubmission.taskId
+                                campaignId: targetSubmission.taskId,
+                                idempotencyKey: `task_reward_${targetSubmission._id}`
                             });
                             targetSubmission.rewardTransactionId = tx._id;
                             await targetSubmission.save();
@@ -4403,12 +4418,20 @@ export const getSurveyCampaignAnalytics = async (req, res) => {
 };
 
 export const addAdminCampaignFunds = async (req, res) => {
+    let settingDeducted = false;
+    let deductedAmountUSD = 0;
+    let taskCredited = false;
+    let targetSettingId = null;
     try {
         if (!req.user || !isUserAdmin(req.user)) {
             return res.status(403).json({ success: false, error: 'Administrative authorization required to add campaign funds.' });
         }
 
         const taskId = req.params.id;
+        if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+            return res.status(400).json({ success: false, error: 'Invalid campaign ID.' });
+        }
+
         const task = await UserTask.findById(taskId);
         if (!task) {
             return res.status(404).json({ success: false, error: 'Task campaign not found.' });
@@ -4429,8 +4452,9 @@ export const addAdminCampaignFunds = async (req, res) => {
         }
 
         const settings = await Setting.getSettings();
+        targetSettingId = settings?._id;
 
-        // Atomically deduct from Admin Campaign Budget in Setting
+        // Atomically deduct from Admin Campaign Budget in Setting (no Mongo session to preserve capped collection safety)
         const updatedSetting = await Setting.findOneAndUpdate(
             {
                 _id: settings._id,
@@ -4456,7 +4480,10 @@ export const addAdminCampaignFunds = async (req, res) => {
             });
         }
 
-        // Atomically add funds to UserTask
+        settingDeducted = true;
+        deductedAmountUSD = fundAmountUSD;
+
+        // Atomically add funds to the SAME UserTask without creating a new campaign or resetting completedUsers
         const updateFields = {
             $inc: {
                 campaignAvailableBalanceUSD: fundAmountUSD,
@@ -4473,7 +4500,7 @@ export const addAdminCampaignFunds = async (req, res) => {
                     previousStatus: task.status,
                     newStatus: task.status,
                     timestamp: new Date(),
-                    performedBy: req.user.username || req.user.id,
+                    performedBy: req.user.username || req.user.id || 'Admin',
                     details: `Added $${fundAmountUSD.toFixed(2)} USD funding from Admin Campaign Budget.`
                 }
             }
@@ -4484,6 +4511,7 @@ export const addAdminCampaignFunds = async (req, res) => {
         }
 
         const updatedTask = await UserTask.findByIdAndUpdate(taskId, updateFields, { new: true });
+        taskCredited = true;
 
         const tx = await Transaction.create({
             userId: req.user._id,
@@ -4508,7 +4536,34 @@ export const addAdminCampaignFunds = async (req, res) => {
             settings: updatedSetting
         });
     } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
+        if (taskCredited && deductedAmountUSD > 0) {
+            try {
+                await UserTask.findByIdAndUpdate(req.params.id, {
+                    $inc: {
+                        campaignAvailableBalanceUSD: -deductedAmountUSD,
+                        campaignTotalFundedUSD: -deductedAmountUSD,
+                        adminBudgetAllocatedUSD: -deductedAmountUSD,
+                        totalBudget: -deductedAmountUSD
+                    }
+                });
+            } catch (revertTaskErr) {
+                console.error('Failed to revert task credit on error in addAdminCampaignFunds:', revertTaskErr);
+            }
+        }
+        if (settingDeducted && deductedAmountUSD > 0 && targetSettingId) {
+            try {
+                await Setting.findOneAndUpdate(
+                    { _id: targetSettingId },
+                    {
+                        $inc: { 'adminCampaignBudget.remainingBudgetUSD': deductedAmountUSD },
+                        $set: { dataVersion: Date.now() }
+                    }
+                );
+            } catch (refundErr) {
+                console.error('CRITICAL: Failed compensating refund to Admin Campaign Budget in addAdminCampaignFunds:', refundErr);
+            }
+        }
+        return res.status(400).json({ success: false, error: err.message });
     }
 };
 
