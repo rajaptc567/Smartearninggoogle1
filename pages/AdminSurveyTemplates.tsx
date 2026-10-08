@@ -482,6 +482,14 @@ export const AdminSurveyTemplates: React.FC = () => {
                     title: campaignTitle.trim(),
                     description: campaignDescription.trim()
                 },
+                requiredProofs: [
+                    {
+                        type: 'text',
+                        label: 'Survey Completion Confirmation',
+                        instruction: 'Complete the integrated survey questionnaire. Answers are recorded automatically.',
+                        required: true
+                    }
+                ],
                 proofRequirements: [
                     {
                         type: 'text',

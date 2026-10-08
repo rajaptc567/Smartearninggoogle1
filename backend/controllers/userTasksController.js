@@ -525,7 +525,7 @@ export const createUserTask = async (req, res) => {
 
         const isSurveyGloballyEnabled = settings.surveyCampaignsEnabled !== false && 
                                         settings.taskCategoryPresets?.survey?.enabled !== false;
-        if (isSurveyTask && !isSurveyGloballyEnabled) {
+        if (isSurveyTask && !isAdminResearchSurvey && !isSurveyGloballyEnabled) {
             return res.status(400).json({ success: false, error: 'Survey campaigns are currently disabled by administrator.' });
         }
 
@@ -536,7 +536,7 @@ export const createUserTask = async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Survey campaigns require at least one question in surveyConfig.' });
             }
 
-            // Backend cycle detection, max 4 options enforcement, and check question integrity validation
+            // Backend cycle detection, max options enforcement, and check question integrity validation
             const questionIds = new Set(surveyConfig.questions.map(q => q.id));
             for (let i = 0; i < surveyConfig.questions.length; i++) {
                 const q = surveyConfig.questions[i];
@@ -544,8 +544,10 @@ export const createUserTask = async (req, res) => {
                     return res.status(400).json({ success: false, error: `Survey question at position ${i + 1} must have an id and title.` });
                 }
 
-                // Enforce maximum answer options (default 10)
-                const maxOptionsAllowed = settings.surveyConfig?.maxOptionsPerQuestion || 10;
+                // Enforce maximum answer options (default 10 for standard users, up to 30 for authorized admin research surveys)
+                const maxOptionsAllowed = isAdminResearchSurvey
+                    ? (settings.surveyConfig?.maxAdminOptionsPerQuestion || 30)
+                    : (settings.surveyConfig?.maxOptionsPerQuestion || 10);
                 if (['single_choice', 'multiple_choice', 'dropdown'].includes(q.type)) {
                     if (Array.isArray(q.options) && q.options.length > maxOptionsAllowed) {
                         return res.status(400).json({ 
@@ -600,7 +602,7 @@ export const createUserTask = async (req, res) => {
         }
 
         const presets = settings.taskCategoryPresets;
-        if (presets) {
+        if (presets && !isAdminResearchSurvey) {
             const catLower = category.toLowerCase();
             const platKey = catLower === 'website' ? 'paidSignUp' : catLower;
             const platformConfig = presets[platKey];
@@ -1014,7 +1016,9 @@ export const createUserTask = async (req, res) => {
                 emailInstruction: emailInstruction || '',
                 requireScreenshot: requireScreenshot !== undefined ? Boolean(requireScreenshot) : !isSurveyTask,
                 screenshotInstruction: screenshotInstruction || (isSurveyTask ? 'Survey responses recorded automatically.' : 'Please upload screenshot proof of completion.'),
-                requiredProofs: requiredProofs || [],
+                requiredProofs: (Array.isArray(requiredProofs) && requiredProofs.length > 0)
+                    ? requiredProofs
+                    : (Array.isArray(req.body.proofRequirements) ? req.body.proofRequirements : []),
                 isSurvey: isSurveyTask,
                 surveyEstimatedMinutes: isSurveyTask ? (Number(req.body.surveyEstimatedMinutes || surveyConfig?.estimatedTimeMinutes) || 5) : 5,
                 surveyQuestionsCount: isSurveyTask ? (Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : (Number(req.body.surveyQuestionsCount) || 0)) : 0,
