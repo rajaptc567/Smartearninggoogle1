@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../hooks/useData';
-import { AdminSurveyTemplate, formatCurrency } from '../types';
+import { AdminSurveyTemplate, formatCurrency, User } from '../types';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
@@ -20,7 +20,8 @@ import {
     updateSettings,
     addAdminCampaignFunds,
     resumeAdminCampaign,
-    pauseAdminCampaign
+    pauseAdminCampaign,
+    getUsers
 } from '../services/api';
 import {
     FileText,
@@ -88,7 +89,7 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [formRewardMode, setFormRewardMode] = useState<'no_reward' | 'fixed' | 'custom'>('no_reward');
     const [formRewardAmount, setFormRewardAmount] = useState<number>(0);
     const [formRewardCurrency, setFormRewardCurrency] = useState<string>('USD');
-    const [formRequirementMode, setFormRequirementMode] = useState<'optional' | 'mandatory_all' | 'mandatory_before_withdrawal'>('optional');
+    const [formRequirementMode, setFormRequirementMode] = useState<'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal'>('optional');
     const [formRecompletionPolicy, setFormRecompletionPolicy] = useState<'never' | 'on_version_change' | 'every_x_days'>('never');
     const [formRecompletionDays, setFormRecompletionDays] = useState<number>(30);
     const [formSurveyConfig, setFormSurveyConfig] = useState<SurveyConfigData>({
@@ -104,7 +105,8 @@ export const AdminSurveyTemplates: React.FC = () => {
     // Form state for "Use Template" (Direct Survey Campaign Launcher)
     const [campaignTitle, setCampaignTitle] = useState<string>('');
     const [campaignDescription, setCampaignDescription] = useState<string>('');
-    const [launchAudienceMode, setLaunchAudienceMode] = useState<'all' | 'selected' | 'advanced'>('all');
+    const [launchRequirementMode, setLaunchRequirementMode] = useState<'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal'>('optional');
+    const [launchAudienceMode, setLaunchAudienceMode] = useState<'all' | 'selected' | 'active' | 'inactive' | 'advanced'>('all');
     const [launchSelectedUserIds, setLaunchSelectedUserIds] = useState<string>('');
     const [launchCountries, setLaunchCountries] = useState<string>('');
     const [launchCurrencies, setLaunchCurrencies] = useState<string>('');
@@ -113,7 +115,12 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [launchMaxAge, setLaunchMaxAge] = useState<string>('');
     const [launchAccountStatus, setLaunchAccountStatus] = useState<'any' | 'active' | 'inactive'>('any');
 
-    const [launchRequirementMode, setLaunchRequirementMode] = useState<'optional' | 'mandatory_all' | 'mandatory_before_withdrawal'>('optional');
+    // Searchable User Selector State
+    const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+    const [userSearchQuery, setUserSearchQuery] = useState<string>('');
+    const [showUserDropdown, setShowUserDropdown] = useState<boolean>(false);
+    const [showManualIdInput, setShowManualIdInput] = useState<boolean>(false);
+
     const [launchResponseLimitMode, setLaunchResponseLimitMode] = useState<'unlimited' | 'limited'>('unlimited');
     const [campaignWorkersNeeded, setCampaignWorkersNeeded] = useState<number>(50);
     const [campaignRewardPerTask, setCampaignRewardPerTask] = useState<number>(0.25);
@@ -150,6 +157,77 @@ export const AdminSurveyTemplates: React.FC = () => {
     useEffect(() => {
         fetchTemplates();
     }, []);
+
+    // Sync available platform workers for searchable user selector
+    useEffect(() => {
+        if (state.users && state.users.length > 0) {
+            setAvailableUsers(state.users);
+        } else {
+            getUsers().then(u => {
+                if (Array.isArray(u)) setAvailableUsers(u);
+            }).catch(() => {});
+        }
+    }, [state.users]);
+
+    // Parse selected user IDs list
+    const selectedUserIdsList = useMemo(() => {
+        return launchSelectedUserIds
+            .split(/[\n,]+/)
+            .map(s => s.trim())
+            .filter(Boolean);
+    }, [launchSelectedUserIds]);
+
+    // Map of user ID to User document for fast chip lookup
+    const userMap = useMemo(() => {
+        const map = new Map<string, User>();
+        for (const u of availableUsers) {
+            if (u._id) map.set(String(u._id), u);
+            if ((u as any).id) map.set(String((u as any).id), u);
+        }
+        return map;
+    }, [availableUsers]);
+
+    // Filter available users for searchable dropdown
+    const filteredUsers = useMemo(() => {
+        if (!userSearchQuery.trim()) {
+            return availableUsers.slice(0, 8);
+        }
+        const q = userSearchQuery.toLowerCase();
+        return availableUsers
+            .filter(u => 
+                u.username?.toLowerCase().includes(q) ||
+                u.fullName?.toLowerCase().includes(q) ||
+                u.email?.toLowerCase().includes(q) ||
+                String(u._id).includes(q)
+            )
+            .slice(0, 15);
+    }, [availableUsers, userSearchQuery]);
+
+    // Toggle user selection
+    const toggleSelectUser = (user: User) => {
+        const id = String(user._id || (user as any).id);
+        const currentList = launchSelectedUserIds
+            .split(/[\n,]+/)
+            .map(s => s.trim())
+            .filter(Boolean);
+        let updated: string[];
+        if (currentList.includes(id)) {
+            updated = currentList.filter(uId => uId !== id);
+        } else {
+            updated = [...currentList, id];
+        }
+        setLaunchSelectedUserIds(updated.join(', '));
+    };
+
+    // Remove single user ID
+    const removeSelectedUserId = (id: string) => {
+        const currentList = launchSelectedUserIds
+            .split(/[\n,]+/)
+            .map(s => s.trim())
+            .filter(Boolean);
+        const updated = currentList.filter(uId => uId !== id);
+        setLaunchSelectedUserIds(updated.join(', '));
+    };
 
     // Auto-clear success message
     useEffect(() => {
@@ -370,21 +448,41 @@ export const AdminSurveyTemplates: React.FC = () => {
         const isFree = template.rewardConfig?.mode === 'no_reward';
         const initialReward = isFree ? 0 : (template.rewardConfig?.amount !== undefined && Number.isFinite(Number(template.rewardConfig.amount)) ? Number(template.rewardConfig.amount) : 0.25);
         setCampaignRewardPerTask(initialReward);
-        const reqMode = template.requirementConfig?.mode || 'optional';
+        const reqMode = (template.requirementConfig?.mode || 'optional') as any;
         setLaunchRequirementMode(reqMode);
         setSetAsMandatoryWithdrawal(reqMode === 'mandatory_before_withdrawal');
         setLaunchResponseLimitMode('unlimited');
         setCampaignWorkersNeeded(50);
         setCampaignInitialFundingUSD(initialReward > 0 ? Number((initialReward * 50).toFixed(2)) : 0);
         setCampaignLowBalanceThreshold(10);
-        setLaunchAudienceMode('all');
-        setLaunchSelectedUserIds('');
-        setLaunchCountries('');
-        setLaunchCurrencies('');
-        setLaunchGenders('');
-        setLaunchMinAge('');
-        setLaunchMaxAge('');
-        setLaunchAccountStatus('any');
+        
+        const tmplTargeting = (template as any).targeting;
+        if (reqMode === 'mandatory_all') {
+            setLaunchAudienceMode('all');
+        } else if (reqMode === 'mandatory_targeted') {
+            if (tmplTargeting?.accountStatus === 'active') {
+                setLaunchAudienceMode('active');
+            } else if (tmplTargeting?.accountStatus === 'inactive') {
+                setLaunchAudienceMode('inactive');
+            } else if (Array.isArray(tmplTargeting?.selectedUserIds) && tmplTargeting.selectedUserIds.length > 0) {
+                setLaunchAudienceMode('selected');
+            } else {
+                setLaunchAudienceMode('advanced');
+            }
+        } else {
+            setLaunchAudienceMode('all');
+        }
+
+        setLaunchSelectedUserIds(Array.isArray(tmplTargeting?.selectedUserIds) ? tmplTargeting.selectedUserIds.join(', ') : '');
+        setLaunchCountries(Array.isArray(tmplTargeting?.countries) ? tmplTargeting.countries.join(', ') : '');
+        setLaunchCurrencies(Array.isArray(tmplTargeting?.currencies) ? tmplTargeting.currencies.join(', ') : '');
+        setLaunchGenders(Array.isArray(tmplTargeting?.genders) ? tmplTargeting.genders.join(', ') : '');
+        setLaunchMinAge(tmplTargeting?.minAge !== null && tmplTargeting?.minAge !== undefined ? String(tmplTargeting.minAge) : '');
+        setLaunchMaxAge(tmplTargeting?.maxAge !== null && tmplTargeting?.maxAge !== undefined ? String(tmplTargeting.maxAge) : '');
+        setLaunchAccountStatus(tmplTargeting?.accountStatus || 'any');
+        setUserSearchQuery('');
+        setShowUserDropdown(false);
+        setShowManualIdInput(false);
         setCampaignSurveyConfig(template.surveyConfig ? JSON.parse(JSON.stringify(template.surveyConfig)) : { questions: [], sections: [] });
     };
 
@@ -432,25 +530,64 @@ export const AdminSurveyTemplates: React.FC = () => {
         setIsLaunchingCampaign(true);
         try {
             const isMandatoryForAll = launchRequirementMode === 'mandatory_all';
-            const isMandatoryWithdrawal = launchRequirementMode === 'mandatory_before_withdrawal' || setAsMandatoryWithdrawal;
+            const isMandatoryTargeted = launchRequirementMode === 'mandatory_targeted';
+            const isMandatoryWithdrawal = launchRequirementMode === 'mandatory_before_withdrawal';
 
             // Build targeting payload
             let targetingPayload: any = undefined;
-            if (launchAudienceMode === 'selected') {
+            if (isMandatoryForAll) {
+                // Mandatory for All: applies dynamically to all eligible platform workers (never static snapshot)
+                targetingPayload = undefined;
+            } else if (launchAudienceMode === 'selected') {
                 const selectedIds = launchSelectedUserIds
                     .split(/[\n,]+/)
                     .map(s => s.trim())
                     .filter(Boolean);
+                if (isMandatoryTargeted && selectedIds.length === 0) {
+                    alert('Mandatory for Targeted Users requires selecting at least one user.');
+                    setIsLaunchingCampaign(false);
+                    return;
+                }
                 targetingPayload = { selectedUserIds: selectedIds };
+            } else if (launchAudienceMode === 'active') {
+                targetingPayload = { accountStatus: 'active' };
+            } else if (launchAudienceMode === 'inactive') {
+                targetingPayload = { accountStatus: 'inactive' };
             } else if (launchAudienceMode === 'advanced') {
+                const tmplTargeting = (usingTemplate as any).targeting || {};
                 targetingPayload = {
                     countries: launchCountries ? launchCountries.split(',').map(s => s.trim()).filter(Boolean) : [],
                     currencies: launchCurrencies ? launchCurrencies.split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : [],
                     genders: launchGenders ? launchGenders.split(',').map(s => s.trim()).filter(Boolean) : [],
                     minAge: launchMinAge === '' ? null : Number(launchMinAge),
                     maxAge: launchMaxAge === '' ? null : Number(launchMaxAge),
-                    accountStatus: launchAccountStatus
+                    accountStatus: launchAccountStatus,
+                    completionRules: tmplTargeting.completionRules || [],
+                    profileRules: tmplTargeting.profileRules || [],
+                    surveyAnswerRules: tmplTargeting.surveyAnswerRules || []
                 };
+
+                if (isMandatoryTargeted) {
+                    const hasRule = 
+                        targetingPayload.countries.length > 0 ||
+                        targetingPayload.currencies.length > 0 ||
+                        targetingPayload.genders.length > 0 ||
+                        targetingPayload.minAge !== null ||
+                        targetingPayload.maxAge !== null ||
+                        targetingPayload.accountStatus === 'active' ||
+                        targetingPayload.accountStatus === 'inactive' ||
+                        (targetingPayload.completionRules && targetingPayload.completionRules.length > 0) ||
+                        (targetingPayload.profileRules && targetingPayload.profileRules.length > 0) ||
+                        (targetingPayload.surveyAnswerRules && targetingPayload.surveyAnswerRules.length > 0);
+                    if (!hasRule) {
+                        alert('Mandatory for Targeted Users requires at least one targeting rule (e.g. country, account status, age range, etc.).');
+                        setIsLaunchingCampaign(false);
+                        return;
+                    }
+                }
+            } else {
+                // 'all'
+                targetingPayload = undefined;
             }
 
             const userTaskPayload = {
@@ -469,6 +606,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                 isSurvey: true,
                 isSurveyCampaign: true,
                 isAdminResearchSurvey: true,
+                requirementMode: launchRequirementMode,
                 isMandatoryForAllUsers: isMandatoryForAll,
                 sourceAdminSurveyTemplateId: usingTemplate._id,
                 publishNow: true,
@@ -541,6 +679,10 @@ export const AdminSurveyTemplates: React.FC = () => {
                     alert(`Survey was created successfully, but the Mandatory Withdrawal Requirement could not be activated (${mandatoryErrorMessage || 'Settings save failed'}). Please configure it manually from Task Settings.`);
                     setSuccessMessage(`Survey campaign "${campaignTitle}" created successfully. (Notice: Mandatory Withdrawal activation failed. Configure manually from Task Settings.)`);
                 }
+            } else if (isMandatoryForAll) {
+                setSuccessMessage(`Survey campaign "${campaignTitle}" created and published as a Platform-Wide Mandatory Requirement for all users!`);
+            } else if (isMandatoryTargeted) {
+                setSuccessMessage(`Survey campaign "${campaignTitle}" created and published as a Mandatory Requirement for targeted users!`);
             } else {
                 setSuccessMessage(`Survey campaign "${campaignTitle}" created and published successfully as an Admin Research Survey!`);
             }
@@ -803,6 +945,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             <span className="font-bold text-amber-600 dark:text-amber-400 truncate block">
                                                 {template.requirementConfig?.mode === 'optional' && 'Optional'}
                                                 {template.requirementConfig?.mode === 'mandatory_all' && 'Mandatory (All)'}
+                                                {template.requirementConfig?.mode === 'mandatory_targeted' && 'Mandatory (Targeted)'}
                                                 {template.requirementConfig?.mode === 'mandatory_before_withdrawal' && 'Pre-Withdrawal'}
                                             </span>
                                         </div>
@@ -1116,6 +1259,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     >
                                         <option value="optional">Optional (Default)</option>
                                         <option value="mandatory_all">Mandatory for all users</option>
+                                        <option value="mandatory_targeted">Mandatory for targeted users</option>
                                         <option value="mandatory_before_withdrawal">Mandatory before withdrawal</option>
                                     </select>
                                     <p className="text-[10px] text-gray-400 mt-1">
@@ -1197,7 +1341,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                         Use Template Flow
                                     </span>
                                     <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                                        Requirement: {usingTemplate.requirementConfig?.mode === 'mandatory_all' ? 'Mandatory for All Users' : usingTemplate.requirementConfig?.mode === 'mandatory_before_withdrawal' ? 'Pre-Withdrawal' : 'Optional'}
+                                        Requirement: {usingTemplate.requirementConfig?.mode === 'mandatory_all' ? 'Mandatory for All Users' : usingTemplate.requirementConfig?.mode === 'mandatory_targeted' ? 'Mandatory for Targeted Users' : usingTemplate.requirementConfig?.mode === 'mandatory_before_withdrawal' ? 'Pre-Withdrawal' : 'Optional'}
                                     </span>
                                     <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
                                         Launch Survey Campaign: {usingTemplate.name}
@@ -1246,6 +1390,151 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     />
                                 </div>
 
+                                {/* Requirement Mode Section (Phase 2) */}
+                                <div className="md:col-span-3 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                            <label className="text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                                                Requirement Mode *
+                                            </label>
+                                        </div>
+                                        <span className="text-[10px] font-bold text-gray-400">
+                                            Determines Work &amp; Earn access gating
+                                        </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                        {/* A. Optional */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setLaunchRequirementMode('optional')}
+                                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                                                launchRequirementMode === 'optional'
+                                                    ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 shadow-sm ring-1 ring-indigo-500'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                                                        Optional
+                                                    </span>
+                                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                        Voluntary
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
+                                                    Normal survey. Does not block normal Work &amp; Earn access.
+                                                </p>
+                                            </div>
+                                            {launchRequirementMode === 'optional' && (
+                                                <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-indigo-600 dark:text-indigo-400">
+                                                    <Check className="w-3 h-3" /> Selected
+                                                </div>
+                                            )}
+                                        </button>
+
+                                        {/* B. Mandatory for All Users */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setLaunchRequirementMode('mandatory_all');
+                                                setLaunchAudienceMode('all');
+                                            }}
+                                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                                                launchRequirementMode === 'mandatory_all'
+                                                    ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-500 shadow-sm ring-1 ring-amber-500'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase tracking-tight">
+                                                        Mandatory (All)
+                                                    </span>
+                                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100">
+                                                        Platform-Wide
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
+                                                    Applies dynamically to all eligible platform workers (current and future).
+                                                </p>
+                                            </div>
+                                            {launchRequirementMode === 'mandatory_all' && (
+                                                <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400">
+                                                    <Check className="w-3 h-3" /> Selected
+                                                </div>
+                                            )}
+                                        </button>
+
+                                        {/* C. Mandatory for Targeted Users */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setLaunchRequirementMode('mandatory_targeted');
+                                                if (launchAudienceMode === 'all') {
+                                                    setLaunchAudienceMode('selected');
+                                                }
+                                            }}
+                                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                                                launchRequirementMode === 'mandatory_targeted'
+                                                    ? 'bg-purple-50/80 dark:bg-purple-950/40 border-purple-500 shadow-sm ring-1 ring-purple-500'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs font-black text-purple-900 dark:text-purple-200 uppercase tracking-tight">
+                                                        Mandatory (Targeted)
+                                                    </span>
+                                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100">
+                                                        Targeted Gate
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
+                                                    Only users matching selected targeting rules are required. Non-matching users are not affected.
+                                                </p>
+                                            </div>
+                                            {launchRequirementMode === 'mandatory_targeted' && (
+                                                <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-purple-600 dark:text-purple-400">
+                                                    <Check className="w-3 h-3" /> Selected
+                                                </div>
+                                            )}
+                                        </button>
+
+                                        {/* D. Mandatory Before Withdrawal */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setLaunchRequirementMode('mandatory_before_withdrawal')}
+                                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                                                launchRequirementMode === 'mandatory_before_withdrawal'
+                                                    ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-500 shadow-sm ring-1 ring-rose-500'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs font-black text-rose-900 dark:text-rose-200 uppercase tracking-tight">
+                                                        Pre-Withdrawal
+                                                    </span>
+                                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-200 dark:bg-rose-800 text-rose-900 dark:text-rose-100">
+                                                        Withdrawal Gate
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
+                                                    Preserves withdrawal-specific requirement. Does not block normal Work &amp; Earn access.
+                                                </p>
+                                            </div>
+                                            {launchRequirementMode === 'mandatory_before_withdrawal' && (
+                                                <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-rose-600 dark:text-rose-400">
+                                                    <Check className="w-3 h-3" /> Selected
+                                                </div>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+
                                 {/* Target Audience Section */}
                                 <div className="md:col-span-3 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">
                                     <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1255,75 +1544,303 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                 Target Audience
                                             </label>
                                         </div>
-                                        <div className="flex items-center gap-1 flex-wrap">
-                                            <button
-                                                type="button"
-                                                onClick={() => setLaunchAudienceMode('all')}
-                                                className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
-                                                    launchAudienceMode === 'all'
-                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                                }`}
-                                            >
-                                                All Users
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setLaunchAudienceMode('selected')}
-                                                className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
-                                                    launchAudienceMode === 'selected'
-                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                                }`}
-                                            >
-                                                Selected Users
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setLaunchAudienceMode('advanced')}
-                                                className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
-                                                    launchAudienceMode === 'advanced'
-                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                                }`}
-                                            >
-                                                Advanced Targeting
-                                            </button>
-                                        </div>
+
+                                        {/* Audience Mode Buttons */}
+                                        {launchRequirementMode === 'mandatory_all' ? (
+                                            <span className="px-2.5 py-1 text-[11px] font-black uppercase rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                                                All Users (Dynamic Platform-Wide)
+                                            </span>
+                                        ) : (
+                                            <div className="flex items-center gap-1 flex-wrap">
+                                                {launchRequirementMode !== 'mandatory_targeted' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setLaunchAudienceMode('all')}
+                                                        className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                            launchAudienceMode === 'all'
+                                                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                        }`}
+                                                    >
+                                                        All Users
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setLaunchAudienceMode('selected')}
+                                                    className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                        launchAudienceMode === 'selected'
+                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                    }`}
+                                                >
+                                                    Selected Users
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setLaunchAudienceMode('active')}
+                                                    className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                        launchAudienceMode === 'active'
+                                                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                                                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                    }`}
+                                                >
+                                                    Active Users
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setLaunchAudienceMode('inactive')}
+                                                    className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                        launchAudienceMode === 'inactive'
+                                                            ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                                                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                    }`}
+                                                >
+                                                    Inactive Users
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setLaunchAudienceMode('advanced')}
+                                                    className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                        launchAudienceMode === 'advanced'
+                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                    }`}
+                                                >
+                                                    Advanced Targeting
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* All Users Description */}
-                                    {launchAudienceMode === 'all' && (
+                                    {/* 1. All Users (Mandatory All or Normal All) */}
+                                    {(launchRequirementMode === 'mandatory_all' || launchAudienceMode === 'all') && (
                                         <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl border border-indigo-100 dark:border-indigo-900/50 text-[11px] text-indigo-900 dark:text-indigo-300">
-                                            <p className="font-bold">Public Campaign (All Users):</p>
+                                            <p className="font-bold flex items-center gap-1.5">
+                                                <Users className="w-3.5 h-3.5" /> All Users Targeting:
+                                            </p>
                                             <p className="text-gray-600 dark:text-gray-400 mt-0.5">
-                                                Available to all current and future eligible platform workers without demographic restrictions. No restrictive targeting object will be attached.
+                                                {launchRequirementMode === 'mandatory_all'
+                                                    ? 'Applies dynamically to all eligible platform workers (current and future). Does not create a static user snapshot or require selected user IDs.'
+                                                    : 'Available to all eligible platform workers without demographic restrictions. No restrictive targeting object will be attached.'}
                                             </p>
                                         </div>
                                     )}
 
-                                    {/* Selected Users Input */}
-                                    {launchAudienceMode === 'selected' && (
-                                        <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
-                                            <label className="block text-xs font-black uppercase text-gray-600 dark:text-gray-300">
-                                                Selected User IDs *
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                required={launchAudienceMode === 'selected'}
-                                                value={launchSelectedUserIds}
-                                                onChange={(e) => setLaunchSelectedUserIds(e.target.value)}
-                                                placeholder="Enter User IDs separated by commas or new lines (e.g. 64abc123456..., 64def789012...)"
-                                                className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-medium"
-                                            />
-                                            <span className="text-[10px] text-gray-500 block">
-                                                Accepts comma-separated and/or newline-separated MongoDB User IDs. Only specified users will be eligible to see and participate.
-                                            </span>
+                                    {/* 2. Selected Users - Searchable Selector */}
+                                    {launchRequirementMode !== 'mandatory_all' && launchAudienceMode === 'selected' && (
+                                        <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+                                            <div className="flex items-center justify-between">
+                                                <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                                                    Search &amp; Select Workers
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowManualIdInput(!showManualIdInput)}
+                                                    className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                                                >
+                                                    {showManualIdInput ? 'Hide Raw ID Entry' : 'Direct ID / Bulk Paste'}
+                                                </button>
+                                            </div>
+
+                                            {/* Search input with live autocomplete dropdown */}
+                                            <div className="relative">
+                                                <div className="relative flex items-center">
+                                                    <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 pointer-events-none" />
+                                                    <input
+                                                        type="text"
+                                                        value={userSearchQuery}
+                                                        onChange={(e) => {
+                                                            setUserSearchQuery(e.target.value);
+                                                            setShowUserDropdown(true);
+                                                        }}
+                                                        onFocus={() => setShowUserDropdown(true)}
+                                                        placeholder="Search workers by username, full name, or email..."
+                                                        className="w-full pl-9 pr-8 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-medium focus:ring-2 focus:ring-indigo-500"
+                                                    />
+                                                    {userSearchQuery && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setUserSearchQuery('')}
+                                                            className="absolute right-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Autocomplete Dropdown */}
+                                                {showUserDropdown && (
+                                                    <div className="absolute z-20 left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700/50">
+                                                        <div className="p-1.5 flex items-center justify-between text-[10px] font-bold text-gray-400 bg-gray-50/80 dark:bg-gray-900/50">
+                                                            <span>Found {filteredUsers.length} workers</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setShowUserDropdown(false)}
+                                                                className="hover:text-gray-600 dark:hover:text-gray-200"
+                                                            >
+                                                                Close
+                                                            </button>
+                                                        </div>
+                                                        {filteredUsers.length === 0 ? (
+                                                            <div className="p-3 text-center text-xs text-gray-500">
+                                                                No matching workers found.
+                                                            </div>
+                                                        ) : (
+                                                            filteredUsers.map(u => {
+                                                                const uId = String(u._id || (u as any).id);
+                                                                const isSelected = selectedUserIdsList.includes(uId);
+                                                                return (
+                                                                    <div
+                                                                        key={uId}
+                                                                        onClick={() => toggleSelectUser(u)}
+                                                                        className={`p-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors ${
+                                                                            isSelected
+                                                                                ? 'bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100/70'
+                                                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'
+                                                                        }`}
+                                                                    >
+                                                                        <div className="flex items-center gap-2 min-w-0">
+                                                                            <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-black text-[10px] flex items-center justify-center shrink-0">
+                                                                                {(u.username || 'U')[0].toUpperCase()}
+                                                                            </div>
+                                                                            <div className="min-w-0">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <span className="text-xs font-black text-gray-900 dark:text-white truncate">
+                                                                                        @{u.username}
+                                                                                    </span>
+                                                                                    {u.fullName && (
+                                                                                        <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                                                                                            {u.fullName}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                                                                                    {u.email && <span className="truncate">{u.email}</span>}
+                                                                                    {u.country && <span>• {u.country}</span>}
+                                                                                    {u.status && (
+                                                                                        <span className={`font-bold ${u.status === 'Active' ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                                                            • {u.status}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="shrink-0">
+                                                                            {isSelected ? (
+                                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">
+                                                                                    <Check className="w-3 h-3" /> Added
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-indigo-600 hover:text-white transition-colors">
+                                                                                    + Add
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Selected Chips */}
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[11px] font-black uppercase text-gray-600 dark:text-gray-400">
+                                                        Selected Workers ({selectedUserIdsList.length})
+                                                    </span>
+                                                    {selectedUserIdsList.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setLaunchSelectedUserIds('')}
+                                                            className="text-[10px] font-bold text-rose-500 hover:underline"
+                                                        >
+                                                            Clear All
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {selectedUserIdsList.length === 0 ? (
+                                                    <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 text-center text-xs text-gray-400">
+                                                        No workers selected yet. Search above to add specific users.
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                                        {selectedUserIdsList.map(id => {
+                                                            const u = userMap.get(id);
+                                                            return (
+                                                                <span
+                                                                    key={id}
+                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60"
+                                                                >
+                                                                    <span>@{u?.username || id.slice(-6)}</span>
+                                                                    {u?.fullName && (
+                                                                        <span className="text-[10px] font-normal text-indigo-600 dark:text-indigo-400">
+                                                                            ({u.fullName})
+                                                                        </span>
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeSelectedUserId(id)}
+                                                                        className="hover:text-rose-500 transition-colors ml-0.5"
+                                                                    >
+                                                                        <X className="w-3 h-3" />
+                                                                    </button>
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Manual ID Input fallback */}
+                                            {showManualIdInput && (
+                                                <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
+                                                    <label className="block text-[10px] font-bold uppercase text-gray-500">
+                                                        Direct User IDs (Comma or Newline separated)
+                                                    </label>
+                                                    <textarea
+                                                        rows={2}
+                                                        value={launchSelectedUserIds}
+                                                        onChange={(e) => setLaunchSelectedUserIds(e.target.value)}
+                                                        placeholder="64abc123456..., 64def789012..."
+                                                        className="w-full px-2.5 py-1.5 rounded-lg border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono"
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
-                                    {/* Advanced Targeting Form */}
-                                    {launchAudienceMode === 'advanced' && (
+                                    {/* 3. Active Users */}
+                                    {launchRequirementMode !== 'mandatory_all' && launchAudienceMode === 'active' && (
+                                        <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-900 dark:text-emerald-300 space-y-1">
+                                            <div className="flex items-center gap-1.5 font-bold">
+                                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                Target Audience: Active Accounts Only
+                                            </div>
+                                            <p className="text-gray-600 dark:text-gray-400">
+                                                Automatically targets workers with an active account status (<code className="px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-mono text-[10px]">targeting.accountStatus = "active"</code>). Inactive or suspended accounts will not be affected.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* 4. Inactive Users */}
+                                    {launchRequirementMode !== 'mandatory_all' && launchAudienceMode === 'inactive' && (
+                                        <div className="p-3 bg-amber-50/60 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-300 space-y-1">
+                                            <div className="flex items-center gap-1.5 font-bold">
+                                                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                                                Target Audience: Inactive Accounts Only
+                                            </div>
+                                            <p className="text-gray-600 dark:text-gray-400">
+                                                Automatically targets workers with an inactive account status (<code className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 font-mono text-[10px]">targeting.accountStatus = "inactive"</code>). Active accounts will not be affected.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* 5. Advanced Targeting Form */}
+                                    {launchRequirementMode !== 'mandatory_all' && launchAudienceMode === 'advanced' && (
                                         <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 <div>
@@ -1411,7 +1928,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                 </div>
                                             </div>
                                             <span className="text-[10px] text-gray-500 block">
-                                                Filters are applied when workers view the task list. Leaving a field blank means no restriction is applied for that criteria.
+                                                Filters are applied dynamically by the server targeting engine. Leaving a field blank means no restriction is applied for that criteria.
                                             </span>
                                         </div>
                                     )}

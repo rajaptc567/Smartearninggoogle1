@@ -1415,7 +1415,7 @@ export interface AdminSurveyTemplate {
         currency: string;
     };
     requirementConfig: {
-        mode: 'optional' | 'mandatory_all' | 'mandatory_before_withdrawal';
+        mode: 'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal';
     };
     recompletionPolicy: {
         policy: 'never' | 'on_version_change' | 'every_x_days';

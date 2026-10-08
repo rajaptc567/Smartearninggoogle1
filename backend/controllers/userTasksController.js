@@ -3156,7 +3156,8 @@ export const submitUserTaskProof = async (req, res) => {
         );
         const isMandatoryTargetedSurvey = Boolean(
             task.isAdminResearchSurvey && 
-            reqMode === 'mandatory_targeted'
+            reqMode === 'mandatory_targeted' &&
+            isUserEligibleForUserTask(worker, task)
         );
         const isMandatorySurvey = isMandatoryAllAdminSurvey || isMandatoryTargetedSurvey;
 
