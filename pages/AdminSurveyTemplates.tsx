@@ -529,9 +529,13 @@ export const AdminSurveyTemplates: React.FC = () => {
 
         setIsLaunchingCampaign(true);
         try {
-            const isMandatoryForAll = launchRequirementMode === 'mandatory_all';
-            const isMandatoryTargeted = launchRequirementMode === 'mandatory_targeted';
-            const isMandatoryWithdrawal = launchRequirementMode === 'mandatory_before_withdrawal';
+            // Determine effective requirement mode with backward compatibility
+            const isMandatoryWithdrawal = launchRequirementMode === 'mandatory_before_withdrawal' || Boolean(setAsMandatoryWithdrawal);
+            const effectiveRequirementMode = isMandatoryWithdrawal
+                ? 'mandatory_before_withdrawal'
+                : launchRequirementMode;
+            const isMandatoryForAll = effectiveRequirementMode === 'mandatory_all';
+            const isMandatoryTargeted = effectiveRequirementMode === 'mandatory_targeted';
 
             // Build targeting payload
             let targetingPayload: any = undefined;
@@ -606,7 +610,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                 isSurvey: true,
                 isSurveyCampaign: true,
                 isAdminResearchSurvey: true,
-                requirementMode: launchRequirementMode,
+                requirementMode: effectiveRequirementMode,
                 isMandatoryForAllUsers: isMandatoryForAll,
                 sourceAdminSurveyTemplateId: usingTemplate._id,
                 publishNow: true,
@@ -1408,9 +1412,12 @@ export const AdminSurveyTemplates: React.FC = () => {
                                         {/* A. Optional */}
                                         <button
                                             type="button"
-                                            onClick={() => setLaunchRequirementMode('optional')}
+                                            onClick={() => {
+                                                setLaunchRequirementMode('optional');
+                                                setSetAsMandatoryWithdrawal(false);
+                                            }}
                                             className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                                                launchRequirementMode === 'optional'
+                                                launchRequirementMode === 'optional' && !setAsMandatoryWithdrawal
                                                     ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 shadow-sm ring-1 ring-indigo-500'
                                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                                             }`}
@@ -1428,7 +1435,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     Normal survey. Does not block normal Work &amp; Earn access.
                                                 </p>
                                             </div>
-                                            {launchRequirementMode === 'optional' && (
+                                            {launchRequirementMode === 'optional' && !setAsMandatoryWithdrawal && (
                                                 <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-indigo-600 dark:text-indigo-400">
                                                     <Check className="w-3 h-3" /> Selected
                                                 </div>
@@ -1441,9 +1448,10 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             onClick={() => {
                                                 setLaunchRequirementMode('mandatory_all');
                                                 setLaunchAudienceMode('all');
+                                                setSetAsMandatoryWithdrawal(false);
                                             }}
                                             className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                                                launchRequirementMode === 'mandatory_all'
+                                                launchRequirementMode === 'mandatory_all' && !setAsMandatoryWithdrawal
                                                     ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-500 shadow-sm ring-1 ring-amber-500'
                                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                                             }`}
@@ -1461,7 +1469,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     Applies dynamically to all eligible platform workers (current and future).
                                                 </p>
                                             </div>
-                                            {launchRequirementMode === 'mandatory_all' && (
+                                            {launchRequirementMode === 'mandatory_all' && !setAsMandatoryWithdrawal && (
                                                 <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400">
                                                     <Check className="w-3 h-3" /> Selected
                                                 </div>
@@ -1476,9 +1484,10 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                 if (launchAudienceMode === 'all') {
                                                     setLaunchAudienceMode('selected');
                                                 }
+                                                setSetAsMandatoryWithdrawal(false);
                                             }}
                                             className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                                                launchRequirementMode === 'mandatory_targeted'
+                                                launchRequirementMode === 'mandatory_targeted' && !setAsMandatoryWithdrawal
                                                     ? 'bg-purple-50/80 dark:bg-purple-950/40 border-purple-500 shadow-sm ring-1 ring-purple-500'
                                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                                             }`}
@@ -1496,7 +1505,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     Only users matching selected targeting rules are required. Non-matching users are not affected.
                                                 </p>
                                             </div>
-                                            {launchRequirementMode === 'mandatory_targeted' && (
+                                            {launchRequirementMode === 'mandatory_targeted' && !setAsMandatoryWithdrawal && (
                                                 <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-purple-600 dark:text-purple-400">
                                                     <Check className="w-3 h-3" /> Selected
                                                 </div>
@@ -1506,9 +1515,12 @@ export const AdminSurveyTemplates: React.FC = () => {
                                         {/* D. Mandatory Before Withdrawal */}
                                         <button
                                             type="button"
-                                            onClick={() => setLaunchRequirementMode('mandatory_before_withdrawal')}
+                                            onClick={() => {
+                                                setLaunchRequirementMode('mandatory_before_withdrawal');
+                                                setSetAsMandatoryWithdrawal(true);
+                                            }}
                                             className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                                                launchRequirementMode === 'mandatory_before_withdrawal'
+                                                launchRequirementMode === 'mandatory_before_withdrawal' || setAsMandatoryWithdrawal
                                                     ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-500 shadow-sm ring-1 ring-rose-500'
                                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                                             }`}
@@ -1526,7 +1538,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     Preserves withdrawal-specific requirement. Does not block normal Work &amp; Earn access.
                                                 </p>
                                             </div>
-                                            {launchRequirementMode === 'mandatory_before_withdrawal' && (
+                                            {(launchRequirementMode === 'mandatory_before_withdrawal' || setAsMandatoryWithdrawal) && (
                                                 <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-rose-600 dark:text-rose-400">
                                                     <Check className="w-3 h-3" /> Selected
                                                 </div>
@@ -2081,15 +2093,23 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     <label className="relative inline-flex items-center cursor-pointer shrink-0">
                                         <input 
                                             type="checkbox" 
-                                            checked={setAsMandatoryWithdrawal} 
-                                            onChange={(e) => setSetAsMandatoryWithdrawal(e.target.checked)}
+                                            checked={setAsMandatoryWithdrawal || launchRequirementMode === 'mandatory_before_withdrawal'} 
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setSetAsMandatoryWithdrawal(checked);
+                                                if (checked) {
+                                                    setLaunchRequirementMode('mandatory_before_withdrawal');
+                                                } else if (launchRequirementMode === 'mandatory_before_withdrawal') {
+                                                    setLaunchRequirementMode('optional');
+                                                }
+                                            }}
                                             className="sr-only peer"
                                         />
                                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-amber-600"></div>
                                     </label>
                                 </div>
 
-                                {setAsMandatoryWithdrawal && (
+                                {(setAsMandatoryWithdrawal || launchRequirementMode === 'mandatory_before_withdrawal') && (
                                     <div className="p-3 bg-white/90 dark:bg-gray-900/90 rounded-xl border border-amber-300 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200 space-y-1.5">
                                         <p className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
                                             <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
