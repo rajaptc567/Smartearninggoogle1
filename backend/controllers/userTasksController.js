@@ -126,7 +126,7 @@ const executeWithOptionalTransaction = async (workFn) => {
     }
 };
 
-const toWorkerSafeUserTask = (task) => {
+const toWorkerSafeUserTask = (task, meta = {}) => {
     if (!task) return task;
     const safeTask = {};
     const allowedFields = [
@@ -162,8 +162,10 @@ const toWorkerSafeUserTask = (task) => {
         'surveyQuestionsCount',
         'surveyConfig',
         'surveyVersion',
+        'recompletionPolicy',
         'isAdminResearchSurvey',
         'isMandatoryForAllUsers',
+        'requirementMode',
         'isUnlimitedResponses',
         'campaignFundingStatus',
         'sourceAdminSurveyTemplateId',
@@ -189,11 +191,26 @@ const toWorkerSafeUserTask = (task) => {
         safeTask.campaignHasAvailableReward = true;
     }
 
+    const reqMode = task.requirementMode || (task.isMandatoryForAllUsers ? 'mandatory_all' : 'optional');
+    safeTask.isMandatory = Boolean(
+        task.isAdminResearchSurvey &&
+        (reqMode === 'mandatory_all' || reqMode === 'mandatory_targeted')
+    );
+
+    if (meta && typeof meta === 'object') {
+        if (meta.isPendingRequirement !== undefined) {
+            safeTask.isPendingRequirement = Boolean(meta.isPendingRequirement);
+        }
+        if (meta.isAwaitingFunding !== undefined) {
+            safeTask.isAwaitingFunding = Boolean(meta.isAwaitingFunding);
+        }
+    }
+
     return safeTask;
 };
 
 // Concurrency-safe atomic completion slot claiming (Phase D-3 & Parts E, F, G, N)
-const claimTaskCompletionSlot = async (taskId, workerId) => {
+const claimTaskCompletionSlot = async (taskId, workerId, allowRecompletion = false) => {
     if (!taskId || !workerId) return null;
 
     const workerObjId = mongoose.Types.ObjectId.isValid(workerId)
@@ -208,12 +225,15 @@ const claimTaskCompletionSlot = async (taskId, workerId) => {
     if (targetTask.isUnlimitedResponses) {
         if (targetTask.rewardPerTask === 0) {
             // Free Unlimited Survey: No cap on slots, only verify not completed yet and active status
+            const filterDoc = {
+                _id: taskId,
+                status: { $in: ['Approved', 'Paid', 'Active'] }
+            };
+            if (!allowRecompletion) {
+                filterDoc.completedUsers = { $ne: workerObjId };
+            }
             updatedTask = await UserTask.findOneAndUpdate(
-                {
-                    _id: taskId,
-                    status: { $in: ['Approved', 'Paid', 'Active'] },
-                    completedUsers: { $ne: workerObjId }
-                },
+                filterDoc,
                 {
                     $inc: { currentCompletions: 1 },
                     $addToSet: { completedUsers: workerObjId }
@@ -223,14 +243,17 @@ const claimTaskCompletionSlot = async (taskId, workerId) => {
         } else {
             // Paid Unlimited Survey: Atomically check and deduct reward from available balance
             const reward = Number((targetTask.rewardPerTask || 0).toFixed(2));
+            const filterDoc = {
+                _id: taskId,
+                status: { $in: ['Approved', 'Paid', 'Active'] },
+                campaignFundingStatus: { $ne: 'paused_insufficient_funds' },
+                campaignAvailableBalanceUSD: { $gte: reward }
+            };
+            if (!allowRecompletion) {
+                filterDoc.completedUsers = { $ne: workerObjId };
+            }
             updatedTask = await UserTask.findOneAndUpdate(
-                {
-                    _id: taskId,
-                    status: { $in: ['Approved', 'Paid', 'Active'] },
-                    campaignFundingStatus: { $ne: 'paused_insufficient_funds' },
-                    campaignAvailableBalanceUSD: { $gte: reward },
-                    completedUsers: { $ne: workerObjId }
-                },
+                filterDoc,
                 {
                     $inc: { 
                         currentCompletions: 1,
@@ -296,13 +319,16 @@ const claimTaskCompletionSlot = async (taskId, workerId) => {
         }
     } else {
         // Limited Task / Survey: Standard targetQuantity slot reservation
+        const limitedFilter = {
+            _id: taskId,
+            status: { $ne: 'Rejected' },
+            $expr: { $lt: ['$currentCompletions', '$targetQuantity'] }
+        };
+        if (!allowRecompletion) {
+            limitedFilter.completedUsers = { $ne: workerObjId };
+        }
         updatedTask = await UserTask.findOneAndUpdate(
-            {
-                _id: taskId,
-                status: { $ne: 'Rejected' },
-                $expr: { $lt: ['$currentCompletions', '$targetQuantity'] },
-                completedUsers: { $ne: workerObjId }
-            },
+            limitedFilter,
             {
                 $inc: { currentCompletions: 1 },
                 $addToSet: { completedUsers: workerObjId }
@@ -368,6 +394,192 @@ const releaseTaskCompletionSlot = async (taskId, workerId) => {
     return updatedTask;
 };
 
+/**
+ * Helper to determine whether a user has validly completed a task according to recompletionPolicy
+ */
+export const isTaskCompletedByUser = (user, task, userSubmissions = []) => {
+    if (!user || !task) return false;
+    const userIdStr = String(user._id || user.id);
+    const policy = task.recompletionPolicy?.policy || 'never';
+
+    // Filter approved/paid submissions for this task
+    const approvedSubs = (Array.isArray(userSubmissions) ? userSubmissions : []).filter(s => 
+        String(s.taskId) === String(task._id) && 
+        (s.status === 'Approved' || s.status === 'Paid')
+    );
+
+    if (policy === 'never') {
+        const inCompletedUsers = Array.isArray(task.completedUsers) && task.completedUsers.some(cu => String(cu?._id || cu) === userIdStr);
+        return inCompletedUsers || approvedSubs.length > 0;
+    }
+
+    if (policy === 'on_version_change') {
+        if (approvedSubs.length > 0) {
+            const latestSub = approvedSubs[0];
+            const subVer = Number(latestSub.surveyVersion || 1);
+            const taskVer = Number(task.surveyVersion || 1);
+            return subVer >= taskVer;
+        }
+        return false;
+    }
+
+    if (policy === 'every_x_days') {
+        if (approvedSubs.length > 0) {
+            const latestSub = approvedSubs[0];
+            const intervalDays = Number(task.recompletionPolicy?.intervalDays) > 0 ? Number(task.recompletionPolicy.intervalDays) : 30;
+            const ageMs = Date.now() - new Date(latestSub.createdAt).getTime();
+            return ageMs <= intervalDays * 86400000;
+        }
+        return false;
+    }
+
+    const inCompletedUsers = Array.isArray(task.completedUsers) && task.completedUsers.some(cu => String(cu?._id || cu) === userIdStr);
+    return inCompletedUsers || approvedSubs.length > 0;
+};
+
+/**
+ * Returns all currently pending mandatory admin research surveys for a specific user.
+ * Server-authoritative: checks requirementMode ('mandatory_all', 'mandatory_targeted'),
+ * targeting eligibility, and recompletionPolicy.
+ */
+export const getPendingMandatorySurveysForUser = async (user, allTasks = null, context = {}) => {
+    if (!user || isUserAdmin(user)) {
+        return [];
+    }
+
+    let tasksToEvaluate = allTasks;
+    if (!tasksToEvaluate) {
+        tasksToEvaluate = await UserTask.find({
+            status: { $in: ['Approved', 'Paid', 'Active'] },
+            $or: [
+                { requirementMode: { $in: ['mandatory_all', 'mandatory_targeted'] } },
+                { isMandatoryForAllUsers: true }
+            ]
+        }).lean();
+    }
+
+    // Filter candidate mandatory tasks
+    const candidateTasks = tasksToEvaluate.filter(t => {
+        const isLive = ['Approved', 'Paid', 'Active'].includes(t.status);
+        if (!isLive) return false;
+
+        const isOwner = t.userId && String(t.userId) === String(user._id);
+        if (isOwner) return false; // Own tasks are not mandatory requirements for oneself
+
+        const isAdminSurvey = Boolean(t.isAdminResearchSurvey || t.isMandatoryForAllUsers);
+        if (!isAdminSurvey) return false;
+
+        const reqMode = t.requirementMode || (t.isMandatoryForAllUsers ? 'mandatory_all' : 'optional');
+        return reqMode === 'mandatory_all' || reqMode === 'mandatory_targeted';
+    });
+
+    if (candidateTasks.length === 0) {
+        return [];
+    }
+
+    // Preload user's approved/paid submissions
+    let userSubmissions = context.userSubmissions;
+    if (!userSubmissions) {
+        const candidateTaskIds = candidateTasks
+            .map(t => t._id)
+            .filter(id => id && mongoose.Types.ObjectId.isValid(id));
+        userSubmissions = candidateTaskIds.length > 0 ? await UserTaskSubmission.find({
+            workerId: user._id,
+            taskId: { $in: candidateTaskIds },
+            status: { $in: ['Approved', 'Paid'] }
+        }).sort({ createdAt: -1 }).lean() : [];
+    }
+
+    // Preload submissions needed for targeting rules if not provided
+    let eligibilityContext = context.eligibilityContext;
+    if (!eligibilityContext) {
+        const referencedTaskIds = new Set();
+        for (const t of candidateTasks) {
+            const targeting = t.targeting;
+            if (targeting) {
+                if (Array.isArray(targeting.completionRules)) {
+                    for (const cr of targeting.completionRules) {
+                        if (cr.taskId) referencedTaskIds.add(cr.taskId);
+                    }
+                }
+                if (Array.isArray(targeting.surveyAnswerRules)) {
+                    for (const sr of targeting.surveyAnswerRules) {
+                        if (sr.taskId) referencedTaskIds.add(sr.taskId);
+                    }
+                }
+            }
+        }
+        const validReferencedIds = Array.from(referencedTaskIds).filter(id => id && mongoose.Types.ObjectId.isValid(id));
+        let targetSubs = [];
+        if (validReferencedIds.length > 0) {
+            targetSubs = await UserTaskSubmission.find({
+                workerId: user._id,
+                taskId: { $in: validReferencedIds }
+            }).sort({ createdAt: -1 }).lean();
+        }
+        eligibilityContext = { submissions: targetSubs };
+    }
+
+    const pendingSurveys = [];
+    for (const task of candidateTasks) {
+        const reqMode = task.requirementMode || (task.isMandatoryForAllUsers ? 'mandatory_all' : 'optional');
+
+        if (reqMode === 'mandatory_targeted') {
+            const isEligible = isUserEligibleForUserTask(user, task, eligibilityContext);
+            if (!isEligible) {
+                continue;
+            }
+        }
+
+        const isCompleted = isTaskCompletedByUser(user, task, userSubmissions);
+        if (!isCompleted) {
+            pendingSurveys.push(task);
+        }
+    }
+
+    return pendingSurveys;
+};
+
+/**
+ * Controller endpoint: GET /api/v1/user-tasks/mandatory-requirements
+ */
+export const getPendingMandatoryRequirements = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ success: false, error: 'Authentication required.' });
+        }
+        const user = await User.findById(req.user.id).lean();
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found.' });
+        }
+
+        if (isUserAdmin(user)) {
+            return res.status(200).json({
+                success: true,
+                count: 0,
+                hasPendingMandatorySurveys: false,
+                data: []
+            });
+        }
+
+        const pendingSurveys = await getPendingMandatorySurveysForUser(user);
+        const safePendingSurveys = pendingSurveys.map(t => {
+            const isAwaiting = t.isUnlimitedResponses && t.rewardPerTask > 0 &&
+                ((t.campaignAvailableBalanceUSD || 0) < t.rewardPerTask || t.campaignFundingStatus === 'paused_insufficient_funds');
+            return toWorkerSafeUserTask(t, { isPendingRequirement: true, isAwaitingFunding: isAwaiting });
+        });
+
+        res.status(200).json({
+            success: true,
+            count: safePendingSurveys.length,
+            hasPendingMandatorySurveys: safePendingSurveys.length > 0,
+            data: safePendingSurveys
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
 export const getUserTasks = async (req, res) => {
     try {
         if (!req.user) {
@@ -377,7 +589,13 @@ export const getUserTasks = async (req, res) => {
         // For admin/super_admin, preserve administrative access to all UserTask records
         if (isUserAdmin(req.user)) {
             const tasks = await UserTask.find().sort({ createdAt: -1 });
-            return res.status(200).json({ success: true, count: tasks.length, data: tasks });
+            return res.status(200).json({ 
+                success: true, 
+                count: tasks.length, 
+                data: tasks,
+                hasPendingMandatorySurveys: false,
+                pendingMandatorySurveys: []
+            });
         }
 
         const user = await User.findById(req.user.id).lean();
@@ -391,42 +609,47 @@ export const getUserTasks = async (req, res) => {
 
         const tasks = await UserTask.find().sort({ createdAt: -1 }).lean();
 
-        // Check if worker tasks can be retrieved (either via normal Hub access or via mandatory-all Admin Surveys)
-        const hasMandatoryAllSurveys = tasks.some(t => Boolean(t.isAdminResearchSurvey && t.isMandatoryForAllUsers));
-        const shouldEvaluateWorkerTasks = (isHubAccessible && isTasksEnabled) || hasMandatoryAllSurveys;
-
-        // E1: Preload worker submissions for tasks referenced in completionRules or surveyAnswerRules (N+1 protection)
-        let workerSubmissions = [];
-        if (shouldEvaluateWorkerTasks) {
-            const referencedTaskIdsSet = new Set();
-            for (const task of tasks) {
-                const isMandatoryAllAdminSurvey = Boolean(task.isAdminResearchSurvey && task.isMandatoryForAllUsers);
-                const isWorkerCandidate = isMandatoryAllAdminSurvey || (isHubAccessible && isTasksEnabled);
-                if (!isWorkerCandidate) continue;
-
-                const t = task.targeting;
-                if (t) {
-                    if (Array.isArray(t.completionRules)) {
-                        for (const cr of t.completionRules) {
-                            if (cr.taskId) referencedTaskIdsSet.add(cr.taskId);
-                        }
+        // 1. Preload worker submissions for tasks referenced in completionRules or surveyAnswerRules (N+1 protection)
+        const referencedTaskIdsSet = new Set();
+        for (const task of tasks) {
+            const t = task.targeting;
+            if (t) {
+                if (Array.isArray(t.completionRules)) {
+                    for (const cr of t.completionRules) {
+                        if (cr.taskId) referencedTaskIdsSet.add(cr.taskId);
                     }
-                    if (Array.isArray(t.surveyAnswerRules)) {
-                        for (const sr of t.surveyAnswerRules) {
-                            if (sr.taskId) referencedTaskIdsSet.add(sr.taskId);
-                        }
+                }
+                if (Array.isArray(t.surveyAnswerRules)) {
+                    for (const sr of t.surveyAnswerRules) {
+                        if (sr.taskId) referencedTaskIdsSet.add(sr.taskId);
                     }
                 }
             }
-
-            if (referencedTaskIdsSet.size > 0) {
-                workerSubmissions = await UserTaskSubmission.find({
-                    workerId: user._id,
-                    taskId: { $in: Array.from(referencedTaskIdsSet) }
-                }).sort({ createdAt: -1 }).lean();
-            }
         }
-        const eligibilityContext = { submissions: workerSubmissions };
+
+        let workerTargetingSubmissions = [];
+        if (referencedTaskIdsSet.size > 0) {
+            workerTargetingSubmissions = await UserTaskSubmission.find({
+                workerId: user._id,
+                taskId: { $in: Array.from(referencedTaskIdsSet) }
+            }).sort({ createdAt: -1 }).lean();
+        }
+        const eligibilityContext = { submissions: workerTargetingSubmissions };
+
+        // 2. Preload worker's approved/paid submissions to evaluate completion
+        const workerApprovedSubmissions = await UserTaskSubmission.find({
+            workerId: user._id,
+            status: { $in: ['Approved', 'Paid'] }
+        }).sort({ createdAt: -1 }).lean();
+
+        // 3. Authoritatively determine pending mandatory admin research surveys for this worker
+        const pendingMandatorySurveys = await getPendingMandatorySurveysForUser(user, tasks, {
+            userSubmissions: workerApprovedSubmissions,
+            eligibilityContext
+        });
+
+        const hasPendingMandatory = pendingMandatorySurveys.length > 0;
+        const pendingMandatoryTaskIds = new Set(pendingMandatorySurveys.map(t => String(t._id)));
 
         const filteredTasks = [];
 
@@ -446,26 +669,55 @@ export const getUserTasks = async (req, res) => {
                 }
                 filteredTasks.push(task);
             } else {
-                const isMandatoryAllAdminSurvey = Boolean(task.isAdminResearchSurvey && task.isMandatoryForAllUsers);
-                const isWorkerAllowed = isMandatoryAllAdminSurvey || (isHubAccessible && isTasksEnabled);
+                const isPendingReqForMe = pendingMandatoryTaskIds.has(String(task._id));
 
-                if (isWorkerAllowed) {
-                    const isLiveStatus = task.status === 'Approved' || task.status === 'Paid' || task.status === 'Active';
-                    const hasAvailableSlots = task.isUnlimitedResponses
-                        ? (task.rewardPerTask === 0 || (task.campaignAvailableBalanceUSD >= task.rewardPerTask && task.campaignFundingStatus !== 'paused_insufficient_funds'))
-                        : ((task.currentCompletions || 0) < (task.targetQuantity || 0));
+                if (hasPendingMandatory) {
+                    // GATE ACTIVE: User has pending mandatory surveys!
+                    // Normal optional tasks are strictly BLOCKED.
+                    // Only the user's pending mandatory surveys themselves are returned.
+                    if (isPendingReqForMe) {
+                        const isLiveStatus = ['Approved', 'Paid', 'Active'].includes(task.status);
+                        if (isLiveStatus) {
+                            const isAwaiting = task.isUnlimitedResponses && task.rewardPerTask > 0 &&
+                                ((task.campaignAvailableBalanceUSD || 0) < task.rewardPerTask || task.campaignFundingStatus === 'paused_insufficient_funds');
+                            filteredTasks.push(toWorkerSafeUserTask(task, {
+                                isPendingRequirement: true,
+                                isAwaitingFunding: isAwaiting
+                            }));
+                        }
+                    }
+                } else {
+                    // GATE CLEARED: User has NO pending mandatory surveys.
+                    // Standard Hub worker access governs normal tasks:
+                    if (isHubAccessible && isTasksEnabled) {
+                        const isLiveStatus = ['Approved', 'Paid', 'Active'].includes(task.status);
+                        const hasAvailableSlots = task.isUnlimitedResponses
+                            ? (task.rewardPerTask === 0 || ((task.campaignAvailableBalanceUSD >= task.rewardPerTask) && task.campaignFundingStatus !== 'paused_insufficient_funds'))
+                            : ((task.currentCompletions || 0) < (task.targetQuantity || 0));
 
-                    const alreadyCompleted = Array.isArray(task.completedUsers) && task.completedUsers.some(cu => String(cu?._id || cu) === String(user._id));
+                        const alreadyCompleted = isTaskCompletedByUser(user, task, workerApprovedSubmissions);
 
-                    if (isLiveStatus && hasAvailableSlots && !alreadyCompleted && isUserEligibleForUserTask(user, task, eligibilityContext)) {
-                        // Return sanitized worker-safe task for eligible non-owner
-                        filteredTasks.push(toWorkerSafeUserTask(task));
+                        if (isLiveStatus && hasAvailableSlots && !alreadyCompleted && isUserEligibleForUserTask(user, task, eligibilityContext)) {
+                            filteredTasks.push(toWorkerSafeUserTask(task));
+                        }
                     }
                 }
             }
         }
 
-        res.status(200).json({ success: true, count: filteredTasks.length, data: filteredTasks });
+        const safePendingSurveys = pendingMandatorySurveys.map(t => {
+            const isAwaiting = t.isUnlimitedResponses && t.rewardPerTask > 0 &&
+                ((t.campaignAvailableBalanceUSD || 0) < t.rewardPerTask || t.campaignFundingStatus === 'paused_insufficient_funds');
+            return toWorkerSafeUserTask(t, { isPendingRequirement: true, isAwaitingFunding: isAwaiting });
+        });
+
+        res.status(200).json({ 
+            success: true, 
+            count: filteredTasks.length, 
+            data: filteredTasks,
+            hasPendingMandatorySurveys: hasPendingMandatory,
+            pendingMandatorySurveys: safePendingSurveys
+        });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -493,12 +745,88 @@ export const createUserTask = async (req, res) => {
         } = req.body;
 
         isCreatedByAdmin = Boolean(req.user && isUserAdmin(req.user));
-        // Server-side authoritative flag: A non-admin user can NEVER set isAdminResearchSurvey or isMandatoryForAllUsers
-        const isAdminResearchSurvey = Boolean(isCreatedByAdmin && (req.body.isAdminResearchSurvey === true || req.body.sourceAdminSurveyTemplateId));
-        const isMandatoryForAllUsers = Boolean(isAdminResearchSurvey && req.body.isMandatoryForAllUsers === true);
-        const sourceAdminSurveyTemplateId = (isAdminResearchSurvey && req.body.sourceAdminSurveyTemplateId) 
-            ? req.body.sourceAdminSurveyTemplateId 
-            : null;
+        const ALLOWED_REQUIREMENT_MODES = ['optional', 'mandatory_all', 'mandatory_targeted', 'mandatory_before_withdrawal'];
+
+        let effectiveRequirementMode = 'optional';
+        let isAdminResearchSurvey = false;
+        let isMandatoryForAllUsers = false;
+        let sourceAdminSurveyTemplateId = null;
+
+        if (isCreatedByAdmin) {
+            isAdminResearchSurvey = Boolean(req.body.isAdminResearchSurvey === true || req.body.sourceAdminSurveyTemplateId);
+            sourceAdminSurveyTemplateId = (isAdminResearchSurvey && req.body.sourceAdminSurveyTemplateId) 
+                ? req.body.sourceAdminSurveyTemplateId 
+                : null;
+
+            if (req.body.requirementMode) {
+                const reqMode = String(req.body.requirementMode).trim().toLowerCase();
+                if (!ALLOWED_REQUIREMENT_MODES.includes(reqMode)) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: `Invalid requirementMode. Allowed values: ${ALLOWED_REQUIREMENT_MODES.join(', ')}.` 
+                    });
+                }
+                effectiveRequirementMode = reqMode;
+            } else if (req.body.isMandatoryForAllUsers === true) {
+                effectiveRequirementMode = 'mandatory_all';
+            } else {
+                effectiveRequirementMode = 'optional';
+            }
+
+            if (effectiveRequirementMode === 'mandatory_all') {
+                isMandatoryForAllUsers = true;
+                isAdminResearchSurvey = true;
+            } else if (effectiveRequirementMode === 'mandatory_targeted') {
+                isAdminResearchSurvey = true;
+                isMandatoryForAllUsers = false;
+            } else if (effectiveRequirementMode === 'mandatory_before_withdrawal') {
+                isMandatoryForAllUsers = false;
+                isAdminResearchSurvey = true;
+            } else {
+                isMandatoryForAllUsers = false;
+            }
+        }
+
+        if (effectiveRequirementMode === 'mandatory_targeted') {
+            const rawTargeting = req.body.targeting || {};
+            const hasRawTargeting = (
+                (Array.isArray(rawTargeting.countries) && rawTargeting.countries.some(c => typeof c === 'string' && c.trim().length > 0)) ||
+                (Array.isArray(rawTargeting.currencies) && rawTargeting.currencies.some(c => typeof c === 'string' && c.trim().length > 0)) ||
+                (Array.isArray(rawTargeting.genders) && rawTargeting.genders.some(g => typeof g === 'string' && g.trim().length > 0)) ||
+                (rawTargeting.minAge !== null && rawTargeting.minAge !== undefined && rawTargeting.minAge !== '') ||
+                (rawTargeting.maxAge !== null && rawTargeting.maxAge !== undefined && rawTargeting.maxAge !== '') ||
+                (Array.isArray(rawTargeting.selectedUserIds) && rawTargeting.selectedUserIds.some(id => String(id).trim().length > 0)) ||
+                (rawTargeting.accountStatus === 'active' || rawTargeting.accountStatus === 'inactive') ||
+                (Array.isArray(rawTargeting.completionRules) && rawTargeting.completionRules.length > 0) ||
+                (Array.isArray(rawTargeting.profileRules) && rawTargeting.profileRules.length > 0) ||
+                (Array.isArray(rawTargeting.surveyAnswerRules) && rawTargeting.surveyAnswerRules.length > 0)
+            );
+            if (!hasRawTargeting) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Targeted mandatory mode requires at least one targeting rule (e.g. countries, selected users, age, etc.).'
+                });
+            }
+        }
+
+        let effectiveRecompletionPolicy = { policy: 'never', intervalDays: 30 };
+        if (req.body.recompletionPolicy && typeof req.body.recompletionPolicy === 'object') {
+            const rawPolicy = String(req.body.recompletionPolicy.policy || '').toLowerCase();
+            const allowedPolicies = ['never', 'on_version_change', 'every_x_days'];
+            effectiveRecompletionPolicy.policy = allowedPolicies.includes(rawPolicy) ? rawPolicy : 'never';
+            const interval = Number(req.body.recompletionPolicy.intervalDays);
+            effectiveRecompletionPolicy.intervalDays = Number.isFinite(interval) && interval > 0 ? interval : 30;
+        } else if (sourceAdminSurveyTemplateId) {
+            try {
+                const tmpl = await AdminSurveyTemplate.findById(sourceAdminSurveyTemplateId).lean();
+                if (tmpl?.recompletionPolicy) {
+                    effectiveRecompletionPolicy = {
+                        policy: tmpl.recompletionPolicy.policy || 'never',
+                        intervalDays: Number(tmpl.recompletionPolicy.intervalDays) || 30
+                    };
+                }
+            } catch (_) {}
+        }
 
         const effectiveUserId = (!isCreatedByAdmin) 
             ? req.user?.id 
@@ -1046,8 +1374,10 @@ export const createUserTask = async (req, res) => {
                 surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
                 surveyConfig: isSurveyTask ? surveyConfig : null,
                 surveyVersion: effectiveSurveyVersion,
+                recompletionPolicy: effectiveRecompletionPolicy,
                 isAdminResearchSurvey: Boolean(isAdminResearchSurvey),
                 isMandatoryForAllUsers: Boolean(isMandatoryForAllUsers),
+                requirementMode: effectiveRequirementMode,
                 sourceAdminSurveyTemplateId: sourceAdminSurveyTemplateId || null,
                 targeting: normalizedTargeting,
                 status: initialStatus,
@@ -2819,12 +3149,33 @@ export const submitUserTaskProof = async (req, res) => {
         const settings = await Setting.getSettings();
 
         // Enforce Global Micro Task Hub Access Policy
-        const isMandatoryAllAdminSurvey = Boolean(task.isAdminResearchSurvey && task.isMandatoryForAllUsers);
-        if (!isUserAdmin(req.user) && !isMandatoryAllAdminSurvey && !canUserAccessMicroTaskHub(worker, settings)) {
+        const reqMode = task.requirementMode || (task.isMandatoryForAllUsers ? 'mandatory_all' : 'optional');
+        const isMandatoryAllAdminSurvey = Boolean(
+            task.isAdminResearchSurvey && 
+            (reqMode === 'mandatory_all' || task.isMandatoryForAllUsers)
+        );
+        const isMandatoryTargetedSurvey = Boolean(
+            task.isAdminResearchSurvey && 
+            reqMode === 'mandatory_targeted'
+        );
+        const isMandatorySurvey = isMandatoryAllAdminSurvey || isMandatoryTargetedSurvey;
+
+        if (!isUserAdmin(req.user) && !isMandatorySurvey && !canUserAccessMicroTaskHub(worker, settings)) {
             return res.status(403).json({
                 success: false,
                 error: 'Micro Task Hub access is currently disabled or restricted for your account.'
             });
+        }
+
+        // Server-Side Gate: If worker has pending mandatory surveys, block submission for normal optional tasks
+        if (!isUserAdmin(req.user) && !isMandatorySurvey) {
+            const pendingSurveys = await getPendingMandatorySurveysForUser(worker);
+            if (pendingSurveys.length > 0) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'You have pending mandatory surveys that must be completed before participating in normal tasks.'
+                });
+            }
         }
 
         // Audience Targeting Enforcement (Phase D-2A & E1)
@@ -2860,11 +3211,36 @@ export const submitUserTaskProof = async (req, res) => {
             }
         }
 
-        // Prevent duplicate submission by same worker for same task/survey
-        const isWorkerAlreadyCompleted = Array.isArray(task.completedUsers) && task.completedUsers.some(cu => String(cu?._id || cu) === String(worker._id));
-        const existing = await UserTaskSubmission.findOne({ taskId: task._id, workerId: worker._id });
-        if (existing || isWorkerAlreadyCompleted) {
-            return res.status(400).json({ success: false, error: 'You have already submitted proof for this task.' });
+        // Prevent duplicate submission by same worker for same task/survey (subject to recompletionPolicy)
+        const policy = task.recompletionPolicy?.policy || 'never';
+        let allowRecompletion = false;
+        if (policy === 'on_version_change') {
+            const latestSub = await UserTaskSubmission.findOne({ 
+                taskId: task._id, 
+                workerId: worker._id,
+                status: { $in: ['Approved', 'Paid'] }
+            }).sort({ createdAt: -1 }).lean();
+            if (latestSub && Number(latestSub.surveyVersion || 1) < Number(task.surveyVersion || 1)) {
+                allowRecompletion = true;
+            }
+        } else if (policy === 'every_x_days') {
+            const latestSub = await UserTaskSubmission.findOne({ 
+                taskId: task._id, 
+                workerId: worker._id,
+                status: { $in: ['Approved', 'Paid'] }
+            }).sort({ createdAt: -1 }).lean();
+            const intervalDays = Number(task.recompletionPolicy?.intervalDays) > 0 ? Number(task.recompletionPolicy.intervalDays) : 30;
+            if (latestSub && (Date.now() - new Date(latestSub.createdAt).getTime()) > intervalDays * 86400000) {
+                allowRecompletion = true;
+            }
+        }
+
+        if (!allowRecompletion) {
+            const isWorkerAlreadyCompleted = Array.isArray(task.completedUsers) && task.completedUsers.some(cu => String(cu?._id || cu) === String(worker._id));
+            const existing = await UserTaskSubmission.findOne({ taskId: task._id, workerId: worker._id });
+            if (existing || isWorkerAlreadyCompleted) {
+                return res.status(400).json({ success: false, error: 'You have already submitted proof for this task.' });
+            }
         }
 
         const isSurveyTask = Boolean(task.isSurvey) || String(task.category || '').toLowerCase().includes('survey');
@@ -3140,7 +3516,7 @@ export const submitUserTaskProof = async (req, res) => {
 
         // If survey task and autoApproval conditions met, auto-approve and credit worker immediately
         if (canAutoApprove) {
-            const claimedTask = await claimTaskCompletionSlot(task._id, worker._id);
+            const claimedTask = await claimTaskCompletionSlot(task._id, worker._id, allowRecompletion);
             if (claimedTask) {
                 try {
                     submission.status = 'Approved';

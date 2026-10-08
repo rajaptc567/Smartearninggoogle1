@@ -19,6 +19,7 @@ import UserTask from '../models/UserTask.js';
 export const REQUIREMENT_MODES = {
     OPTIONAL: 'optional',
     MANDATORY_ALL: 'mandatory_all',
+    MANDATORY_TARGETED: 'mandatory_targeted',
     MANDATORY_BEFORE_WITHDRAWAL: 'mandatory_before_withdrawal'
 };
 

@@ -46,7 +46,7 @@ const AdminSurveyTemplateSchema = new mongoose.Schema({
     requirementConfig: {
         mode: {
             type: String,
-            enum: ['optional', 'mandatory_all', 'mandatory_before_withdrawal'],
+            enum: ['optional', 'mandatory_all', 'mandatory_targeted', 'mandatory_before_withdrawal'],
             default: 'optional'
         }
     },

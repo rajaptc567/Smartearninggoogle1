@@ -212,6 +212,17 @@ const UserTaskSchema = new mongoose.Schema({
         type: Number,
         default: 1
     },
+    recompletionPolicy: {
+        policy: {
+            type: String,
+            enum: ['never', 'on_version_change', 'every_x_days'],
+            default: 'never'
+        },
+        intervalDays: {
+            type: Number,
+            default: 30
+        }
+    },
     isAdminResearchSurvey: {
         type: Boolean,
         default: false
