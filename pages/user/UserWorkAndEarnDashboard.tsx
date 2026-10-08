@@ -56,6 +56,7 @@ import {
 } from 'lucide-react';
 import { useWorkAndEarnConfig } from '../../hooks/useWorkAndEarnConfig';
 import OtherTasksCard from '../../components/OtherTasksCard';
+import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
 import { getEffectiveModulePageControl } from '../../data/modulePagesDefaults';
 import { formatCurrency, currencySymbols, UserTask, UserTaskSubmission } from '../../types';
 import { 
@@ -64,7 +65,8 @@ import {
     submitUserTaskProof, 
     updateUserTaskStatus, 
     deleteUserTask, 
-    openTaskDispute 
+    openTaskDispute,
+    getPendingMandatoryRequirements
 } from '../../services/api';
 
 interface JobGig {
@@ -327,6 +329,29 @@ const UserWorkAndEarnDashboard: React.FC = () => {
 
     // Referral Copy State
     const [copiedReferral, setCopiedReferral] = useState(false);
+
+    // Phase 3: Pending Mandatory Surveys
+    const [pendingMandatorySurveys, setPendingMandatorySurveys] = useState<UserTask[]>([]);
+    const [isLoadingMandatory, setIsLoadingMandatory] = useState(false);
+    const [activeMandatorySurvey, setActiveMandatorySurvey] = useState<UserTask | null>(null);
+
+    const fetchPendingMandatorySurveys = async () => {
+        if (!currentUser) return;
+        try {
+            setIsLoadingMandatory(true);
+            const data = await getPendingMandatoryRequirements();
+            const workAndEarnMandatory = (data || []).filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
+            setPendingMandatorySurveys(workAndEarnMandatory);
+        } catch (err) {
+            console.error('Failed to load mandatory survey requirements:', err);
+        } finally {
+            setIsLoadingMandatory(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPendingMandatorySurveys();
+    }, [currentUser?._id]);
 
     // Breakdown Accordion Toggle States
     const [showTaskEarningsBreakdown, setShowTaskEarningsBreakdown] = useState(false);
@@ -1330,6 +1355,75 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     return (
         <div className="max-w-7xl mx-auto space-y-6 pb-24 md:pb-12 px-3 sm:px-6 pt-2">
             
+            {/* PHASE 3: WORKER MANDATORY SURVEY BLOCKER */}
+            {pendingMandatorySurveys.length > 0 && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md overflow-y-auto">
+                    <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6">
+                        <div className="flex items-center gap-3.5 border-b border-slate-800 pb-4">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl shrink-0 font-bold border border-amber-500/30">
+                                ⚠️
+                            </div>
+                            <div>
+                                <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-wider">Required Survey Pending</h3>
+                                <p className="text-xs sm:text-sm text-amber-300/90 font-medium mt-0.5">
+                                    You have a required survey to complete before you can access more Work & Earn tasks.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                            {pendingMandatorySurveys.map((survey) => {
+                                const estimatedTime = survey.surveyEstimatedMinutes || survey.surveyConfig?.estimatedTimeMinutes || 5;
+                                const rewardUSD = survey.rewardPerTask || 0;
+                                return (
+                                    <div key={survey._id} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                        <div className="space-y-1.5 min-w-0">
+                                            <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 inline-block font-mono">
+                                                {survey.requirementMode === 'mandatory_all' ? 'Mandatory For All' : survey.requirementMode === 'mandatory_targeted' ? 'Mandatory Targeted' : 'Required Survey'}
+                                            </span>
+                                            <h4 className="text-sm sm:text-base font-bold text-white truncate max-w-lg">{survey.title}</h4>
+                                            <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
+                                                {rewardUSD > 0 && (
+                                                    <span className="text-emerald-400 font-bold">
+                                                        +{formatCurrency(rewardUSD * exchangeRate, currentUser.currency)}
+                                                    </span>
+                                                )}
+                                                <span>⏱️ {estimatedTime} mins</span>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            onClick={() => setActiveMandatorySurvey(survey)}
+                                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-lg shadow-amber-500/20 shrink-0 w-full sm:w-auto"
+                                        >
+                                            Complete Survey
+                                        </Button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="text-center pt-2 border-t border-slate-800">
+                            <p className="text-[11px] text-slate-400">
+                                Normal tasks remain locked until all required surveys above are successfully submitted and approved.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SURVEY RUNNER MODAL FOR MANDATORY SURVEYS */}
+            {activeMandatorySurvey && (
+                <SurveyRunnerModal
+                    task={activeMandatorySurvey}
+                    currentUserId={currentUser._id || ''}
+                    onClose={() => setActiveMandatorySurvey(null)}
+                    onCompleted={async () => {
+                        setActiveMandatorySurvey(null);
+                        await fetchPendingMandatorySurveys();
+                    }}
+                />
+            )}
+
             {/* Top Success Toast Notice */}
             {successMessage && (
                 <div className="bg-emerald-500 text-white p-4 rounded-2xl shadow-xl flex items-center justify-between animate-fade-in border border-emerald-400/50">
