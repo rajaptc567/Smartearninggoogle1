@@ -2444,7 +2444,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     const browseableTasks = userTasks.filter(t => {
         const isApproved = t.status === 'Approved' || t.status === 'Paid';
         const isNotMine = t.userId?.toString() !== currentUser._id?.toString();
-        const hasSlots = t.currentCompletions < t.targetQuantity;
+        const hasSlots = t.isUnlimitedResponses
+            ? (
+                t.rewardPerTask === 0 ||
+                (
+                    (t.campaignAvailableBalanceUSD || 0) >= t.rewardPerTask &&
+                    t.campaignFundingStatus !== 'paused_insufficient_funds'
+                )
+            )
+            : (t.currentCompletions < t.targetQuantity);
         const alreadySubmitted = userTaskSubmissions.some(s => {
             const matchTask = s.taskId?.toString() === t._id?.toString();
             const wId = typeof s.workerId === 'object' ? (s.workerId as any)?._id : s.workerId;
@@ -2496,9 +2504,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             
             let matchesStatus = true;
             if (myCampaignFilter === 'pending') matchesStatus = t.status === 'Pending';
-            else if (myCampaignFilter === 'approved') matchesStatus = (t.status === 'Approved' || t.status === 'Active') && t.currentCompletions < t.targetQuantity;
-            else if (myCampaignFilter === 'paused') matchesStatus = t.status === 'On Hold';
-            else if (myCampaignFilter === 'completed') matchesStatus = t.status === 'Completed' || t.currentCompletions >= t.targetQuantity;
+            else if (myCampaignFilter === 'approved') matchesStatus = (t.status === 'Approved' || t.status === 'Active') && (t.isUnlimitedResponses ? (t.rewardPerTask === 0 || (((t.campaignAvailableBalanceUSD || 0) >= t.rewardPerTask) && t.campaignFundingStatus !== 'paused_insufficient_funds')) : t.currentCompletions < t.targetQuantity);
+            else if (myCampaignFilter === 'paused') matchesStatus = t.status === 'On Hold' || (t.isUnlimitedResponses && t.campaignFundingStatus === 'paused_insufficient_funds');
+            else if (myCampaignFilter === 'completed') matchesStatus = t.status === 'Completed' || (!t.isUnlimitedResponses && t.currentCompletions >= t.targetQuantity);
             else if (myCampaignFilter === 'rejected') matchesStatus = t.status === 'Rejected';
 
             return matchesSearch && matchesStatus;
@@ -3996,8 +4004,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                                 {paginatedBrowseTasks.map(task => {
                                     const alreadySubmitted = mySubmissions.some(s => s.taskId.toString() === task._id.toString());
-                                    const progressPercent = Math.min(100, Math.max(0, (task.currentCompletions / (task.targetQuantity || 1)) * 100));
-                                    const spotsLeft = Math.max(0, task.targetQuantity - task.currentCompletions);
+                                    const isUnlimited = Boolean(task.isUnlimitedResponses);
+                                    const progressPercent = isUnlimited ? 100 : Math.min(100, Math.max(0, (task.currentCompletions / (task.targetQuantity || 1)) * 100));
+                                    const spotsLeft = isUnlimited ? Infinity : Math.max(0, task.targetQuantity - task.currentCompletions);
 
                                     return (
                                         <div key={task._id} className="bg-slate-950/80 rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800/80 hover:border-amber-500/50 transition-all group flex flex-col justify-between space-y-3.5">
@@ -4023,10 +4032,21 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             <div className="pt-2 border-t border-slate-800/80 space-y-2.5">
                                                 <div className="space-y-1">
                                                     <div className="text-[10px] sm:text-xs text-slate-400 flex items-center justify-between font-mono">
-                                                        <span>Progress: <strong className="text-slate-200 font-bold">{task.currentCompletions}/{task.targetQuantity}</strong></span>
-                                                        <span className="text-amber-400 font-bold">
-                                                            {spotsLeft > 0 ? `${spotsLeft} left` : 'Full'}
-                                                        </span>
+                                                        {isUnlimited ? (
+                                                            <>
+                                                                <span>Completions: <strong className="text-slate-200 font-bold">{task.currentCompletions}</strong></span>
+                                                                <span className="text-emerald-400 font-bold">
+                                                                    Unlimited Slots
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span>Progress: <strong className="text-slate-200 font-bold">{task.currentCompletions}/{task.targetQuantity}</strong></span>
+                                                                <span className="text-amber-400 font-bold">
+                                                                    {spotsLeft > 0 ? `${spotsLeft} left` : 'Full'}
+                                                                </span>
+                                                            </>
+                                                        )}
                                                     </div>
                                                     <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-800/50">
                                                         <div 
@@ -4079,10 +4099,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             )}
             {/* TAB 3: MY CAMPAIGNS */}
             {activeTab === 'my-tasks' && (() => {
-                const activeCampaignsCount = mySubmittedTasks.filter(t => (t.status === 'Approved' || t.status === 'Active') && t.currentCompletions < t.targetQuantity).length;
-                const pausedCampaignsCount = mySubmittedTasks.filter(t => t.status === 'On Hold').length;
+                const activeCampaignsCount = mySubmittedTasks.filter(t => (t.status === 'Approved' || t.status === 'Active') && (t.isUnlimitedResponses ? (t.rewardPerTask === 0 || (((t.campaignAvailableBalanceUSD || 0) >= t.rewardPerTask) && t.campaignFundingStatus !== 'paused_insufficient_funds')) : t.currentCompletions < t.targetQuantity)).length;
+                const pausedCampaignsCount = mySubmittedTasks.filter(t => t.status === 'On Hold' || (t.isUnlimitedResponses && t.campaignFundingStatus === 'paused_insufficient_funds')).length;
                 const pendingCampaignsCount = mySubmittedTasks.filter(t => t.status === 'Pending').length;
-                const completedCampaignsCount = mySubmittedTasks.filter(t => t.status === 'Completed' || t.currentCompletions >= t.targetQuantity).length;
+                const completedCampaignsCount = mySubmittedTasks.filter(t => t.status === 'Completed' || (!t.isUnlimitedResponses && t.currentCompletions >= t.targetQuantity)).length;
                 const rejectedCampaignsCount = mySubmittedTasks.filter(t => t.status === 'Rejected').length;
 
                 if (selectedCampaignForDetail) {
@@ -4278,7 +4298,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         </div>
                                                         <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30">
                                                             <span className="text-gray-400 text-[10px] block font-medium uppercase">Completed slots</span>
-                                                            <p className="font-bold text-blue-600 dark:text-blue-400 font-mono text-sm mt-0.5">{task.currentCompletions} / {task.targetQuantity}</p>
+                                                            <p className="font-bold text-blue-600 dark:text-blue-400 font-mono text-sm mt-0.5">{task.isUnlimitedResponses ? `${task.currentCompletions} (Unlimited)` : `${task.currentCompletions} / ${task.targetQuantity}`}</p>
                                                         </div>
                                                         <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30">
                                                             <span className="text-gray-400 text-[10px] block font-medium uppercase">Worker Rewards Budget</span>
@@ -5075,7 +5095,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         </h4>
                                                     </div>
                                                     <div className="shrink-0">
-                                                        {task.currentCompletions >= task.targetQuantity || task.status === 'Completed' ? (
+                                                        {(!task.isUnlimitedResponses && task.currentCompletions >= task.targetQuantity) || task.status === 'Completed' ? (
                                                             <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                                                                 Completed
                                                             </span>
@@ -5111,7 +5131,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     </div>
                                                     <div>
                                                         <span className="text-gray-400 font-sans">Slots: </span>
-                                                        <span className="text-gray-700 dark:text-gray-300 font-bold">{task.currentCompletions}/{task.targetQuantity}</span>
+                                                        <span className="text-gray-700 dark:text-gray-300 font-bold">{task.isUnlimitedResponses ? `${task.currentCompletions} (Unlimited)` : `${task.currentCompletions}/${task.targetQuantity}`}</span>
                                                     </div>
                                                 </div>
 
@@ -5278,10 +5298,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 );
                                                             })()}
                                                         </td>
-                                                        <td className="p-3.5 md:p-5 text-gray-500">{task.currentCompletions} / {task.targetQuantity}</td>
+                                                        <td className="p-3.5 md:p-5 text-gray-500">{task.isUnlimitedResponses ? `${task.currentCompletions} (Unlimited)` : `${task.currentCompletions} / ${task.targetQuantity}`}</td>
                                                         <td className="p-3.5 md:p-5">
                                                             <div className="space-y-1">
-                                                                {task.currentCompletions >= task.targetQuantity || task.status === 'Completed' ? (
+                                                                {(!task.isUnlimitedResponses && task.currentCompletions >= task.targetQuantity) || task.status === 'Completed' ? (
                                                                     <Badge variant="success">✅ Completed</Badge>
                                                                 ) : task.status === 'Approved' || task.status === 'Active' ? (
                                                                     <Badge variant="success">🟢 Active</Badge>
