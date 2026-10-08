@@ -792,6 +792,7 @@ export interface UserTask {
     currentCompletions: number;
     isUnlimitedResponses?: boolean;
     campaignFundingStatus?: 'funded' | 'low_balance' | 'paused_insufficient_funds' | 'resumed' | 'exhausted' | 'disabled' | string;
+    campaignHasAvailableReward?: boolean;
     campaignAvailableBalanceUSD?: number;
     campaignTotalFundedUSD?: number;
     campaignTotalSpentUSD?: number;

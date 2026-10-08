@@ -751,13 +751,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             const isApproved = t.status === 'Approved' || t.status === 'Paid';
             const isNotMine = t.userId?.toString() !== currentUser._id?.toString();
             const hasSlots = t.isUnlimitedResponses
-                ? (
-                    t.rewardPerTask === 0 ||
-                    (
-                        (t.campaignAvailableBalanceUSD || 0) >= t.rewardPerTask &&
-                        t.campaignFundingStatus !== 'paused_insufficient_funds'
-                    )
-                )
+                ? Boolean(t.campaignHasAvailableReward)
                 : (t.currentCompletions < t.targetQuantity);
             const alreadySubmitted = userTaskSubmissions.some(s => {
                 const matchTask = s.taskId?.toString() === t._id?.toString();

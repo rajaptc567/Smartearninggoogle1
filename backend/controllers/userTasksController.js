@@ -178,6 +178,17 @@ const toWorkerSafeUserTask = (task) => {
         }
     }
 
+    if (task.isUnlimitedResponses) {
+        safeTask.campaignHasAvailableReward = task.rewardPerTask === 0
+            ? true
+            : Boolean(
+                (task.campaignAvailableBalanceUSD || 0) >= task.rewardPerTask &&
+                task.campaignFundingStatus !== 'paused_insufficient_funds'
+            );
+    } else {
+        safeTask.campaignHasAvailableReward = true;
+    }
+
     return safeTask;
 };
 
@@ -423,6 +434,16 @@ export const getUserTasks = async (req, res) => {
             const isOwner = task.userId && String(task.userId) === String(user._id);
             if (isOwner) {
                 // Return full task for campaign owner
+                if (task.isUnlimitedResponses) {
+                    task.campaignHasAvailableReward = task.rewardPerTask === 0
+                        ? true
+                        : Boolean(
+                            (task.campaignAvailableBalanceUSD || 0) >= task.rewardPerTask &&
+                            task.campaignFundingStatus !== 'paused_insufficient_funds'
+                        );
+                } else {
+                    task.campaignHasAvailableReward = true;
+                }
                 filteredTasks.push(task);
             } else {
                 const isMandatoryAllAdminSurvey = Boolean(task.isAdminResearchSurvey && task.isMandatoryForAllUsers);
