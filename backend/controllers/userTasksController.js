@@ -456,6 +456,10 @@ export const createUserTask = async (req, res) => {
     let createdTask = null;
     let createdTransaction = null;
     let settingId = null;
+    let isCreatedByAdmin = false;
+    let user = null;
+    let totalAmountUSD = 0;
+    let finalIdempotencyKey = null;
     try {
         const { 
             userId, category, subType, title, description, link, targetQuantity, rewardPerTask,
@@ -467,7 +471,7 @@ export const createUserTask = async (req, res) => {
             requiredProofs
         } = req.body;
 
-        const isCreatedByAdmin = Boolean(req.user && isUserAdmin(req.user));
+        isCreatedByAdmin = Boolean(req.user && isUserAdmin(req.user));
         // Server-side authoritative flag: A non-admin user can NEVER set isAdminResearchSurvey or isMandatoryForAllUsers
         const isAdminResearchSurvey = Boolean(isCreatedByAdmin && (req.body.isAdminResearchSurvey === true || req.body.sourceAdminSurveyTemplateId));
         const isMandatoryForAllUsers = Boolean(isAdminResearchSurvey && req.body.isMandatoryForAllUsers === true);
@@ -652,7 +656,7 @@ export const createUserTask = async (req, res) => {
             }
         }
 
-        const user = await User.findById(effectiveUserId);
+        user = await User.findById(effectiveUserId);
         if (!user) {
             return res.status(404).json({ success: false, error: 'User not found.' });
         }
@@ -663,7 +667,7 @@ export const createUserTask = async (req, res) => {
         let adminCommission = 0;
         let totalBudget = 0;
         let baseFeeCharged = 0;
-        let totalAmountUSD = 0;
+        totalAmountUSD = 0;
         let initialFundingAllocatedUSD = 0;
 
         if (isUnlimitedResponses) {
@@ -713,7 +717,7 @@ export const createUserTask = async (req, res) => {
 
         // Idempotency / Request Key logic
         const rawClientIdempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey || req.body.requestId || req.body.requestKey;
-        const finalIdempotencyKey = typeof rawClientIdempotencyKey === 'string' ? rawClientIdempotencyKey.trim() : (rawClientIdempotencyKey || null);
+        finalIdempotencyKey = typeof rawClientIdempotencyKey === 'string' ? rawClientIdempotencyKey.trim() : (rawClientIdempotencyKey || null);
 
         if (finalIdempotencyKey) {
             const existingTx = await Transaction.findOne({ idempotencyKey: finalIdempotencyKey });
@@ -743,10 +747,10 @@ export const createUserTask = async (req, res) => {
             }
         }
 
-        let createdTask = null;
-        let createdTransaction = null;
-        let adminBudgetReserved = false;
-        let reservedAmountUSD = 0;
+        createdTask = null;
+        createdTransaction = null;
+        adminBudgetReserved = false;
+        reservedAmountUSD = 0;
 
         if (isCreatedByAdmin) {
             if (totalAmountUSD > 0) {
@@ -1233,7 +1237,7 @@ export const createUserTask = async (req, res) => {
                 const isExpectedType = existingTx.type === 'Campaign Creation';
                 const hasValidCampaign = Boolean(existingTx.campaignId);
                 const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - totalAmountUSD) < 0.001;
-                const userMatches = String(existingTx.userId) === String(user._id);
+                const userMatches = user ? (String(existingTx.userId) === String(user._id)) : false;
 
                 if (!isExpectedType || !hasValidCampaign || !amountMatches || !userMatches) {
                     return res.status(409).json({

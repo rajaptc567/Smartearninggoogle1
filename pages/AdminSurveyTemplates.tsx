@@ -1238,6 +1238,177 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     />
                                 </div>
 
+                                {/* Target Audience Section */}
+                                <div className="md:col-span-3 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                            <label className="text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                                                Target Audience
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                            <button
+                                                type="button"
+                                                onClick={() => setLaunchAudienceMode('all')}
+                                                className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                    launchAudienceMode === 'all'
+                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                }`}
+                                            >
+                                                All Users
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setLaunchAudienceMode('selected')}
+                                                className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                    launchAudienceMode === 'selected'
+                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                }`}
+                                            >
+                                                Selected Users
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setLaunchAudienceMode('advanced')}
+                                                className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                    launchAudienceMode === 'advanced'
+                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                }`}
+                                            >
+                                                Advanced Targeting
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* All Users Description */}
+                                    {launchAudienceMode === 'all' && (
+                                        <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl border border-indigo-100 dark:border-indigo-900/50 text-[11px] text-indigo-900 dark:text-indigo-300">
+                                            <p className="font-bold">Public Campaign (All Users):</p>
+                                            <p className="text-gray-600 dark:text-gray-400 mt-0.5">
+                                                Available to all current and future eligible platform workers without demographic restrictions. No restrictive targeting object will be attached.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Selected Users Input */}
+                                    {launchAudienceMode === 'selected' && (
+                                        <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+                                            <label className="block text-xs font-black uppercase text-gray-600 dark:text-gray-300">
+                                                Selected User IDs *
+                                            </label>
+                                            <textarea
+                                                rows={3}
+                                                required={launchAudienceMode === 'selected'}
+                                                value={launchSelectedUserIds}
+                                                onChange={(e) => setLaunchSelectedUserIds(e.target.value)}
+                                                placeholder="Enter User IDs separated by commas or new lines (e.g. 64abc123456..., 64def789012...)"
+                                                className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-medium"
+                                            />
+                                            <span className="text-[10px] text-gray-500 block">
+                                                Accepts comma-separated and/or newline-separated MongoDB User IDs. Only specified users will be eligible to see and participate.
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* Advanced Targeting Form */}
+                                    {launchAudienceMode === 'advanced' && (
+                                        <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-[11px] font-black uppercase text-gray-600 dark:text-gray-300 mb-1">
+                                                        Countries (ISO Codes)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={launchCountries}
+                                                        onChange={(e) => setLaunchCountries(e.target.value)}
+                                                        placeholder="e.g. US, PK, IN, GB (comma-separated)"
+                                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[11px] font-black uppercase text-gray-600 dark:text-gray-300 mb-1">
+                                                        Currencies
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={launchCurrencies}
+                                                        onChange={(e) => setLaunchCurrencies(e.target.value)}
+                                                        placeholder="e.g. USD, EUR, PKR (comma-separated)"
+                                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs uppercase"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[11px] font-black uppercase text-gray-600 dark:text-gray-300 mb-1">
+                                                        Gender
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={launchGenders}
+                                                        onChange={(e) => setLaunchGenders(e.target.value)}
+                                                        placeholder="e.g. Male, Female (comma-separated)"
+                                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[11px] font-black uppercase text-gray-600 dark:text-gray-300 mb-1">
+                                                        Account Status
+                                                    </label>
+                                                    <select
+                                                        value={launchAccountStatus}
+                                                        onChange={(e) => setLaunchAccountStatus(e.target.value as 'any' | 'active' | 'inactive')}
+                                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold"
+                                                    >
+                                                        <option value="any">Any Status (Active or Inactive)</option>
+                                                        <option value="active">Active Only</option>
+                                                        <option value="inactive">Inactive Only</option>
+                                                    </select>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[11px] font-black uppercase text-gray-600 dark:text-gray-300 mb-1">
+                                                        Minimum Age
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min={13}
+                                                        max={120}
+                                                        value={launchMinAge}
+                                                        onChange={(e) => setLaunchMinAge(e.target.value)}
+                                                        placeholder="e.g. 18 (leave blank for none)"
+                                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[11px] font-black uppercase text-gray-600 dark:text-gray-300 mb-1">
+                                                        Maximum Age
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min={13}
+                                                        max={120}
+                                                        value={launchMaxAge}
+                                                        onChange={(e) => setLaunchMaxAge(e.target.value)}
+                                                        placeholder="e.g. 65 (leave blank for none)"
+                                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <span className="text-[10px] text-gray-500 block">
+                                                Filters are applied when workers view the task list. Leaving a field blank means no restriction is applied for that criteria.
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="md:col-span-3">
                                     <div className="flex items-center justify-between mb-2">
                                         <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
