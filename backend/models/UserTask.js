@@ -220,6 +220,11 @@ const UserTaskSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    requirementMode: {
+        type: String,
+        enum: ['optional', 'mandatory_all', 'mandatory_targeted', 'mandatory_before_withdrawal'],
+        default: 'optional'
+    },
     sourceAdminSurveyTemplateId: {
         type: mongoose.Schema.ObjectId,
         ref: 'AdminSurveyTemplate',

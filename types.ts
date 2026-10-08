@@ -835,6 +835,9 @@ export interface UserTask {
     surveyVersion?: number;
     isAdminResearchSurvey?: boolean;
     isMandatoryForAllUsers?: boolean;
+    requirementMode?: 'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal' | string;
+    isMandatory?: boolean;
+    isPendingRequirement?: boolean;
     sourceAdminSurveyTemplateId?: string;
     targeting?: {
         countries?: string[];
