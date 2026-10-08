@@ -1133,9 +1133,10 @@ export const createUserTask = async (req, res) => {
         createdTask = txResult.task;
         createdTransaction = txResult.transaction;
 
+        const shouldPublishNow = Boolean(isCreatedByAdmin && req.body.publishNow === true);
+
         // Send Notification to Campaign Creator (non-blocking, outside of transaction)
         try {
-            const shouldPublishNow = Boolean(isCreatedByAdmin && req.body.publishNow === true);
             if (shouldPublishNow) {
                 await Notification.create({
                     userId: user._id,
@@ -1160,10 +1161,10 @@ export const createUserTask = async (req, res) => {
             userId: user._id,
             templateKey: 'task_campaign_created_email',
             variables: {
-                taskTitle: task.title,
+                taskTitle: createdTask.title,
                 amount: totalAmountUSD,
                 currency: 'USD',
-                txId: task._id.toString()
+                txId: createdTask._id.toString()
             }
         }).catch(err => console.error('Failed to send campaign created email:', err));
 
@@ -1171,10 +1172,10 @@ export const createUserTask = async (req, res) => {
             userId: user._id,
             templateKey: 'task_campaign_created_whatsapp',
             variables: {
-                taskTitle: task.title,
+                taskTitle: createdTask.title,
                 amount: totalAmountUSD,
                 currency: 'USD',
-                txId: task._id.toString()
+                txId: createdTask._id.toString()
             }
         }).catch(err => console.error('Failed to send campaign created whatsapp:', err));
 
@@ -1186,8 +1187,8 @@ export const createUserTask = async (req, res) => {
                     userId: admin._id,
                     subject: shouldPublishNow ? 'New Campaign Published 🚀' : 'New Campaign Submission 📋',
                     message: shouldPublishNow
-                        ? `Admin @${user.username} has published a new campaign "${task.title}" directly to live status.`
-                        : `User @${user.username} has submitted a new campaign "${task.title}" for review.`,
+                        ? `Admin @${user.username} has published a new campaign "${createdTask.title}" directly to live status.`
+                        : `User @${user.username} has submitted a new campaign "${createdTask.title}" for review.`,
                     senderType: 'System'
                 });
             }
@@ -1197,7 +1198,7 @@ export const createUserTask = async (req, res) => {
 
         global.appDataVersion = Date.now();
         const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
-        res.status(201).json({ success: true, data: { task, user, settings: latestSettings } });
+        res.status(201).json({ success: true, data: { task: createdTask, user, settings: latestSettings } });
     } catch (err) {
         if (createdTransaction) {
             try {
