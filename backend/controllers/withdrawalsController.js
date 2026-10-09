@@ -8,6 +8,7 @@ import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
+import mongoose from 'mongoose';
 import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendTemplateNotification } from '../utils/automation.js';
 import { isUserEligibleForUserTask } from '../utils/userTaskEligibility.js';
