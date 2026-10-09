@@ -345,12 +345,7 @@ export const createWithdrawal = async (req, res) => {
                         }
                     }
                 } else {
-                    // Neither UserTask nor Task exists!
-                    return res.status(503).json({
-                        success: false,
-                        error: 'The mandatory withdrawal requirement is currently unavailable. Please contact support.',
-                        code: 'MANDATORY_REQUIREMENT_CONFIG_INVALID'
-                    });
+                    // Neither UserTask nor Task exists (stale/deleted task ID) -> do not block withdrawal
                 }
             }
         }

@@ -462,15 +462,8 @@ const WithdrawFunds: React.FC = () => {
             return null;
         }
 
-        // 3. Fallback: task not found in state -> flag unavailable
-        return {
-            type: 'unavailable',
-            title: 'Mandatory Verification Requirement',
-            taskId: reqTaskId,
-            submissionStatus: 'Requirement Unavailable',
-            isSurvey: false,
-            isUnavailable: true
-        };
+        // 3. Fallback: task not found in state -> task deleted or unavailable, do not block withdrawal
+        return null;
     }, [isTasksEnabled, settings?.mandatoryWithdrawalRequirement, state.userTasks, state.userTaskSubmissions, tasks, currentUser]);
 
     // --- WORK & EARN CONDITIONAL WITHDRAWAL RULES ENGINE ---
