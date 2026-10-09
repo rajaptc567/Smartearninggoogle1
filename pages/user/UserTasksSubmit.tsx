@@ -3985,13 +3985,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                     {activeMandatorySurvey && (
                         <SurveyRunnerModal
-                            survey={activeMandatorySurvey}
-                            isOpen={Boolean(activeMandatorySurvey)}
+                            task={activeMandatorySurvey}
+                            currentUserId={currentUser?._id || ''}
                             onClose={() => {
                                 setActiveMandatorySurvey(null);
                                 fetchPendingMandatorySurveys();
                             }}
-                            onComplete={() => {
+                            onCompleted={() => {
                                 setActiveMandatorySurvey(null);
                                 fetchPendingMandatorySurveys();
                             }}
@@ -4191,9 +4191,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     const isUnlimited = Boolean(task.isUnlimitedResponses);
                                     const progressPercent = isUnlimited ? 100 : Math.min(100, Math.max(0, (task.currentCompletions / (task.targetQuantity || 1)) * 100));
                                     const spotsLeft = isUnlimited ? Infinity : Math.max(0, task.targetQuantity - task.currentCompletions);
+                                    const hasPendingMandatory = pendingMandatorySurveys.length > 0;
 
                                     return (
-                                        <div key={task._id} className="bg-slate-950/80 rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800/80 hover:border-amber-500/50 transition-all group flex flex-col justify-between space-y-3.5">
+                                        <div key={task._id} className={`bg-slate-950/80 rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800/80 transition-all group flex flex-col justify-between space-y-3.5 ${hasPendingMandatory ? 'opacity-60 relative' : 'hover:border-amber-500/50'}`}>
+                                            {hasPendingMandatory && (
+                                                <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] rounded-2xl z-10 flex items-center justify-center p-3 text-center">
+                                                    <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold font-mono">
+                                                        🔒 Locked (Required Survey Pending)
+                                                    </span>
+                                                </div>
+                                            )}
                                             <div className="space-y-2.5">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <span className="inline-block px-2.5 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 font-bold text-[10px] uppercase tracking-wider truncate max-w-[120px]">

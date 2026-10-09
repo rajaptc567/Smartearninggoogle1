@@ -813,11 +813,15 @@ export const createUserTask = async (req, res) => {
         let effectiveRecompletionPolicy = { policy: 'never', intervalDays: 30 };
         let effectiveDisplayBehavior = 'popup_only';
         const ALLOWED_DISPLAY_BEHAVIORS = ['popup_only', 'highlighted_only', 'both'];
-        if (req.body.mandatoryDisplayBehavior) {
+        if (req.body.mandatoryDisplayBehavior !== undefined && req.body.mandatoryDisplayBehavior !== null && req.body.mandatoryDisplayBehavior !== '') {
             const b = String(req.body.mandatoryDisplayBehavior).trim().toLowerCase();
-            if (ALLOWED_DISPLAY_BEHAVIORS.includes(b)) {
-                effectiveDisplayBehavior = b;
+            if (!ALLOWED_DISPLAY_BEHAVIORS.includes(b)) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Invalid mandatoryDisplayBehavior. Allowed values: ${ALLOWED_DISPLAY_BEHAVIORS.join(', ')}.`
+                });
             }
+            effectiveDisplayBehavior = b;
         } else if (sourceAdminSurveyTemplateId) {
             try {
                 const tmpl = await AdminSurveyTemplate.findById(sourceAdminSurveyTemplateId).lean();
