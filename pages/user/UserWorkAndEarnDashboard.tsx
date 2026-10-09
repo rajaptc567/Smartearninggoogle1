@@ -267,7 +267,7 @@ const DEFAULT_GIGS: JobGig[] = [
 ];
 
 const UserWorkAndEarnDashboard: React.FC = () => {
-    const { state, dispatch } = useData();
+    const { state, dispatch, refreshData } = useData();
     const { currentUser, userTasks = [], userTaskSubmissions = [], tasks = [], transactions = [], deposits = [], withdrawals = [] } = state;
     const navigate = useNavigate();
 
@@ -1490,6 +1490,9 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                     onCompleted={async () => {
                         setActiveMandatorySurvey(null);
                         await fetchPendingMandatorySurveys();
+                        if (refreshData) {
+                            await refreshData(true);
+                        }
                     }}
                 />
             )}

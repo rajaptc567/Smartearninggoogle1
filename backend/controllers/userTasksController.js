@@ -205,6 +205,9 @@ const toWorkerSafeUserTask = (task, meta = {}) => {
         if (meta.isAwaitingFunding !== undefined) {
             safeTask.isAwaitingFunding = Boolean(meta.isAwaitingFunding);
         }
+        if (meta.isLockedByMandatoryRequirement !== undefined) {
+            safeTask.isLockedByMandatoryRequirement = Boolean(meta.isLockedByMandatoryRequirement);
+        }
     }
 
     return safeTask;
@@ -672,24 +675,19 @@ export const getUserTasks = async (req, res) => {
             } else {
                 const isPendingReqForMe = pendingMandatoryTaskIds.has(String(task._id));
 
-                if (hasPendingMandatory) {
-                    // GATE ACTIVE: User has pending mandatory surveys!
-                    // Normal optional tasks are strictly BLOCKED.
-                    // Only the user's pending mandatory surveys themselves are returned.
-                    if (isPendingReqForMe) {
-                        const isLiveStatus = ['Approved', 'Paid', 'Active'].includes(task.status);
-                        if (isLiveStatus) {
-                            const isAwaiting = task.isUnlimitedResponses && task.rewardPerTask > 0 &&
-                                ((task.campaignAvailableBalanceUSD || 0) < task.rewardPerTask || task.campaignFundingStatus === 'paused_insufficient_funds');
-                            filteredTasks.push(toWorkerSafeUserTask(task, {
-                                isPendingRequirement: true,
-                                isAwaitingFunding: isAwaiting
-                            }));
-                        }
+                if (isPendingReqForMe) {
+                    // This is one of the user's pending mandatory surveys
+                    const isLiveStatus = ['Approved', 'Paid', 'Active'].includes(task.status);
+                    if (isLiveStatus) {
+                        const isAwaiting = task.isUnlimitedResponses && task.rewardPerTask > 0 &&
+                            ((task.campaignAvailableBalanceUSD || 0) < task.rewardPerTask || task.campaignFundingStatus === 'paused_insufficient_funds');
+                        filteredTasks.push(toWorkerSafeUserTask(task, {
+                            isPendingRequirement: true,
+                            isAwaitingFunding: isAwaiting
+                        }));
                     }
                 } else {
-                    // GATE CLEARED: User has NO pending mandatory surveys.
-                    // Standard Hub worker access governs normal tasks:
+                    // Ordinary or other non-mandatory task: check normal worker access and eligibility
                     if (isHubAccessible && isTasksEnabled) {
                         const isLiveStatus = ['Approved', 'Paid', 'Active'].includes(task.status);
                         const hasAvailableSlots = task.isUnlimitedResponses
@@ -699,7 +697,9 @@ export const getUserTasks = async (req, res) => {
                         const alreadyCompleted = isTaskCompletedByUser(user, task, workerApprovedSubmissions);
 
                         if (isLiveStatus && hasAvailableSlots && !alreadyCompleted && isUserEligibleForUserTask(user, task, eligibilityContext)) {
-                            filteredTasks.push(toWorkerSafeUserTask(task));
+                            filteredTasks.push(toWorkerSafeUserTask(task, {
+                                isLockedByMandatoryRequirement: hasPendingMandatory
+                            }));
                         }
                     }
                 }

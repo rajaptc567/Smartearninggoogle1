@@ -839,6 +839,7 @@ export interface UserTask {
     mandatoryDisplayBehavior?: 'popup_only' | 'highlighted_only' | 'both' | string;
     isMandatory?: boolean;
     isPendingRequirement?: boolean;
+    isLockedByMandatoryRequirement?: boolean;
     sourceAdminSurveyTemplateId?: string;
     targeting?: {
         countries?: string[];

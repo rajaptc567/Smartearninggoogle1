@@ -197,7 +197,7 @@ export const renderDisputeTimerBox = (sub: any, settings: any) => {
 };
 
 const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false, hideSubTabs = false, isAdminMode = false, onCampaignCreated }) => {
-    const { state, dispatch } = useData();
+    const { state, dispatch, refreshData } = useData();
     const { currentUser, userTasks, userTaskSubmissions, settings } = state;
     const rates = settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
     const [searchParams] = useSearchParams();
@@ -3992,9 +3992,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 setActiveMandatorySurvey(null);
                                 fetchPendingMandatorySurveys();
                             }}
-                            onCompleted={() => {
+                            onCompleted={async () => {
                                 setActiveMandatorySurvey(null);
-                                fetchPendingMandatorySurveys();
+                                await fetchPendingMandatorySurveys();
+                                if (refreshData) {
+                                    await refreshData(true);
+                                }
                             }}
                         />
                     )}
