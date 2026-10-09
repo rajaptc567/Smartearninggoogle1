@@ -366,6 +366,9 @@ const WithdrawFunds: React.FC = () => {
         // 1. Check UserTasks (surveys & campaigns)
         const ut = (state.userTasks || []).find((t: any) => String(t._id) === reqTaskId);
         if (ut) {
+            if (ut.status === 'On Hold') {
+                return null;
+            }
             const isSurvey = Boolean(ut.isSurvey);
             const sub = (state.userTaskSubmissions || []).find((s: any) =>
                 String(s.taskId) === reqTaskId &&

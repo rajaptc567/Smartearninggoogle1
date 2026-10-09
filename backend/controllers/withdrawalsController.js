@@ -211,47 +211,49 @@ export const createWithdrawal = async (req, res) => {
             } catch (_) {}
 
             if (userTask) {
-                const isSurvey = Boolean(userTask.isSurvey);
+                if (userTask.status !== 'On Hold') {
+                    const isSurvey = Boolean(userTask.isSurvey);
 
-                // Look up authenticated user's submission for this UserTask
-                const submission = await UserTaskSubmission.findOne({
-                    taskId: userTask._id,
-                    workerId: user._id
-                }).sort({ createdAt: -1 }).lean();
+                    // Look up authenticated user's submission for this UserTask
+                    const submission = await UserTaskSubmission.findOne({
+                        taskId: userTask._id,
+                        workerId: user._id
+                    }).sort({ createdAt: -1 }).lean();
 
-                let isSatisfied = false;
-                let failureReason = '';
+                    let isSatisfied = false;
+                    let failureReason = '';
 
-                if (!submission) {
-                    isSatisfied = false;
-                    failureReason = `Platform security policy requires you to complete the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" before withdrawing Work & Earn earnings.`;
-                } else if (submission.status !== 'Approved' && submission.status !== 'Paid') {
-                    isSatisfied = false;
-                    failureReason = `Your submission for the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" is currently "${submission.status}". It must be Approved before withdrawing Work & Earn earnings.`;
-                } else if (isSurvey && (submission.surveyQualificationStatus === 'Disqualified' || submission.surveyQualificationStatus === 'Screenout')) {
-                    isSatisfied = false;
-                    failureReason = `Your submission for survey "${userTask.title}" was not qualified (Status: ${submission.surveyQualificationStatus}). You must complete a qualified survey to withdraw.`;
-                } else if (isSurvey && reqVersion && (Number(submission.surveyVersion) || 1) !== reqVersion) {
-                    isSatisfied = false;
-                    failureReason = `Your completed survey submission is version ${Number(submission.surveyVersion) || 1}, but mandatory withdrawal requirement mandates version ${reqVersion}. Please complete version ${reqVersion}.`;
-                } else {
-                    isSatisfied = true;
-                }
+                    if (!submission) {
+                        isSatisfied = false;
+                        failureReason = `Platform security policy requires you to complete the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" before withdrawing Work & Earn earnings.`;
+                    } else if (submission.status !== 'Approved' && submission.status !== 'Paid') {
+                        isSatisfied = false;
+                        failureReason = `Your submission for the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" is currently "${submission.status}". It must be Approved before withdrawing Work & Earn earnings.`;
+                    } else if (isSurvey && (submission.surveyQualificationStatus === 'Disqualified' || submission.surveyQualificationStatus === 'Screenout')) {
+                        isSatisfied = false;
+                        failureReason = `Your submission for survey "${userTask.title}" was not qualified (Status: ${submission.surveyQualificationStatus}). You must complete a qualified survey to withdraw.`;
+                    } else if (isSurvey && reqVersion && (Number(submission.surveyVersion) || 1) !== reqVersion) {
+                        isSatisfied = false;
+                        failureReason = `Your completed survey submission is version ${Number(submission.surveyVersion) || 1}, but mandatory withdrawal requirement mandates version ${reqVersion}. Please complete version ${reqVersion}.`;
+                    } else {
+                        isSatisfied = true;
+                    }
 
-                if (!isSatisfied) {
-                    return res.status(403).json({
-                        success: false,
-                        error: failureReason,
-                        code: 'MANDATORY_REQUIREMENT_UNMET',
-                        mandatoryRequirement: {
-                            type: isSurvey ? 'survey' : 'user_task',
-                            taskId: userTask._id,
-                            taskTitle: userTask.title,
-                            requiredVersion: isSurvey ? reqVersion : undefined,
-                            submissionStatus: submission ? submission.status : 'Not Started',
-                            submissionVersion: submission ? (submission.surveyVersion || 1) : undefined
-                        }
-                    });
+                    if (!isSatisfied) {
+                        return res.status(403).json({
+                            success: false,
+                            error: failureReason,
+                            code: 'MANDATORY_REQUIREMENT_UNMET',
+                            mandatoryRequirement: {
+                                type: isSurvey ? 'survey' : 'user_task',
+                                taskId: userTask._id,
+                                taskTitle: userTask.title,
+                                requiredVersion: isSurvey ? reqVersion : undefined,
+                                submissionStatus: submission ? submission.status : 'Not Started',
+                                submissionVersion: submission ? (submission.surveyVersion || 1) : undefined
+                            }
+                        });
+                    }
                 }
             } else {
                 // 2. Fallback: check if requiredTaskId matches an admin Task
