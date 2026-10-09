@@ -4196,10 +4196,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     const progressPercent = isUnlimited ? 100 : Math.min(100, Math.max(0, (task.currentCompletions / (task.targetQuantity || 1)) * 100));
                                     const spotsLeft = isUnlimited ? Infinity : Math.max(0, task.targetQuantity - task.currentCompletions);
                                     const hasPendingMandatory = pendingMandatorySurveys.length > 0;
+                                    const isLocked = Boolean(hasPendingMandatory || task.isLockedByMandatoryRequirement);
 
                                     return (
-                                        <div key={task._id} className={`bg-slate-950/80 rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800/80 transition-all group flex flex-col justify-between space-y-3.5 ${hasPendingMandatory ? 'opacity-60 relative' : 'hover:border-amber-500/50'}`}>
-                                            {hasPendingMandatory && (
+                                        <div key={task._id} className={`bg-slate-950/80 rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800/80 transition-all group flex flex-col justify-between space-y-3.5 ${isLocked ? 'opacity-60 relative' : 'hover:border-amber-500/50'}`}>
+                                            {isLocked && (
                                                 <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] rounded-2xl z-10 flex items-center justify-center p-3 text-center">
                                                     <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold font-mono">
                                                         🔒 Locked (Required Survey Pending)
@@ -4257,10 +4258,22 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         <span className="w-full py-2 px-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 font-mono">
                                                             ✓ Submitted
                                                         </span>
+                                                    ) : isLocked ? (
+                                                        <button 
+                                                            type="button"
+                                                            disabled={true}
+                                                            aria-disabled="true"
+                                                            title="Complete pending required survey to unlock this task"
+                                                            className="w-full py-2 px-3 bg-slate-800/80 border border-slate-700/60 text-slate-400 font-bold rounded-xl text-xs uppercase tracking-wider cursor-not-allowed opacity-75 transition-all flex items-center justify-center gap-1.5 min-h-[40px]"
+                                                        >
+                                                            <span>🔒 Locked</span>
+                                                        </button>
                                                     ) : (
                                                         <button 
+                                                            type="button"
                                                             className="w-full py-2 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-500/10 transition-all flex items-center justify-center gap-1.5 min-h-[40px]"
                                                             onClick={() => {
+                                                                if (isLocked) return;
                                                                 setSelectedTaskForProof(task);
                                                                 setProofStep(1); // Start at step 1 (View Details)
                                                                 seoAnalytics.trackViewTask(task._id, task.category);
