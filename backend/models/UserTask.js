@@ -236,6 +236,11 @@ const UserTaskSchema = new mongoose.Schema({
         enum: ['optional', 'mandatory_all', 'mandatory_targeted', 'mandatory_before_withdrawal'],
         default: 'optional'
     },
+    mandatoryDisplayBehavior: {
+        type: String,
+        enum: ['popup_only', 'highlighted_only', 'both'],
+        default: 'popup_only'
+    },
     sourceAdminSurveyTemplateId: {
         type: mongoose.Schema.ObjectId,
         ref: 'AdminSurveyTemplate',

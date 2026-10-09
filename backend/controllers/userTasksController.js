@@ -166,6 +166,7 @@ const toWorkerSafeUserTask = (task, meta = {}) => {
         'isAdminResearchSurvey',
         'isMandatoryForAllUsers',
         'requirementMode',
+        'mandatoryDisplayBehavior',
         'isUnlimitedResponses',
         'campaignFundingStatus',
         'sourceAdminSurveyTemplateId',
@@ -810,6 +811,25 @@ export const createUserTask = async (req, res) => {
         }
 
         let effectiveRecompletionPolicy = { policy: 'never', intervalDays: 30 };
+        let effectiveDisplayBehavior = 'popup_only';
+        const ALLOWED_DISPLAY_BEHAVIORS = ['popup_only', 'highlighted_only', 'both'];
+        if (req.body.mandatoryDisplayBehavior) {
+            const b = String(req.body.mandatoryDisplayBehavior).trim().toLowerCase();
+            if (ALLOWED_DISPLAY_BEHAVIORS.includes(b)) {
+                effectiveDisplayBehavior = b;
+            }
+        } else if (sourceAdminSurveyTemplateId) {
+            try {
+                const tmpl = await AdminSurveyTemplate.findById(sourceAdminSurveyTemplateId).lean();
+                if (tmpl?.requirementConfig?.mandatoryDisplayBehavior) {
+                    const b = String(tmpl.requirementConfig.mandatoryDisplayBehavior).trim().toLowerCase();
+                    if (ALLOWED_DISPLAY_BEHAVIORS.includes(b)) {
+                        effectiveDisplayBehavior = b;
+                    }
+                }
+            } catch (_) {}
+        }
+
         if (req.body.recompletionPolicy && typeof req.body.recompletionPolicy === 'object') {
             const rawPolicy = String(req.body.recompletionPolicy.policy || '').toLowerCase();
             const allowedPolicies = ['never', 'on_version_change', 'every_x_days'];
@@ -1378,6 +1398,7 @@ export const createUserTask = async (req, res) => {
                 isAdminResearchSurvey: Boolean(isAdminResearchSurvey),
                 isMandatoryForAllUsers: Boolean(isMandatoryForAllUsers),
                 requirementMode: effectiveRequirementMode,
+                mandatoryDisplayBehavior: effectiveDisplayBehavior,
                 sourceAdminSurveyTemplateId: sourceAdminSurveyTemplateId || null,
                 targeting: normalizedTargeting,
                 status: initialStatus,

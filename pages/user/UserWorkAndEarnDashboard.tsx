@@ -353,6 +353,31 @@ const UserWorkAndEarnDashboard: React.FC = () => {
         fetchPendingMandatorySurveys();
     }, [currentUser?._id]);
 
+    // Session-scoped dismissal state for popups
+    const [dismissedPopupIds, setDismissedPopupIds] = useState<string[]>(() => {
+        try {
+            return JSON.parse(sessionStorage.getItem(`dismissed_mandatory_${currentUser?._id}`) || '[]');
+        } catch {
+            return [];
+        }
+    });
+
+    const handleDismissPopup = (surveyIds: string[]) => {
+        const updated = Array.from(new Set([...dismissedPopupIds, ...surveyIds]));
+        setDismissedPopupIds(updated);
+        try {
+            sessionStorage.setItem(`dismissed_mandatory_${currentUser?._id}`, JSON.stringify(updated));
+        } catch (_) {}
+    };
+
+    const popupEligibleSurveys = useMemo(() => {
+        return pendingMandatorySurveys.filter(s => {
+            const behavior = s.mandatoryDisplayBehavior || 'popup_only';
+            if (behavior === 'highlighted_only') return false;
+            return !dismissedPopupIds.includes(String(s._id));
+        });
+    }, [pendingMandatorySurveys, dismissedPopupIds]);
+
     // Breakdown Accordion Toggle States
     const [showTaskEarningsBreakdown, setShowTaskEarningsBreakdown] = useState(false);
     const [showCampaignWalletBreakdown, setShowCampaignWalletBreakdown] = useState(false);
@@ -1355,11 +1380,48 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     return (
         <div className="max-w-7xl mx-auto space-y-6 pb-24 md:pb-12 px-3 sm:px-6 pt-2">
             
-            {/* PHASE 3: WORKER MANDATORY SURVEY BLOCKER */}
+            {/* PERSISTENT DASHBOARD REMINDER & POPUP MODAL FOR MANDATORY SURVEYS */}
             {pendingMandatorySurveys.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in">
+                    <div className="flex items-start sm:items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl shrink-0 font-bold border border-amber-500/30">
+                            ⚠️
+                        </div>
+                        <div>
+                            <h4 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">
+                                {pendingMandatorySurveys.length} Required Survey{pendingMandatorySurveys.length > 1 ? 's' : ''} Pending
+                            </h4>
+                            <p className="text-xs text-amber-300/90 font-medium mt-0.5">
+                                Complete required surveys below to unlock other Work & Earn earning tasks.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                        {pendingMandatorySurveys.map(s => (
+                            <Button
+                                key={s._id}
+                                onClick={() => setActiveMandatorySurvey(s)}
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider px-4 py-2 rounded-xl shadow-md shadow-amber-500/20 shrink-0"
+                            >
+                                Complete: {s.title}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {popupEligibleSurveys.length > 0 && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md overflow-y-auto">
-                    <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6">
-                        <div className="flex items-center gap-3.5 border-b border-slate-800 pb-4">
+                    <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 relative">
+                        <button
+                            onClick={() => handleDismissPopup(popupEligibleSurveys.map(s => String(s._id)))}
+                            className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-lg transition-all"
+                            title="Close popup (requirement remains active)"
+                        >
+                            &times;
+                        </button>
+
+                        <div className="flex items-center gap-3.5 border-b border-slate-800 pb-4 pr-8">
                             <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl shrink-0 font-bold border border-amber-500/30">
                                 ⚠️
                             </div>
@@ -1372,7 +1434,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                         </div>
 
                         <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                            {pendingMandatorySurveys.map((survey) => {
+                            {popupEligibleSurveys.map((survey) => {
                                 const estimatedTime = survey.surveyEstimatedMinutes || survey.surveyConfig?.estimatedTimeMinutes || 5;
                                 const rewardUSD = survey.rewardPerTask || 0;
                                 return (
@@ -1402,10 +1464,18 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                             })}
                         </div>
 
-                        <div className="text-center pt-2 border-t border-slate-800">
-                            <p className="text-[11px] text-slate-400">
-                                Normal tasks remain locked until all required surveys above are successfully submitted and approved.
+                        <div className="text-center pt-2 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                            <p className="text-[11px] text-slate-400 text-left">
+                                Normal tasks remain locked until all required surveys above are successfully completed.
                             </p>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleDismissPopup(popupEligibleSurveys.map(s => String(s._id)))}
+                                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0"
+                            >
+                                Dismiss Popup
+                            </Button>
                         </div>
                     </div>
                 </div>

@@ -836,6 +836,7 @@ export interface UserTask {
     isAdminResearchSurvey?: boolean;
     isMandatoryForAllUsers?: boolean;
     requirementMode?: 'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal' | string;
+    mandatoryDisplayBehavior?: 'popup_only' | 'highlighted_only' | 'both' | string;
     isMandatory?: boolean;
     isPendingRequirement?: boolean;
     sourceAdminSurveyTemplateId?: string;
@@ -1416,6 +1417,7 @@ export interface AdminSurveyTemplate {
     };
     requirementConfig: {
         mode: 'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal';
+        mandatoryDisplayBehavior?: 'popup_only' | 'highlighted_only' | 'both';
     };
     recompletionPolicy: {
         policy: 'never' | 'on_version_change' | 'every_x_days';

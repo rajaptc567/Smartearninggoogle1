@@ -48,6 +48,11 @@ const AdminSurveyTemplateSchema = new mongoose.Schema({
             type: String,
             enum: ['optional', 'mandatory_all', 'mandatory_targeted', 'mandatory_before_withdrawal'],
             default: 'optional'
+        },
+        mandatoryDisplayBehavior: {
+            type: String,
+            enum: ['popup_only', 'highlighted_only', 'both'],
+            default: 'popup_only'
         }
     },
     recompletionPolicy: {

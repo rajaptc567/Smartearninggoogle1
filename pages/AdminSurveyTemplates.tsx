@@ -106,6 +106,7 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [campaignTitle, setCampaignTitle] = useState<string>('');
     const [campaignDescription, setCampaignDescription] = useState<string>('');
     const [launchRequirementMode, setLaunchRequirementMode] = useState<'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal'>('optional');
+    const [launchMandatoryDisplayBehavior, setLaunchMandatoryDisplayBehavior] = useState<'popup_only' | 'highlighted_only' | 'both'>('popup_only');
     const [launchAudienceMode, setLaunchAudienceMode] = useState<'all' | 'selected' | 'active' | 'inactive' | 'advanced'>('all');
     const [launchSelectedUserIds, setLaunchSelectedUserIds] = useState<string>('');
     const [launchCountries, setLaunchCountries] = useState<string>('');
@@ -450,6 +451,7 @@ export const AdminSurveyTemplates: React.FC = () => {
         setCampaignRewardPerTask(initialReward);
         const reqMode = (template.requirementConfig?.mode || 'optional') as any;
         setLaunchRequirementMode(reqMode);
+        setLaunchMandatoryDisplayBehavior(template.requirementConfig?.mandatoryDisplayBehavior || 'popup_only');
         setSetAsMandatoryWithdrawal(reqMode === 'mandatory_before_withdrawal');
         setLaunchResponseLimitMode('unlimited');
         setCampaignWorkersNeeded(50);
@@ -611,6 +613,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                 isSurveyCampaign: true,
                 isAdminResearchSurvey: true,
                 requirementMode: effectiveRequirementMode,
+                mandatoryDisplayBehavior: (effectiveRequirementMode === 'mandatory_all' || effectiveRequirementMode === 'mandatory_targeted') ? launchMandatoryDisplayBehavior : 'popup_only',
                 isMandatoryForAllUsers: isMandatoryForAll,
                 sourceAdminSurveyTemplateId: usingTemplate._id,
                 publishNow: true,
@@ -1545,6 +1548,35 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             )}
                                         </button>
                                     </div>
+
+                                    {(launchRequirementMode === 'mandatory_all' || launchRequirementMode === 'mandatory_targeted') && (
+                                        <div className="mt-3 p-3.5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 space-y-2">
+                                            <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                                                Mandatory Display Behavior *
+                                            </label>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                {[
+                                                    { id: 'popup_only', label: 'Popup Only', desc: 'Modal popup when pending' },
+                                                    { id: 'highlighted_only', label: 'Highlighted Only', desc: 'Highlighted list task, no popup' },
+                                                    { id: 'both', label: 'Both', desc: 'Popup + Highlighted list task' }
+                                                ].map(b => (
+                                                    <button
+                                                        key={b.id}
+                                                        type="button"
+                                                        onClick={() => setLaunchMandatoryDisplayBehavior(b.id as any)}
+                                                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                                                            launchMandatoryDisplayBehavior === b.id
+                                                                ? 'bg-amber-500/20 border-amber-500 text-amber-900 dark:text-amber-200 font-bold shadow-sm'
+                                                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                        }`}
+                                                    >
+                                                        <div className="text-xs font-black uppercase">{b.label}</div>
+                                                        <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{b.desc}</div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Target Audience Section */}
