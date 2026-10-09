@@ -2504,7 +2504,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                               (s.workerName && currentUser.username && s.workerName === currentUser.username);
             return matchTask && matchUser;
         });
-        return isApproved && isNotMine && hasSlots && !alreadySubmitted;
+        const isMandatoryPending = pendingMandatorySurveys.some(s => String(s._id) === String(t._id));
+        return isApproved && isNotMine && hasSlots && !alreadySubmitted && !isMandatoryPending;
     });
     const pendingSubmissions = mySubmissions.filter(s => s.status === 'Pending');
     const completedSubmissions = mySubmissions.filter(s => s.status === 'Approved');
