@@ -10,6 +10,7 @@ import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
 import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendTemplateNotification } from '../utils/automation.js';
+import { isUserEligibleForUserTask } from '../utils/userTaskEligibility.js';
 
 const isUserAdmin = (user) => {
     if (!user) return false;
@@ -212,47 +213,81 @@ export const createWithdrawal = async (req, res) => {
 
             if (userTask) {
                 if (userTask.status !== 'On Hold') {
-                    const isSurvey = Boolean(userTask.isSurvey);
+                    const reqMode = userTask.requirementMode || (userTask.isMandatoryForAllUsers ? 'mandatory_all' : 'optional');
+                    if (reqMode === 'mandatory_targeted') {
+                        const referencedTaskIds = new Set();
+                        const targeting = userTask.targeting;
+                        if (targeting) {
+                            if (Array.isArray(targeting.completionRules)) {
+                                for (const cr of targeting.completionRules) {
+                                    if (cr.taskId) referencedTaskIds.add(cr.taskId);
+                                }
+                            }
+                            if (Array.isArray(targeting.surveyAnswerRules)) {
+                                for (const sr of targeting.surveyAnswerRules) {
+                                    if (sr.taskId) referencedTaskIds.add(sr.taskId);
+                                }
+                            }
+                        }
+                        const validReferencedIds = Array.from(referencedTaskIds).filter(id => id && mongoose.Types.ObjectId.isValid(id));
+                        let targetSubs = [];
+                        if (validReferencedIds.length > 0) {
+                            targetSubs = await UserTaskSubmission.find({
+                                workerId: user._id,
+                                taskId: { $in: validReferencedIds }
+                            }).sort({ createdAt: -1 }).lean();
+                        }
+                        const eligibilityContext = { submissions: targetSubs };
 
-                    // Look up authenticated user's submission for this UserTask
-                    const submission = await UserTaskSubmission.findOne({
-                        taskId: userTask._id,
-                        workerId: user._id
-                    }).sort({ createdAt: -1 }).lean();
-
-                    let isSatisfied = false;
-                    let failureReason = '';
-
-                    if (!submission) {
-                        isSatisfied = false;
-                        failureReason = `Platform security policy requires you to complete the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" before withdrawing Work & Earn earnings.`;
-                    } else if (submission.status !== 'Approved' && submission.status !== 'Paid') {
-                        isSatisfied = false;
-                        failureReason = `Your submission for the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" is currently "${submission.status}". It must be Approved before withdrawing Work & Earn earnings.`;
-                    } else if (isSurvey && (submission.surveyQualificationStatus === 'Disqualified' || submission.surveyQualificationStatus === 'Screenout')) {
-                        isSatisfied = false;
-                        failureReason = `Your submission for survey "${userTask.title}" was not qualified (Status: ${submission.surveyQualificationStatus}). You must complete a qualified survey to withdraw.`;
-                    } else if (isSurvey && reqVersion && (Number(submission.surveyVersion) || 1) !== reqVersion) {
-                        isSatisfied = false;
-                        failureReason = `Your completed survey submission is version ${Number(submission.surveyVersion) || 1}, but mandatory withdrawal requirement mandates version ${reqVersion}. Please complete version ${reqVersion}.`;
-                    } else {
-                        isSatisfied = true;
+                        const isEligible = isUserEligibleForUserTask(user, userTask, eligibilityContext);
+                        if (!isEligible) {
+                            userTask = null; // User not eligible for this targeted campaign; do not block withdrawal
+                        }
                     }
 
-                    if (!isSatisfied) {
-                        return res.status(403).json({
-                            success: false,
-                            error: failureReason,
-                            code: 'MANDATORY_REQUIREMENT_UNMET',
-                            mandatoryRequirement: {
-                                type: isSurvey ? 'survey' : 'user_task',
-                                taskId: userTask._id,
-                                taskTitle: userTask.title,
-                                requiredVersion: isSurvey ? reqVersion : undefined,
-                                submissionStatus: submission ? submission.status : 'Not Started',
-                                submissionVersion: submission ? (submission.surveyVersion || 1) : undefined
-                            }
-                        });
+                    if (userTask) {
+                        const isSurvey = Boolean(userTask.isSurvey);
+
+                        // Look up authenticated user's submission for this UserTask
+                        const submission = await UserTaskSubmission.findOne({
+                            taskId: userTask._id,
+                            workerId: user._id
+                        }).sort({ createdAt: -1 }).lean();
+
+                        let isSatisfied = false;
+                        let failureReason = '';
+
+                        if (!submission) {
+                            isSatisfied = false;
+                            failureReason = `Platform security policy requires you to complete the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" before withdrawing Work & Earn earnings.`;
+                        } else if (submission.status !== 'Approved' && submission.status !== 'Paid') {
+                            isSatisfied = false;
+                            failureReason = `Your submission for the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" is currently "${submission.status}". It must be Approved before withdrawing Work & Earn earnings.`;
+                        } else if (isSurvey && (submission.surveyQualificationStatus === 'Disqualified' || submission.surveyQualificationStatus === 'Screenout')) {
+                            isSatisfied = false;
+                            failureReason = `Your submission for survey "${userTask.title}" was not qualified (Status: ${submission.surveyQualificationStatus}). You must complete a qualified survey to withdraw.`;
+                        } else if (isSurvey && reqVersion && (Number(submission.surveyVersion) || 1) !== reqVersion) {
+                            isSatisfied = false;
+                            failureReason = `Your completed survey submission is version ${Number(submission.surveyVersion) || 1}, but mandatory withdrawal requirement mandates version ${reqVersion}. Please complete version ${reqVersion}.`;
+                        } else {
+                            isSatisfied = true;
+                        }
+
+                        if (!isSatisfied) {
+                            return res.status(403).json({
+                                success: false,
+                                error: failureReason,
+                                code: 'MANDATORY_REQUIREMENT_UNMET',
+                                mandatoryRequirement: {
+                                    type: isSurvey ? 'survey' : 'user_task',
+                                    taskId: userTask._id,
+                                    taskTitle: userTask.title,
+                                    requiredVersion: isSurvey ? reqVersion : undefined,
+                                    submissionStatus: submission ? submission.status : 'Not Started',
+                                    submissionVersion: submission ? (submission.surveyVersion || 1) : undefined
+                                }
+                            });
+                        }
                     }
                 }
             } else {

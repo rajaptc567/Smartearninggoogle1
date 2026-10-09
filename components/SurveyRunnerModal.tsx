@@ -143,6 +143,28 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
     onClose,
     onCompleted
 }) => {
+    if (task?.status === 'On Hold') {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+                <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-200 dark:border-gray-800 text-center">
+                    <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/20 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-2xl font-bold">
+                        ⏸️
+                    </div>
+                    <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight mb-2">Campaign Paused</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                        This survey campaign is currently paused (&ldquo;On Hold&rdquo;) by the administrator and is not accepting submissions at this time.
+                    </p>
+                    <button
+                        onClick={onClose}
+                        className="w-full py-3 bg-gray-900 dark:bg-white dark:text-gray-900 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:opacity-90 transition-all"
+                    >
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     // Stages: 'intro' | 'active' | 'submitting' | 'success' | 'speed_warning' | 'disqualified'
     const [stage, setStage] = useState<'intro' | 'active' | 'submitting' | 'success' | 'speed_warning' | 'disqualified'>('intro');
     const [consentAgreed, setConsentAgreed] = useState(false);

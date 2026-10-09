@@ -369,6 +369,32 @@ const WithdrawFunds: React.FC = () => {
             if (ut.status === 'On Hold') {
                 return null;
             }
+            const reqMode = ut.requirementMode || (ut.isMandatoryForAllUsers ? 'mandatory_all' : 'optional');
+            if (reqMode === 'mandatory_targeted' && ut.targeting) {
+                const targeting = ut.targeting;
+                const userCountry = (currentUser?.country || '').trim().toLowerCase();
+                const userCurrency = (currentUser?.currency || '').trim().toUpperCase();
+                const userGender = (currentUser?.gender || '').trim().toLowerCase();
+                const userIdStr = String(currentUser?._id || currentUser?.id || '');
+
+                if (Array.isArray(targeting.countries) && targeting.countries.length > 0) {
+                    const cleanCountries = targeting.countries.map((c: string) => c.trim().toLowerCase());
+                    if (userCountry && !cleanCountries.includes(userCountry)) return null;
+                }
+                if (Array.isArray(targeting.currencies) && targeting.currencies.length > 0) {
+                    const cleanCurrencies = targeting.currencies.map((c: string) => c.trim().toUpperCase());
+                    if (userCurrency && !cleanCurrencies.includes(userCurrency)) return null;
+                }
+                if (Array.isArray(targeting.genders) && targeting.genders.length > 0) {
+                    const cleanGenders = targeting.genders.map((g: string) => g.trim().toLowerCase());
+                    if (userGender && !cleanGenders.includes(userGender)) return null;
+                }
+                if (Array.isArray(targeting.selectedUserIds) && targeting.selectedUserIds.length > 0) {
+                    const cleanSelected = targeting.selectedUserIds.map((id: string) => String(id).trim());
+                    if (userIdStr && !cleanSelected.includes(userIdStr)) return null;
+                }
+            }
+
             const isSurvey = Boolean(ut.isSurvey);
             const sub = (state.userTaskSubmissions || []).find((s: any) =>
                 String(s.taskId) === reqTaskId &&
