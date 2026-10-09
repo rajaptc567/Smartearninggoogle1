@@ -3,7 +3,7 @@ import { useData } from '../../hooks/useData';
 import { formatCurrency, UserTask } from '../../types';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
-import { createUserTask, submitUserTaskProof, convertUserCurrency, createDispute, convertTaskWalletBalance, updateSubmissionStatus, openTaskDispute, updateUserTaskStatus, deleteUserTask, transferInvestmentToTaskWallet, transferTaskEarningsToCampaignWallet, transferWalletToCampaign } from '../../services/api';
+import { createUserTask, submitUserTaskProof, convertUserCurrency, createDispute, convertTaskWalletBalance, updateSubmissionStatus, openTaskDispute, updateUserTaskStatus, deleteUserTask, transferInvestmentToTaskWallet, transferTaskEarningsToCampaignWallet, transferWalletToCampaign, getPendingMandatoryRequirements } from '../../services/api';
 import { canUserAccessTasks } from '../../utils/taskAccess';
 import { canAccessInvestmentModule } from '../../utils/investmentAccess';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -448,6 +448,54 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
     const [activeTab, setActiveTab] = useState<'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs'>(initialTab);
     const [availableTasksSubTab, setAvailableTasksSubTab] = useState<'available_jobs' | 'other_tasks'>('available_jobs');
+
+    // Phase 3: Pending Mandatory Surveys in Available Tasks
+    const [pendingMandatorySurveys, setPendingMandatorySurveys] = useState<UserTask[]>([]);
+    const [isLoadingMandatory, setIsLoadingMandatory] = useState(false);
+    const [activeMandatorySurvey, setActiveMandatorySurvey] = useState<UserTask | null>(null);
+
+    const fetchPendingMandatorySurveys = async () => {
+        if (!currentUser) return;
+        try {
+            setIsLoadingMandatory(true);
+            const data = await getPendingMandatoryRequirements();
+            const workAndEarnMandatory = (data || []).filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
+            setPendingMandatorySurveys(workAndEarnMandatory);
+        } catch (err) {
+            console.error('Failed to load mandatory survey requirements:', err);
+        } finally {
+            setIsLoadingMandatory(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPendingMandatorySurveys();
+    }, [currentUser?._id]);
+
+    // Session-scoped dismissal state for popups
+    const [dismissedPopupIds, setDismissedPopupIds] = useState<string[]>(() => {
+        try {
+            return JSON.parse(sessionStorage.getItem(`dismissed_mandatory_${currentUser?._id}`) || '[]');
+        } catch {
+            return [];
+        }
+    });
+
+    const handleDismissPopup = (surveyIds: string[]) => {
+        const updated = Array.from(new Set([...dismissedPopupIds, ...surveyIds]));
+        setDismissedPopupIds(updated);
+        try {
+            sessionStorage.setItem(`dismissed_mandatory_${currentUser?._id}`, JSON.stringify(updated));
+        } catch (_) {}
+    };
+
+    const popupEligibleSurveys = useMemo(() => {
+        return pendingMandatorySurveys.filter(s => {
+            const behavior = s.mandatoryDisplayBehavior || 'popup_only';
+            if (behavior === 'highlighted_only') return false;
+            return !dismissedPopupIds.includes(String(s._id));
+        });
+    }, [pendingMandatorySurveys, dismissedPopupIds]);
 
     useEffect(() => {
         const tab = searchParams.get('tab');
@@ -3807,6 +3855,148 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             {/* TAB 2: BROWSE & EARN TASKS */}
             {activeTab === 'browse' && (
                 <div className="space-y-6">
+                    {/* PERSISTENT REQUIRED SURVEYS BANNER & POPUP MODAL */}
+                    {pendingMandatorySurveys.length > 0 && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl shrink-0 font-bold border border-amber-500/30">
+                                        ⚠️
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">
+                                            {pendingMandatorySurveys.length} Required Survey{pendingMandatorySurveys.length > 1 ? 's' : ''} Pending
+                                        </h4>
+                                        <p className="text-xs text-amber-300/90 font-medium mt-0.5">
+                                            Complete required surveys below to satisfy mandatory participation requirements.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {pendingMandatorySurveys.map(survey => {
+                                    const estimatedTime = survey.surveyEstimatedMinutes || survey.surveyConfig?.estimatedTimeMinutes || 5;
+                                    const rewardUSD = survey.rewardPerTask || 0;
+                                    const behavior = survey.mandatoryDisplayBehavior || 'popup_only';
+                                    return (
+                                        <div key={survey._id} className="bg-slate-950/90 border border-amber-500/30 rounded-2xl p-4 flex flex-col justify-between space-y-3">
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="text-[10px] uppercase font-black tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
+                                                        REQUIRED SURVEY
+                                                    </span>
+                                                    {rewardUSD > 0 && (
+                                                        <span className="text-emerald-400 font-bold font-mono text-xs">
+                                                            +${rewardUSD} USD
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <h5 className="text-sm font-bold text-white line-clamp-1">{survey.title}</h5>
+                                                <p className="text-xs text-slate-400 line-clamp-2">{survey.description}</p>
+                                                <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+                                                    <span>⏱️ {estimatedTime} mins</span>
+                                                    <span>•</span>
+                                                    <span className="text-amber-300 uppercase text-[10px] font-bold">Behavior: {behavior}</span>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                onClick={() => setActiveMandatorySurvey(survey)}
+                                                className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider py-2.5 rounded-xl shadow-md shadow-amber-500/20"
+                                            >
+                                                Complete Survey Now
+                                            </Button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {popupEligibleSurveys.length > 0 && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md overflow-y-auto">
+                            <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 relative">
+                                <button
+                                    onClick={() => handleDismissPopup(popupEligibleSurveys.map(s => String(s._id)))}
+                                    className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-lg transition-all"
+                                    title="Close popup (requirement remains active)"
+                                >
+                                    &times;
+                                </button>
+
+                                <div className="flex items-center gap-3.5 border-b border-slate-800 pb-4 pr-8">
+                                    <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl shrink-0 font-bold border border-amber-500/30">
+                                        ⚠️
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-wider">Required Survey Pending</h3>
+                                        <p className="text-xs sm:text-sm text-amber-300/90 font-medium mt-0.5">
+                                            You have a required survey to complete before you can access more tasks.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                                    {popupEligibleSurveys.map((survey) => {
+                                        const estimatedTime = survey.surveyEstimatedMinutes || survey.surveyConfig?.estimatedTimeMinutes || 5;
+                                        const rewardUSD = survey.rewardPerTask || 0;
+                                        return (
+                                            <div key={survey._id} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                <div className="space-y-1.5 min-w-0">
+                                                    <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 inline-block font-mono">
+                                                        REQUIRED SURVEY
+                                                    </span>
+                                                    <h4 className="text-sm sm:text-base font-bold text-white truncate max-w-lg">{survey.title}</h4>
+                                                    <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
+                                                        {rewardUSD > 0 && (
+                                                            <span className="text-emerald-400 font-bold">
+                                                                +{formatCurrency(rewardUSD * exchangeRate, currentUser.currency)}
+                                                            </span>
+                                                        )}
+                                                        <span>⏱️ {estimatedTime} mins</span>
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    onClick={() => setActiveMandatorySurvey(survey)}
+                                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-lg shadow-amber-500/20 shrink-0 w-full sm:w-auto"
+                                                >
+                                                    Complete Survey
+                                                </Button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="text-center pt-2 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                    <p className="text-[11px] text-slate-400 text-left">
+                                        Required surveys remain active until completed.
+                                    </p>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => handleDismissPopup(popupEligibleSurveys.map(s => String(s._id)))}
+                                        className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0"
+                                    >
+                                        Dismiss Popup
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeMandatorySurvey && (
+                        <SurveyRunnerModal
+                            survey={activeMandatorySurvey}
+                            isOpen={Boolean(activeMandatorySurvey)}
+                            onClose={() => {
+                                setActiveMandatorySurvey(null);
+                                fetchPendingMandatorySurveys();
+                            }}
+                            onComplete={() => {
+                                setActiveMandatorySurvey(null);
+                                fetchPendingMandatorySurveys();
+                            }}
+                        />
+                    )}
                     {/* 1. Description / Detail Hero Summary Card (Topmost) */}
                     {!hideHeroBanner && (
                         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 p-6 md:p-8 rounded-[2rem] text-white shadow-xl space-y-6 border border-blue-400/20">
