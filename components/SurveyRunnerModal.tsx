@@ -24,14 +24,120 @@ import {
     pipeAnswersIntoText
 } from '../lib/surveyLogicEngine';
 
-interface SurveyRunnerModalProps {
+export interface NormalizedSurveyOption {
+    id: string;
+    text: string;
+    value: string;
+}
+
+export function normalizeSurveyOption(opt: any, index: number): NormalizedSurveyOption {
+    if (typeof opt === 'string') {
+        const trimmed = opt.trim();
+        return {
+            id: trimmed || `opt_${index}`,
+            text: opt,
+            value: opt
+        };
+    }
+    if (typeof opt === 'number' || typeof opt === 'boolean') {
+        const str = String(opt);
+        return {
+            id: `opt_${index}_${str}`,
+            text: str,
+            value: str
+        };
+    }
+    if (typeof opt === 'object' && opt !== null) {
+        const text = typeof opt.text === 'string'
+            ? opt.text
+            : (typeof opt.label === 'string'
+                ? opt.label
+                : (typeof opt.title === 'string'
+                    ? opt.title
+                    : (opt.value !== undefined && opt.value !== null
+                        ? String(opt.value)
+                        : `Option ${index + 1}`)));
+
+        const value = opt.value !== undefined && opt.value !== null
+            ? String(opt.value)
+            : text;
+
+        const id = opt.id !== undefined && opt.id !== null && String(opt.id).trim() !== ''
+            ? String(opt.id)
+            : (value ? `opt_${index}_${value}` : `opt_${index}`);
+
+        return { id, text, value };
+    }
+    const fallback = `Option ${index + 1}`;
+    return {
+        id: `opt_${index}`,
+        text: fallback,
+        value: fallback
+    };
+}
+
+interface ErrorBoundaryProps {
+    children: React.ReactNode;
+    onClose: () => void;
+}
+
+interface ErrorBoundaryState {
+    hasError: boolean;
+    error: Error | null;
+}
+
+class SurveyRunnerErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+    public state: ErrorBoundaryState = { hasError: false, error: null };
+    public props: ErrorBoundaryProps;
+
+    constructor(props: ErrorBoundaryProps) {
+        super(props);
+        this.props = props;
+    }
+
+    static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error: Error, errorInfo: any) {
+        console.error('SurveyRunner encountered an uncaught error:', error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-850 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-200 dark:border-gray-700 text-center space-y-4">
+                        <div className="w-14 h-14 bg-amber-100 dark:bg-amber-950/40 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+                            <AlertTriangle className="w-7 h-7" />
+                        </div>
+                        <h4 className="text-base font-bold text-gray-900 dark:text-white">
+                            Survey Question Notice
+                        </h4>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                            A display issue occurred while rendering this survey question. Your progress has been safely preserved.
+                        </p>
+                        <div className="pt-2">
+                            <Button size="sm" variant="secondary" onClick={this.props.onClose} className="rounded-xl px-5">
+                                Close & Return to Dashboard
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+export interface SurveyRunnerModalProps {
     task: UserTask;
     currentUserId: string;
     onClose: () => void;
     onCompleted: () => void;
 }
 
-export const SurveyRunnerModal: React.FC<SurveyRunnerModalProps> = ({
+const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
     task,
     currentUserId,
     onClose,
@@ -43,7 +149,8 @@ export const SurveyRunnerModal: React.FC<SurveyRunnerModalProps> = ({
 
     // Questions from surveyConfig
     const surveyConfig = task.surveyConfig || {};
-    const questions: SurveyQuestion[] = Array.isArray(surveyConfig.questions) ? surveyConfig.questions : [];
+    const rawQuestions: any[] = Array.isArray(surveyConfig.questions) ? surveyConfig.questions : [];
+    const questions: SurveyQuestion[] = rawQuestions.filter(q => q && typeof q === 'object' && q.id);
 
     // Worker responses: { [questionId: string]: any }
     const [responses, setResponses] = useState<{ [key: string]: any }>({});
@@ -163,7 +270,8 @@ export const SurveyRunnerModal: React.FC<SurveyRunnerModalProps> = ({
     };
 
     // Current question
-    const currentQ: SurveyQuestion | undefined = questions[activeQuestionIndex];
+    const activeIndex = Math.max(0, Math.min(activeQuestionIndex, questions.length > 0 ? questions.length - 1 : 0));
+    const currentQ: SurveyQuestion | undefined = questions[activeIndex];
 
     // Check if current question is answered
     const isCurrentQuestionAnswered = () => {
@@ -171,7 +279,15 @@ export const SurveyRunnerModal: React.FC<SurveyRunnerModalProps> = ({
         if (!currentQ.required) return true;
         const ans = responses[currentQ.id];
         if (ans === undefined || ans === null || ans === '') return false;
-        if (Array.isArray(ans) && ans.length === 0) return false;
+        if (Array.isArray(ans)) {
+            if (ans.length === 0) return false;
+            if (currentQ.type === 'top_n') {
+                const minN = currentQ.validation?.topN || 1;
+                const availableOptsCount = (currentQ.options || []).length;
+                const targetCount = Math.min(minN, availableOptsCount);
+                return ans.length >= targetCount;
+            }
+        }
         return true;
     };
 
@@ -509,323 +625,542 @@ export const SurveyRunnerModal: React.FC<SurveyRunnerModalProps> = ({
 
                     {/* 1. INTRO / CONSENT SCREEN */}
                     {stage === 'intro' && (
-                        <div className="space-y-5 text-center py-4">
-                            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/40 text-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-                                <ShieldCheck className="w-8 h-8" />
+                        <div className="space-y-6 text-center py-2">
+                            {/* Icon badge */}
+                            <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/80 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                                <ShieldCheck className="w-9 h-9" />
                             </div>
 
+                            {/* Headings */}
                             <div className="space-y-2">
-                                <h4 className="text-lg font-bold text-gray-900 dark:text-white">
-                                    Welcome to this Survey
+                                <span className="inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full text-[11px] font-black uppercase tracking-wider">
+                                    Quality Verified Research
+                                </span>
+                                <h4 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                                    {task.title || 'Required Survey Participation'}
                                 </h4>
-                                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 max-w-lg mx-auto leading-relaxed">
                                     {task.description || 'Please read each question carefully and provide honest responses to earn your task reward.'}
                                 </p>
                             </div>
 
                             {/* Rewards & Details Badge Grid */}
-                            <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto text-left">
-                                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase">Reward for completion</span>
-                                    <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-lg mx-auto text-left">
+                                <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
+                                    <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold uppercase tracking-wider block">
+                                        Reward Credit
+                                    </span>
+                                    <div className="text-base sm:text-lg font-black text-emerald-700 dark:text-emerald-400 mt-0.5">
                                         {formatCurrency(task.rewardPerTask)}
                                     </div>
                                 </div>
-                                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase">Estimated Duration</span>
-                                    <div className="text-base font-extrabold text-blue-600 dark:text-blue-400 mt-0.5">
-                                        ~{estimatedMinutes} Minutes
+                                <div className="p-3.5 bg-blue-50/80 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800/60 shadow-xs">
+                                    <span className="text-[10px] text-blue-800 dark:text-blue-300 font-bold uppercase tracking-wider block">
+                                        Estimated Time
+                                    </span>
+                                    <div className="text-base sm:text-lg font-black text-blue-700 dark:text-blue-400 mt-0.5">
+                                        ~{estimatedMinutes} Min
+                                    </div>
+                                </div>
+                                <div className="p-3.5 bg-purple-50/80 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800/60 shadow-xs col-span-2 sm:col-span-1">
+                                    <span className="text-[10px] text-purple-800 dark:text-purple-300 font-bold uppercase tracking-wider block">
+                                        Questions
+                                    </span>
+                                    <div className="text-base sm:text-lg font-black text-purple-700 dark:text-purple-400 mt-0.5">
+                                        {questions.length} Total
                                     </div>
                                 </div>
                             </div>
 
                             {/* Quality Notice */}
-                            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-xl text-left text-xs text-amber-800 dark:text-amber-300 space-y-1">
-                                <span className="font-bold flex items-center gap-1">
-                                    <AlertTriangle className="w-3.5 h-3.5" /> Quality Checkpoints & Anti-Speeding Rules
+                            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/80 rounded-xl text-left space-y-1.5 shadow-xs">
+                                <span className="font-bold flex items-center gap-1.5 text-xs text-amber-900 dark:text-amber-200">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                                    Quality Checkpoints & Attention Verification
                                 </span>
-                                <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                                    Responses are verified for attentiveness and logical consistency. Submissions completed with random click patterns or unverified checks may be disqualified.
+                                <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed font-normal">
+                                    Responses are verified for attentiveness and logical consistency. Submissions completed with random click patterns or failed consistency checks may be disqualified.
                                 </p>
                             </div>
 
-                            {/* Consent Checkbox */}
-                            <div className="pt-2 text-left max-w-md mx-auto">
-                                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-gray-700 dark:text-gray-300">
-                                    <input
-                                        type="checkbox"
-                                        checked={consentAgreed}
-                                        onChange={e => setConsentAgreed(e.target.checked)}
-                                        className="mt-0.5 rounded text-blue-600"
-                                    />
-                                    <span>
-                                        I agree to participate in this survey, confirm that my answers will be accurate, and understand that rewards are credited upon quality verification.
+                            {/* Empty questions notice if misconfigured */}
+                            {questions.length === 0 && (
+                                <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl text-left text-xs text-red-700 dark:text-red-300 space-y-1">
+                                    <span className="font-bold flex items-center gap-1.5">
+                                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                                        Configuration Notice
                                     </span>
-                                </label>
-                            </div>
+                                    <p className="leading-relaxed">
+                                        This survey currently has no active questions configured. Please contact support or the campaign owner to activate questions.
+                                    </p>
+                                </div>
+                            )}
 
-                            <div className="pt-2">
-                                <Button
-                                    variant="primary"
-                                    disabled={!consentAgreed || questions.length === 0}
-                                    onClick={() => setStage('active')}
-                                    className="w-full sm:w-64 py-3 rounded-xl shadow-lg"
-                                >
-                                    Start Survey Now <ArrowRight className="w-4 h-4 ml-1.5" />
+                            {/* Consent Checkbox Box */}
+                            {questions.length > 0 && (
+                                <div className="p-4 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-left">
+                                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={consentAgreed}
+                                            onChange={e => setConsentAgreed(e.target.checked)}
+                                            className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-relaxed">
+                                            I agree to participate in this survey, confirm that my answers will be accurate and honest, and understand that rewards are credited upon quality verification.
+                                        </span>
+                                    </label>
+                                </div>
+                            )}
+
+                            {/* Start / Close Button */}
+                            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                                {questions.length === 0 ? (
+                                    <Button
+                                        variant="secondary"
+                                        onClick={onClose}
+                                        className="w-full sm:w-64 py-3 rounded-xl"
+                                    >
+                                        Close & Return to Dashboard
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        variant="primary"
+                                        disabled={!consentAgreed}
+                                        onClick={() => setStage('active')}
+                                        className="w-full sm:w-64 py-3 rounded-xl shadow-lg font-bold text-xs flex items-center justify-center gap-2"
+                                    >
+                                        Start Survey Now <ArrowRight className="w-4 h-4 ml-1" />
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 2. ACTIVE QUESTION SCREEN WITH DEFENSIVE GUARDS */}
+                    {stage === 'active' && !currentQ && (
+                        <div className="py-12 text-center space-y-4">
+                            <div className="w-14 h-14 bg-amber-100 dark:bg-amber-900/40 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+                                <AlertTriangle className="w-7 h-7" />
+                            </div>
+                            <h4 className="text-base font-bold text-gray-900 dark:text-white">
+                                {questions.length === 0 ? 'No Survey Questions Available' : 'End of Questions'}
+                            </h4>
+                            <p className="text-xs text-gray-600 dark:text-gray-300 max-w-sm mx-auto leading-relaxed">
+                                {questions.length === 0
+                                    ? 'This survey does not currently have any active questions configured.'
+                                    : 'You have reached the end of the available questions.'}
+                            </p>
+                            <div className="pt-2 flex justify-center gap-3">
+                                {questions.length > 0 && (
+                                    <Button size="sm" variant="secondary" onClick={() => setActiveQuestionIndex(0)}>
+                                        Review from Start
+                                    </Button>
+                                )}
+                                <Button size="sm" variant="primary" onClick={questions.length > 0 ? handleSubmitSurvey : onClose}>
+                                    {questions.length > 0 ? 'Submit Responses' : 'Close Survey'}
                                 </Button>
                             </div>
                         </div>
                     )}
 
-                    {/* 2. ACTIVE QUESTION SCREEN WITH DYNAMIC BRANCHING & PIPING */}
-                    {stage === 'active' && currentQ && (
-                        <div className="space-y-5">
-                            {/* Progress bar */}
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between text-xs text-gray-500">
-                                    <span>Question {activeQuestionIndex + 1} of {questions.length}</span>
-                                    <span>{Math.min(100, Math.round(((activeQuestionIndex + 1) / questions.length) * 100))}% Complete</span>
-                                </div>
-                                <div className="w-full bg-gray-200 dark:bg-gray-700 h-2 rounded-full overflow-hidden">
-                                    <div
-                                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                        style={{ width: `${Math.min(100, ((activeQuestionIndex + 1) / questions.length) * 100)}%` }}
-                                    ></div>
-                                </div>
-                            </div>
+                    {stage === 'active' && currentQ && (() => {
+                        const safeTitle = typeof currentQ.title === 'string' ? currentQ.title : String(currentQ.title || 'Question');
+                        const safeDescription = typeof currentQ.description === 'string' ? currentQ.description : (currentQ.description ? String(currentQ.description) : '');
+                        const pipedTitle = pipeAnswersIntoText(safeTitle, responses, questions);
+                        const pipedDescription = safeDescription ? pipeAnswersIntoText(safeDescription, responses, questions) : '';
+                        const normalizedOptions: NormalizedSurveyOption[] = (currentQ.options || []).map((opt: any, idx: number) =>
+                            normalizeSurveyOption(opt, idx)
+                        );
 
-                            {/* Check Warning Notification if Retry triggered */}
-                            {checkWarning && (
-                                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-xl text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
-                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                    <span>{checkWarning}</span>
-                                </div>
-                            )}
-
-                            {/* Question Box with Answer Piping */}
-                            <div className="p-4 bg-gray-50/70 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
-                                <div>
-                                    <h4 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">
-                                        {pipeAnswersIntoText(currentQ.title, responses, questions)}
-                                        {currentQ.required && <span className="text-red-500 ml-1">*</span>}
-                                    </h4>
-                                    {currentQ.description && (
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            {pipeAnswersIntoText(currentQ.description, responses, questions)}
-                                        </p>
-                                    )}
+                        return (
+                            <div className="space-y-5">
+                                {/* Progress bar */}
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 font-medium">
+                                        <span>Question {activeIndex + 1} of {questions.length}</span>
+                                        <span>{Math.min(100, Math.round(((activeIndex + 1) / questions.length) * 100))}% Complete</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 h-2 rounded-full overflow-hidden">
+                                        <div
+                                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                            style={{ width: `${Math.min(100, ((activeIndex + 1) / questions.length) * 100)}%` }}
+                                        ></div>
+                                    </div>
                                 </div>
 
-                                {/* Dynamic Interactive Question Options */}
-                                <div className="pt-2">
-                                    {/* Single Choice Radio */}
-                                    {currentQ.type === 'single_choice' && (
-                                        <div className="space-y-2">
-                                            {(currentQ.options || []).map((opt: string, oi: number) => {
-                                                const isSelected = responses[currentQ.id] === opt;
-                                                return (
-                                                    <div
-                                                        key={oi}
-                                                        onClick={() => handleAnswer(currentQ.id, opt)}
-                                                        className={`p-3 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
-                                                            isSelected
-                                                                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
-                                                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750'
-                                                        }`}
-                                                    >
-                                                        <span>{opt}</span>
-                                                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-blue-600 bg-blue-600' : 'border-gray-400'}`}>
-                                                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
+                                {/* Check Warning Notification if Retry triggered */}
+                                {checkWarning && (
+                                    <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-xl text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                        <span>{checkWarning}</span>
+                                    </div>
+                                )}
 
-                                    {/* Multiple Choice Checkboxes */}
-                                    {currentQ.type === 'multiple_choice' && (
-                                        <div className="space-y-2">
-                                            {(currentQ.options || []).map((opt: string, oi: number) => {
-                                                const currentList: string[] = responses[currentQ.id] || [];
-                                                const isChecked = currentList.includes(opt);
-                                                return (
-                                                    <div
-                                                        key={oi}
-                                                        onClick={() => {
-                                                            const updated = isChecked
-                                                                ? currentList.filter(item => item !== opt)
-                                                                : [...currentList, opt];
-                                                            handleAnswer(currentQ.id, updated);
-                                                        }}
-                                                        className={`p-3 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
-                                                            isChecked
-                                                                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
-                                                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750'
-                                                        }`}
-                                                    >
-                                                        <span>{opt}</span>
-                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-400'}`}>
-                                                            {isChecked && <Check className="w-3 h-3" />}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
+                                {/* Question Box with Answer Piping */}
+                                <div className="p-4 sm:p-5 bg-gray-50/80 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
+                                    <div>
+                                        <h4 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white leading-snug">
+                                            {pipedTitle}
+                                            {currentQ.required && <span className="text-red-500 ml-1 font-bold">*</span>}
+                                        </h4>
+                                        {pipedDescription && (
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+                                                {pipedDescription}
+                                            </p>
+                                        )}
+                                    </div>
 
-                                    {/* Yes / No Binary */}
-                                    {currentQ.type === 'yes_no' && (
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {['Yes', 'No'].map(choice => {
-                                                const isSelected = responses[currentQ.id] === choice;
-                                                return (
-                                                    <button
-                                                        key={choice}
-                                                        type="button"
-                                                        onClick={() => handleAnswer(currentQ.id, choice)}
-                                                        className={`py-3 px-4 rounded-xl border font-bold text-xs transition flex items-center justify-center gap-2 ${
-                                                            isSelected
-                                                                ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                                                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
-                                                        }`}
-                                                    >
-                                                        {choice === 'Yes' ? '👍 Yes' : '👎 No'}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-
-                                    {/* Star Rating (1-5) */}
-                                    {currentQ.type === 'rating' && (
-                                        <div className="flex justify-center items-center gap-2 py-3">
-                                            {[1, 2, 3, 4, 5].map(star => {
-                                                const isFilled = (responses[currentQ.id] || 0) >= star;
-                                                return (
-                                                    <button
-                                                        key={star}
-                                                        type="button"
-                                                        onClick={() => handleAnswer(currentQ.id, star)}
-                                                        className="p-1.5 transform hover:scale-125 transition"
-                                                    >
-                                                        <Star
-                                                            className={`w-8 h-8 ${
-                                                                isFilled
-                                                                    ? 'text-amber-400 fill-amber-400'
-                                                                    : 'text-gray-300 dark:text-gray-600'
-                                                            }`}
-                                                        />
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-
-                                    {/* Opinion Scale (0-10) */}
-                                    {currentQ.type === 'opinion_scale' && (
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between text-[11px] text-gray-500 font-semibold px-1">
-                                                <span>0 - Not likely</span>
-                                                <span>10 - Extremely likely</span>
-                                            </div>
-                                            <div className="flex flex-wrap justify-between gap-1">
-                                                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => {
-                                                    const isSelected = responses[currentQ.id] === val;
+                                    {/* Dynamic Interactive Question Options */}
+                                    <div className="pt-2">
+                                        {/* Single Choice Radio */}
+                                        {currentQ.type === 'single_choice' && (
+                                            <div className="space-y-2">
+                                                {normalizedOptions.map((optData) => {
+                                                    const currentAns = responses[currentQ.id];
+                                                    const isSelected = currentAns !== undefined && currentAns !== null && (
+                                                        currentAns === optData.value ||
+                                                        currentAns === optData.text ||
+                                                        currentAns === optData.id
+                                                    );
                                                     return (
-                                                        <button
-                                                            key={val}
-                                                            type="button"
-                                                            onClick={() => handleAnswer(currentQ.id, val)}
-                                                            className={`w-9 h-9 rounded-xl border text-xs font-bold transition flex items-center justify-center ${
+                                                        <div
+                                                            key={optData.id}
+                                                            onClick={() => handleAnswer(currentQ.id, optData.value)}
+                                                            className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
                                                                 isSelected
-                                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                                                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750'
+                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
+                                                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
                                                             }`}
                                                         >
-                                                            {val}
+                                                            <span className="leading-snug">{optData.text}</span>
+                                                            <div className={`w-4 h-4 rounded-full border shrink-0 ml-3 flex items-center justify-center ${isSelected ? 'border-blue-600 bg-blue-600' : 'border-gray-400 dark:border-gray-500'}`}>
+                                                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {currentQ.allowOther && (
+                                                    <div className="pt-1.5">
+                                                        <div
+                                                            onClick={() => handleAnswer(currentQ.id, 'Other')}
+                                                            className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                                responses[currentQ.id] === 'Other'
+                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
+                                                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                            }`}
+                                                        >
+                                                            <span>Other (specify below)</span>
+                                                            <div className={`w-4 h-4 rounded-full border shrink-0 ml-3 flex items-center justify-center ${responses[currentQ.id] === 'Other' ? 'border-blue-600 bg-blue-600' : 'border-gray-400 dark:border-gray-500'}`}>
+                                                                {responses[currentQ.id] === 'Other' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                                            </div>
+                                                        </div>
+                                                        {responses[currentQ.id] === 'Other' && (
+                                                            <input
+                                                                type="text"
+                                                                value={responses[`${currentQ.id}_other`] || ''}
+                                                                onChange={e => handleAnswer(`${currentQ.id}_other`, e.target.value)}
+                                                                placeholder={currentQ.otherPlaceholder || 'Please provide details...'}
+                                                                className="mt-2 w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Multiple Choice Checkboxes */}
+                                        {currentQ.type === 'multiple_choice' && (
+                                            <div className="space-y-2">
+                                                {normalizedOptions.map((optData) => {
+                                                    const currentList: any[] = Array.isArray(responses[currentQ.id]) ? responses[currentQ.id] : [];
+                                                    const isChecked = currentList.some(item =>
+                                                        item === optData.value || item === optData.text || item === optData.id
+                                                    );
+                                                    return (
+                                                        <div
+                                                            key={optData.id}
+                                                            onClick={() => {
+                                                                const updated = isChecked
+                                                                    ? currentList.filter(item =>
+                                                                        item !== optData.value && item !== optData.text && item !== optData.id
+                                                                    )
+                                                                    : [...currentList, optData.value];
+                                                                handleAnswer(currentQ.id, updated);
+                                                            }}
+                                                            className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                                isChecked
+                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
+                                                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                            }`}
+                                                        >
+                                                            <span className="leading-snug">{optData.text}</span>
+                                                            <div className={`w-4 h-4 rounded border shrink-0 ml-3 flex items-center justify-center ${isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-400 dark:border-gray-500'}`}>
+                                                                {isChecked && <Check className="w-3 h-3" />}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {currentQ.allowOther && (
+                                                    <div className="pt-1.5">
+                                                        {(() => {
+                                                            const currentList: any[] = Array.isArray(responses[currentQ.id]) ? responses[currentQ.id] : [];
+                                                            const isChecked = currentList.includes('Other');
+                                                            return (
+                                                                <>
+                                                                    <div
+                                                                        onClick={() => {
+                                                                            const updated = isChecked
+                                                                                ? currentList.filter(item => item !== 'Other')
+                                                                                : [...currentList, 'Other'];
+                                                                            handleAnswer(currentQ.id, updated);
+                                                                        }}
+                                                                        className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                                            isChecked
+                                                                                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
+                                                                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                        }`}
+                                                                    >
+                                                                        <span>Other (specify below)</span>
+                                                                        <div className={`w-4 h-4 rounded border shrink-0 ml-3 flex items-center justify-center ${isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-400 dark:border-gray-500'}`}>
+                                                                            {isChecked && <Check className="w-3 h-3" />}
+                                                                        </div>
+                                                                    </div>
+                                                                    {isChecked && (
+                                                                        <input
+                                                                            type="text"
+                                                                            value={responses[`${currentQ.id}_other`] || ''}
+                                                                            onChange={e => handleAnswer(`${currentQ.id}_other`, e.target.value)}
+                                                                            placeholder={currentQ.otherPlaceholder || 'Please provide details...'}
+                                                                            className="mt-2 w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                                                                        />
+                                                                    )}
+                                                                </>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Dropdown */}
+                                        {currentQ.type === 'dropdown' && (
+                                            <select
+                                                value={responses[currentQ.id] || ''}
+                                                onChange={e => handleAnswer(currentQ.id, e.target.value)}
+                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            >
+                                                <option value="">-- Select an option --</option>
+                                                {normalizedOptions.map((optData) => (
+                                                    <option key={optData.id} value={optData.value}>
+                                                        {optData.text}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+
+                                        {/* Top N Ranking */}
+                                        {currentQ.type === 'top_n' && (
+                                            <div className="space-y-2">
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+                                                    Select up to {currentQ.validation?.topN || 3} items in order of priority:
+                                                </p>
+                                                <div className="space-y-2">
+                                                    {normalizedOptions.map((optData) => {
+                                                        const rankedList: any[] = Array.isArray(responses[currentQ.id]) ? responses[currentQ.id] : [];
+                                                        const rankIdx = rankedList.findIndex(item =>
+                                                            item === optData.value || item === optData.text || item === optData.id
+                                                        );
+                                                        const isSelected = rankIdx >= 0;
+                                                        const topLimit = currentQ.validation?.topN || 3;
+
+                                                        return (
+                                                            <div
+                                                                key={optData.id}
+                                                                onClick={() => {
+                                                                    let updated = [...rankedList];
+                                                                    if (isSelected) {
+                                                                        updated = updated.filter(item =>
+                                                                            item !== optData.value && item !== optData.text && item !== optData.id
+                                                                        );
+                                                                    } else if (updated.length < topLimit) {
+                                                                        updated.push(optData.value);
+                                                                    }
+                                                                    handleAnswer(currentQ.id, updated);
+                                                                }}
+                                                                className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                                    isSelected
+                                                                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
+                                                                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                }`}
+                                                            >
+                                                                <span className="leading-snug">{optData.text}</span>
+                                                                {isSelected ? (
+                                                                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shrink-0 ml-3">
+                                                                        #{rankIdx + 1}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono shrink-0 ml-3">
+                                                                        Tap to rank
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Yes / No Binary */}
+                                        {currentQ.type === 'yes_no' && (
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {['Yes', 'No'].map(choice => {
+                                                    const isSelected = responses[currentQ.id] === choice;
+                                                    return (
+                                                        <button
+                                                            key={choice}
+                                                            type="button"
+                                                            onClick={() => handleAnswer(currentQ.id, choice)}
+                                                            className={`py-3 px-4 rounded-xl border font-bold text-xs transition flex items-center justify-center gap-2 ${
+                                                                isSelected
+                                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                                                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                            }`}
+                                                        >
+                                                            {choice === 'Yes' ? '👍 Yes' : '👎 No'}
                                                         </button>
                                                     );
                                                 })}
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    {/* Short Text */}
-                                    {currentQ.type === 'short_text' && (
-                                        <input
-                                            type="text"
-                                            value={responses[currentQ.id] || ''}
-                                            onChange={e => handleAnswer(currentQ.id, e.target.value)}
-                                            placeholder="Type your response here..."
-                                            className="w-full text-xs border rounded-xl p-3 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        />
-                                    )}
+                                        {/* Star Rating (1-5) */}
+                                        {currentQ.type === 'rating' && (
+                                            <div className="flex justify-center items-center gap-2 py-3">
+                                                {[1, 2, 3, 4, 5].map(star => {
+                                                    const isFilled = Number(responses[currentQ.id] || 0) >= star;
+                                                    return (
+                                                        <button
+                                                            key={star}
+                                                            type="button"
+                                                            onClick={() => handleAnswer(currentQ.id, star)}
+                                                            className="p-1.5 transform hover:scale-125 transition"
+                                                        >
+                                                            <Star
+                                                                className={`w-8 h-8 ${
+                                                                    isFilled
+                                                                        ? 'text-amber-400 fill-amber-400'
+                                                                        : 'text-gray-300 dark:text-gray-600'
+                                                                }`}
+                                                            />
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
 
-                                    {/* Long Text */}
-                                    {currentQ.type === 'long_text' && (
-                                        <textarea
-                                            rows={4}
-                                            value={responses[currentQ.id] || ''}
-                                            onChange={e => handleAnswer(currentQ.id, e.target.value)}
-                                            placeholder="Type your detailed thoughts, feedback or opinions..."
-                                            className="w-full text-xs border rounded-xl p-3 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        />
-                                    )}
+                                        {/* Opinion Scale (0-10) */}
+                                        {currentQ.type === 'opinion_scale' && (
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 font-semibold px-1">
+                                                    <span>0 - Not likely</span>
+                                                    <span>10 - Extremely likely</span>
+                                                </div>
+                                                <div className="flex flex-wrap justify-between gap-1">
+                                                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => {
+                                                        const isSelected = responses[currentQ.id] === val;
+                                                        return (
+                                                            <button
+                                                                key={val}
+                                                                type="button"
+                                                                onClick={() => handleAnswer(currentQ.id, val)}
+                                                                className={`w-9 h-9 rounded-xl border text-xs font-bold transition flex items-center justify-center ${
+                                                                    isSelected
+                                                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                                                                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                }`}
+                                                            >
+                                                                {val}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
 
-                                    {/* Dropdown */}
-                                    {currentQ.type === 'dropdown' && (
-                                        <select
-                                            value={responses[currentQ.id] || ''}
-                                            onChange={e => handleAnswer(currentQ.id, e.target.value)}
-                                            className="w-full text-xs border rounded-xl p-3 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-semibold"
-                                        >
-                                            <option value="">-- Select an option --</option>
-                                            {(currentQ.options || []).map((o: string, oi: number) => (
-                                                <option key={oi} value={o}>{o}</option>
-                                            ))}
-                                        </select>
-                                    )}
+                                        {/* Short Text */}
+                                        {currentQ.type === 'short_text' && (
+                                            <input
+                                                type="text"
+                                                value={responses[currentQ.id] || ''}
+                                                onChange={e => handleAnswer(currentQ.id, e.target.value)}
+                                                placeholder="Type your response here..."
+                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            />
+                                        )}
 
-                                    {/* Number */}
-                                    {currentQ.type === 'number' && (
-                                        <input
-                                            type="number"
-                                            value={responses[currentQ.id] ?? ''}
-                                            onChange={e => handleAnswer(currentQ.id, e.target.value)}
-                                            placeholder="Enter number..."
-                                            className="w-full text-xs border rounded-xl p-3 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        />
-                                    )}
+                                        {/* Long Text */}
+                                        {currentQ.type === 'long_text' && (
+                                            <textarea
+                                                rows={4}
+                                                value={responses[currentQ.id] || ''}
+                                                onChange={e => handleAnswer(currentQ.id, e.target.value)}
+                                                placeholder="Type your detailed thoughts, feedback or opinions..."
+                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            />
+                                        )}
+
+                                        {/* Number */}
+                                        {currentQ.type === 'number' && (
+                                            <input
+                                                type="number"
+                                                value={responses[currentQ.id] ?? ''}
+                                                onChange={e => handleAnswer(currentQ.id, e.target.value)}
+                                                placeholder="Enter number..."
+                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            />
+                                        )}
+
+                                        {/* Fallback for unrecognized types */}
+                                        {!['single_choice', 'multiple_choice', 'dropdown', 'top_n', 'yes_no', 'rating', 'opinion_scale', 'short_text', 'long_text', 'number'].includes(currentQ.type) && (
+                                            <input
+                                                type="text"
+                                                value={responses[currentQ.id] || ''}
+                                                onChange={e => handleAnswer(currentQ.id, e.target.value)}
+                                                placeholder="Type your response here..."
+                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Step Navigation Buttons */}
+                                <div className="flex justify-between items-center pt-2">
+                                    <button
+                                        type="button"
+                                        disabled={pathHistory.length === 0}
+                                        onClick={handlePreviousQuestion}
+                                        className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-1"
+                                    >
+                                        <ArrowLeft className="w-3.5 h-3.5" /> Previous
+                                    </button>
+
+                                    <Button
+                                        variant="primary"
+                                        disabled={!isCurrentQuestionAnswered()}
+                                        onClick={handleNextQuestion}
+                                        className="rounded-xl px-6 text-xs font-bold"
+                                    >
+                                        {activeIndex < questions.length - 1 ? (
+                                            <>Next Question <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
+                                        ) : (
+                                            <>Submit Survey <Check className="w-4 h-4 ml-1" /></>
+                                        )}
+                                    </Button>
                                 </div>
                             </div>
-
-                            {/* Step Navigation Buttons */}
-                            <div className="flex justify-between items-center pt-2">
-                                <button
-                                    type="button"
-                                    disabled={pathHistory.length === 0}
-                                    onClick={handlePreviousQuestion}
-                                    className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-1"
-                                >
-                                    <ArrowLeft className="w-3.5 h-3.5" /> Previous
-                                </button>
-
-                                <Button
-                                    variant="primary"
-                                    disabled={!isCurrentQuestionAnswered()}
-                                    onClick={handleNextQuestion}
-                                    className="rounded-xl px-6 text-xs font-bold"
-                                >
-                                    {activeQuestionIndex < questions.length - 1 ? (
-                                        <>Next Question <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
-                                    ) : (
-                                        <>Submit Survey <Check className="w-4 h-4 ml-1" /></>
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* 3. DISQUALIFIED SCREEN */}
                     {stage === 'disqualified' && (
@@ -930,3 +1265,13 @@ export const SurveyRunnerModal: React.FC<SurveyRunnerModalProps> = ({
         </div>
     );
 };
+
+export const SurveyRunnerModal: React.FC<SurveyRunnerModalProps> = (props) => {
+    return (
+        <SurveyRunnerErrorBoundary onClose={props.onClose}>
+            <SurveyRunnerModalInner {...props} />
+        </SurveyRunnerErrorBoundary>
+    );
+};
+
+export default SurveyRunnerModal;

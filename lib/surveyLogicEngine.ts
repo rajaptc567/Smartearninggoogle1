@@ -73,6 +73,7 @@ export interface SurveyQuestion {
     required: boolean;
     options?: any[];
     allowOther?: boolean;
+    otherPlaceholder?: string;
     validation?: {
         required?: boolean;
         minSelections?: number;
