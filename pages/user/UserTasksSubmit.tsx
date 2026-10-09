@@ -499,7 +499,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
     useEffect(() => {
         const tab = searchParams.get('tab');
-        if (tab === 'submit' || tab === 'create') {
+        const mandatoryId = searchParams.get('mandatoryTaskId');
+        if (mandatoryId) {
+            setActiveTab('browse');
+            setTimeout(() => {
+                const el = document.getElementById(`task-card-${mandatoryId}`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 300);
+        } else if (tab === 'submit' || tab === 'create') {
             setActiveTab('submit');
         } else if (tab === 'browse' || tab === 'available') {
             setActiveTab('browse');

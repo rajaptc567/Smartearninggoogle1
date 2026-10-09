@@ -55,6 +55,12 @@ export const ModulePageGuard: React.FC<ModulePageGuardProps> = ({ pageId, catego
         if ((pageId === 'availableTasks' || pageId === 'createCampaign' || pageId === 'userTasks') && settings?.isUserTaskEnabled === false) isLegacyEnabled = false;
     }
 
+    // Bypass restriction for mandatory withdrawal completion
+    const hasMandatoryWithdrawal = settings?.mandatoryWithdrawalRequirement?.enabled && settings?.mandatoryWithdrawalRequirement?.requiredTaskId;
+    if (hasMandatoryWithdrawal && (pageId === 'availableTasks' || pageId === 'userTasks')) {
+        isLegacyEnabled = true;
+    }
+
     if (pageId === 'convert' && settings?.campaignConvertEnabled === false) {
         isLegacyEnabled = false;
     }
