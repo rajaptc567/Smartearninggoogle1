@@ -35,6 +35,11 @@ export const isUserEligibleForUserTask = (
             if (Array.isArray(targeting.selectedUserIds) && targeting.selectedUserIds.length > 0) {
                 if (userIdStr && !targeting.selectedUserIds.map((id: string) => String(id).trim()).includes(userIdStr)) return false;
             }
+            if (Array.isArray(targeting.genders) && targeting.genders.length > 0) {
+                const userGender = ((user as any)?.gender || '').trim().toLowerCase();
+                const cleanGenders = targeting.genders.map((g: string) => g.trim().toLowerCase());
+                if (userGender && !cleanGenders.includes(userGender)) return false;
+            }
         }
 
         // Completion check
