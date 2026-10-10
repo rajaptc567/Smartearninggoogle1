@@ -3463,14 +3463,8 @@ export const submitUserTaskProof = async (req, res) => {
             // Check Questions Verification (only on questions visible on valid survey path)
             for (const q of visibleQuestions) {
                 if (q.isCheckQuestion && q.sourceQuestionId) {
-                    const sourceAnsObj = responseMap.get(String(q.sourceQuestionId));
-                    const checkAnsObj = responseMap.get(String(q.id));
-                    const sourceVal = (serverFlow.effectiveResponses && serverFlow.effectiveResponses[String(q.sourceQuestionId)] !== undefined)
-                        ? serverFlow.effectiveResponses[String(q.sourceQuestionId)]
-                        : (sourceAnsObj ? sourceAnsObj.value : undefined);
-                    const checkVal = (serverFlow.effectiveResponses && serverFlow.effectiveResponses[String(q.id)] !== undefined)
-                        ? serverFlow.effectiveResponses[String(q.id)]
-                        : (checkAnsObj ? checkAnsObj.value : undefined);
+                    const sourceVal = serverFlow.effectiveResponses ? serverFlow.effectiveResponses[String(q.sourceQuestionId)] : undefined;
+                    const checkVal = serverFlow.effectiveResponses ? serverFlow.effectiveResponses[String(q.id)] : undefined;
 
                     // On authoritative server proof submission, check verification retries are final if mismatched
                     const attempts = q.maxCheckAttempts || 1;

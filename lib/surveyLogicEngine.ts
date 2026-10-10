@@ -768,7 +768,7 @@ export function evaluateSurveyFlow(
                 // A rule can trigger its matched action if its condition matches effectiveResponses,
                 // or its elseAction once all conditioned questions have reached fromIndex <= i.
                 const res = evaluateRule(rule, effectiveResponses);
-                if (res.matched && res.action) {
+                if (res.matched && res.action && i >= fromIndex) {
                     executedRuleIds.add(ruleKey);
                     const shouldBreak = applyRuleAction(res, questions, i, state, rule.conditions?.[0]?.questionId, true);
                     if (shouldBreak) break;
