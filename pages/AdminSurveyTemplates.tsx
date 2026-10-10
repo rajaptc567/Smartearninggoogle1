@@ -487,6 +487,16 @@ export const AdminSurveyTemplates: React.FC = () => {
             return;
         }
 
+        let validatedRecompletionIntervalDays = 30;
+        if (launchRecompletionPolicy === 'every_x_days') {
+            const parsedInterval = Number(launchRecompletionIntervalDays);
+            if (!Number.isFinite(parsedInterval) || !Number.isInteger(parsedInterval) || parsedInterval <= 0) {
+                alert('Please enter a valid re-completion interval (a positive integer number of days).');
+                return;
+            }
+            validatedRecompletionIntervalDays = parsedInterval;
+        }
+
         const safeReward = Number(campaignRewardPerTask);
         if (isNaN(safeReward) || safeReward < 0) {
             alert('Reward per submission cannot be negative.');
@@ -602,7 +612,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                 requirementMode: effectiveRequirementMode,
                 recompletionPolicy: {
                     policy: launchRecompletionPolicy,
-                    intervalDays: launchRecompletionPolicy === 'every_x_days' ? Number(launchRecompletionIntervalDays) : 30
+                    intervalDays: validatedRecompletionIntervalDays
                 },
                 mandatoryDisplayBehavior: (effectiveRequirementMode === 'mandatory_all' || effectiveRequirementMode === 'mandatory_targeted') ? launchMandatoryDisplayBehavior : 'popup_only',
                 isMandatoryForAllUsers: isMandatoryForAll,
@@ -1439,6 +1449,37 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             )}
                                         </button>
                                     </div>
+
+                                    {launchRequirementMode === 'mandatory_before_withdrawal' && (
+                                        <div className="mt-3 p-3.5 bg-rose-50/80 dark:bg-rose-950/30 rounded-xl border border-rose-200 dark:border-rose-900/50 space-y-2 text-rose-900 dark:text-rose-200">
+                                            <div className="flex items-start gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                                                <div className="space-y-1">
+                                                    <p className="text-xs font-bold">
+                                                        Single Active Pre-Withdrawal Requirement
+                                                    </p>
+                                                    <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed">
+                                                        Only one survey or task can serve as the platform&apos;s active mandatory withdrawal requirement at a time. Launching this campaign with Pre-Withdrawal mode will automatically designate it as the current active prerequisite in System Settings.
+                                                    </p>
+                                                    {settings?.mandatoryWithdrawalRequirement?.enabled && settings.mandatoryWithdrawalRequirement.requiredTaskId && (
+                                                        <div className="mt-2 pt-2 border-t border-rose-200/60 dark:border-rose-900/60 flex items-center gap-2 flex-wrap text-[10px] font-mono">
+                                                            <span className="font-sans font-bold uppercase text-rose-800 dark:text-rose-300">
+                                                                Current Active Prerequisite:
+                                                            </span>
+                                                            <span className="px-1.5 py-0.5 bg-white dark:bg-gray-800 rounded border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300">
+                                                                Task ID: {settings.mandatoryWithdrawalRequirement.requiredTaskId}
+                                                            </span>
+                                                            {settings.mandatoryWithdrawalRequirement.requiredTaskVersion !== undefined && (
+                                                                <span className="px-1.5 py-0.5 bg-white dark:bg-gray-800 rounded border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300">
+                                                                    Version: v{settings.mandatoryWithdrawalRequirement.requiredTaskVersion}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {(launchRequirementMode === 'mandatory_all' || launchRequirementMode === 'mandatory_targeted') && (
                                         <div className="mt-3 p-3.5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 space-y-2">
