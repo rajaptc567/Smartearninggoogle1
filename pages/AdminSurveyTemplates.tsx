@@ -423,9 +423,20 @@ export const AdminSurveyTemplates: React.FC = () => {
         const reqMode = (template.requirementConfig?.mode || 'optional') as any;
         setLaunchRequirementMode(reqMode);
         setLaunchMandatoryDisplayBehavior(template.requirementConfig?.mandatoryDisplayBehavior || 'popup_only');
-        setLaunchRecompletionPolicy((template.recompletionPolicy?.policy === 'interval' ? 'every_x_days' : (template.recompletionPolicy?.policy || 'never')) as 'never' | 'on_version_change' | 'every_x_days');
+        const rawPolicy = String(template.recompletionPolicy?.policy || 'never');
+        const policyVal: 'never' | 'on_version_change' | 'every_x_days' =
+            rawPolicy === 'interval' || rawPolicy === 'every_x_days'
+                ? 'every_x_days'
+                : rawPolicy === 'on_version_change'
+                ? 'on_version_change'
+                : 'never';
+        setLaunchRecompletionPolicy(policyVal);
         setLaunchRecompletionIntervalDays(template.recompletionPolicy?.intervalDays || 30);
-        setCampaignEstimatedMinutes(template.estimatedTimeMinutes || 5);        setLaunchResponseLimitMode('unlimited');
+        const validDuration = (typeof template.estimatedTimeMinutes === 'number' && Number.isFinite(template.estimatedTimeMinutes) && template.estimatedTimeMinutes > 0)
+            ? template.estimatedTimeMinutes
+            : 5;
+        setCampaignEstimatedMinutes(validDuration);
+        setLaunchResponseLimitMode('unlimited');
         setCampaignWorkersNeeded(50);
         setCampaignInitialFundingUSD(initialReward > 0 ? Number((initialReward * 50).toFixed(2)) : 0);
         setCampaignLowBalanceThreshold(10);
@@ -467,6 +478,12 @@ export const AdminSurveyTemplates: React.FC = () => {
 
         if (!campaignTitle.trim()) {
             alert('Campaign title is required.');
+            return;
+        }
+
+        const validEstimatedMinutes = Number(campaignEstimatedMinutes);
+        if (!Number.isFinite(validEstimatedMinutes) || validEstimatedMinutes <= 0) {
+            alert('Estimated duration must be a positive number of minutes.');
             return;
         }
 
@@ -593,11 +610,12 @@ export const AdminSurveyTemplates: React.FC = () => {
                 publishNow: true,
                 targeting: targetingPayload,
                 surveyCategory: usingTemplate.category || 'General Opinion Poll',
-                surveyEstimatedMinutes: Number(campaignEstimatedMinutes) || 5,
+                surveyEstimatedMinutes: validEstimatedMinutes,
                 surveyQuestionsCount: campaignSurveyConfig.questions?.length || 0,
                 surveyApprovalMode: (campaignSurveyConfig as any).approvalMode || 'auto',
                 surveyConfig: {
                     ...campaignSurveyConfig,
+                    estimatedTimeMinutes: validEstimatedMinutes,
                     title: campaignTitle.trim(),
                     description: campaignDescription.trim()
                 },
@@ -1867,6 +1885,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     </span>
                                 </div>
 
+                                <div className="md:col-span-3 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                                     <div className="flex items-center justify-between mb-2">
                                         <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
                                             Survey Reward Mode & Pricing
