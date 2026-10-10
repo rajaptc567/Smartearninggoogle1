@@ -38,12 +38,17 @@ export const isUserEligibleForUserTask = (
 
         // Completion check
         const isSurvey = Boolean(ut.isSurvey);
+        const reqVersion = Number(settings.mandatoryWithdrawalRequirement.requiredTaskVersion) || 1;
+        
         const sub = submissions.find((s: any) =>
             String(s.taskId) === reqTaskId &&
             String(s.workerId) === String(user._id)
         );
         const isApproved = sub && (sub.status === 'Approved' || sub.status === 'Paid');
-        if (isApproved) return false;
+        const isQualified = isSurvey ? (sub?.surveyQualificationStatus !== 'Disqualified' && sub?.surveyQualificationStatus !== 'Screenout') : true;
+        const versionMatch = isSurvey && reqVersion ? (Number(sub?.surveyVersion) || 1) === reqVersion : true;
+
+        if (isApproved && isQualified && versionMatch) return false;
         return true;
     }
 
