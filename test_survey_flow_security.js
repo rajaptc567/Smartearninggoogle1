@@ -231,6 +231,36 @@ console.log('Running comprehensive survey flow security regression suite...');
     console.log('Test 11 (ELSE action timing, partial non-execution and full execution) passed.');
 }
 
+// 13. Direct unit test for evaluateRule() with ALL rule, conditions on q1 and q3, and elseAction
+{
+    const rule = {
+        id: 'ruleElseDirect',
+        matchType: 'ALL',
+        conditions: [
+            { questionId: 'q1', operator: 'equals', value: 'yes' },
+            { questionId: 'q3', operator: 'equals', value: 'yes' }
+        ],
+        action: 'disqualify',
+        elseAction: 'qualify',
+        elseTargetQuestionId: 'targetQ',
+        elseMessage: 'Custom else message'
+    };
+
+    // A. With only 'q1' answered and 'q3' unanswered, assert that evaluateRule() does not return an executable ELSE action.
+    const partialRes = evaluateRule(rule, { q1: 'yes' });
+    assert.strictEqual(partialRes.matched, false);
+    assert.strictEqual(partialRes.action, '', 'evaluateRule must not return elseAction when condition q3 is unanswered');
+
+    // B. With both condition questions answered and conditions not matching, assert that ELSE action and configured target/message are returned correctly.
+    const unmatchedRes = evaluateRule(rule, { q1: 'yes', q3: 'no' });
+    assert.strictEqual(unmatchedRes.matched, false);
+    assert.strictEqual(unmatchedRes.action, 'qualify');
+    assert.strictEqual(unmatchedRes.targetQuestionId, 'targetQ');
+    assert.strictEqual(unmatchedRes.message, 'Custom else message');
+
+    console.log('Test 13 (Direct evaluateRule hasAllResponses safeguard) passed.');
+}
+
 // 12. Hidden or skipped fabricated answers cannot incorrectly trigger a global rule
 {
     const questions = [
