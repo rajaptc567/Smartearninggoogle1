@@ -151,4 +151,28 @@ console.log('Running comprehensive survey flow security regression suite...');
     console.log('Test 8 (Attention check disqualification) passed.');
 }
 
+// 9. ANY global rule matches early without waiting for later unreached condition
+{
+    const questions = [
+        { id: 'q1', title: 'Q1', type: 'yes_no' },
+        { id: 'q2', title: 'Q2', type: 'yes_no' },
+        { id: 'q3', title: 'Q3', type: 'yes_no' }
+    ];
+    const globalRules = [
+        {
+            id: 'ruleAny',
+            matchType: 'ANY',
+            conditions: [
+                { questionId: 'q1', operator: 'equals', value: 'yes' },
+                { questionId: 'q3', operator: 'equals', value: 'yes' }
+            ],
+            action: 'disqualify'
+        }
+    ];
+    // At q1, q1 matches 'yes', q3 is at index 2 (unreached). ANY should trigger immediately at q1 (i=0).
+    const result = evaluateSurveyFlow(questions, [], { q1: 'yes' }, globalRules);
+    assert.strictEqual(result.status, 'disqualified', 'ANY global rule must trigger immediately when q1 matches without waiting for q3');
+    console.log('Test 9 (ANY global rule early match) passed.');
+}
+
 console.log('All comprehensive survey flow security regression tests passed successfully!');

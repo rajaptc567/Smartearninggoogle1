@@ -765,16 +765,21 @@ export function evaluateSurveyFlow(
                 const fromIndex = getRuleFromIndex(rule);
                 if (fromIndex === -1) continue;
 
-                // A rule can trigger its matched action if its condition matches effectiveResponses,
-                // or its elseAction once all conditioned questions have reached fromIndex <= i.
                 const res = evaluateRule(rule, effectiveResponses);
-                if (res.matched && res.action && i >= fromIndex) {
+                const isAny = rule.matchType === 'ANY';
+                const canMatch = res.matched && res.action && (isAny || i >= fromIndex);
+                const canElse = !res.matched && rule.elseAction && i >= fromIndex;
+
+                if ((canMatch || canElse) && (canMatch ? res.action : rule.elseAction)) {
                     executedRuleIds.add(ruleKey);
-                    const shouldBreak = applyRuleAction(res, questions, i, state, rule.conditions?.[0]?.questionId, true);
-                    if (shouldBreak) break;
-                } else if (!res.matched && res.action && i >= fromIndex) {
-                    executedRuleIds.add(ruleKey);
-                    const shouldBreak = applyRuleAction(res, questions, i, state, rule.conditions?.[0]?.questionId, true);
+                    const actionRes = canMatch ? res : {
+                        matched: false,
+                        action: rule.elseAction!,
+                        targetQuestionId: rule.elseTargetQuestionId,
+                        targetSectionId: rule.elseTargetSectionId,
+                        message: rule.elseMessage
+                    };
+                    const shouldBreak = applyRuleAction(actionRes, questions, i, state, rule.conditions?.[0]?.questionId, true);
                     if (shouldBreak) break;
                 }
             }
