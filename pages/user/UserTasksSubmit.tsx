@@ -4206,9 +4206,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     const spotsLeft = isUnlimited ? Infinity : Math.max(0, task.targetQuantity - task.currentCompletions);
                                     const hasPendingMandatory = pendingMandatorySurveys.length > 0;
                                     const isLocked = Boolean(hasPendingMandatory || task.isLockedByMandatoryRequirement);
+                                    const isMandatoryTarget = String(task._id) === String(searchParams.get('mandatoryTaskId'));
 
                                     return (
-                                        <div key={task._id} className={`bg-slate-950/80 rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800/80 transition-all group flex flex-col justify-between space-y-3.5 ${isLocked ? 'opacity-60 relative' : 'hover:border-amber-500/50'}`}>
+                                        <div id={`task-card-${task._id}`} key={task._id} className={`bg-slate-950/80 rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800/80 transition-all group flex flex-col justify-between space-y-3.5 ${isLocked ? 'opacity-60 relative' : 'hover:border-amber-500/50'} ${isMandatoryTarget ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-slate-950 animate-pulse border-amber-500' : ''}`}>
+                                            {isMandatoryTarget && (
+                                                <div className="absolute -top-3 -left-3 z-20">
+                                                    <span className="px-3 py-1 bg-amber-500 text-slate-950 font-extrabold text-[10px] uppercase rounded-full shadow-lg">
+                                                        Required For Withdrawal
+                                                    </span>
+                                                </div>
+                                            )}
                                             {isLocked && (
                                                 <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] rounded-2xl z-10 flex items-center justify-center p-3 text-center">
                                                     <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold font-mono">

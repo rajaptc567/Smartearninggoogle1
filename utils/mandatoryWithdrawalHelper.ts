@@ -22,7 +22,7 @@ export const isUserEligibleForUserTask = (
     // Also check submissions for survey/task requirement
     const sub = submissions.find((s: any) =>
         String(s.taskId) === reqTaskId &&
-        String(s.workerId) === String(user._id || user.id) &&
+        String(s.workerId) === String(user._id) &&
         (s.status === 'Approved' || s.status === 'Paid')
     );
     if (sub) return false;
