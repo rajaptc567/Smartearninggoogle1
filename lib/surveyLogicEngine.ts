@@ -350,13 +350,13 @@ export function evaluateRule(
             message: rule.message
         };
     } else if (rule.elseAction) {
-        // Only trigger elseAction if at least one question referenced in conditions has been answered
-        const hasAnyResponse = rule.conditions.some(c => {
+        // Only trigger elseAction if all condition questions referenced in rules have been answered
+        const hasAllResponses = rule.conditions.every(c => {
             const v = responses[c.questionId];
             return v !== undefined && v !== null && v !== '' && (!Array.isArray(v) || v.length > 0);
         });
 
-        if (hasAnyResponse) {
+        if (hasAllResponses) {
             return {
                 matched: false,
                 action: rule.elseAction,
@@ -768,18 +768,11 @@ export function evaluateSurveyFlow(
                 const res = evaluateRule(rule, effectiveResponses);
                 const isAny = rule.matchType === 'ANY';
                 const canMatch = res.matched && res.action && (isAny || i >= fromIndex);
-                const canElse = !res.matched && rule.elseAction && i >= fromIndex;
+                const canElse = !res.matched && res.action && i >= fromIndex;
 
-                if ((canMatch || canElse) && (canMatch ? res.action : rule.elseAction)) {
+                if (canMatch || canElse) {
                     executedRuleIds.add(ruleKey);
-                    const actionRes = canMatch ? res : {
-                        matched: false,
-                        action: rule.elseAction!,
-                        targetQuestionId: rule.elseTargetQuestionId,
-                        targetSectionId: rule.elseTargetSectionId,
-                        message: rule.elseMessage
-                    };
-                    const shouldBreak = applyRuleAction(actionRes, questions, i, state, rule.conditions?.[0]?.questionId, true);
+                    const shouldBreak = applyRuleAction(res, questions, i, state, rule.conditions?.[0]?.questionId, true);
                     if (shouldBreak) break;
                 }
             }

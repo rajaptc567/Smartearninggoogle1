@@ -198,7 +198,7 @@ console.log('Running comprehensive survey flow security regression suite...');
     console.log('Test 10 (ALL rule matching) passed.');
 }
 
-// 11. ELSE action does not execute prematurely and triggers at the correct evaluation point when conditions do not match
+// 11. ELSE action does not execute prematurely on partial responses and triggers at the correct evaluation point when conditions do not match
 {
     const questions = [
         { id: 'q1', title: 'Q1', type: 'yes_no' },
@@ -217,10 +217,18 @@ console.log('Running comprehensive survey flow security regression suite...');
             elseAction: 'qualify'
         }
     ];
-    // At q1, else must not trigger prematurely before q3 is reached. At q3, conditions do not match (q3 is 'no'), so elseAction ('qualify') triggers.
-    const result = evaluateSurveyFlow(questions, [], { q1: 'yes', q2: 'no', q3: 'no' }, globalRules);
-    assert.strictEqual(result.qualificationStatus, 'Qualified', 'ELSE action must trigger once evaluation completes and conditions do not match');
-    console.log('Test 11 (ELSE action timing and execution) passed.');
+
+    // A. Partial responses: answer only through q1 (before the last condition question q3).
+    // Verify that ELSE has NOT executed prematurely and qualificationStatus remains Standard.
+    const partialResult = evaluateSurveyFlow(questions, [], { q1: 'yes' }, globalRules);
+    assert.strictEqual(partialResult.qualificationStatus, 'Standard', 'ELSE action must NOT execute prematurely before condition question q3 is reached');
+
+    // B. Full responses failing conditions: answer through q3 where conditions fail (q3 is 'no').
+    // Verify that ELSE executes at the correct evaluation point and triggers the elseAction ('Qualified').
+    const fullResult = evaluateSurveyFlow(questions, [], { q1: 'yes', q2: 'no', q3: 'no' }, globalRules);
+    assert.strictEqual(fullResult.qualificationStatus, 'Qualified', 'ELSE action must trigger once evaluation completes and conditions do not match');
+
+    console.log('Test 11 (ELSE action timing, partial non-execution and full execution) passed.');
 }
 
 // 12. Hidden or skipped fabricated answers cannot incorrectly trigger a global rule
