@@ -122,7 +122,6 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [campaignRewardPerTask, setCampaignRewardPerTask] = useState<number>(0.25);
     const [campaignInitialFundingUSD, setCampaignInitialFundingUSD] = useState<number>(50);
     const [campaignLowBalanceThreshold, setCampaignLowBalanceThreshold] = useState<number>(10);
-    const [setAsMandatoryWithdrawal, setSetAsMandatoryWithdrawal] = useState<boolean>(false);
     const [campaignSurveyConfig, setCampaignSurveyConfig] = useState<SurveyConfigData>({
         questions: [],
         sections: []
@@ -2034,57 +2033,6 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             onChange={(e) => setLaunchRecompletionIntervalDays(Number(e.target.value))}
                                             className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold font-mono"
                                         />
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Mandatory Withdrawal Requirement Toggle */}
-                            <div className="p-4 bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-800 space-y-3">
-                                <div className="flex items-center justify-between gap-4">
-                                    <div>
-                                        <span className="text-xs font-black uppercase text-amber-900 dark:text-amber-300 block">
-                                            Set as Active Mandatory Withdrawal Requirement
-                                        </span>
-                                        <p className="text-[11px] text-amber-800/80 dark:text-amber-400 mt-0.5">
-                                            When enabled, members cannot withdraw Work &amp; Earn funds until they have completed and obtained an Approved submission for this survey.
-                                        </p>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={setAsMandatoryWithdrawal || launchRequirementMode === 'mandatory_before_withdrawal'} 
-                                            onChange={(e) => {
-                                                const checked = e.target.checked;
-                                                setSetAsMandatoryWithdrawal(checked);
-                                                if (checked) {
-                                                    setLaunchRequirementMode('mandatory_before_withdrawal');
-                                                } else if (launchRequirementMode === 'mandatory_before_withdrawal') {
-                                                    setLaunchRequirementMode('optional');
-                                                }
-                                            }}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-amber-600"></div>
-                                    </label>
-                                </div>
-
-                                {(setAsMandatoryWithdrawal || launchRequirementMode === 'mandatory_before_withdrawal') && (
-                                    <div className="p-3 bg-white/90 dark:bg-gray-900/90 rounded-xl border border-amber-300 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200 space-y-1.5">
-                                        <p className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
-                                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                            Single Active Requirement Model:
-                                        </p>
-                                        <p className="text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
-                                            Only one Mandatory Withdrawal Requirement can be active at a time. Activating this survey will replace the currently active requirement.
-                                        </p>
-                                        {settings?.mandatoryWithdrawalRequirement?.enabled && settings.mandatoryWithdrawalRequirement.requiredTaskId && (
-                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 pt-1 border-t border-amber-200 dark:border-amber-900/60 flex items-center justify-between gap-2">
-                                                <span>Currently Active Prerequisite:</span>
-                                                <span className="font-mono font-bold text-gray-700 dark:text-gray-300 truncate max-w-[240px]">
-                                                    ID {String(settings.mandatoryWithdrawalRequirement.requiredTaskId)} (v{settings.mandatoryWithdrawalRequirement.requiredTaskVersion || 1})
-                                                </span>
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                             </div>
