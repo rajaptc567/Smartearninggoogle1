@@ -957,7 +957,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                             className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                 isSelected
                                                                     ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
-                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
+                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
                                                             }`}
                                                         >
                                                             <span className="leading-snug">{optData.text}</span>
@@ -974,7 +974,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                             className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                 responses[currentQ.id] === 'Other'
                                                                     ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
-                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
+                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
                                                             }`}
                                                         >
                                                             <span>Other (specify below)</span>
@@ -1018,7 +1018,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                             className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                 isChecked
                                                                     ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
-                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
+                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
                                                             }`}
                                                         >
                                                             <span className="leading-snug">{optData.text}</span>
@@ -1045,7 +1045,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                                         className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                             isChecked
                                                                                 ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
-                                                                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
+                                                                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
                                                                         }`}
                                                                     >
                                                                         <span>Other (specify below)</span>
@@ -1118,7 +1118,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                                 className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                     isSelected
                                                                         ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
-                                                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
+                                                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
                                                                 }`}
                                                             >
                                                                 <span className="leading-snug">{optData.text}</span>
@@ -1151,7 +1151,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                             className={`py-3.5 px-4 rounded-xl border font-bold text-xs transition-all duration-150 flex items-center justify-center gap-2 shadow-2xs ${
                                                                 isSelected
                                                                     ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-[1.01]'
-                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
+                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
                                                             }`}
                                                         >
                                                             {choice === 'Yes' ? '👍 Yes' : '👎 No'}
@@ -1204,7 +1204,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                                 className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border text-xs font-bold transition-all duration-150 flex items-center justify-center shadow-2xs ${
                                                                     isSelected
                                                                         ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-105'
-                                                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
+                                                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
                                                                 }`}
                                                             >
                                                                 {val}
