@@ -506,6 +506,7 @@ export interface SurveyFlowResult {
     disqualificationReason?: string;
     qualificationStatus: 'Completed' | 'Qualified' | 'Disqualified' | 'Standard';
     messages: { type: 'info' | 'warning'; text: string; questionId?: string }[];
+    effectiveResponses?: Record<string, any>;
 }
 
 /**
@@ -623,37 +624,38 @@ export function evaluateSurveyFlow(
         state.requiredMap[q.id] = !!(q.required || (q.validation && q.validation.required));
     });
 
-    // Evaluate global rules first if any
+    // Helper to calculate the highest index among condition questions
+    const getRuleFromIndex = (rule: SurveyLogicRule): number => {
+        if (!rule.conditions || rule.conditions.length === 0) return -1;
+        const indices = rule.conditions
+            .map(c => questions.findIndex(q => q.id === c.questionId))
+            .filter(idx => idx !== -1);
+        return indices.length > 0 ? Math.max(...indices) : -1;
+    };
+
+    // Effective responses only records answers to questions that are legitimately visible and reached.
+    // Responses to hidden, skipped, or unreachable questions cannot enter effectiveResponses
+    // or influence downstream showIf, logic rules, or qualification.
+    const effectiveResponses: Record<string, any> = {};
+    const executedRuleIds = new Set<string>();
+
+    // 1. Evaluate unconditional global rules (fromIndex === -1)
     if (globalRules && globalRules.length > 0) {
-        for (const rule of globalRules) {
-            if (state.status === 'disqualified' || state.status === 'completed') {
-                break;
-            }
-
-            let fromIndex = -1;
-            let sourceQuestionId: string | undefined = undefined;
-            if (rule.conditions && rule.conditions.length > 0) {
-                sourceQuestionId = rule.conditions[0]?.questionId;
-                const indices = rule.conditions
-                    .map(c => questions.findIndex(q => q.id === c.questionId))
-                    .filter(idx => idx !== -1);
-                if (indices.length > 0) {
-                    fromIndex = Math.max(...indices);
-                }
-            }
-
-            const res = evaluateRule(rule, responses);
-            if (res.matched && res.action) {
-                // 1. Global Logic rules (THEN action)
-                const shouldBreak = applyRuleAction(res, questions, fromIndex, state, sourceQuestionId, true);
-                if (shouldBreak) {
-                    break;
-                }
-            } else if (!res.matched && res.action) {
-                // 2. Global Logic ELSE actions
-                const shouldBreak = applyRuleAction(res, questions, fromIndex, state, sourceQuestionId, true);
-                if (shouldBreak) {
-                    break;
+        for (let rIdx = 0; rIdx < globalRules.length; rIdx++) {
+            const rule = globalRules[rIdx];
+            const ruleKey = rule.id || `global_${rIdx}`;
+            const fromIndex = getRuleFromIndex(rule);
+            if (fromIndex === -1) {
+                if (state.status === 'disqualified' || state.status === 'completed') break;
+                const res = evaluateRule(rule, effectiveResponses);
+                if (res.matched && res.action) {
+                    executedRuleIds.add(ruleKey);
+                    const shouldBreak = applyRuleAction(res, questions, -1, state, undefined, true);
+                    if (shouldBreak) break;
+                } else if (!res.matched && res.action) {
+                    executedRuleIds.add(ruleKey);
+                    const shouldBreak = applyRuleAction(res, questions, -1, state, undefined, true);
+                    if (shouldBreak) break;
                 }
             }
         }
@@ -672,12 +674,12 @@ export function evaluateSurveyFlow(
             continue;
         }
 
-        // Backward compatibility for showIf
+        // Backward compatibility for showIf, evaluated ONLY against legitimately effective responses
         if ((q as any).showIf) {
             const conds = Array.isArray((q as any).showIf) ? (q as any).showIf : [(q as any).showIf];
             const validConds = conds.filter((c: any) => c && c.questionId);
             if (validConds.length > 0) {
-                const isVisible = validConds.every((c: any) => evaluateCondition(c, responses));
+                const isVisible = validConds.every((c: any) => evaluateCondition(c, effectiveResponses));
                 if (!isVisible) {
                     state.hidden.add(q.id);
                     state.explicitShown.delete(q.id);
@@ -693,63 +695,87 @@ export function evaluateSurveyFlow(
             continue;
         }
 
-        // Check if question is answered
+        // Check if question has a submitted response
         const ans = responses[q.id];
         const hasAnswer = ans !== undefined && ans !== null && ans !== '' && (!Array.isArray(ans) || ans.length > 0);
 
-        if (!hasAnswer) {
-            continue;
-        }
+        if (hasAnswer) {
+            // Legitimately visible and answered question
+            effectiveResponses[q.id] = ans;
 
-        // Check Attention Check
-        if (q.isAttentionCheck && q.expectedAnswer) {
-            const att = evaluateAttentionCheck(q, ans);
-            if (!att.passed) {
-                state.qualificationStatus = 'Disqualified';
-                state.status = 'disqualified';
-                state.disqualificationReason = att.message || 'Attention trap failed.';
-                for (let j = i + 1; j < questions.length; j++) state.skipped.add(questions[j].id);
-                break;
+            // Check Attention Check
+            if (q.isAttentionCheck && q.expectedAnswer) {
+                const att = evaluateAttentionCheck(q, ans);
+                if (!att.passed) {
+                    state.qualificationStatus = 'Disqualified';
+                    state.status = 'disqualified';
+                    state.disqualificationReason = att.message || 'Attention trap failed.';
+                    for (let j = i + 1; j < questions.length; j++) state.skipped.add(questions[j].id);
+                    break;
+                }
             }
-        }
 
-        // Check Question Verification
-        if (q.isCheckQuestion && q.sourceQuestionId) {
-            const sourceAns = responses[q.sourceQuestionId];
-            if (sourceAns !== undefined && sourceAns !== null && sourceAns !== '') {
-                const currentAttempts = (checkAttempts && checkAttempts[q.id] !== undefined)
-                    ? checkAttempts[q.id]
-                    : 1;
-                const checkRes = evaluateCheckQuestion(q, sourceAns, ans, currentAttempts);
-                if (!checkRes.passed) {
-                    if (checkRes.action === 'disqualify' || checkRes.action === 'reject') {
-                        state.qualificationStatus = 'Disqualified';
-                        state.status = 'disqualified';
-                        state.disqualificationReason = checkRes.message || 'Verification check failed.';
-                        for (let j = i + 1; j < questions.length; j++) state.skipped.add(questions[j].id);
+            // Check Question Verification
+            if (q.isCheckQuestion && q.sourceQuestionId) {
+                const sourceAns = effectiveResponses[q.sourceQuestionId];
+                if (sourceAns !== undefined && sourceAns !== null && sourceAns !== '') {
+                    const currentAttempts = (checkAttempts && checkAttempts[q.id] !== undefined)
+                        ? checkAttempts[q.id]
+                        : 1;
+                    const checkRes = evaluateCheckQuestion(q, sourceAns, ans, currentAttempts);
+                    if (!checkRes.passed) {
+                        if (checkRes.action === 'disqualify' || checkRes.action === 'reject') {
+                            state.qualificationStatus = 'Disqualified';
+                            state.status = 'disqualified';
+                            state.disqualificationReason = checkRes.message || 'Verification check failed.';
+                            for (let j = i + 1; j < questions.length; j++) state.skipped.add(questions[j].id);
+                            break;
+                        } else if (checkRes.action === 'flag' || checkRes.action === 'review') {
+                            state.messages.push({ type: 'warning', text: checkRes.message || 'Check flagged for review.', questionId: q.id });
+                        }
+                    }
+                }
+            }
+
+            // Evaluate question logic rules against effective responses
+            const rulesToEval = [...(q.logicRules || [])];
+            for (const rule of rulesToEval) {
+                const res = evaluateRule(rule, effectiveResponses);
+                if (res.matched && res.action) {
+                    const shouldBreak = applyRuleAction(res, questions, i, state, q.id, false);
+                    if (shouldBreak) {
                         break;
-                    } else if (checkRes.action === 'flag' || checkRes.action === 'review') {
-                        state.messages.push({ type: 'warning', text: checkRes.message || 'Check flagged for review.', questionId: q.id });
+                    }
+                } else if (!res.matched && res.action) {
+                    const shouldBreak = applyRuleAction(res, questions, i, state, q.id, false);
+                    if (shouldBreak) {
+                        break;
                     }
                 }
             }
         }
 
-        // Evaluate question logic rules
-        const rulesToEval = [...(q.logicRules || [])];
-        for (const rule of rulesToEval) {
-            const res = evaluateRule(rule, responses);
-            if (res.matched && res.action) {
-                // 3. Question-level logic rules (THEN action)
-                const shouldBreak = applyRuleAction(res, questions, i, state, q.id, false);
-                if (shouldBreak) {
-                    break;
-                }
-            } else if (!res.matched && res.action) {
-                // 4. Question-level ELSE actions
-                const shouldBreak = applyRuleAction(res, questions, i, state, q.id, false);
-                if (shouldBreak) {
-                    break;
+        // Evaluate global logic rules whose conditions can be evaluated at step i
+        if (globalRules && globalRules.length > 0) {
+            for (let rIdx = 0; rIdx < globalRules.length; rIdx++) {
+                const rule = globalRules[rIdx];
+                const ruleKey = rule.id || `global_${rIdx}`;
+                if (executedRuleIds.has(ruleKey)) continue;
+
+                const fromIndex = getRuleFromIndex(rule);
+                if (fromIndex === -1) continue;
+
+                // A rule can trigger its matched action if its condition matches effectiveResponses,
+                // or its elseAction once all conditioned questions have reached fromIndex <= i.
+                const res = evaluateRule(rule, effectiveResponses);
+                if (res.matched && res.action) {
+                    executedRuleIds.add(ruleKey);
+                    const shouldBreak = applyRuleAction(res, questions, i, state, rule.conditions?.[0]?.questionId, true);
+                    if (shouldBreak) break;
+                } else if (!res.matched && res.action && i >= fromIndex) {
+                    executedRuleIds.add(ruleKey);
+                    const shouldBreak = applyRuleAction(res, questions, i, state, rule.conditions?.[0]?.questionId, true);
+                    if (shouldBreak) break;
                 }
             }
         }
@@ -769,7 +795,8 @@ export function evaluateSurveyFlow(
         status: state.status,
         disqualificationReason: state.disqualificationReason,
         qualificationStatus: state.qualificationStatus,
-        messages: state.messages
+        messages: state.messages,
+        effectiveResponses
     };
 }
 
