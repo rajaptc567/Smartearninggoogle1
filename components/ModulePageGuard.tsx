@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import { getEffectiveModulePageControl } from '../data/modulePagesDefaults';
 import { canAccessInvestmentModule } from '../utils/investmentAccess';
+import { isUserEligibleForUserTask } from '../utils/mandatoryWithdrawalHelper';
 
 interface ModulePageGuardProps {
     pageId: string;
@@ -57,7 +58,17 @@ export const ModulePageGuard: React.FC<ModulePageGuardProps> = ({ pageId, catego
 
     // Bypass restriction for mandatory withdrawal completion
     const hasMandatoryWithdrawal = settings?.mandatoryWithdrawalRequirement?.enabled && settings?.mandatoryWithdrawalRequirement?.requiredTaskId;
-    if (hasMandatoryWithdrawal && (pageId === 'availableTasks' || pageId === 'userTasks')) {
+    
+    // Check if the user is actually required to complete the task
+    const isRequired = hasMandatoryWithdrawal && isUserEligibleForUserTask(
+        currentUser!,
+        settings,
+        state.tasks,
+        state.userTasks,
+        state.userTaskSubmissions
+    );
+
+    if (isRequired && (pageId === 'availableTasks' || pageId === 'userTasks')) {
         isLegacyEnabled = true;
     }
 

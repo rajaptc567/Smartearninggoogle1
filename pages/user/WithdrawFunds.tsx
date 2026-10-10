@@ -863,7 +863,7 @@ const WithdrawFunds: React.FC = () => {
                                     </div>
                                 </div>
                                 <button 
-                                    onClick={() => navigate(mandatoryRequirementUnmet.type === 'survey' || mandatoryRequirementUnmet.type === 'user_task' ? '/member/user-tasks' : '/member/tasks')}
+                                    onClick={() => navigate(`/member/available-tasks?mandatoryTaskId=${encodeURIComponent(mandatoryRequirementUnmet.taskId)}`)}
                                     className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
                                 >
                                     Complete {mandatoryRequirementUnmet.isSurvey ? 'Survey' : 'Task'} &rarr;
