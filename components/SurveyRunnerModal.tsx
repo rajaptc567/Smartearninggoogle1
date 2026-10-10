@@ -109,15 +109,15 @@ class SurveyRunnerErrorBoundary extends React.Component<ErrorBoundaryProps, Erro
     render() {
         if (this.state.hasError) {
             return (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-850 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-200 dark:border-gray-700 text-center space-y-4">
-                        <div className="w-14 h-14 bg-amber-100 dark:bg-amber-950/40 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+                <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 text-center space-y-4">
+                        <div className="w-14 h-14 bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
                             <AlertTriangle className="w-7 h-7" />
                         </div>
-                        <h4 className="text-base font-bold text-gray-900 dark:text-white">
+                        <h4 className="text-base font-bold text-slate-900 dark:text-white">
                             Survey Question Notice
                         </h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                             A display issue occurred while rendering this survey question. Your progress has been safely preserved.
                         </p>
                         <div className="pt-2">
@@ -265,18 +265,18 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
     if (task?.status === 'On Hold') {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-                <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-200 dark:border-gray-800 text-center">
-                    <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/20 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-2xl font-bold">
-                        ⏸️
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-fade-in">
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 text-center">
+                    <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+                        <AlertTriangle className="w-8 h-8" />
                     </div>
-                    <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight mb-2">Campaign Paused</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                    <h3 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight mb-2">Campaign Paused</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
                         This survey campaign is currently paused (&ldquo;On Hold&rdquo;) by the administrator and is not accepting submissions at this time.
                     </p>
                     <button
                         onClick={onClose}
-                        className="w-full py-3 bg-gray-900 dark:bg-white dark:text-gray-900 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:opacity-90 transition-all"
+                        className="w-full py-3.5 bg-slate-900 dark:bg-white dark:text-slate-900 text-white font-bold uppercase text-xs tracking-wider rounded-xl hover:opacity-90 transition-all shadow-md"
                     >
                         Back to Dashboard
                     </button>
@@ -655,23 +655,23 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-gray-850 rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[92vh] sm:max-h-[88vh]">
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-800 flex justify-between items-center">
+                <div className="px-6 py-4.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 flex justify-between items-center shrink-0">
                     <div>
                         <span className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 tracking-wider">
                             Interactive Survey Task
                         </span>
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate max-w-xs sm:max-w-md">
+                        <h3 className="text-sm font-extrabold text-slate-900 dark:text-white truncate max-w-xs sm:max-w-md">
                             {task.title}
                         </h3>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                         {stage === 'active' && (
-                            <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-full text-xs font-mono font-bold">
-                                <Clock className="w-3.5 h-3.5 animate-pulse" />
+                            <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-full text-xs font-mono font-bold shadow-2xs">
+                                <Clock className="w-3.5 h-3.5 animate-pulse text-blue-500" />
                                 {formatTimer(secondsElapsed)}
                             </div>
                         )}
@@ -679,7 +679,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                             <button
                                 type="button"
                                 onClick={saveAndContinueLater}
-                                className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg"
+                                className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                 title="Save & Continue Later"
                             >
                                 <Bookmark className="w-4 h-4" />
@@ -688,7 +688,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+                            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -696,33 +696,33 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                 </div>
 
                 {/* Body Content */}
-                <div className="p-6 overflow-y-auto flex-1 space-y-5">
+                <div className="p-6 overflow-y-auto flex-1 space-y-6">
                     {/* Error Toast */}
                     {errorMessage && (
-                        <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 text-red-700 dark:text-red-300 rounded-xl text-xs flex items-center justify-between">
-                            <span>{errorMessage}</span>
-                            <button onClick={() => setErrorMessage(null)} className="text-xs font-bold underline">Dismiss</button>
+                        <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-2xl text-xs flex items-center justify-between shadow-xs">
+                            <span className="font-medium">{errorMessage}</span>
+                            <button onClick={() => setErrorMessage(null)} className="text-xs font-bold underline ml-2 shrink-0">Dismiss</button>
                         </div>
                     )}
 
                     {/* Resume Draft Banner */}
                     {hasDraftToResume && stage === 'intro' && (
-                        <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center justify-between gap-2 text-xs">
-                            <div className="flex items-center gap-2">
-                                <RotateCcw className="w-4 h-4 text-blue-600 shrink-0" />
-                                <span className="font-semibold text-gray-800 dark:text-gray-200">
+                        <div className="p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-2xl flex items-center justify-between gap-3 text-xs shadow-xs">
+                            <div className="flex items-center gap-2.5">
+                                <RotateCcw className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                                <span className="font-semibold text-slate-800 dark:text-slate-200">
                                     You have an unfinished response saved from an earlier session.
                                 </span>
                             </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex items-center gap-2 shrink-0">
                                 <button
                                     type="button"
                                     onClick={discardDraft}
-                                    className="px-2 py-1 text-gray-400 hover:text-gray-600 font-semibold"
+                                    className="px-2.5 py-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 font-semibold transition-colors"
                                 >
                                     Discard
                                 </button>
-                                <Button size="sm" variant="primary" onClick={resumeDraft} className="text-xs py-1">
+                                <Button size="sm" variant="primary" onClick={resumeDraft} className="text-xs py-1.5 px-4 rounded-xl shadow-xs">
                                     Resume
                                 </Button>
                             </div>
@@ -733,26 +733,26 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                     {stage === 'intro' && (
                         <div className="space-y-6 text-center py-2">
                             {/* Icon badge */}
-                            <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/80 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                            <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
                                 <ShieldCheck className="w-9 h-9" />
                             </div>
 
                             {/* Headings */}
                             <div className="space-y-2">
-                                <span className="inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full text-[11px] font-black uppercase tracking-wider">
+                                <span className="inline-block px-3 py-1 bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 rounded-full text-[11px] font-black uppercase tracking-wider">
                                     Quality Verified Research
                                 </span>
-                                <h4 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                                <h4 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                                     {task.title || 'Required Survey Participation'}
                                 </h4>
-                                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 max-w-lg mx-auto leading-relaxed">
+                                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-lg mx-auto leading-relaxed">
                                     {task.description || 'Please read each question carefully and provide honest responses to earn your task reward.'}
                                 </p>
                             </div>
 
                             {/* Rewards & Details Badge Grid */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-lg mx-auto text-left">
-                                <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 max-w-lg mx-auto text-left">
+                                <div className="p-4 bg-emerald-50/80 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/60 shadow-xs">
                                     <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold uppercase tracking-wider block">
                                         Reward Credit
                                     </span>
@@ -760,7 +760,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                         {formatCurrency(task.rewardPerTask)}
                                     </div>
                                 </div>
-                                <div className="p-3.5 bg-blue-50/80 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800/60 shadow-xs">
+                                <div className="p-4 bg-blue-50/80 dark:bg-blue-950/30 rounded-2xl border border-blue-200/80 dark:border-blue-800/60 shadow-xs">
                                     <span className="text-[10px] text-blue-800 dark:text-blue-300 font-bold uppercase tracking-wider block">
                                         Estimated Time
                                     </span>
@@ -768,19 +768,19 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                         ~{estimatedMinutes} Min
                                     </div>
                                 </div>
-                                <div className="p-3.5 bg-purple-50/80 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800/60 shadow-xs col-span-2 sm:col-span-1">
-                                    <span className="text-[10px] text-purple-800 dark:text-purple-300 font-bold uppercase tracking-wider block">
+                                <div className="p-4 bg-indigo-50/80 dark:bg-indigo-950/30 rounded-2xl border border-indigo-200/80 dark:border-indigo-800/60 shadow-xs col-span-2 sm:col-span-1">
+                                    <span className="text-[10px] text-indigo-800 dark:text-indigo-300 font-bold uppercase tracking-wider block">
                                         Questions
                                     </span>
-                                    <div className="text-base sm:text-lg font-black text-purple-700 dark:text-purple-400 mt-0.5">
+                                    <div className="text-base sm:text-lg font-black text-indigo-700 dark:text-indigo-400 mt-0.5">
                                         {questions.length} Total
                                     </div>
                                 </div>
                             </div>
 
                             {/* Quality Notice */}
-                            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/80 rounded-xl text-left space-y-1.5 shadow-xs">
-                                <span className="font-bold flex items-center gap-1.5 text-xs text-amber-900 dark:text-amber-200">
+                            <div className="p-4 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-left space-y-1.5 shadow-xs">
+                                <span className="font-bold flex items-center gap-2 text-xs text-amber-900 dark:text-amber-200">
                                     <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                                     Quality Checkpoints & Attention Verification
                                 </span>
@@ -791,8 +791,8 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                             {/* Empty questions notice if misconfigured */}
                             {questions.length === 0 && (
-                                <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl text-left text-xs text-red-700 dark:text-red-300 space-y-1">
-                                    <span className="font-bold flex items-center gap-1.5">
+                                <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-2xl text-left text-xs text-red-700 dark:text-red-300 space-y-1">
+                                    <span className="font-bold flex items-center gap-2">
                                         <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
                                         Configuration Notice
                                     </span>
@@ -804,15 +804,15 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                             {/* Consent Checkbox Box */}
                             {questions.length > 0 && (
-                                <div className="p-4 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-left">
+                                <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl text-left shadow-xs">
                                     <label className="flex items-start gap-3 cursor-pointer select-none">
                                         <input
                                             type="checkbox"
                                             checked={consentAgreed}
                                             onChange={e => setConsentAgreed(e.target.checked)}
-                                            className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 cursor-pointer"
+                                            className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-600 cursor-pointer accent-blue-600"
                                         />
-                                        <span className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-relaxed">
+                                        <span className="text-xs font-medium text-slate-800 dark:text-slate-200 leading-relaxed">
                                             I agree to participate in this survey, confirm that my answers will be accurate and honest, and understand that rewards are credited upon quality verification.
                                         </span>
                                     </label>
@@ -825,7 +825,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                     <Button
                                         variant="secondary"
                                         onClick={onClose}
-                                        className="w-full sm:w-64 py-3 rounded-xl"
+                                        className="w-full sm:w-64 py-3.5 rounded-xl font-semibold"
                                     >
                                         Close & Return to Dashboard
                                     </Button>
@@ -834,7 +834,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                         variant="primary"
                                         disabled={!consentAgreed}
                                         onClick={() => setStage('active')}
-                                        className="w-full sm:w-64 py-3 rounded-xl shadow-lg font-bold text-xs flex items-center justify-center gap-2"
+                                        className="w-full sm:w-64 py-3.5 rounded-xl shadow-lg font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
                                     >
                                         Start Survey Now <ArrowRight className="w-4 h-4 ml-1" />
                                     </Button>
@@ -846,24 +846,24 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                     {/* 2. ACTIVE QUESTION SCREEN WITH DEFENSIVE GUARDS */}
                     {stage === 'active' && !currentQ && (
                         <div className="py-12 text-center space-y-4">
-                            <div className="w-14 h-14 bg-amber-100 dark:bg-amber-900/40 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+                            <div className="w-14 h-14 bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
                                 <AlertTriangle className="w-7 h-7" />
                             </div>
-                            <h4 className="text-base font-bold text-gray-900 dark:text-white">
+                            <h4 className="text-base font-bold text-slate-900 dark:text-white">
                                 {questions.length === 0 ? 'No Survey Questions Available' : 'End of Questions'}
                             </h4>
-                            <p className="text-xs text-gray-600 dark:text-gray-300 max-w-sm mx-auto leading-relaxed">
+                            <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm mx-auto leading-relaxed">
                                 {questions.length === 0
                                     ? 'This survey does not currently have any active questions configured.'
                                     : 'You have reached the end of the available questions.'}
                             </p>
                             <div className="pt-2 flex justify-center gap-3">
                                 {questions.length > 0 && (
-                                    <Button size="sm" variant="secondary" onClick={() => setActiveQuestionIndex(0)}>
+                                    <Button size="sm" variant="secondary" onClick={() => setActiveQuestionIndex(0)} className="rounded-xl px-4">
                                         Review from Start
                                     </Button>
                                 )}
-                                <Button size="sm" variant="primary" onClick={questions.length > 0 ? handleSubmitSurvey : onClose}>
+                                <Button size="sm" variant="primary" onClick={questions.length > 0 ? handleSubmitSurvey : onClose} className="rounded-xl px-5">
                                     {questions.length > 0 ? 'Submit Responses' : 'Close Survey'}
                                 </Button>
                             </div>
@@ -891,14 +891,14 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                         return (
                             <div className="space-y-5">
                                 {/* Progress bar */}
-                                <div className="space-y-1.5">
-                                    <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 font-medium">
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400 font-semibold">
                                         <span>Question {displayQNum} of {totalVisible}</span>
-                                        <span>{progressPct}% Complete</span>
+                                        <span className="font-mono">{progressPct}% Complete</span>
                                     </div>
-                                    <div className="w-full bg-gray-200 dark:bg-gray-700 h-2 rounded-full overflow-hidden">
+                                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200/60 dark:border-slate-700/60">
                                         <div
-                                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                            className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-300 shadow-2xs"
                                             style={{ width: `${progressPct}%` }}
                                         ></div>
                                     </div>
@@ -906,43 +906,43 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                                 {/* Check Warning Notification if Retry triggered */}
                                 {checkWarning && (
-                                    <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-xl text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
-                                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                        <span>{checkWarning}</span>
+                                    <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-2xl text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5 shadow-xs">
+                                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                        <span className="font-medium leading-relaxed">{checkWarning}</span>
                                     </div>
                                 )}
 
                                 {/* Rule Messages if applicable */}
                                 {currentMessages.map((msg, mIdx) => (
-                                    <div key={mIdx} className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                                    <div key={mIdx} className={`p-3.5 rounded-2xl text-xs flex items-start gap-2.5 shadow-xs ${
                                         msg.type === 'warning'
-                                            ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200'
-                                            : 'bg-blue-50 dark:bg-blue-950/30 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
+                                            ? 'bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200'
+                                            : 'bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
                                     }`}>
                                         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                                        <span>{msg.text}</span>
+                                        <span className="font-medium leading-relaxed">{msg.text}</span>
                                     </div>
                                 ))}
 
                                 {/* Question Box with Answer Piping */}
-                                <div className="p-4 sm:p-5 bg-gray-50/80 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
+                                <div className="p-5 sm:p-6 bg-slate-50/70 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-4 shadow-xs">
                                     <div>
-                                        <h4 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white leading-snug">
+                                        <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug">
                                             {pipedTitle}
                                             {isCurrentQuestionRequired() && <span className="text-red-500 ml-1 font-bold">*</span>}
                                         </h4>
                                         {pipedDescription && (
-                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+                                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
                                                 {pipedDescription}
                                             </p>
                                         )}
                                     </div>
 
                                     {/* Dynamic Interactive Question Options */}
-                                    <div className="pt-2">
+                                    <div className="pt-1">
                                         {/* Single Choice Radio */}
                                         {currentQ.type === 'single_choice' && (
-                                            <div className="space-y-2">
+                                            <div className="space-y-2.5">
                                                 {normalizedOptions.map((optData) => {
                                                     const currentAns = responses[currentQ.id];
                                                     const isSelected = currentAns !== undefined && currentAns !== null && (
@@ -954,31 +954,31 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                         <div
                                                             key={optData.id}
                                                             onClick={() => handleAnswer(currentQ.id, optData.value)}
-                                                            className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                            className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                 isSelected
-                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
-                                                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                    ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
+                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
                                                             }`}
                                                         >
                                                             <span className="leading-snug">{optData.text}</span>
-                                                            <div className={`w-4 h-4 rounded-full border shrink-0 ml-3 flex items-center justify-center ${isSelected ? 'border-blue-600 bg-blue-600' : 'border-gray-400 dark:border-gray-500'}`}>
+                                                            <div className={`w-4.5 h-4.5 rounded-full border shrink-0 ml-3 flex items-center justify-center transition-colors ${isSelected ? 'border-blue-600 bg-blue-600' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'}`}>
                                                                 {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                                             </div>
                                                         </div>
                                                     );
                                                 })}
                                                 {currentQ.allowOther && (
-                                                    <div className="pt-1.5">
+                                                    <div className="pt-1">
                                                         <div
                                                             onClick={() => handleAnswer(currentQ.id, 'Other')}
-                                                            className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                            className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                 responses[currentQ.id] === 'Other'
-                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
-                                                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                    ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
+                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
                                                             }`}
                                                         >
                                                             <span>Other (specify below)</span>
-                                                            <div className={`w-4 h-4 rounded-full border shrink-0 ml-3 flex items-center justify-center ${responses[currentQ.id] === 'Other' ? 'border-blue-600 bg-blue-600' : 'border-gray-400 dark:border-gray-500'}`}>
+                                                            <div className={`w-4.5 h-4.5 rounded-full border shrink-0 ml-3 flex items-center justify-center transition-colors ${responses[currentQ.id] === 'Other' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'}`}>
                                                                 {responses[currentQ.id] === 'Other' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                                             </div>
                                                         </div>
@@ -988,7 +988,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                                 value={responses[`${currentQ.id}_other`] || ''}
                                                                 onChange={e => handleAnswer(`${currentQ.id}_other`, e.target.value)}
                                                                 placeholder={currentQ.otherPlaceholder || 'Please provide details...'}
-                                                                className="mt-2 w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                                                                className="mt-2.5 w-full text-xs border rounded-xl p-3.5 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-2xs"
                                                             />
                                                         )}
                                                     </div>
@@ -998,7 +998,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                                         {/* Multiple Choice Checkboxes */}
                                         {currentQ.type === 'multiple_choice' && (
-                                            <div className="space-y-2">
+                                            <div className="space-y-2.5">
                                                 {normalizedOptions.map((optData) => {
                                                     const currentList: any[] = Array.isArray(responses[currentQ.id]) ? responses[currentQ.id] : [];
                                                     const isChecked = currentList.some(item =>
@@ -1015,21 +1015,21 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                                     : [...currentList, optData.value];
                                                                 handleAnswer(currentQ.id, updated);
                                                             }}
-                                                            className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                            className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                 isChecked
-                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
-                                                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                    ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
+                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
                                                             }`}
                                                         >
                                                             <span className="leading-snug">{optData.text}</span>
-                                                            <div className={`w-4 h-4 rounded border shrink-0 ml-3 flex items-center justify-center ${isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-400 dark:border-gray-500'}`}>
-                                                                {isChecked && <Check className="w-3 h-3" />}
+                                                            <div className={`w-4.5 h-4.5 rounded border shrink-0 ml-3 flex items-center justify-center transition-colors ${isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'}`}>
+                                                                {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                                                             </div>
                                                         </div>
                                                     );
                                                 })}
                                                 {currentQ.allowOther && (
-                                                    <div className="pt-1.5">
+                                                    <div className="pt-1">
                                                         {(() => {
                                                             const currentList: any[] = Array.isArray(responses[currentQ.id]) ? responses[currentQ.id] : [];
                                                             const isChecked = currentList.includes('Other');
@@ -1042,15 +1042,15 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                                                 : [...currentList, 'Other'];
                                                                             handleAnswer(currentQ.id, updated);
                                                                         }}
-                                                                        className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                                        className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                             isChecked
-                                                                                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
-                                                                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                                ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
+                                                                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
                                                                         }`}
                                                                     >
                                                                         <span>Other (specify below)</span>
-                                                                        <div className={`w-4 h-4 rounded border shrink-0 ml-3 flex items-center justify-center ${isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-400 dark:border-gray-500'}`}>
-                                                                            {isChecked && <Check className="w-3 h-3" />}
+                                                                        <div className={`w-4.5 h-4.5 rounded border shrink-0 ml-3 flex items-center justify-center transition-colors ${isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'}`}>
+                                                                            {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                                                                         </div>
                                                                     </div>
                                                                     {isChecked && (
@@ -1059,7 +1059,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                                             value={responses[`${currentQ.id}_other`] || ''}
                                                                             onChange={e => handleAnswer(`${currentQ.id}_other`, e.target.value)}
                                                                             placeholder={currentQ.otherPlaceholder || 'Please provide details...'}
-                                                                            className="mt-2 w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                                                                            className="mt-2.5 w-full text-xs border rounded-xl p-3.5 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-2xs"
                                                                         />
                                                                     )}
                                                                 </>
@@ -1075,7 +1075,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                             <select
                                                 value={responses[currentQ.id] || ''}
                                                 onChange={e => handleAnswer(currentQ.id, e.target.value)}
-                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                                className="w-full text-xs border rounded-xl p-3.5 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-2xs transition-all"
                                             >
                                                 <option value="">-- Select an option --</option>
                                                 {normalizedOptions.map((optData) => (
@@ -1088,11 +1088,11 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                                         {/* Top N Ranking */}
                                         {currentQ.type === 'top_n' && (
-                                            <div className="space-y-2">
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+                                            <div className="space-y-3">
+                                                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
                                                     Select up to {currentQ.validation?.topN || 3} items in order of priority:
                                                 </p>
-                                                <div className="space-y-2">
+                                                <div className="space-y-2.5">
                                                     {normalizedOptions.map((optData) => {
                                                         const rankedList: any[] = Array.isArray(responses[currentQ.id]) ? responses[currentQ.id] : [];
                                                         const rankIdx = rankedList.findIndex(item =>
@@ -1115,19 +1115,19 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                                     }
                                                                     handleAnswer(currentQ.id, updated);
                                                                 }}
-                                                                className={`p-3.5 rounded-xl border text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                                className={`p-4 rounded-xl border text-xs font-semibold cursor-pointer transition-all duration-150 flex items-center justify-between ${
                                                                     isSelected
-                                                                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm'
-                                                                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                        ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500 text-blue-900 dark:text-blue-200 shadow-sm'
+                                                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
                                                                 }`}
                                                             >
                                                                 <span className="leading-snug">{optData.text}</span>
                                                                 {isSelected ? (
-                                                                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shrink-0 ml-3">
+                                                                    <span className="w-5.5 h-5.5 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shrink-0 ml-3 shadow-2xs">
                                                                         #{rankIdx + 1}
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono shrink-0 ml-3">
+                                                                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono shrink-0 ml-3">
                                                                         Tap to rank
                                                                     </span>
                                                                 )}
@@ -1140,7 +1140,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                                         {/* Yes / No Binary */}
                                         {currentQ.type === 'yes_no' && (
-                                            <div className="grid grid-cols-2 gap-3">
+                                            <div className="grid grid-cols-2 gap-3.5">
                                                 {['Yes', 'No'].map(choice => {
                                                     const isSelected = responses[currentQ.id] === choice;
                                                     return (
@@ -1148,10 +1148,10 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                             key={choice}
                                                             type="button"
                                                             onClick={() => handleAnswer(currentQ.id, choice)}
-                                                            className={`py-3 px-4 rounded-xl border font-bold text-xs transition flex items-center justify-center gap-2 ${
+                                                            className={`py-3.5 px-4 rounded-xl border font-bold text-xs transition-all duration-150 flex items-center justify-center gap-2 shadow-2xs ${
                                                                 isSelected
-                                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                                                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-[1.01]'
+                                                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
                                                             }`}
                                                         >
                                                             {choice === 'Yes' ? '👍 Yes' : '👎 No'}
@@ -1163,7 +1163,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                                         {/* Star Rating (1-5) */}
                                         {currentQ.type === 'rating' && (
-                                            <div className="flex justify-center items-center gap-2 py-3">
+                                            <div className="flex justify-center items-center gap-2.5 py-4">
                                                 {[1, 2, 3, 4, 5].map(star => {
                                                     const isFilled = Number(responses[currentQ.id] || 0) >= star;
                                                     return (
@@ -1171,13 +1171,13 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                             key={star}
                                                             type="button"
                                                             onClick={() => handleAnswer(currentQ.id, star)}
-                                                            className="p-1.5 transform hover:scale-125 transition"
+                                                            className="p-2 transform hover:scale-125 transition-transform"
                                                         >
                                                             <Star
-                                                                className={`w-8 h-8 ${
+                                                                className={`w-8 h-8 transition-colors ${
                                                                     isFilled
-                                                                        ? 'text-amber-400 fill-amber-400'
-                                                                        : 'text-gray-300 dark:text-gray-600'
+                                                                        ? 'text-amber-400 fill-amber-400 drop-shadow-xs'
+                                                                        : 'text-slate-300 dark:text-slate-600'
                                                                 }`}
                                                             />
                                                         </button>
@@ -1188,12 +1188,12 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                                         {/* Opinion Scale (0-10) */}
                                         {currentQ.type === 'opinion_scale' && (
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 font-semibold px-1">
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between text-[11px] text-slate-500 dark:text-slate-400 font-semibold px-1">
                                                     <span>0 - Not likely</span>
                                                     <span>10 - Extremely likely</span>
                                                 </div>
-                                                <div className="flex flex-wrap justify-between gap-1">
+                                                <div className="flex flex-wrap justify-between gap-1.5">
                                                     {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => {
                                                         const isSelected = responses[currentQ.id] === val;
                                                         return (
@@ -1201,10 +1201,10 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                                 key={val}
                                                                 type="button"
                                                                 onClick={() => handleAnswer(currentQ.id, val)}
-                                                                className={`w-9 h-9 rounded-xl border text-xs font-bold transition flex items-center justify-center ${
+                                                                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border text-xs font-bold transition-all duration-150 flex items-center justify-center shadow-2xs ${
                                                                     isSelected
-                                                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                                                                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200'
+                                                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-105'
+                                                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200'
                                                                 }`}
                                                             >
                                                                 {val}
@@ -1222,7 +1222,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                 value={responses[currentQ.id] || ''}
                                                 onChange={e => handleAnswer(currentQ.id, e.target.value)}
                                                 placeholder="Type your response here..."
-                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                                className="w-full text-xs border rounded-xl p-3.5 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-2xs"
                                             />
                                         )}
 
@@ -1233,7 +1233,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                 value={responses[currentQ.id] || ''}
                                                 onChange={e => handleAnswer(currentQ.id, e.target.value)}
                                                 placeholder="Type your detailed thoughts, feedback or opinions..."
-                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                                className="w-full text-xs border rounded-xl p-3.5 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-2xs"
                                             />
                                         )}
 
@@ -1244,7 +1244,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                 value={responses[currentQ.id] ?? ''}
                                                 onChange={e => handleAnswer(currentQ.id, e.target.value)}
                                                 placeholder="Enter number..."
-                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                                className="w-full text-xs border rounded-xl p-3.5 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-2xs"
                                             />
                                         )}
 
@@ -1255,19 +1255,19 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                                 value={responses[currentQ.id] || ''}
                                                 onChange={e => handleAnswer(currentQ.id, e.target.value)}
                                                 placeholder="Type your response here..."
-                                                className="w-full text-xs border rounded-xl p-3 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                                                className="w-full text-xs border rounded-xl p-3.5 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white shadow-2xs"
                                             />
                                         )}
                                     </div>
                                 </div>
 
                                 {/* Step Navigation Buttons */}
-                                <div className="flex justify-between items-center pt-2">
+                                <div className="flex justify-between items-center pt-3">
                                     <button
                                         type="button"
                                         disabled={pathHistory.length === 0}
                                         onClick={handlePreviousQuestion}
-                                        className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-1"
+                                        className="px-4.5 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 disabled:opacity-30 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 shadow-2xs"
                                     >
                                         <ArrowLeft className="w-3.5 h-3.5" /> Previous
                                     </button>
@@ -1276,7 +1276,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                         variant="primary"
                                         disabled={!isCurrentQuestionAnswered()}
                                         onClick={handleNextQuestion}
-                                        className="rounded-xl px-6 text-xs font-bold"
+                                        className="rounded-xl px-6 py-2.5 text-xs font-bold shadow-md transition-transform active:scale-[0.98]"
                                     >
                                         {hasNextVisible ? (
                                             <>Next Question <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
@@ -1292,20 +1292,20 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                     {/* 3. DISQUALIFIED SCREEN */}
                     {stage === 'disqualified' && (
                         <div className="py-8 text-center space-y-4">
-                            <div className="w-14 h-14 bg-amber-100 dark:bg-amber-950/40 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
-                                <AlertTriangle className="w-7 h-7" />
+                            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                                <AlertTriangle className="w-8 h-8" />
                             </div>
-                            <h4 className="text-base font-bold text-gray-900 dark:text-white">
+                            <h4 className="text-base font-extrabold text-slate-900 dark:text-white">
                                 Survey Screenout Notice
                             </h4>
-                            <p className="text-xs text-gray-600 dark:text-gray-300 max-w-sm mx-auto">
+                            <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm mx-auto leading-relaxed">
                                 {disqualificationReason}
                             </p>
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
                                 Thank you for your participation. If configured by the survey administrator, a screening micro-reward has been credited to your Task Earnings balance.
                             </p>
                             <div className="pt-3">
-                                <Button size="sm" variant="secondary" onClick={() => { onCompleted(); onClose(); }}>
+                                <Button size="sm" variant="secondary" onClick={() => { onCompleted(); onClose(); }} className="rounded-xl px-6 font-semibold">
                                     Return to Task Dashboard
                                 </Button>
                             </div>
@@ -1314,21 +1314,21 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                     {/* 4. SPEED WARNING MODAL */}
                     {stage === 'speed_warning' && (
-                        <div className="p-6 text-center space-y-4">
-                            <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
-                                <Clock className="w-7 h-7 animate-bounce" />
+                        <div className="p-4 text-center space-y-4">
+                            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                                <Clock className="w-8 h-8 animate-bounce text-amber-600 dark:text-amber-400" />
                             </div>
-                            <h4 className="text-base font-bold text-gray-900 dark:text-white">
+                            <h4 className="text-base font-extrabold text-slate-900 dark:text-white">
                                 Speed Verification Warning
                             </h4>
-                            <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                            <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm mx-auto leading-relaxed">
                                 You completed this {estimatedMinutes}-minute survey in only {secondsElapsed} seconds. To ensure data validity, our anti-speeding engine asks that you review your answers carefully before final submission.
                             </p>
                             <div className="flex justify-center gap-3 pt-2">
-                                <Button size="sm" variant="secondary" onClick={() => setStage('active')}>
+                                <Button size="sm" variant="secondary" onClick={() => setStage('active')} className="rounded-xl px-4">
                                     Review Answers
                                 </Button>
-                                <Button size="sm" variant="primary" onClick={performSubmission}>
+                                <Button size="sm" variant="primary" onClick={performSubmission} className="rounded-xl px-5 shadow-sm">
                                     Confirm and Submit Anyway
                                 </Button>
                             </div>
@@ -1337,12 +1337,12 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                     {/* 5. SUBMITTING SCREEN */}
                     {stage === 'submitting' && (
-                        <div className="py-16 text-center space-y-3">
+                        <div className="py-16 text-center space-y-3.5">
                             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
-                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                            <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
                                 Transmitting and Verifying Responses...
                             </h4>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
                                 Validating attention checks, consistency checks, and recording completion status.
                             </p>
                         </div>
@@ -1350,21 +1350,21 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
 
                     {/* 6. SUCCESS SCREEN */}
                     {stage === 'success' && (
-                        <div className="py-8 text-center space-y-4">
-                            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 rounded-full flex items-center justify-center mx-auto animate-bounce">
+                        <div className="py-8 text-center space-y-5">
+                            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-sm animate-bounce">
                                 <Award className="w-9 h-9" />
                             </div>
 
-                            <div className="space-y-1">
-                                <h4 className="text-lg font-extrabold text-gray-900 dark:text-white">
+                            <div className="space-y-1.5">
+                                <h4 className="text-lg font-extrabold text-slate-900 dark:text-white">
                                     Survey Completed Successfully!
                                 </h4>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
                                     Your responses have been verified and recorded.
                                 </p>
                             </div>
 
-                            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl max-w-sm mx-auto space-y-1">
+                            <div className="p-4 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl max-w-sm mx-auto space-y-1 shadow-xs">
                                 <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 block">
                                     Reward: {formatCurrency(task.rewardPerTask)}
                                 </span>
@@ -1380,7 +1380,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                         onCompleted();
                                         onClose();
                                     }}
-                                    className="px-8 py-2.5 rounded-xl text-xs font-bold"
+                                    className="px-8 py-3 rounded-xl text-xs font-bold shadow-md transition-transform active:scale-[0.98]"
                                 >
                                     Done & Return to Tasks
                                 </Button>
