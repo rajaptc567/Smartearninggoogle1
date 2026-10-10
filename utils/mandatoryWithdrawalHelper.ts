@@ -19,7 +19,8 @@ export const isUserEligibleForUserTask = (
         if (ut.status === 'On Hold') return false;
         
         // Targeting check
-        if (ut.targeting) {
+        const reqMode = ut.requirementMode || (ut.isMandatoryForAllUsers ? 'mandatory_all' : 'optional');
+        if (reqMode === 'mandatory_targeted' && ut.targeting) {
             const targeting = ut.targeting;
             const userCountry = (user.country || '').trim().toLowerCase();
             const userCurrency = (user.currency || '').trim().toUpperCase();
