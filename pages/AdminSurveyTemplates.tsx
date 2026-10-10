@@ -85,13 +85,6 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [formName, setFormName] = useState<string>('');
     const [formDescription, setFormDescription] = useState<string>('');
     const [formCategory, setFormCategory] = useState<string>('Member Intelligence & Experience');
-    const [formEstimatedMinutes, setFormEstimatedMinutes] = useState<number>(5);
-    const [formRewardMode, setFormRewardMode] = useState<'no_reward' | 'fixed' | 'custom'>('no_reward');
-    const [formRewardAmount, setFormRewardAmount] = useState<number>(0);
-    const [formRewardCurrency, setFormRewardCurrency] = useState<string>('USD');
-    const [formRequirementMode, setFormRequirementMode] = useState<'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal'>('optional');
-    const [formRecompletionPolicy, setFormRecompletionPolicy] = useState<'never' | 'on_version_change' | 'every_x_days'>('never');
-    const [formRecompletionDays, setFormRecompletionDays] = useState<number>(30);
     const [formSurveyConfig, setFormSurveyConfig] = useState<SurveyConfigData>({
         title: '',
         description: '',
@@ -327,13 +320,6 @@ export const AdminSurveyTemplates: React.FC = () => {
         setFormName(template.name);
         setFormDescription(template.description || '');
         setFormCategory(template.category || 'Member Intelligence & Experience');
-        setFormEstimatedMinutes(template.estimatedTimeMinutes || 5);
-        setFormRewardMode(template.rewardConfig?.mode || 'no_reward');
-        setFormRewardAmount(template.rewardConfig?.mode === 'no_reward' ? 0 : (template.rewardConfig?.amount !== undefined ? Number(template.rewardConfig.amount) : 0.05));
-        setFormRewardCurrency(template.rewardConfig?.currency || 'USD');
-        setFormRequirementMode(template.requirementConfig?.mode || 'optional');
-        setFormRecompletionPolicy(template.recompletionPolicy?.policy || 'never');
-        setFormRecompletionDays(template.recompletionPolicy?.intervalDays || 30);
         setFormSurveyConfig(template.surveyConfig ? JSON.parse(JSON.stringify(template.surveyConfig)) : { questions: [], sections: [] });
     };
 
@@ -343,13 +329,6 @@ export const AdminSurveyTemplates: React.FC = () => {
         setFormName('');
         setFormDescription('');
         setFormCategory('Member Intelligence & Experience');
-        setFormEstimatedMinutes(5);
-        setFormRewardMode('no_reward');
-        setFormRewardAmount(0);
-        setFormRewardCurrency('USD');
-        setFormRequirementMode('optional');
-        setFormRecompletionPolicy('never');
-        setFormRecompletionDays(30);
         setFormSurveyConfig({
             title: '',
             description: '',
@@ -384,16 +363,6 @@ export const AdminSurveyTemplates: React.FC = () => {
 
         // Validate Reward Configuration
         let safeRewardAmount = 0;
-        if (formRewardMode === 'fixed' || formRewardMode === 'custom') {
-            const parsed = Number(formRewardAmount);
-            if (!Number.isFinite(parsed) || isNaN(parsed) || parsed < 0.01) {
-                alert(`Please enter a valid reward amount of at least $0.01 for ${formRewardMode === 'fixed' ? 'Fixed' : 'Custom'} Reward mode.`);
-                return;
-            }
-            safeRewardAmount = Number(parsed.toFixed(2));
-        } else {
-            safeRewardAmount = 0;
-        }
 
         setIsSubmittingForm(true);
         try {
@@ -401,25 +370,25 @@ export const AdminSurveyTemplates: React.FC = () => {
                 name: formName.trim(),
                 description: formDescription.trim(),
                 category: formCategory.trim(),
-                estimatedTimeMinutes: Number(formEstimatedMinutes) || 5,
+                estimatedTimeMinutes: 5,
                 rewardConfig: {
-                    mode: formRewardMode,
-                    amount: safeRewardAmount,
-                    currency: formRewardCurrency
+                    mode: 'no_reward',
+                    amount: 0,
+                    currency: 'USD'
                 },
                 requirementConfig: {
-                    mode: formRequirementMode
+                    mode: 'optional'
                 },
                 recompletionPolicy: {
-                    policy: formRecompletionPolicy,
-                    intervalDays: Number(formRecompletionDays) || 30
+                    policy: 'never',
+                    intervalDays: 30
                 },
                 surveyConfig: {
                     ...formSurveyConfig,
                     title: formName.trim(),
                     description: formDescription.trim(),
                     category: formCategory.trim(),
-                    estimatedTimeMinutes: Number(formEstimatedMinutes) || 5
+                    estimatedTimeMinutes: 5
                 }
             };
 
@@ -1201,103 +1170,6 @@ export const AdminSurveyTemplates: React.FC = () => {
                                         placeholder="Brief summary of survey objective and target audience..."
                                         className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-black uppercase text-gray-500 mb-1">Est. Minutes</label>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={60}
-                                        value={formEstimatedMinutes}
-                                        onChange={(e) => setFormEstimatedMinutes(Number(e.target.value))}
-                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Reward & Requirement Configuration (Phase 1 Controls) */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl border dark:border-gray-700">
-                                <div>
-                                    <label className="block text-xs font-black uppercase text-gray-500 mb-1">Reward Mode</label>
-                                    <select
-                                        value={formRewardMode}
-                                        onChange={(e) => {
-                                            const newMode = e.target.value as any;
-                                            setFormRewardMode(newMode);
-                                            if (newMode === 'no_reward') {
-                                                setFormRewardAmount(0);
-                                            } else if (formRewardAmount <= 0) {
-                                                setFormRewardAmount(newMode === 'fixed' ? 0.25 : 0.05);
-                                            }
-                                        }}
-                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    >
-                                        <option value="no_reward">No Reward (Default)</option>
-                                        <option value="fixed">Fixed Reward</option>
-                                        <option value="custom">Custom Reward</option>
-                                    </select>
-                                    {(formRewardMode === 'fixed' || formRewardMode === 'custom') && (
-                                        <div className="mt-2 flex items-center gap-2">
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0.01"
-                                                required
-                                                value={formRewardAmount}
-                                                onChange={(e) => setFormRewardAmount(Number(e.target.value))}
-                                                placeholder={formRewardMode === 'fixed' ? '0.25' : '0.05'}
-                                                className="w-24 px-3 py-1.5 rounded-lg border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold font-mono"
-                                            />
-                                            <span className="text-xs font-bold text-gray-500">USD</span>
-                                            <span className="text-[10px] text-gray-400">
-                                                {formRewardMode === 'fixed' ? '(Fixed Payout)' : '(Default Custom Payout)'}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-black uppercase text-gray-500 mb-1">Requirement Mode</label>
-                                    <select
-                                        value={formRequirementMode}
-                                        onChange={(e) => setFormRequirementMode(e.target.value as any)}
-                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    >
-                                        <option value="optional">Optional (Default)</option>
-                                        <option value="mandatory_all">Mandatory for all users</option>
-                                        <option value="mandatory_targeted">Mandatory for targeted users</option>
-                                        <option value="mandatory_before_withdrawal">Mandatory before withdrawal</option>
-                                    </select>
-                                    <p className="text-[10px] text-gray-400 mt-1">
-                                        Data contract stored safely. Withdrawal enforcement remains OFF in Phase 1.
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-black uppercase text-gray-500 mb-1">Re-Completion Policy</label>
-                                    <select
-                                        value={formRecompletionPolicy}
-                                        onChange={(e) => setFormRecompletionPolicy(e.target.value as any)}
-                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    >
-                                        <option value="never">Never (Once Only)</option>
-                                        <option value="on_version_change">On Survey Version Change</option>
-                                        <option value="every_x_days">Every X Days</option>
-                                    </select>
-                                    {formRecompletionPolicy === 'every_x_days' && (
-                                        <div className="mt-2 flex items-center gap-2">
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                max={365}
-                                                value={formRecompletionDays}
-                                                onChange={(e) => setFormRecompletionDays(Number(e.target.value))}
-                                                className="w-20 px-3 py-1.5 rounded-lg border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold"
-                                            />
-                                            <span className="text-xs font-bold text-gray-500">Days</span>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
