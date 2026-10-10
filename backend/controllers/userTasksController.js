@@ -11,6 +11,11 @@ import Withdrawal from '../models/Withdrawal.js';
 import { sendTemplateNotification } from '../utils/automation.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 import { isUserEligibleForUserTask } from '../utils/userTaskEligibility.js';
+import {
+    evaluateSurveyFlow,
+    evaluateCheckQuestion,
+    evaluateAttentionCheck
+} from '../../lib/surveyLogicEngine.ts';
 
 // Centralized admin role check
 const isUserAdmin = (user) => Boolean(user && (user.role === 'admin' || user.role === 'super_admin'));
@@ -3307,52 +3312,55 @@ export const submitUserTaskProof = async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Survey responses cannot be empty.' });
             }
 
-            // Build response lookup map
+            // Build response lookup map and plain responses object
             const responseMap = new Map();
+            const responsesObj = {};
             for (const r of surveyResponses) {
                 if (r && r.questionId) {
-                    responseMap.set(String(r.questionId), r);
+                    const qIdStr = String(r.questionId);
+                    responseMap.set(qIdStr, r);
+                    responsesObj[qIdStr] = r.value;
                 }
             }
 
-            // Question-by-question authoritative validation
-            for (const q of questions) {
-                // Evaluate conditional showIf
-                let isVisible = true;
-                if (q.showIf && q.showIf.questionId) {
-                    const parentAns = responseMap.get(String(q.showIf.questionId));
-                    const parentVal = parentAns ? parentAns.value : undefined;
-                    const expected = q.showIf.value;
-                    const op = q.showIf.operator || 'equals';
-
-                    if (op === 'equals') {
-                        isVisible = String(parentVal ?? '').trim().toLowerCase() === String(expected ?? '').trim().toLowerCase();
-                    } else if (op === 'not_equals') {
-                        isVisible = String(parentVal ?? '').trim().toLowerCase() !== String(expected ?? '').trim().toLowerCase();
-                    } else if (op === 'contains') {
-                        if (Array.isArray(parentVal)) {
-                            isVisible = parentVal.some(v => String(v).trim().toLowerCase() === String(expected).trim().toLowerCase());
-                        } else {
-                            isVisible = String(parentVal ?? '').toLowerCase().includes(String(expected ?? '').toLowerCase());
-                        }
-                    } else if (op === 'not_contains') {
-                        if (Array.isArray(parentVal)) {
-                            isVisible = !parentVal.some(v => String(v).trim().toLowerCase() === String(expected).trim().toLowerCase());
-                        } else {
-                            isVisible = !String(parentVal ?? '').toLowerCase().includes(String(expected ?? '').toLowerCase());
-                        }
-                    } else if (op === 'answered') {
-                        isVisible = parentVal !== undefined && parentVal !== null && parentVal !== '';
-                    } else if (op === 'not_answered') {
-                        isVisible = parentVal === undefined || parentVal === null || parentVal === '';
+            // Extract client check question attempts
+            const clientCheckAttempts = {};
+            if (Array.isArray(req.body.checkQuestionResults)) {
+                for (const c of req.body.checkQuestionResults) {
+                    if (c && c.checkQuestionId) {
+                        clientCheckAttempts[String(c.checkQuestionId)] = (clientCheckAttempts[String(c.checkQuestionId)] || 0) + 1;
                     }
                 }
+            }
+
+            // Server-Authoritative Survey Flow Evaluation via shared surveyLogicEngine
+            const sections = Array.isArray(surveyConfig.sections) ? surveyConfig.sections : [];
+            const globalLogicRules = Array.isArray(surveyConfig.globalLogicRules) ? surveyConfig.globalLogicRules : [];
+
+            const serverFlow = evaluateSurveyFlow(questions, sections, responsesObj, globalLogicRules, clientCheckAttempts);
+            const visibleQuestions = serverFlow.visibleQuestions;
+            const visibleQuestionIds = new Set(visibleQuestions.map(q => String(q.id)));
+
+            if (serverFlow.status === 'disqualified') {
+                surveyQualificationStatus = 'Disqualified';
+                qualityFlags.push(serverFlow.disqualificationReason || 'Screened out based on survey logic criteria.');
+                qualityScore = Math.max(0, qualityScore - 50);
+            } else if (serverFlow.qualificationStatus === 'Qualified') {
+                if (surveyQualificationStatus !== 'Disqualified') {
+                    surveyQualificationStatus = 'Qualified';
+                }
+            }
+
+            // Authoritative Question-by-Question Validation on Server-Visible Questions
+            for (const q of visibleQuestions) {
+                const isRequired = serverFlow.requiredMap[q.id] !== undefined
+                    ? serverFlow.requiredMap[q.id]
+                    : Boolean(q.required || q.validation?.required);
 
                 const userAns = responseMap.get(String(q.id));
                 const val = userAns ? userAns.value : undefined;
-                const isRequired = Boolean(q.required || q.validation?.required);
 
-                if (isVisible && isRequired) {
+                if (isRequired) {
                     const isEmpty = val === undefined || val === null || val === '' || (Array.isArray(val) && val.length === 0);
                     if (isEmpty && surveyQualificationStatus !== 'Disqualified') {
                         return res.status(400).json({ success: false, error: `Question "${q.title}" is required.` });
@@ -3412,52 +3420,51 @@ export const submitUserTaskProof = async (req, res) => {
                         if (strVal.length > maxLen) {
                             return res.status(400).json({ success: false, error: `Text answer for "${q.title}" exceeds maximum allowed length of ${maxLen} characters.` });
                         }
+                    } else if (q.type === 'number') {
+                        const numVal = Number(val);
+                        if (isNaN(numVal)) {
+                            return res.status(400).json({ success: false, error: `Answer for "${q.title}" must be a valid number.` });
+                        }
+                        if (q.validation?.minValue !== undefined && numVal < q.validation.minValue) {
+                            return res.status(400).json({ success: false, error: `Answer for "${q.title}" must be at least ${q.validation.minValue}.` });
+                        }
+                        if (q.validation?.maxValue !== undefined && numVal > q.validation.maxValue) {
+                            return res.status(400).json({ success: false, error: `Answer for "${q.title}" must be at most ${q.validation.maxValue}.` });
+                        }
+                    } else if (q.type === 'yes_no') {
+                        const strVal = String(val).trim().toLowerCase();
+                        if (strVal !== 'yes' && strVal !== 'no' && strVal !== 'true' && strVal !== 'false') {
+                            return res.status(400).json({ success: false, error: `Answer for "${q.title}" must be Yes or No.` });
+                        }
                     }
                 }
             }
 
-            // Attention Checks Validation
-            for (const q of questions) {
+            // Attention Checks Validation (only on questions visible on valid survey path)
+            for (const q of visibleQuestions) {
                 if (q.isAttentionCheck && q.expectedAnswer) {
-                    const ans = surveyResponses.find(r => String(r.questionId) === String(q.id));
-                    if (!ans || String(ans.value || '').trim().toLowerCase() !== String(q.expectedAnswer).trim().toLowerCase()) {
+                    const ans = responseMap.get(String(q.id));
+                    const val = ans ? ans.value : undefined;
+                    const att = evaluateAttentionCheck(q, val);
+                    if (!att.passed) {
                         attentionCheckPassed = false;
                         qualityFlags.push(`Failed Attention Check on Question: "${q.title}"`);
                         qualityScore = Math.max(0, qualityScore - 40);
+                        surveyQualificationStatus = 'Disqualified';
                     }
                 }
             }
 
-            // Check Questions Verification
-            for (const q of questions) {
+            // Check Questions Verification (only on questions visible on valid survey path)
+            for (const q of visibleQuestions) {
                 if (q.isCheckQuestion && q.sourceQuestionId) {
-                    const sourceAnsObj = surveyResponses.find(r => String(r.questionId) === String(q.sourceQuestionId));
-                    const checkAnsObj = surveyResponses.find(r => String(r.questionId) === String(q.id));
+                    const sourceAnsObj = responseMap.get(String(q.sourceQuestionId));
+                    const checkAnsObj = responseMap.get(String(q.id));
                     const sourceVal = sourceAnsObj ? sourceAnsObj.value : undefined;
                     const checkVal = checkAnsObj ? checkAnsObj.value : undefined;
 
-                    let passed = false;
-                    const compMethod = q.checkComparisonMethod || 'case_insensitive';
-
-                    if (sourceVal !== undefined && checkVal !== undefined) {
-                        if (compMethod === 'exact') {
-                            passed = String(sourceVal) === String(checkVal);
-                        } else if (compMethod === 'trim_spaces') {
-                            passed = String(sourceVal).replace(/\s+/g, '') === String(checkVal).replace(/\s+/g, '');
-                        } else if (compMethod === 'numeric') {
-                            passed = !isNaN(Number(sourceVal)) && !isNaN(Number(checkVal)) && Number(sourceVal) === Number(checkVal);
-                        } else if (compMethod === 'date') {
-                            const d1 = new Date(sourceVal).getTime();
-                            const d2 = new Date(checkVal).getTime();
-                            passed = !isNaN(d1) && !isNaN(d2) && d1 === d2;
-                        } else if (compMethod === 'normalized') {
-                            const norm1 = String(sourceVal).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-                            const norm2 = String(checkVal).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-                            passed = norm1 === norm2;
-                        } else {
-                            passed = String(sourceVal).trim().toLowerCase() === String(checkVal).trim().toLowerCase();
-                        }
-                    }
+                    const attempts = clientCheckAttempts[String(q.id)] || 1;
+                    const checkRes = evaluateCheckQuestion(q, sourceVal, checkVal, attempts);
 
                     const failureAction = q.checkFailureAction || 'flag';
                     checkQuestionResults.push({
@@ -3466,21 +3473,34 @@ export const submitUserTaskProof = async (req, res) => {
                         sourceQuestionId: q.sourceQuestionId,
                         originalAnswer: sourceVal,
                         verificationAnswer: checkVal,
-                        comparisonMethod: compMethod,
-                        result: passed ? 'PASS' : 'FAIL',
+                        comparisonMethod: q.checkComparisonMethod || 'case_insensitive',
+                        result: checkRes.passed ? 'PASS' : 'FAIL',
                         failureAction,
                         timestamp: new Date()
                     });
 
-                    if (!passed) {
+                    if (!checkRes.passed) {
                         qualityFlags.push(`Inconsistent Answer between "${q.title}" and source question`);
                         qualityScore = Math.max(0, qualityScore - 30);
-                        if (failureAction === 'disqualify') {
+                        if (checkRes.action === 'disqualify' || checkRes.action === 'reject') {
                             surveyQualificationStatus = 'Disqualified';
                         }
                     }
                 }
             }
+
+            // Authoritative server-computed skipped and answered navigation paths
+            const authoritativeSkipped = questions
+                .filter(q => !visibleQuestionIds.has(String(q.id)))
+                .map(q => q.id);
+
+            const authoritativeAnswered = questions
+                .filter(q => {
+                    if (!visibleQuestionIds.has(String(q.id))) return false;
+                    const ans = responseMap.get(String(q.id));
+                    return ans && ans.value !== undefined && ans.value !== null && ans.value !== '' && (!Array.isArray(ans.value) || ans.value.length > 0);
+                })
+                .map(q => q.id);
 
             // Anti-Speeding Verification
             const minTimeRatio = (settings.surveyConfig?.securityRules?.minCompletionTimeRatio) || 0.25;
@@ -3492,6 +3512,10 @@ export const submitUserTaskProof = async (req, res) => {
                     error: `Survey completion was too fast (${surveyCompletionTimeSeconds}s). Please take time to carefully read and answer each question thoughtfully.`
                 });
             }
+
+            // Override frontend-submitted navigation arrays with authoritative server calculations
+            req.body.authoritativeSkipped = authoritativeSkipped;
+            req.body.authoritativeAnswered = authoritativeAnswered;
         }
 
         const finalProofText = isSurveyTask 
@@ -3523,8 +3547,8 @@ export const submitUserTaskProof = async (req, res) => {
             checkQuestionResults: isSurveyTask ? checkQuestionResults : [],
             qualityFlags: isSurveyTask ? qualityFlags : [],
             qualityScore: isSurveyTask ? qualityScore : 100,
-            answeredPath: isSurveyTask ? answeredPath : [],
-            skippedQuestions: isSurveyTask ? skippedQuestions : [],
+            answeredPath: isSurveyTask ? (req.body.authoritativeAnswered || answeredPath) : [],
+            skippedQuestions: isSurveyTask ? (req.body.authoritativeSkipped || skippedQuestions) : [],
             approvalMode: isSurveyTask ? surveyApprovalMode : 'auto',
             status: 'Pending'
         });

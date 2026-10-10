@@ -21,7 +21,10 @@ import {
     SurveyQuestion,
     verifyCheckQuestion,
     evaluateRule,
-    pipeAnswersIntoText
+    pipeAnswersIntoText,
+    evaluateSurveyFlow,
+    evaluateCheckQuestion,
+    evaluateAttentionCheck
 } from '../lib/surveyLogicEngine';
 
 export interface NormalizedSurveyOption {
@@ -291,18 +294,51 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
         setCheckWarning(null);
     };
 
+    // Single source of truth logic evaluation via surveyLogicEngine
+    const flowResult = evaluateSurveyFlow(
+        questions,
+        surveyConfig.sections || [],
+        responses,
+        surveyConfig.globalLogicRules || [],
+        checkAttempts
+    );
+
     // Current question
     const activeIndex = Math.max(0, Math.min(activeQuestionIndex, questions.length > 0 ? questions.length - 1 : 0));
     const currentQ: SurveyQuestion | undefined = questions[activeIndex];
 
+    // Ensure active question is always a visible question in active stage
+    useEffect(() => {
+        if (stage === 'active' && questions.length > 0 && flowResult.visibleQuestions.length > 0) {
+            const isVisible = currentQ && flowResult.visibleQuestions.some(vq => vq.id === currentQ.id);
+            if (!isVisible) {
+                let targetIdx = questions.findIndex((q, idx) => idx >= activeQuestionIndex && flowResult.visibleQuestions.some(vq => vq.id === q.id));
+                if (targetIdx === -1) {
+                    targetIdx = questions.findIndex(q => flowResult.visibleQuestions.some(vq => vq.id === q.id));
+                }
+                if (targetIdx !== -1 && targetIdx !== activeQuestionIndex) {
+                    setActiveQuestionIndex(targetIdx);
+                }
+            }
+        }
+    }, [stage, activeQuestionIndex, currentQ, flowResult.visibleQuestions, questions]);
+
+    // Check if current question is required dynamically
+    const isCurrentQuestionRequired = () => {
+        if (!currentQ) return false;
+        return flowResult.requiredMap[currentQ.id] !== undefined
+            ? flowResult.requiredMap[currentQ.id]
+            : Boolean(currentQ.required || currentQ.validation?.required);
+    };
+
     // Check if current question is answered
     const isCurrentQuestionAnswered = () => {
         if (!currentQ) return true;
-        if (!currentQ.required) return true;
+        const req = isCurrentQuestionRequired();
         const ans = responses[currentQ.id];
-        if (ans === undefined || ans === null || ans === '') return false;
-        if (Array.isArray(ans)) {
-            if (ans.length === 0) return false;
+        const hasAns = ans !== undefined && ans !== null && ans !== '' && (!Array.isArray(ans) || ans.length > 0);
+        if (req && !hasAns) return false;
+        if (hasAns && Array.isArray(ans)) {
             if (currentQ.type === 'top_n') {
                 const minN = currentQ.validation?.topN || 1;
                 const availableOptsCount = (currentQ.options || []).length;
@@ -318,154 +354,159 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
         if (!currentQ) return;
 
         // 1. Validate required answer
-        if (currentQ.required && !isCurrentQuestionAnswered()) {
+        if (isCurrentQuestionRequired() && !isCurrentQuestionAnswered()) {
             setErrorMessage('Please provide an answer to continue.');
             return;
         }
+
+        const ans = responses[currentQ.id];
+        const hasAns = ans !== undefined && ans !== null && ans !== '' && (!Array.isArray(ans) || ans.length > 0);
+
+        // 1.5. Validate answer constraints if answered
+        if (hasAns) {
+            if (currentQ.type === 'top_n' && Array.isArray(ans)) {
+                const minN = currentQ.validation?.topN || 1;
+                const availableOptsCount = (currentQ.options || []).length;
+                const targetCount = Math.min(minN, availableOptsCount);
+                if (ans.length < targetCount) {
+                    setErrorMessage(`Please rank at least ${targetCount} item(s) to continue.`);
+                    return;
+                }
+            } else if (currentQ.type === 'multiple_choice' && Array.isArray(ans)) {
+                if (currentQ.validation?.minSelections && ans.length < currentQ.validation.minSelections) {
+                    setErrorMessage(`Please select at least ${currentQ.validation.minSelections} choices.`);
+                    return;
+                }
+                if (currentQ.validation?.maxSelections && ans.length > currentQ.validation.maxSelections) {
+                    setErrorMessage(`Please select at most ${currentQ.validation.maxSelections} choices.`);
+                    return;
+                }
+            } else if ((currentQ.type === 'short_text' || currentQ.type === 'long_text') && typeof ans === 'string') {
+                if (currentQ.validation?.minLength && ans.trim().length < currentQ.validation.minLength) {
+                    setErrorMessage(`Must be at least ${currentQ.validation.minLength} characters.`);
+                    return;
+                }
+            } else if (currentQ.type === 'number') {
+                const num = Number(ans);
+                if (isNaN(num)) {
+                    setErrorMessage('Please enter a valid number.');
+                    return;
+                }
+                if (currentQ.validation?.minValue !== undefined && num < currentQ.validation.minValue) {
+                    setErrorMessage(`Value must be at least ${currentQ.validation.minValue}.`);
+                    return;
+                }
+                if (currentQ.validation?.maxValue !== undefined && num > currentQ.validation.maxValue) {
+                    setErrorMessage(`Value must be at most ${currentQ.validation.maxValue}.`);
+                    return;
+                }
+            }
+
+            if (ans === 'Other' || (Array.isArray(ans) && ans.includes('Other'))) {
+                const otherVal = responses[`${currentQ.id}_other`];
+                if (!otherVal || !String(otherVal).trim()) {
+                    setErrorMessage('Please specify details for "Other".');
+                    return;
+                }
+            }
+        }
+
         setErrorMessage(null);
 
         // 2. Check Question Verification at Runtime
         if (currentQ.isCheckQuestion && currentQ.sourceQuestionId) {
             const sourceAns = responses[currentQ.sourceQuestionId];
             const checkAns = responses[currentQ.id];
-            const compMethod = currentQ.checkComparisonMethod || 'case_insensitive';
-            const verifyResult = verifyCheckQuestion(sourceAns, checkAns, compMethod);
-
             const curAttempts = (checkAttempts[currentQ.id] || 0) + 1;
             setCheckAttempts(prev => ({ ...prev, [currentQ.id]: curAttempts }));
 
-            const maxAttempts = currentQ.maxCheckAttempts || 2;
-            const failureAction = currentQ.checkFailureAction || 'flag';
+            const checkRes = evaluateCheckQuestion(currentQ, sourceAns, checkAns, curAttempts);
 
-            if (!verifyResult.passed) {
-                // Check failed
-                const attemptsRemaining = maxAttempts - curAttempts;
+            const newCheckRecord = {
+                checkQuestionId: currentQ.id,
+                checkQuestionTitle: currentQ.title,
+                sourceQuestionId: currentQ.sourceQuestionId,
+                originalAnswer: sourceAns,
+                verificationAnswer: checkAns,
+                comparisonMethod: currentQ.checkComparisonMethod || 'case_insensitive',
+                result: checkRes.passed ? ('PASS' as const) : ('FAIL' as const),
+                failureAction: currentQ.checkFailureAction || 'flag',
+                timestamp: new Date()
+            };
+            setCheckQuestionResults(prev => [...prev.filter(r => r.checkQuestionId !== currentQ.id), newCheckRecord]);
 
-                if (failureAction === 'retry' && attemptsRemaining > 0) {
-                    // Show non-revealing warning and require user to retry
-                    const msg = currentQ.checkRetryMessage || 
-                        `Your answer does not match the information provided earlier. Please verify and try again. (${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining)`;
+            if (!checkRes.passed) {
+                if (checkRes.action === 'retry') {
+                    const msg = currentQ.checkRetryMessage || checkRes.message || 'Your answer does not match the information provided earlier. Please verify and try again.';
                     setCheckWarning(msg);
-                    return; // Prevent advancing!
-                }
-
-                // Attempts exhausted or action is immediate
-                const newCheckRecord = {
-                    checkQuestionId: currentQ.id,
-                    checkQuestionTitle: currentQ.title,
-                    sourceQuestionId: currentQ.sourceQuestionId,
-                    originalAnswer: sourceAns,
-                    verificationAnswer: checkAns,
-                    comparisonMethod: compMethod,
-                    result: 'FAIL' as const,
-                    failureAction,
-                    timestamp: new Date()
-                };
-                setCheckQuestionResults(prev => [...prev.filter(r => r.checkQuestionId !== currentQ.id), newCheckRecord]);
-
-                if (failureAction === 'disqualify') {
-                    const reason = 'Your responses did not meet consistency verification standards.';
+                    return; // Prevent advancing on retry!
+                } else if (checkRes.action === 'disqualify' || checkRes.action === 'reject') {
+                    const reason = checkRes.message || 'Verification check failed: Inconsistent response detected across verification check questions.';
                     setQualificationStatus('Disqualified');
                     setDisqualificationReason(reason);
                     performScreenoutSubmission(reason);
                     return;
                 }
             } else {
-                // Check passed
-                const passRecord = {
-                    checkQuestionId: currentQ.id,
-                    checkQuestionTitle: currentQ.title,
-                    sourceQuestionId: currentQ.sourceQuestionId,
-                    originalAnswer: sourceAns,
-                    verificationAnswer: checkAns,
-                    comparisonMethod: compMethod,
-                    result: 'PASS' as const,
-                    failureAction,
-                    timestamp: new Date()
-                };
-                setCheckQuestionResults(prev => [...prev.filter(r => r.checkQuestionId !== currentQ.id), passRecord]);
                 setCheckWarning(null);
             }
         }
 
-        // Record question in answered path
-        if (!answeredPath.includes(currentQ.id)) {
-            setAnsweredPath(prev => [...prev, currentQ.id]);
-        }
-
-        // 3. Evaluate Branching Rules for Current Question
-        let nextTargetIndex: number | null = null;
-        let earlyFinish = false;
-
-        if (currentQ.logicRules && currentQ.logicRules.length > 0) {
-            for (const rule of currentQ.logicRules) {
-                const evaluated = evaluateRule(rule, responses);
-                if (evaluated.action) {
-                    if (evaluated.action === 'disqualify') {
-                        const reason = evaluated.message || 'Based on your response, you do not meet the criteria for this survey.';
-                        setQualificationStatus('Disqualified');
-                        setDisqualificationReason(reason);
-                        performScreenoutSubmission(reason);
-                        return;
-                    }
-
-                    if (evaluated.action === 'end_survey') {
-                        earlyFinish = true;
-                        break;
-                    }
-
-                    if (evaluated.action === 'goto_question' && evaluated.targetQuestionId) {
-                        const targetIdx = questions.findIndex(q => q.id === evaluated.targetQuestionId);
-                        if (targetIdx !== -1 && targetIdx > activeQuestionIndex) {
-                            // Record skipped questions between current and target
-                            const newlySkipped = questions
-                                .slice(activeQuestionIndex + 1, targetIdx)
-                                .map(q => q.id);
-                            setSkippedQuestions(prev => Array.from(new Set([...prev, ...newlySkipped])));
-
-                            nextTargetIndex = targetIdx;
-                            break;
-                        }
-                    }
-
-                    if (evaluated.action === 'skip_question') {
-                        const targetIdx = activeQuestionIndex + 2;
-                        if (targetIdx < questions.length) {
-                            setSkippedQuestions(prev => Array.from(new Set([...prev, questions[activeQuestionIndex + 1]?.id || ''])));
-                            nextTargetIndex = targetIdx;
-                            break;
-                        } else {
-                            earlyFinish = true;
-                            break;
-                        }
-                    }
-
-                    if (evaluated.action === 'goto_section' && evaluated.targetSectionId) {
-                        const secIdx = questions.findIndex(q => q.sectionId === evaluated.targetSectionId);
-                        if (secIdx !== -1) {
-                            nextTargetIndex = secIdx;
-                            break;
-                        }
-                    }
-                }
+        // 2.5. Attention Check Verification
+        if (currentQ.isAttentionCheck && currentQ.expectedAnswer) {
+            const att = evaluateAttentionCheck(currentQ, responses[currentQ.id]);
+            if (!att.passed) {
+                const reason = att.message || 'Attention trap verification failed.';
+                setQualificationStatus('Disqualified');
+                setDisqualificationReason(reason);
+                performScreenoutSubmission(reason);
+                return;
             }
         }
 
-        if (earlyFinish) {
+        // 3. Record question in answered path
+        if (hasAns && !answeredPath.includes(currentQ.id)) {
+            setAnsweredPath(prev => [...prev, currentQ.id]);
+        }
+
+        // 4. Authoritative Flow Evaluation via shared surveyLogicEngine
+        const updatedFlow = evaluateSurveyFlow(
+            questions,
+            surveyConfig.sections || [],
+            responses,
+            surveyConfig.globalLogicRules || [],
+            checkAttempts
+        );
+
+        if (updatedFlow.status === 'disqualified') {
+            const reason = updatedFlow.disqualificationReason || 'Based on your response, you do not meet the criteria for this survey.';
+            setQualificationStatus('Disqualified');
+            setDisqualificationReason(reason);
+            performScreenoutSubmission(reason);
+            return;
+        }
+
+        if (updatedFlow.status === 'completed') {
             handleSubmitSurvey();
             return;
         }
 
-        // Determine destination index
-        const resolvedNextIndex = nextTargetIndex !== null ? nextTargetIndex : activeQuestionIndex + 1;
+        // 5. Determine next visible destination index
+        let nextTargetIndex: number | null = null;
+        for (let j = activeIndex + 1; j < questions.length; j++) {
+            if (updatedFlow.visibleQuestions.some(vq => vq.id === questions[j].id)) {
+                nextTargetIndex = j;
+                break;
+            }
+        }
 
-        if (resolvedNextIndex >= questions.length) {
+        if (nextTargetIndex === null) {
             // Reached survey completion
             handleSubmitSurvey();
         } else {
             // Push current question index to navigation history stack
-            setPathHistory(prev => [...prev, activeQuestionIndex]);
-            setActiveQuestionIndex(resolvedNextIndex);
+            setPathHistory(prev => [...prev, activeIndex]);
+            setActiveQuestionIndex(nextTargetIndex);
             setCheckWarning(null);
         }
     };
@@ -478,6 +519,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
         setPathHistory(newHistory);
         setActiveQuestionIndex(previousIndex);
         setCheckWarning(null);
+        setErrorMessage(null);
     };
 
     // Submit Survey Responses
@@ -495,14 +537,34 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
         setStage('submitting');
         setErrorMessage(null);
 
-        const formattedResponses = questions
-            .filter(q => !skippedQuestions.includes(q.id) && responses[q.id] !== undefined)
+        const finalFlow = evaluateSurveyFlow(
+            questions,
+            surveyConfig.sections || [],
+            responses,
+            surveyConfig.globalLogicRules || [],
+            checkAttempts
+        );
+
+        const visibleList = finalFlow.visibleQuestions;
+        const visibleIds = new Set(visibleList.map(q => q.id));
+
+        const formattedResponses = visibleList
+            .filter(q => responses[q.id] !== undefined)
             .map(q => ({
                 questionId: q.id,
                 questionTitle: q.title,
                 type: q.type,
-                value: responses[q.id] !== undefined ? responses[q.id] : null
+                value: responses[q.id],
+                otherValue: responses[`${q.id}_other`] || undefined
             }));
+
+        const finalSkippedQuestions = questions
+            .filter(q => !visibleIds.has(q.id))
+            .map(q => q.id);
+
+        const finalAnsweredPath = visibleList
+            .filter(q => responses[q.id] !== undefined && responses[q.id] !== null && responses[q.id] !== '')
+            .map(q => q.id);
 
         try {
             await submitUserTaskProof(task._id, {
@@ -512,8 +574,8 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                 surveyQualificationStatus: 'Disqualified',
                 consentAgreed: true,
                 checkQuestionResults,
-                answeredPath,
-                skippedQuestions,
+                answeredPath: finalAnsweredPath,
+                skippedQuestions: finalSkippedQuestions,
                 proofText: `Survey screener disqualified in ${secondsElapsed} seconds. Reason: ${reason}`
             });
 
@@ -530,26 +592,48 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
         setStage('submitting');
         setErrorMessage(null);
 
-        // Format responses array
-        const formattedResponses = questions
-            .filter(q => !skippedQuestions.includes(q.id))
-            .map(q => ({
-                questionId: q.id,
-                questionTitle: q.title,
-                type: q.type,
-                value: responses[q.id] !== undefined ? responses[q.id] : null
-            }));
+        const finalFlow = evaluateSurveyFlow(
+            questions,
+            surveyConfig.sections || [],
+            responses,
+            surveyConfig.globalLogicRules || [],
+            checkAttempts
+        );
+
+        const visibleList = finalFlow.visibleQuestions;
+        const visibleIds = new Set(visibleList.map(q => q.id));
+
+        // Format responses array from authoritative visible questions
+        const formattedResponses = visibleList.map(q => ({
+            questionId: q.id,
+            questionTitle: q.title,
+            type: q.type,
+            value: responses[q.id] !== undefined ? responses[q.id] : null,
+            otherValue: responses[`${q.id}_other`] || undefined
+        }));
+
+        const finalSkippedQuestions = questions
+            .filter(q => !visibleIds.has(q.id))
+            .map(q => q.id);
+
+        const finalAnsweredPath = visibleList
+            .filter(q => responses[q.id] !== undefined && responses[q.id] !== null && responses[q.id] !== '')
+            .map(q => q.id);
+
+        const finalQualificationStatus = finalFlow.status === 'disqualified'
+            ? 'Disqualified'
+            : (finalFlow.qualificationStatus === 'Qualified' ? 'Qualified' : qualificationStatus);
 
         try {
             await submitUserTaskProof(task._id, {
                 userId: currentUserId,
                 surveyResponses: formattedResponses,
                 surveyCompletionTimeSeconds: secondsElapsed,
-                surveyQualificationStatus: qualificationStatus,
+                surveyQualificationStatus: finalQualificationStatus,
                 consentAgreed: true,
                 checkQuestionResults,
-                answeredPath,
-                skippedQuestions,
+                answeredPath: finalAnsweredPath,
+                skippedQuestions: finalSkippedQuestions,
                 proofText: `Survey completed in ${secondsElapsed} seconds. (${formattedResponses.length} answered questions)`
             });
 
@@ -795,18 +879,27 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                             normalizeSurveyOption(opt, idx)
                         );
 
+                        const currentVisibleIdx = flowResult.visibleQuestions.findIndex(vq => vq.id === currentQ.id);
+                        const totalVisible = flowResult.visibleQuestions.length > 0 ? flowResult.visibleQuestions.length : questions.length;
+                        const displayQNum = currentVisibleIdx >= 0 ? currentVisibleIdx + 1 : activeIndex + 1;
+                        const progressPct = Math.min(100, Math.round((displayQNum / totalVisible) * 100));
+                        const hasNextVisible = questions
+                            .slice(activeIndex + 1)
+                            .some(q => flowResult.visibleQuestions.some(vq => vq.id === q.id));
+                        const currentMessages = flowResult.messages.filter(m => !m.questionId || m.questionId === currentQ.id);
+
                         return (
                             <div className="space-y-5">
                                 {/* Progress bar */}
                                 <div className="space-y-1.5">
                                     <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 font-medium">
-                                        <span>Question {activeIndex + 1} of {questions.length}</span>
-                                        <span>{Math.min(100, Math.round(((activeIndex + 1) / questions.length) * 100))}% Complete</span>
+                                        <span>Question {displayQNum} of {totalVisible}</span>
+                                        <span>{progressPct}% Complete</span>
                                     </div>
                                     <div className="w-full bg-gray-200 dark:bg-gray-700 h-2 rounded-full overflow-hidden">
                                         <div
                                             className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                            style={{ width: `${Math.min(100, ((activeIndex + 1) / questions.length) * 100)}%` }}
+                                            style={{ width: `${progressPct}%` }}
                                         ></div>
                                     </div>
                                 </div>
@@ -819,12 +912,24 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                     </div>
                                 )}
 
+                                {/* Rule Messages if applicable */}
+                                {currentMessages.map((msg, mIdx) => (
+                                    <div key={mIdx} className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                                        msg.type === 'warning'
+                                            ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200'
+                                            : 'bg-blue-50 dark:bg-blue-950/30 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
+                                    }`}>
+                                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                                        <span>{msg.text}</span>
+                                    </div>
+                                ))}
+
                                 {/* Question Box with Answer Piping */}
                                 <div className="p-4 sm:p-5 bg-gray-50/80 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
                                     <div>
                                         <h4 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white leading-snug">
                                             {pipedTitle}
-                                            {currentQ.required && <span className="text-red-500 ml-1 font-bold">*</span>}
+                                            {isCurrentQuestionRequired() && <span className="text-red-500 ml-1 font-bold">*</span>}
                                         </h4>
                                         {pipedDescription && (
                                             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
@@ -1173,7 +1278,7 @@ const SurveyRunnerModalInner: React.FC<SurveyRunnerModalProps> = ({
                                         onClick={handleNextQuestion}
                                         className="rounded-xl px-6 text-xs font-bold"
                                     >
-                                        {activeIndex < questions.length - 1 ? (
+                                        {hasNextVisible ? (
                                             <>Next Question <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
                                         ) : (
                                             <>Submit Survey <Check className="w-4 h-4 ml-1" /></>

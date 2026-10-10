@@ -279,6 +279,14 @@ export function evaluateCondition(condition: SurveyLogicCondition, responses: Re
     const ansStr = String(rawVal).toLowerCase().trim();
     const condStr = String(condition.value !== undefined ? condition.value : '').toLowerCase().trim();
 
+    const normalizeBoolOrStr = (s: string) => {
+        if (s === 'true') return 'yes';
+        if (s === 'false') return 'no';
+        return s;
+    };
+    const normAnsStr = normalizeBoolOrStr(ansStr);
+    const normCondStr = normalizeBoolOrStr(condStr);
+
     // Numeric comparisons
     const numAns = parseFloat(ansStr);
     const numCond = parseFloat(condStr);
@@ -286,13 +294,13 @@ export function evaluateCondition(condition: SurveyLogicCondition, responses: Re
 
     switch (condition.operator) {
         case 'equals':
-            return hasNumeric ? numAns === numCond : ansStr === condStr;
+            return hasNumeric ? numAns === numCond : normAnsStr === normCondStr;
         case 'not_equals':
-            return hasNumeric ? numAns !== numCond : ansStr !== condStr;
+            return hasNumeric ? numAns !== numCond : normAnsStr !== normCondStr;
         case 'contains':
-            return ansStr.includes(condStr);
+            return normAnsStr.includes(normCondStr);
         case 'not_contains':
-            return !ansStr.includes(condStr);
+            return !normAnsStr.includes(normCondStr);
         case 'greater_than':
             return hasNumeric && numAns > numCond;
         case 'less_than':
@@ -575,6 +583,7 @@ export function applyRuleAction(
         state.skipped.delete(res.targetQuestionId);
     } else if (res.action === 'hide_question' && res.targetQuestionId) {
         state.hidden.add(res.targetQuestionId);
+        state.explicitShown.delete(res.targetQuestionId);
     } else if (res.action === 'require_answer' && res.targetQuestionId) {
         state.requiredMap[res.targetQuestionId] = true;
     } else if (res.action === 'make_optional' && res.targetQuestionId) {
@@ -611,7 +620,7 @@ export function evaluateSurveyFlow(
 
     // Initialize requiredMap from questions
     questions.forEach(q => {
-        state.requiredMap[q.id] = !!q.required;
+        state.requiredMap[q.id] = !!(q.required || (q.validation && q.validation.required));
     });
 
     // Evaluate global rules first if any
@@ -658,17 +667,30 @@ export function evaluateSurveyFlow(
             break;
         }
 
+        // If question was already skipped by a preceding branch jump, skip processing
+        if (state.skipped.has(q.id)) {
+            continue;
+        }
+
         // Backward compatibility for showIf
         if ((q as any).showIf) {
-            const cond = Array.isArray((q as any).showIf) ? (q as any).showIf[0] : (q as any).showIf;
-            if (cond && cond.questionId) {
-                const isVisible = evaluateCondition(cond, responses);
+            const conds = Array.isArray((q as any).showIf) ? (q as any).showIf : [(q as any).showIf];
+            const validConds = conds.filter((c: any) => c && c.questionId);
+            if (validConds.length > 0) {
+                const isVisible = validConds.every((c: any) => evaluateCondition(c, responses));
                 if (!isVisible) {
                     state.hidden.add(q.id);
+                    state.explicitShown.delete(q.id);
                 } else {
                     state.explicitShown.add(q.id);
+                    state.hidden.delete(q.id);
                 }
             }
+        }
+
+        // If question is currently hidden and not explicitly shown, skip rule and check processing
+        if (state.hidden.has(q.id) && !state.explicitShown.has(q.id)) {
+            continue;
         }
 
         // Check if question is answered
