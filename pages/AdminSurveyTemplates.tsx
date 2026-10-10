@@ -100,6 +100,8 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [campaignDescription, setCampaignDescription] = useState<string>('');
     const [launchRequirementMode, setLaunchRequirementMode] = useState<'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal'>('optional');
     const [launchMandatoryDisplayBehavior, setLaunchMandatoryDisplayBehavior] = useState<'popup_only' | 'highlighted_only' | 'both'>('popup_only');
+    const [launchRecompletionPolicy, setLaunchRecompletionPolicy] = useState<'never' | 'interval'>('never');
+    const [launchRecompletionIntervalDays, setLaunchRecompletionIntervalDays] = useState<number>(30);
     const [launchAudienceMode, setLaunchAudienceMode] = useState<'all' | 'selected' | 'active' | 'inactive' | 'advanced'>('all');
     const [launchSelectedUserIds, setLaunchSelectedUserIds] = useState<string>('');
     const [launchCountries, setLaunchCountries] = useState<string>('');
@@ -421,6 +423,8 @@ export const AdminSurveyTemplates: React.FC = () => {
         const reqMode = (template.requirementConfig?.mode || 'optional') as any;
         setLaunchRequirementMode(reqMode);
         setLaunchMandatoryDisplayBehavior(template.requirementConfig?.mandatoryDisplayBehavior || 'popup_only');
+        setLaunchRecompletionPolicy(template.recompletionPolicy?.policy || 'never');
+        setLaunchRecompletionIntervalDays(template.recompletionPolicy?.intervalDays || 30);
         setSetAsMandatoryWithdrawal(reqMode === 'mandatory_before_withdrawal');
         setLaunchResponseLimitMode('unlimited');
         setCampaignWorkersNeeded(50);
@@ -582,6 +586,10 @@ export const AdminSurveyTemplates: React.FC = () => {
                 isSurveyCampaign: true,
                 isAdminResearchSurvey: true,
                 requirementMode: effectiveRequirementMode,
+                recompletionPolicy: {
+                    policy: launchRecompletionPolicy,
+                    intervalDays: launchRecompletionPolicy === 'interval' ? Number(launchRecompletionIntervalDays) : 30
+                },
                 mandatoryDisplayBehavior: (effectiveRequirementMode === 'mandatory_all' || effectiveRequirementMode === 'mandatory_targeted') ? launchMandatoryDisplayBehavior : 'popup_only',
                 isMandatoryForAllUsers: isMandatoryForAll,
                 sourceAdminSurveyTemplateId: usingTemplate._id,
@@ -1851,6 +1859,22 @@ export const AdminSurveyTemplates: React.FC = () => {
                                 </div>
 
                                 <div className="md:col-span-3">
+                                    <div className="mb-3">
+                                        <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300 mb-1">
+                                            Est. Minutes *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={usingTemplate?.estimatedTimeMinutes || 5}
+                                            readOnly
+                                            className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-xs font-bold text-gray-500"
+                                        />
+                                        <span className="text-[10px] text-gray-400 mt-1 block">
+                                            Estimated time based on template configuration.
+                                        </span>
+                                    </div>
+
                                     <div className="flex items-center justify-between mb-2">
                                         <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
                                             Survey Reward Mode & Pricing
@@ -1981,6 +2005,37 @@ export const AdminSurveyTemplates: React.FC = () => {
                                         onChange={(updated) => setCampaignSurveyConfig(updated)}
                                     />
                                 </div>
+                            </div>
+
+                            {/* Re-Completion Policy */}
+                            <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700 space-y-3">
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300 mb-1">
+                                        Re-Completion Policy
+                                    </label>
+                                    <select
+                                        value={launchRecompletionPolicy}
+                                        onChange={(e) => setLaunchRecompletionPolicy(e.target.value as 'never' | 'interval')}
+                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold"
+                                    >
+                                        <option value="never">Never (Once Only)</option>
+                                        <option value="interval">Allow Re-Completion After Interval</option>
+                                    </select>
+                                </div>
+                                {launchRecompletionPolicy === 'interval' && (
+                                    <div>
+                                        <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300 mb-1">
+                                            Re-completion Interval (Days)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={launchRecompletionIntervalDays}
+                                            onChange={(e) => setLaunchRecompletionIntervalDays(Number(e.target.value))}
+                                            className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold font-mono"
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Mandatory Withdrawal Requirement Toggle */}
