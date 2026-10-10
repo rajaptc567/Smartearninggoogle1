@@ -100,8 +100,9 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [campaignDescription, setCampaignDescription] = useState<string>('');
     const [launchRequirementMode, setLaunchRequirementMode] = useState<'optional' | 'mandatory_all' | 'mandatory_targeted' | 'mandatory_before_withdrawal'>('optional');
     const [launchMandatoryDisplayBehavior, setLaunchMandatoryDisplayBehavior] = useState<'popup_only' | 'highlighted_only' | 'both'>('popup_only');
-    const [launchRecompletionPolicy, setLaunchRecompletionPolicy] = useState<'never' | 'interval'>('never');
+    const [launchRecompletionPolicy, setLaunchRecompletionPolicy] = useState<'never' | 'on_version_change' | 'every_x_days'>('never');
     const [launchRecompletionIntervalDays, setLaunchRecompletionIntervalDays] = useState<number>(30);
+    const [campaignEstimatedMinutes, setCampaignEstimatedMinutes] = useState<number>(5);
     const [launchAudienceMode, setLaunchAudienceMode] = useState<'all' | 'selected' | 'active' | 'inactive' | 'advanced'>('all');
     const [launchSelectedUserIds, setLaunchSelectedUserIds] = useState<string>('');
     const [launchCountries, setLaunchCountries] = useState<string>('');
@@ -422,10 +423,9 @@ export const AdminSurveyTemplates: React.FC = () => {
         const reqMode = (template.requirementConfig?.mode || 'optional') as any;
         setLaunchRequirementMode(reqMode);
         setLaunchMandatoryDisplayBehavior(template.requirementConfig?.mandatoryDisplayBehavior || 'popup_only');
-        setLaunchRecompletionPolicy(template.recompletionPolicy?.policy || 'never');
+        setLaunchRecompletionPolicy((template.recompletionPolicy?.policy === 'interval' ? 'every_x_days' : (template.recompletionPolicy?.policy || 'never')) as 'never' | 'on_version_change' | 'every_x_days');
         setLaunchRecompletionIntervalDays(template.recompletionPolicy?.intervalDays || 30);
-        setSetAsMandatoryWithdrawal(reqMode === 'mandatory_before_withdrawal');
-        setLaunchResponseLimitMode('unlimited');
+        setCampaignEstimatedMinutes(template.estimatedTimeMinutes || 5);        setLaunchResponseLimitMode('unlimited');
         setCampaignWorkersNeeded(50);
         setCampaignInitialFundingUSD(initialReward > 0 ? Number((initialReward * 50).toFixed(2)) : 0);
         setCampaignLowBalanceThreshold(10);
@@ -503,11 +503,9 @@ export const AdminSurveyTemplates: React.FC = () => {
 
         setIsLaunchingCampaign(true);
         try {
-            // Determine effective requirement mode with backward compatibility
-            const isMandatoryWithdrawal = launchRequirementMode === 'mandatory_before_withdrawal' || Boolean(setAsMandatoryWithdrawal);
-            const effectiveRequirementMode = isMandatoryWithdrawal
-                ? 'mandatory_before_withdrawal'
-                : launchRequirementMode;
+            // Determine effective requirement mode
+            const isMandatoryWithdrawal = launchRequirementMode === 'mandatory_before_withdrawal';
+            const effectiveRequirementMode = launchRequirementMode;
             const isMandatoryForAll = effectiveRequirementMode === 'mandatory_all';
             const isMandatoryTargeted = effectiveRequirementMode === 'mandatory_targeted';
 
@@ -587,7 +585,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                 requirementMode: effectiveRequirementMode,
                 recompletionPolicy: {
                     policy: launchRecompletionPolicy,
-                    intervalDays: launchRecompletionPolicy === 'interval' ? Number(launchRecompletionIntervalDays) : 30
+                    intervalDays: launchRecompletionPolicy === 'every_x_days' ? Number(launchRecompletionIntervalDays) : 30
                 },
                 mandatoryDisplayBehavior: (effectiveRequirementMode === 'mandatory_all' || effectiveRequirementMode === 'mandatory_targeted') ? launchMandatoryDisplayBehavior : 'popup_only',
                 isMandatoryForAllUsers: isMandatoryForAll,
@@ -595,7 +593,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                 publishNow: true,
                 targeting: targetingPayload,
                 surveyCategory: usingTemplate.category || 'General Opinion Poll',
-                surveyEstimatedMinutes: usingTemplate.estimatedTimeMinutes || 5,
+                surveyEstimatedMinutes: Number(campaignEstimatedMinutes) || 5,
                 surveyQuestionsCount: campaignSurveyConfig.questions?.length || 0,
                 surveyApprovalMode: (campaignSurveyConfig as any).approvalMode || 'auto',
                 surveyConfig: {
@@ -1227,7 +1225,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                         Use Template Flow
                                     </span>
                                     <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                                        Requirement: {usingTemplate.requirementConfig?.mode === 'mandatory_all' ? 'Mandatory for All Users' : usingTemplate.requirementConfig?.mode === 'mandatory_targeted' ? 'Mandatory for Targeted Users' : usingTemplate.requirementConfig?.mode === 'mandatory_before_withdrawal' ? 'Pre-Withdrawal' : 'Optional'}
+                                        Requirement: {launchRequirementMode === 'mandatory_all' ? 'Mandatory for All Users' : launchRequirementMode === 'mandatory_targeted' ? 'Mandatory for Targeted Users' : launchRequirementMode === 'mandatory_before_withdrawal' ? 'Pre-Withdrawal' : 'Optional'}
                                     </span>
                                     <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
                                         Launch Survey Campaign: {usingTemplate.name}
@@ -1296,10 +1294,9 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             type="button"
                                             onClick={() => {
                                                 setLaunchRequirementMode('optional');
-                                                setSetAsMandatoryWithdrawal(false);
                                             }}
                                             className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                                                launchRequirementMode === 'optional' && !setAsMandatoryWithdrawal
+                                                launchRequirementMode === 'optional'
                                                     ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 shadow-sm ring-1 ring-indigo-500'
                                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                                             }`}
@@ -1317,7 +1314,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     Normal survey. Does not block normal Work &amp; Earn access.
                                                 </p>
                                             </div>
-                                            {launchRequirementMode === 'optional' && !setAsMandatoryWithdrawal && (
+                                            {launchRequirementMode === 'optional' && (
                                                 <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-indigo-600 dark:text-indigo-400">
                                                     <Check className="w-3 h-3" /> Selected
                                                 </div>
@@ -1330,10 +1327,9 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             onClick={() => {
                                                 setLaunchRequirementMode('mandatory_all');
                                                 setLaunchAudienceMode('all');
-                                                setSetAsMandatoryWithdrawal(false);
                                             }}
                                             className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                                                launchRequirementMode === 'mandatory_all' && !setAsMandatoryWithdrawal
+                                                launchRequirementMode === 'mandatory_all'
                                                     ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-500 shadow-sm ring-1 ring-amber-500'
                                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                                             }`}
@@ -1351,7 +1347,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     Applies dynamically to all eligible platform workers (current and future).
                                                 </p>
                                             </div>
-                                            {launchRequirementMode === 'mandatory_all' && !setAsMandatoryWithdrawal && (
+                                            {launchRequirementMode === 'mandatory_all' && (
                                                 <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400">
                                                     <Check className="w-3 h-3" /> Selected
                                                 </div>
@@ -1366,10 +1362,9 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                 if (launchAudienceMode === 'all') {
                                                     setLaunchAudienceMode('selected');
                                                 }
-                                                setSetAsMandatoryWithdrawal(false);
                                             }}
                                             className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                                                launchRequirementMode === 'mandatory_targeted' && !setAsMandatoryWithdrawal
+                                                launchRequirementMode === 'mandatory_targeted'
                                                     ? 'bg-purple-50/80 dark:bg-purple-950/40 border-purple-500 shadow-sm ring-1 ring-purple-500'
                                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                                             }`}
@@ -1387,7 +1382,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     Only users matching selected targeting rules are required. Non-matching users are not affected.
                                                 </p>
                                             </div>
-                                            {launchRequirementMode === 'mandatory_targeted' && !setAsMandatoryWithdrawal && (
+                                            {launchRequirementMode === 'mandatory_targeted' && (
                                                 <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-purple-600 dark:text-purple-400">
                                                     <Check className="w-3 h-3" /> Selected
                                                 </div>
@@ -1399,10 +1394,9 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             type="button"
                                             onClick={() => {
                                                 setLaunchRequirementMode('mandatory_before_withdrawal');
-                                                setSetAsMandatoryWithdrawal(true);
                                             }}
                                             className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                                                launchRequirementMode === 'mandatory_before_withdrawal' || setAsMandatoryWithdrawal
+                                                launchRequirementMode === 'mandatory_before_withdrawal'
                                                     ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-500 shadow-sm ring-1 ring-rose-500'
                                                     : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                                             }`}
@@ -1420,7 +1414,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     Preserves withdrawal-specific requirement. Does not block normal Work &amp; Earn access.
                                                 </p>
                                             </div>
-                                            {(launchRequirementMode === 'mandatory_before_withdrawal' || setAsMandatoryWithdrawal) && (
+                                            {launchRequirementMode === 'mandatory_before_withdrawal' && (
                                                 <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-rose-600 dark:text-rose-400">
                                                     <Check className="w-3 h-3" /> Selected
                                                 </div>
@@ -1857,22 +1851,21 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     )}
                                 </div>
 
-                                <div className="md:col-span-3">
-                                    <div className="mb-3">
-                                        <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300 mb-1">
-                                            Est. Minutes *
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            value={usingTemplate?.estimatedTimeMinutes || 5}
-                                            readOnly
-                                            className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-xs font-bold text-gray-500"
-                                        />
-                                        <span className="text-[10px] text-gray-400 mt-1 block">
-                                            Estimated time based on template configuration.
-                                        </span>
-                                    </div>
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-gray-500 mb-1">
+                                        Estimated Minutes *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={campaignEstimatedMinutes}
+                                        onChange={(e) => setCampaignEstimatedMinutes(Number(e.target.value))}
+                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold"
+                                    />
+                                    <span className="text-[10px] text-gray-400 mt-1 block">
+                                        Estimated time for workers to complete.
+                                    </span>
+                                </div>
 
                                     <div className="flex items-center justify-between mb-2">
                                         <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
@@ -2014,14 +2007,15 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     </label>
                                     <select
                                         value={launchRecompletionPolicy}
-                                        onChange={(e) => setLaunchRecompletionPolicy(e.target.value as 'never' | 'interval')}
+                                        onChange={(e) => setLaunchRecompletionPolicy(e.target.value as 'never' | 'on_version_change' | 'every_x_days')}
                                         className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold"
                                     >
                                         <option value="never">Never (Once Only)</option>
-                                        <option value="interval">Allow Re-Completion After Interval</option>
+                                        <option value="on_version_change">Every New Survey Version</option>
+                                        <option value="every_x_days">Every X Days</option>
                                     </select>
                                 </div>
-                                {launchRecompletionPolicy === 'interval' && (
+                                {launchRecompletionPolicy === 'every_x_days' && (
                                     <div>
                                         <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300 mb-1">
                                             Re-completion Interval (Days)
