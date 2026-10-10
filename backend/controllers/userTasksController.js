@@ -3312,23 +3312,16 @@ export const submitUserTaskProof = async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Survey responses cannot be empty.' });
             }
 
-            // Build response lookup map and plain responses object
+            // Build response lookup map and plain responses object strictly for valid task questions (ignoring duplicates and unknown IDs)
+            const validQuestionIdSet = new Set(questions.map(q => String(q.id)));
             const responseMap = new Map();
             const responsesObj = {};
             for (const r of surveyResponses) {
                 if (r && r.questionId) {
                     const qIdStr = String(r.questionId);
-                    responseMap.set(qIdStr, r);
-                    responsesObj[qIdStr] = r.value;
-                }
-            }
-
-            // Extract client check question attempts
-            const clientCheckAttempts = {};
-            if (Array.isArray(req.body.checkQuestionResults)) {
-                for (const c of req.body.checkQuestionResults) {
-                    if (c && c.checkQuestionId) {
-                        clientCheckAttempts[String(c.checkQuestionId)] = (clientCheckAttempts[String(c.checkQuestionId)] || 0) + 1;
+                    if (validQuestionIdSet.has(qIdStr) && !responseMap.has(qIdStr)) {
+                        responseMap.set(qIdStr, r);
+                        responsesObj[qIdStr] = r.value;
                     }
                 }
             }
@@ -3337,7 +3330,15 @@ export const submitUserTaskProof = async (req, res) => {
             const sections = Array.isArray(surveyConfig.sections) ? surveyConfig.sections : [];
             const globalLogicRules = Array.isArray(surveyConfig.globalLogicRules) ? surveyConfig.globalLogicRules : [];
 
-            const serverFlow = evaluateSurveyFlow(questions, sections, responsesObj, globalLogicRules, clientCheckAttempts);
+            // At server submission time, check questions are evaluated at maximum attempts so mismatched answers are final
+            const serverCheckAttempts = {};
+            for (const q of questions) {
+                if (q && q.isCheckQuestion) {
+                    serverCheckAttempts[String(q.id)] = q.maxCheckAttempts || 1;
+                }
+            }
+
+            const serverFlow = evaluateSurveyFlow(questions, sections, responsesObj, globalLogicRules, serverCheckAttempts);
             const visibleQuestions = serverFlow.visibleQuestions;
             const visibleQuestionIds = new Set(visibleQuestions.map(q => String(q.id)));
 
@@ -3348,6 +3349,10 @@ export const submitUserTaskProof = async (req, res) => {
             } else if (serverFlow.qualificationStatus === 'Qualified') {
                 if (surveyQualificationStatus !== 'Disqualified') {
                     surveyQualificationStatus = 'Qualified';
+                }
+            } else {
+                if (surveyQualificationStatus !== 'Disqualified') {
+                    surveyQualificationStatus = 'Completed';
                 }
             }
 
@@ -3463,7 +3468,8 @@ export const submitUserTaskProof = async (req, res) => {
                     const sourceVal = sourceAnsObj ? sourceAnsObj.value : undefined;
                     const checkVal = checkAnsObj ? checkAnsObj.value : undefined;
 
-                    const attempts = clientCheckAttempts[String(q.id)] || 1;
+                    // On authoritative server proof submission, check verification retries are final if mismatched
+                    const attempts = q.maxCheckAttempts || 1;
                     const checkRes = evaluateCheckQuestion(q, sourceVal, checkVal, attempts);
 
                     const failureAction = q.checkFailureAction || 'flag';
@@ -3502,6 +3508,25 @@ export const submitUserTaskProof = async (req, res) => {
                 })
                 .map(q => q.id);
 
+            // Filter submitted responses to authoritative visible questions on the verified path
+            const authoritativeResponses = [];
+            const recordedQuestionIds = new Set();
+            for (const r of surveyResponses) {
+                if (r && r.questionId) {
+                    const qIdStr = String(r.questionId);
+                    if (visibleQuestionIds.has(qIdStr) && !recordedQuestionIds.has(qIdStr)) {
+                        recordedQuestionIds.add(qIdStr);
+                        authoritativeResponses.push({
+                            questionId: r.questionId,
+                            questionTitle: r.questionTitle || questions.find(q => String(q.id) === qIdStr)?.title || '',
+                            type: r.type || questions.find(q => String(q.id) === qIdStr)?.type || '',
+                            value: r.value,
+                            otherValue: r.otherValue
+                        });
+                    }
+                }
+            }
+
             // Anti-Speeding Verification
             const minTimeRatio = (settings.surveyConfig?.securityRules?.minCompletionTimeRatio) || 0.25;
             const estimatedSec = (task.surveyEstimatedMinutes || 5) * 60;
@@ -3516,10 +3541,11 @@ export const submitUserTaskProof = async (req, res) => {
             // Override frontend-submitted navigation arrays with authoritative server calculations
             req.body.authoritativeSkipped = authoritativeSkipped;
             req.body.authoritativeAnswered = authoritativeAnswered;
+            req.body.authoritativeResponses = authoritativeResponses;
         }
 
         const finalProofText = isSurveyTask 
-            ? `Survey responses recorded (${surveyResponses.length} answered in ${surveyCompletionTimeSeconds}s, qualification: ${surveyQualificationStatus}, quality score: ${qualityScore}).` 
+            ? `Survey responses recorded (${(req.body.authoritativeResponses || surveyResponses).length} answered in ${surveyCompletionTimeSeconds}s, qualification: ${surveyQualificationStatus}, quality score: ${qualityScore}).` 
             : (proofText || '');
 
         const surveyApprovalMode = (task.surveyApprovalMode || settings.surveyConfig?.approvalSettings?.mode || 'auto').toLowerCase();
@@ -3538,7 +3564,7 @@ export const submitUserTaskProof = async (req, res) => {
             currency: task.currency || 'USD',
             taskTitle: task.title,
             taskCategory: task.category,
-            surveyResponses: isSurveyTask ? surveyResponses : [],
+            surveyResponses: isSurveyTask ? (req.body.authoritativeResponses || surveyResponses) : [],
             surveyCompletionTimeSeconds: isSurveyTask ? surveyCompletionTimeSeconds : 0,
             surveyQualificationStatus: isSurveyTask ? surveyQualificationStatus : 'Completed',
             attentionCheckPassed: isSurveyTask ? attentionCheckPassed : true,
