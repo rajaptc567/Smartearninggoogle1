@@ -175,4 +175,85 @@ console.log('Running comprehensive survey flow security regression suite...');
     console.log('Test 9 (ANY global rule early match) passed.');
 }
 
+// 10. ALL rule triggers when all conditions match at or after fromIndex
+{
+    const questions = [
+        { id: 'q1', title: 'Q1', type: 'yes_no' },
+        { id: 'q2', title: 'Q2', type: 'yes_no' },
+        { id: 'q3', title: 'Q3', type: 'yes_no' }
+    ];
+    const globalRules = [
+        {
+            id: 'ruleAll',
+            matchType: 'ALL',
+            conditions: [
+                { questionId: 'q1', operator: 'equals', value: 'yes' },
+                { questionId: 'q3', operator: 'equals', value: 'yes' }
+            ],
+            action: 'disqualify'
+        }
+    ];
+    const result = evaluateSurveyFlow(questions, [], { q1: 'yes', q2: 'no', q3: 'yes' }, globalRules);
+    assert.strictEqual(result.status, 'disqualified', 'ALL rule must trigger when all conditions match');
+    console.log('Test 10 (ALL rule matching) passed.');
+}
+
+// 11. ELSE action does not execute prematurely and triggers at the correct evaluation point when conditions do not match
+{
+    const questions = [
+        { id: 'q1', title: 'Q1', type: 'yes_no' },
+        { id: 'q2', title: 'Q2', type: 'yes_no' },
+        { id: 'q3', title: 'Q3', type: 'yes_no' }
+    ];
+    const globalRules = [
+        {
+            id: 'ruleElse',
+            matchType: 'ALL',
+            conditions: [
+                { questionId: 'q1', operator: 'equals', value: 'yes' },
+                { questionId: 'q3', operator: 'equals', value: 'yes' }
+            ],
+            action: 'disqualify',
+            elseAction: 'qualify'
+        }
+    ];
+    // At q1, else must not trigger prematurely before q3 is reached. At q3, conditions do not match (q3 is 'no'), so elseAction ('qualify') triggers.
+    const result = evaluateSurveyFlow(questions, [], { q1: 'yes', q2: 'no', q3: 'no' }, globalRules);
+    assert.strictEqual(result.qualificationStatus, 'Qualified', 'ELSE action must trigger once evaluation completes and conditions do not match');
+    console.log('Test 11 (ELSE action timing and execution) passed.');
+}
+
+// 12. Hidden or skipped fabricated answers cannot incorrectly trigger a global rule
+{
+    const questions = [
+        {
+            id: 'q1',
+            title: 'Q1',
+            type: 'yes_no',
+            logicRules: [{
+                id: 'rJump',
+                matchType: 'ALL',
+                conditions: [{ questionId: 'q1', operator: 'equals', value: 'no' }],
+                action: 'goto_question',
+                targetQuestionId: 'q3'
+            }]
+        },
+        { id: 'q2', title: 'Q2', type: 'yes_no' },
+        { id: 'q3', title: 'Q3', type: 'text' }
+    ];
+    const globalRules = [
+        {
+            id: 'ruleQ2',
+            matchType: 'ALL',
+            conditions: [{ questionId: 'q2', operator: 'equals', value: 'yes' }],
+            action: 'disqualify'
+        }
+    ];
+    // q1 is 'no', jumping to q3, skipping q2. Client submits fabricated q2 answer.
+    const result = evaluateSurveyFlow(questions, [], { q1: 'no', q2: 'yes', q3: 'ok' }, globalRules);
+    assert.ok(result.skippedQuestionIds.has('q2'), 'q2 should be skipped');
+    assert.strictEqual(result.status, 'in_progress', 'Fabricated answer on skipped q2 must not trigger global rule');
+    console.log('Test 12 (Skipped fabricated answer isolation from global rules) passed.');
+}
+
 console.log('All comprehensive survey flow security regression tests passed successfully!');
