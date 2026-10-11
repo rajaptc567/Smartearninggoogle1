@@ -437,12 +437,13 @@ export const updateSettings = async (req, res) => {
                     providerKey: String(st.providerKey || st.id || '').trim(),
                     badge: String(st.badge || '').trim(),
                     description: String(st.description || '').trim(),
-                    icon: String(st.icon || '').trim()
+                    icon: String(st.icon || '').trim(),
+                    enabled: st.enabled !== false
                 })).filter(st => st.name) : [];
 
                 return {
-                    id: String(tab.id || 'other_tasks').trim(),
-                    title: String(tab.title || 'Other Tasks').trim(),
+                    id: String(tab.id || '').trim() || ('tab_' + Math.random().toString(36).substring(2, 8)),
+                    title: String(tab.title || 'Tab').trim(),
                     enabled: tab.enabled !== false,
                     subTabs: cleanSubTabs
                 };

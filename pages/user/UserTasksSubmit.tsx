@@ -10,6 +10,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { DisputeTimeline } from '../../components/DisputeTimeline';
 import { seoAnalytics } from '../../services/seoAnalytics';
 import OtherTasksCard from '../../components/OtherTasksCard';
+import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
 import { Layers as TaskIcon, Globe as GlobeIcon, FileQuestion, HelpCircle, CheckSquare } from 'lucide-react';
 import { SurveyBuilder, SurveyConfigData } from '../../components/SurveyBuilder';
 import { SMARTEXN_SURVEY_TEMPLATES } from '../../lib/surveyTemplates';
@@ -447,7 +448,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     };
 
     const [activeTab, setActiveTab] = useState<'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs'>(initialTab);
-    const [availableTasksSubTab, setAvailableTasksSubTab] = useState<'available_jobs' | 'other_tasks'>('available_jobs');
+    const [availableTasksSubTab, setAvailableTasksSubTab] = useState<string>('available_jobs');
+
+    const visibleEarnTabs = useMemo(() => {
+        return getVisibleEarnTabs(state.settings?.customEarnTabs, state.settings?.modulePagesConfig);
+    }, [state.settings?.customEarnTabs, state.settings?.modulePagesConfig]);
+
+    useEffect(() => {
+        if (availableTasksSubTab !== 'available_jobs' && !visibleEarnTabs.some(t => t.id === availableTasksSubTab)) {
+            setAvailableTasksSubTab('available_jobs');
+        }
+    }, [visibleEarnTabs, availableTasksSubTab]);
 
     // Phase 3: Pending Mandatory Surveys in Available Tasks
     const [pendingMandatorySurveys, setPendingMandatorySurveys] = useState<UserTask[]>([]);
@@ -4085,26 +4096,29 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             {filteredBrowseableTasks.length}
                                         </span>
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setAvailableTasksSubTab('other_tasks')}
-                                        className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
-                                            availableTasksSubTab === 'other_tasks'
-                                                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
-                                                : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                                        }`}
-                                    >
-                                        <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                        <span>Other Tasks</span>
-                                    </button>
+                                    {visibleEarnTabs.map(tab => (
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            onClick={() => setAvailableTasksSubTab(tab.id)}
+                                            className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                                                availableTasksSubTab === tab.id
+                                                    ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
+                                                    : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                            }`}
+                                        >
+                                            <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                            <span>{tab.title}</span>
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* 3. Content Section: Other Tasks Card OR Available Jobs Search + List */}
-                    {availableTasksSubTab === 'other_tasks' ? (
-                        <OtherTasksCard hideHeader={false} />
+                    {/* 3. Content Section: Custom Earn Tabs Card OR Available Jobs Search + List */}
+                    {availableTasksSubTab !== 'available_jobs' && visibleEarnTabs.some(t => t.id === availableTasksSubTab) ? (
+                        <OtherTasksCard hideHeader={false} tabId={availableTasksSubTab} />
                     ) : (
                         <div className="space-y-6">
                             {!hideHeaderAndTabs && (

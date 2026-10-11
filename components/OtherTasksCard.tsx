@@ -38,14 +38,15 @@ export const DEFAULT_GIGS: JobGig[] = [];
 export interface OtherTasksCardProps {
     className?: string;
     hideHeader?: boolean;
+    tabId?: string;
 }
 
-export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', hideHeader = false }) => {
+export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', hideHeader = false, tabId }) => {
     const { state, dispatch } = useData();
     const { currentUser } = state;
     const workAndEarnConfig = useWorkAndEarnConfig();
 
-    const [activeSubTab, setActiveSubTab] = useState<string>('cpalead');
+    const [activeSubTab, setActiveSubTab] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
     const [difficultyFilter] = useState<string>('all');
 
@@ -60,35 +61,37 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
     // Custom Tabs & Sub-Tabs from Admin Settings
     const customEarnTabs = state.settings?.customEarnTabs;
 
-    const subTabs = useMemo(() => {
-        const defaultSubTabs = [
-            { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
-            { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
-            { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
-            { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
-            { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
-        ];
+    // Find the relevant main tab
+    const currentMainTab = useMemo(() => {
+        if (!Array.isArray(customEarnTabs) || customEarnTabs.length === 0) {
+            return null;
+        }
+        if (tabId) {
+            const found = customEarnTabs.find(t => t.id === tabId);
+            if (found) return found;
+        }
+        // Fallback: tab matching 'other_tasks' or first enabled tab
+        return customEarnTabs.find(t => t.id === 'other_tasks') || customEarnTabs.find(t => t.enabled !== false) || customEarnTabs[0];
+    }, [customEarnTabs, tabId]);
 
-        // If customEarnTabs is explicitly defined (even if [] or subTabs: []), use the saved configuration and NEVER fall back to defaults
-        if (customEarnTabs !== undefined && customEarnTabs !== null) {
-            if (!Array.isArray(customEarnTabs) || customEarnTabs.length === 0) {
-                return [];
-            }
-            const otherTasksTabConfig = customEarnTabs.find(t => t.id === 'other_tasks' || t.title?.toLowerCase().includes('other'));
-            if (otherTasksTabConfig && Array.isArray(otherTasksTabConfig.subTabs)) {
-                return otherTasksTabConfig.subTabs.map(st => ({
+    const subTabs = useMemo(() => {
+        if (!currentMainTab || currentMainTab.enabled === false) {
+            return [];
+        }
+        if (Array.isArray(currentMainTab.subTabs)) {
+            return currentMainTab.subTabs
+                .filter(st => st.enabled !== false)
+                .map(st => ({
                     id: st.id,
                     name: st.name,
                     providerKey: st.providerKey || st.id,
                     badge: st.badge || st.name,
-                    description: st.description || ''
+                    description: st.description || '',
+                    enabled: st.enabled !== false
                 }));
-            }
-            return [];
         }
-
-        return defaultSubTabs;
-    }, [customEarnTabs]);
+        return [];
+    }, [currentMainTab]);
 
     useEffect(() => {
         if (subTabs.length > 0) {
@@ -203,7 +206,7 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
         }
     };
 
-    const activeNetworkName = subTabs.find(s => s.id === activeSubTab)?.name || 'Partner';
+    const activeNetworkName = subTabs.find(s => s.id === activeSubTab)?.name || currentMainTab?.title || 'Partner';
 
     return (
         <div className={`space-y-4 ${className}`}>
@@ -229,10 +232,10 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
                         </div>
                         <div>
                             <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-                                Partner Networks & External Tasks
+                                {currentMainTab?.title || 'Partner Networks & External Tasks'}
                             </h4>
                             <p className="text-[10px] sm:text-xs text-slate-400">
-                                Select an offerwall provider to browse available surveys and tasks.
+                                Select a provider to browse available opportunities.
                             </p>
                         </div>
                     </div>

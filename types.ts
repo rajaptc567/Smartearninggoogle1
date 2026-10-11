@@ -156,6 +156,7 @@ export interface CustomEarnSubTab {
     description?: string;
     icon?: string;
     badge?: string;
+    enabled?: boolean;
 }
 
 export interface CustomEarnTab {

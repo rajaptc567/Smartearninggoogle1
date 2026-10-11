@@ -112,7 +112,8 @@ const CustomEarnSubTabSchema = new mongoose.Schema({
     providerKey: { type: String, default: '' },
     badge: { type: String, default: '' },
     description: { type: String, default: '' },
-    icon: { type: String, default: '' }
+    icon: { type: String, default: '' },
+    enabled: { type: Boolean, default: true }
 }, { _id: false });
 
 const CustomEarnTabSchema = new mongoose.Schema({

@@ -56,6 +56,7 @@ import {
 } from 'lucide-react';
 import { useWorkAndEarnConfig } from '../../hooks/useWorkAndEarnConfig';
 import OtherTasksCard from '../../components/OtherTasksCard';
+import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
 import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
 import { getEffectiveModulePageControl } from '../../data/modulePagesDefaults';
 import { formatCurrency, currencySymbols, UserTask, UserTaskSubmission } from '../../types';
@@ -97,39 +98,13 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     // Custom Tabs from Admin Settings
     const customEarnTabs = state.settings?.customEarnTabs;
 
-    // Dynamic Sub-Tabs for "Other Tasks"
-    const subTabs = useMemo(() => {
-        if (customEarnTabs !== undefined && customEarnTabs !== null) {
-            if (!Array.isArray(customEarnTabs) || customEarnTabs.length === 0) {
-                return [];
-            }
-            const otherTasksTabConfig = customEarnTabs.find(t => t.id === 'other_tasks' || t.title?.toLowerCase().includes('other'));
-            if (!otherTasksTabConfig || otherTasksTabConfig.enabled === false) {
-                return [];
-            }
-            if (Array.isArray(otherTasksTabConfig.subTabs)) {
-                return otherTasksTabConfig.subTabs
-                    .filter(st => st.enabled !== false)
-                    .map(st => ({
-                        id: st.id,
-                        name: st.name,
-                        providerKey: st.providerKey || st.id,
-                        badge: st.badge || st.name,
-                        description: st.description || ''
-                    }));
-            }
-            return [];
-        }
-        return [];
-    }, [customEarnTabs]);
-
-    const otherTasksControl = getEffectiveModulePageControl(state.settings?.modulePagesConfig, 'workAndEarn', 'otherTasks');
-    const otherTasksTabConfig = (customEarnTabs || []).find(t => t.id === 'other_tasks' || t.title?.toLowerCase().includes('other'));
-    const isOtherTasksEnabled = otherTasksTabConfig ? otherTasksTabConfig.enabled !== false && otherTasksTabConfig.isHiddenInNav !== true : true;
-    const showOtherTasks = otherTasksControl.isEnabled && !otherTasksControl.isHiddenInNav && isOtherTasksEnabled && subTabs.length > 0;
+    // Dynamic visible earn tabs derived via shared helper
+    const visibleEarnTabs = useMemo(() => {
+        return getVisibleEarnTabs(customEarnTabs, state.settings?.modulePagesConfig);
+    }, [customEarnTabs, state.settings?.modulePagesConfig]);
 
     // Primary Tabs
-    const [dashboardTab, setDashboardTab] = useState<'available_jobs' | 'other_tasks'>('available_jobs');
+    const [dashboardTab, setDashboardTab] = useState<string>('available_jobs');
 
     const customDashboardTabs = useMemo(() => {
         const pages = state.settings?.modulePagesConfig?.workAndEarn || {};
@@ -139,10 +114,10 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     }, [state.settings?.modulePagesConfig]);
 
     useEffect(() => {
-        if (!showOtherTasks && dashboardTab === 'other_tasks') {
+        if (dashboardTab !== 'available_jobs' && !visibleEarnTabs.some(t => t.id === dashboardTab)) {
             setDashboardTab('available_jobs');
         }
-    }, [showOtherTasks, dashboardTab]);
+    }, [visibleEarnTabs, dashboardTab]);
 
     // Sub-tab for "Other Tasks"
     const [activeSubTab, setActiveSubTab] = useState<string>('cpalead');
@@ -2292,19 +2267,20 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                         </span>
                     </button>
 
-                    {showOtherTasks && (
+                    {visibleEarnTabs.map(tab => (
                         <button
-                            onClick={() => setDashboardTab('other_tasks')}
+                            key={tab.id}
+                            onClick={() => setDashboardTab(tab.id)}
                             className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
-                                dashboardTab === 'other_tasks'
+                                dashboardTab === tab.id
                                     ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
                                     : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                             }`}
                         >
                             <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            <span>Other Tasks</span>
+                            <span>{tab.title}</span>
                         </button>
-                    )}
+                    ))}
 
                     {customDashboardTabs.map((ct: any) => (
                         <button
@@ -2349,9 +2325,9 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                 </div>
             )}
 
-            {/* TAB 2: OTHER TASKS */}
-            {dashboardTab === 'other_tasks' && (
-                <OtherTasksCard hideHeader={false} />
+            {/* TAB 2+: DYNAMIC WORK & EARN TABS */}
+            {dashboardTab !== 'available_jobs' && (
+                <OtherTasksCard hideHeader={false} tabId={dashboardTab} />
             )}
 
             {/* MODAL 1: OFFERWALL GIG DETAIL */}
