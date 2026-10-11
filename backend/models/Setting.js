@@ -443,6 +443,15 @@ const SettingSchema = new mongoose.Schema({
     showUkSupportOfficeInFooter: { type: Boolean, default: true },
     investmentModuleEnabled: { type: Boolean, default: true },
     isInvestmentModuleEnabled: { type: Boolean, default: true },
+    audienceTargeting: {
+        countriesEnabled: { type: Boolean, default: true },
+        currenciesEnabled: { type: Boolean, default: true },
+        genderEnabled: { type: Boolean, default: true },
+        ageEnabled: { type: Boolean, default: true },
+        selectedUsersEnabled: { type: Boolean, default: true },
+        accountStatusEnabled: { type: Boolean, default: true },
+        advancedE1Enabled: { type: Boolean, default: true }
+    },
     publicSupportEmail: { type: String, default: 'support@smartexn.com' },
     supportOfficeBadge1: { type: String, default: 'Official Registered Support Desk' },
     supportOfficeBadge2: { type: String, default: 'UK Customer Support' },
@@ -1993,10 +2002,23 @@ SettingSchema.statics.getSettings = async function() {
         settings.tickerEnabled = true;
         needsSave = true;
     }
+    if (!settings.audienceTargeting) {
+        settings.audienceTargeting = {
+            countriesEnabled: true,
+            currenciesEnabled: true,
+            genderEnabled: true,
+            ageEnabled: true,
+            selectedUsersEnabled: true,
+            accountStatusEnabled: true,
+            advancedE1Enabled: true
+        };
+        needsSave = true;
+    }
     if (needsSave) {
         settings.markModified('surveyConfig');
         settings.markModified('customEarnTabs');
         settings.markModified('tickerEnabled');
+        settings.markModified('audienceTargeting');
         await settings.save();
     }
     return settings;

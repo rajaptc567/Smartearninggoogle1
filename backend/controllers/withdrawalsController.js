@@ -238,7 +238,7 @@ export const createWithdrawal = async (req, res) => {
                                 taskId: { $in: validReferencedIds }
                             }).sort({ createdAt: -1 }).lean();
                         }
-                        const eligibilityContext = { submissions: targetSubs };
+                        const eligibilityContext = { submissions: targetSubs, audienceTargeting: settings?.audienceTargeting };
 
                         const isEligible = isUserEligibleForUserTask(user, userTask, eligibilityContext);
                         if (!isEligible) {

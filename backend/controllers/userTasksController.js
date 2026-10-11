@@ -526,7 +526,8 @@ export const getPendingMandatorySurveysForUser = async (user, allTasks = null, c
                 taskId: { $in: validReferencedIds }
             }).sort({ createdAt: -1 }).lean();
         }
-        eligibilityContext = { submissions: targetSubs };
+        const settings = await Setting.getSettings();
+        eligibilityContext = { submissions: targetSubs, audienceTargeting: settings?.audienceTargeting };
     }
 
     const pendingSurveys = [];
@@ -643,7 +644,7 @@ export const getUserTasks = async (req, res) => {
                 taskId: { $in: Array.from(referencedTaskIdsSet) }
             }).sort({ createdAt: -1 }).lean();
         }
-        const eligibilityContext = { submissions: workerTargetingSubmissions };
+        const eligibilityContext = { submissions: workerTargetingSubmissions, audienceTargeting: settings?.audienceTargeting };
 
         // 2. Preload worker's approved/paid submissions to evaluate completion
         const workerApprovedSubmissions = await UserTaskSubmission.find({
@@ -3233,7 +3234,7 @@ export const submitUserTaskProof = async (req, res) => {
                 }).sort({ createdAt: -1 }).lean();
             }
 
-            const isEligible = isUserEligibleForUserTask(worker, task, { submissions: workerSubmissions });
+            const isEligible = isUserEligibleForUserTask(worker, task, { submissions: workerSubmissions, audienceTargeting: settings?.audienceTargeting });
             if (!isEligible) {
                 return res.status(403).json({
                     success: false,

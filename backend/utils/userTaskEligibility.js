@@ -123,7 +123,7 @@ const BANNED_PROFILE_KEYS = [
  * 
  * @param {Object} user - The user object containing country, currency, gender, dateOfBirth, status, customFields
  * @param {Object} userTask - The UserTask or survey object containing optional targeting
- * @param {Object} [context] - Optional preloaded data (e.g. submissions) for advanced evaluation
+ * @param {Object} [context] - Optional preloaded data (e.g. submissions, audienceTargeting) for advanced evaluation
  * @returns {boolean} True if the user is eligible to view/participate in the task
  */
 export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
@@ -134,10 +134,19 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
         return true;
     }
 
+    const targetingConfig = context.audienceTargeting || context.settings?.audienceTargeting || {};
+    const countriesEnabled = targetingConfig.countriesEnabled !== false;
+    const currenciesEnabled = targetingConfig.currenciesEnabled !== false;
+    const genderEnabled = targetingConfig.genderEnabled !== false;
+    const ageEnabled = targetingConfig.ageEnabled !== false;
+    const selectedUsersEnabled = targetingConfig.selectedUsersEnabled !== false;
+    const accountStatusEnabled = targetingConfig.accountStatusEnabled !== false;
+    const advancedE1Enabled = targetingConfig.advancedE1Enabled !== false;
+
     const { countries, currencies, genders, minAge, maxAge, selectedUserIds, accountStatus, completionRules, profileRules, surveyAnswerRules } = targeting;
 
     // 1. Country Targeting
-    if (Array.isArray(countries) && countries.length > 0) {
+    if (countriesEnabled && Array.isArray(countries) && countries.length > 0) {
         const cleanCountries = countries
             .filter(c => typeof c === 'string' && c.trim().length > 0)
             .map(c => c.trim().toLowerCase());
@@ -151,7 +160,7 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
     }
 
     // 2. Currency Targeting
-    if (Array.isArray(currencies) && currencies.length > 0) {
+    if (currenciesEnabled && Array.isArray(currencies) && currencies.length > 0) {
         const cleanCurrencies = currencies
             .filter(c => typeof c === 'string' && c.trim().length > 0)
             .map(c => c.trim().toUpperCase());
@@ -165,7 +174,7 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
     }
 
     // 3. Gender Targeting
-    if (Array.isArray(genders) && genders.length > 0) {
+    if (genderEnabled && Array.isArray(genders) && genders.length > 0) {
         const cleanGenders = genders
             .filter(g => typeof g === 'string' && g.trim().length > 0)
             .map(g => g.trim().toLowerCase());
@@ -179,146 +188,155 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
     }
 
     // 4. Age Boundaries (minAge / maxAge)
-    const parsedMinAge = parseAgeLimit(minAge);
-    const parsedMaxAge = parseAgeLimit(maxAge);
+    if (ageEnabled) {
+        const parsedMinAge = parseAgeLimit(minAge);
+        const parsedMaxAge = parseAgeLimit(maxAge);
 
-    if (parsedMinAge === 'INVALID' || parsedMaxAge === 'INVALID') {
-        return false;
-    }
-
-    if (parsedMinAge !== null && parsedMaxAge !== null && parsedMinAge > parsedMaxAge) {
-        return false;
-    }
-
-    const hasAgeRestriction = parsedMinAge !== null || parsedMaxAge !== null;
-
-    if (hasAgeRestriction) {
-        const userAge = calculateUserAge(user.dateOfBirth);
-        if (userAge === null) {
+        if (parsedMinAge === 'INVALID' || parsedMaxAge === 'INVALID') {
             return false;
         }
 
-        if (parsedMinAge !== null && userAge < parsedMinAge) {
+        if (parsedMinAge !== null && parsedMaxAge !== null && parsedMinAge > parsedMaxAge) {
             return false;
         }
 
-        if (parsedMaxAge !== null && userAge > parsedMaxAge) {
-            return false;
+        const hasAgeRestriction = parsedMinAge !== null || parsedMaxAge !== null;
+
+        if (hasAgeRestriction) {
+            const userAge = calculateUserAge(user.dateOfBirth);
+            if (userAge === null) {
+                return false;
+            }
+
+            if (parsedMinAge !== null && userAge < parsedMinAge) {
+                return false;
+            }
+
+            if (parsedMaxAge !== null && userAge > parsedMaxAge) {
+                return false;
+            }
         }
     }
 
     // 5. Selected Users Targeting
-    if (Array.isArray(selectedUserIds) && selectedUserIds.length > 0) {
-        const userIdStr = String(user._id || user.id || '');
-        const cleanSelected = selectedUserIds.map(id => String(id).trim());
-        if (!userIdStr || !cleanSelected.includes(userIdStr)) {
-            return false;
+    if (selectedUsersEnabled && Array.isArray(selectedUserIds) && selectedUserIds.length > 0) {
+        const userIdStr = String(user._id || user.id || '').trim();
+        const cleanSelected = selectedUserIds
+            .map(id => String(id || '').trim())
+            .filter(id => id.length > 0);
+
+        if (cleanSelected.length > 0) {
+            if (!userIdStr || !cleanSelected.includes(userIdStr)) {
+                return false;
+            }
         }
     }
 
     // 6. Account Status Targeting
-    const statusRule = String(accountStatus || 'any').trim().toLowerCase();
-    if (statusRule === 'active' && user.status !== 'Active') {
-        return false;
-    }
-    if (statusRule === 'inactive' && user.status === 'Active') {
-        return false;
-    }
-
-    // Success definition helper
-    const isSubmissionSuccessful = (s) => {
-        if (!s) return false;
-        return s.status === 'Approved' || 
-               s.status === 'Paid' || 
-               s.status === 'Completed' || 
-               s.paid === true || 
-               s.rewardClaimed === true;
-    };
-
-    // 7. Completion Rules (AND logic)
-    if (Array.isArray(completionRules) && completionRules.length > 0) {
-        const submissions = Array.isArray(context.submissions) ? context.submissions : [];
-        for (const rule of completionRules) {
-            const targetTaskId = String(rule.taskId || '');
-            const mustBeCompleted = rule.completed;
-
-            // Malformed rule guard
-            if (!isValidObjectId(targetTaskId) || typeof mustBeCompleted !== 'boolean') {
-                return false;
-            }
-
-            // Check if user has AT LEAST ONE successful submission for this task
-            const hasSuccessfulSubmission = submissions.some(s => {
-                const sTaskId = String(s.taskId || s.task?._id || '');
-                return sTaskId === targetTaskId && isSubmissionSuccessful(s);
-            });
-
-            if (mustBeCompleted && !hasSuccessfulSubmission) return false;
-            if (!mustBeCompleted && hasSuccessfulSubmission) return false;
+    if (accountStatusEnabled) {
+        const statusRule = String(accountStatus || 'any').trim().toLowerCase();
+        const userStatus = String(user.status || '').trim().toLowerCase();
+        if (statusRule === 'active' && userStatus !== 'active') {
+            return false;
+        }
+        if (statusRule === 'inactive' && userStatus === 'active') {
+            return false;
         }
     }
 
-    // 8. Profile Rules (AND logic)
-    if (Array.isArray(profileRules) && profileRules.length > 0) {
-        const customFields = user.customFields || {};
-        const validOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in'];
+    if (advancedE1Enabled) {
+        // Success definition helper
+        const isSubmissionSuccessful = (s) => {
+            if (!s) return false;
+            return s.status === 'Approved' || 
+                   s.status === 'Paid' || 
+                   s.status === 'Completed' || 
+                   s.paid === true || 
+                   s.rewardClaimed === true;
+        };
 
-        for (const rule of profileRules) {
-            const fieldKey = String(rule.fieldKey || '').trim();
-            const operator = String(rule.operator || '').trim().toLowerCase();
+        // 7. Completion Rules (AND logic)
+        if (Array.isArray(completionRules) && completionRules.length > 0) {
+            const submissions = Array.isArray(context.submissions) ? context.submissions : [];
+            for (const rule of completionRules) {
+                const targetTaskId = String(rule.taskId || '');
+                const mustBeCompleted = rule.completed;
 
-            // Malformed rule guard
-            if (!fieldKey || !validOperators.includes(operator)) {
-                return false;
-            }
-            if (/[.$]/.test(fieldKey)) {
-                return false;
-            }
-            if (BANNED_PROFILE_KEYS.some(b => fieldKey.toLowerCase() === b.toLowerCase())) {
-                return false;
-            }
+                // Malformed rule guard
+                if (!isValidObjectId(targetTaskId) || typeof mustBeCompleted !== 'boolean') {
+                    return false;
+                }
 
-            const attrObj = customFields[fieldKey];
-            const attrVal = (attrObj && typeof attrObj === 'object' && 'value' in attrObj) ? attrObj.value : attrObj;
-
-            const matches = evaluateCondition(attrVal, rule.operator, rule.value);
-            if (!matches) return false;
-        }
-    }
-
-    // 9. Survey Answer Rules (AND logic)
-    if (Array.isArray(surveyAnswerRules) && surveyAnswerRules.length > 0) {
-        const submissions = Array.isArray(context.submissions) ? context.submissions : [];
-        const validOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in'];
-
-        for (const rule of surveyAnswerRules) {
-            const targetTaskId = String(rule.taskId || '');
-            const questionId = String(rule.questionId || '').trim();
-            const operator = String(rule.operator || '').trim().toLowerCase();
-
-            // Malformed rule guard
-            if (!isValidObjectId(targetTaskId) || !questionId || !validOperators.includes(operator)) {
-                return false;
-            }
-
-            // Picks the LATEST successful submission for that task
-            // Note: We assume context.submissions is sorted by createdAt ASC, or we handle it here.
-            // To be safe and deterministic, let's filter and pick the one with max createdAt.
-            const successfulSubs = submissions
-                .filter(s => String(s.taskId || s.task?._id || '') === targetTaskId && isSubmissionSuccessful(s))
-                .sort((a, b) => {
-                    const dateA = new Date(a.createdAt || 0).getTime();
-                    const dateB = new Date(b.createdAt || 0).getTime();
-                    return dateB - dateA; // Descending
+                // Check if user has AT LEAST ONE successful submission for this task
+                const hasSuccessfulSubmission = submissions.some(s => {
+                    const sTaskId = String(s.taskId || s.task?._id || '');
+                    return sTaskId === targetTaskId && isSubmissionSuccessful(s);
                 });
 
-            const latestSub = successfulSubs[0];
-            const surveyResponses = Array.isArray(latestSub?.surveyResponses) ? latestSub.surveyResponses : [];
-            const resp = surveyResponses.find(r => String(r?.questionId || '') === questionId);
-            const respVal = resp ? resp.value : undefined;
+                if (mustBeCompleted && !hasSuccessfulSubmission) return false;
+                if (!mustBeCompleted && hasSuccessfulSubmission) return false;
+            }
+        }
 
-            const matches = evaluateCondition(respVal, rule.operator, rule.value);
-            if (!matches) return false;
+        // 8. Profile Rules (AND logic)
+        if (Array.isArray(profileRules) && profileRules.length > 0) {
+            const customFields = user.customFields || {};
+            const validOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in'];
+
+            for (const rule of profileRules) {
+                const fieldKey = String(rule.fieldKey || '').trim();
+                const operator = String(rule.operator || '').trim().toLowerCase();
+
+                // Malformed rule guard
+                if (!fieldKey || !validOperators.includes(operator)) {
+                    return false;
+                }
+                if (/[.$]/.test(fieldKey)) {
+                    return false;
+                }
+                if (BANNED_PROFILE_KEYS.some(b => fieldKey.toLowerCase() === b.toLowerCase())) {
+                    return false;
+                }
+
+                const attrObj = customFields[fieldKey];
+                const attrVal = (attrObj && typeof attrObj === 'object' && 'value' in attrObj) ? attrObj.value : attrObj;
+
+                const matches = evaluateCondition(attrVal, rule.operator, rule.value);
+                if (!matches) return false;
+            }
+        }
+
+        // 9. Survey Answer Rules (AND logic)
+        if (Array.isArray(surveyAnswerRules) && surveyAnswerRules.length > 0) {
+            const submissions = Array.isArray(context.submissions) ? context.submissions : [];
+            const validOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in'];
+
+            for (const rule of surveyAnswerRules) {
+                const targetTaskId = String(rule.taskId || '');
+                const questionId = String(rule.questionId || '').trim();
+                const operator = String(rule.operator || '').trim().toLowerCase();
+
+                // Malformed rule guard
+                if (!isValidObjectId(targetTaskId) || !questionId || !validOperators.includes(operator)) {
+                    return false;
+                }
+
+                const successfulSubs = submissions
+                    .filter(s => String(s.taskId || s.task?._id || '') === targetTaskId && isSubmissionSuccessful(s))
+                    .sort((a, b) => {
+                        const dateA = new Date(a.createdAt || 0).getTime();
+                        const dateB = new Date(b.createdAt || 0).getTime();
+                        return dateB - dateA; // Descending
+                    });
+
+                const latestSub = successfulSubs[0];
+                const surveyResponses = Array.isArray(latestSub?.surveyResponses) ? latestSub.surveyResponses : [];
+                const resp = surveyResponses.find(r => String(r?.questionId || '') === questionId);
+                const respVal = resp ? resp.value : undefined;
+
+                const matches = evaluateCondition(respVal, rule.operator, rule.value);
+                if (!matches) return false;
+            }
         }
     }
 
