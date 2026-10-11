@@ -1854,7 +1854,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             genders: cleanGenders,
             minAge: pMinAge,
             maxAge: pMaxAge,
-            selectedUserIds: targetingSelectedUserIds,
+            selectedUserIds: targetingAudienceType === 'selected' ? targetingSelectedUserIds.filter(id => id.trim()) : [],
             accountStatus: targetingAccountStatus,
             completionRules: targetingCompletionRules.filter(r => r.taskId.trim()),
             profileRules: targetingProfileRules.filter(r => r.fieldKey.trim()),

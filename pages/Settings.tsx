@@ -5456,6 +5456,52 @@ const Settings: React.FC = () => {
                     )}
                 </div>
 
+                {/* AUDIENCE TARGETING GLOBAL ENFORCEMENT CONTROLS */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-6">
+                    <div className="border-b dark:border-gray-700 pb-3">
+                        <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 uppercase tracking-wide flex items-center gap-2">
+                            <span>🎯 Global Audience Targeting Controls</span>
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Control which audience segmentation and targeting dimensions are actively enforced for normal users. Toggling a dimension OFF bypasses its restriction without deleting saved campaign data. Admin task/survey creation options remain fully available.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {[
+                            { key: 'countriesEnabled', label: 'Country Targeting', desc: 'Enforce country matching for workers' },
+                            { key: 'currenciesEnabled', label: 'Currency Targeting', desc: 'Enforce wallet currency matching' },
+                            { key: 'genderEnabled', label: 'Gender Targeting', desc: 'Enforce gender demographic rules' },
+                            { key: 'ageEnabled', label: 'Age Range Targeting', desc: 'Enforce min/max age boundary checks' },
+                            { key: 'selectedUsersEnabled', label: 'Selected Users / Whitelist', desc: 'Enforce specific member ID whitelists' },
+                            { key: 'accountStatusEnabled', label: 'Account Status Requirement', desc: 'Enforce Active/Inactive status requirements' },
+                            { key: 'advancedE1Enabled', label: 'Advanced E1 Rules', desc: 'Enforce completion, profile, and survey answer rules' },
+                        ].map(item => {
+                            const isEnabled = (localSettings.audienceTargeting as any)?.[item.key] !== false;
+                            const inputName = `audienceTargeting.${item.key}`;
+                            return (
+                                <div key={item.key} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border dark:border-gray-800 flex items-center justify-between gap-3">
+                                    <div className="space-y-1">
+                                        <div className="font-bold text-xs text-gray-900 dark:text-white">{item.label}</div>
+                                        <div className="text-[11px] text-gray-500 dark:text-gray-400">{item.desc}</div>
+                                    </div>
+                                    <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out shrink-0 ml-2">
+                                        <input
+                                            id={`target_toggle_${item.key}`}
+                                            name={inputName}
+                                            type="checkbox"
+                                            className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
+                                            checked={isEnabled}
+                                            onChange={handleCheckboxChange}
+                                        />
+                                        <label htmlFor={`target_toggle_${item.key}`} className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${isEnabled ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
                 {/* WORK AND EARN MODULE CUSTOM TABS & SUB-TABS MANAGER */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-6">
                     <div className="border-b dark:border-gray-700 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">

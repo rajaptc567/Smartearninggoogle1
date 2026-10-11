@@ -166,8 +166,19 @@ export interface CustomEarnTab {
     enabled?: boolean;
 }
 
+export interface AudienceTargetingConfig {
+    countriesEnabled: boolean;
+    currenciesEnabled: boolean;
+    genderEnabled: boolean;
+    ageEnabled: boolean;
+    selectedUsersEnabled: boolean;
+    accountStatusEnabled: boolean;
+    advancedE1Enabled: boolean;
+}
+
 export interface Settings {
     customEarnTabs?: CustomEarnTab[];
+    audienceTargeting?: AudienceTargetingConfig;
     proofControls?: {
         screenshotEnabled?: boolean;
         textEnabled?: boolean;

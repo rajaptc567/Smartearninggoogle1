@@ -3185,10 +3185,31 @@ export const submitUserTaskProof = async (req, res) => {
             task.isAdminResearchSurvey && 
             (reqMode === 'mandatory_all' || task.isMandatoryForAllUsers)
         );
+
+        let workerSubmissions = [];
+        const referencedTaskIds = [];
+        const t = task.targeting || {};
+        if (Array.isArray(t.completionRules)) {
+            for (const cr of t.completionRules) {
+                if (cr.taskId) referencedTaskIds.push(cr.taskId);
+            }
+        }
+        if (Array.isArray(t.surveyAnswerRules)) {
+            for (const sr of t.surveyAnswerRules) {
+                if (sr.taskId) referencedTaskIds.push(sr.taskId);
+            }
+        }
+        if (referencedTaskIds.length > 0) {
+            workerSubmissions = await UserTaskSubmission.find({
+                workerId: worker._id,
+                taskId: { $in: referencedTaskIds }
+            }).sort({ createdAt: -1 }).lean();
+        }
+
         const isMandatoryTargetedSurvey = Boolean(
             task.isAdminResearchSurvey && 
             reqMode === 'mandatory_targeted' &&
-            isUserEligibleForUserTask(worker, task)
+            isUserEligibleForUserTask(worker, task, { submissions: workerSubmissions, audienceTargeting: settings?.audienceTargeting })
         );
         const isMandatorySurvey = isMandatoryAllAdminSurvey || isMandatoryTargetedSurvey;
 
@@ -3213,27 +3234,6 @@ export const submitUserTaskProof = async (req, res) => {
         // Audience Targeting Enforcement (Phase D-2A & E1)
         const isOwner = task.userId && String(task.userId) === String(worker._id);
         if (!isOwner) {
-            const referencedTaskIds = [];
-            const t = task.targeting || {};
-            if (Array.isArray(t.completionRules)) {
-                for (const cr of t.completionRules) {
-                    if (cr.taskId) referencedTaskIds.push(cr.taskId);
-                }
-            }
-            if (Array.isArray(t.surveyAnswerRules)) {
-                for (const sr of t.surveyAnswerRules) {
-                    if (sr.taskId) referencedTaskIds.push(sr.taskId);
-                }
-            }
-
-            let workerSubmissions = [];
-            if (referencedTaskIds.length > 0) {
-                workerSubmissions = await UserTaskSubmission.find({
-                    workerId: worker._id,
-                    taskId: { $in: referencedTaskIds }
-                }).sort({ createdAt: -1 }).lean();
-            }
-
             const isEligible = isUserEligibleForUserTask(worker, task, { submissions: workerSubmissions, audienceTargeting: settings?.audienceTargeting });
             if (!isEligible) {
                 return res.status(403).json({
