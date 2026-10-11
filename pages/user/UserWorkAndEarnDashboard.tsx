@@ -87,195 +87,49 @@ interface JobGig {
     proofType?: 'screenshot' | 'text' | 'none';
 }
 
-const DEFAULT_GIGS: JobGig[] = [
-    // Other Tasks -> CPALead
-    {
-        id: 'cpa-1',
-        title: 'Install & Test Free Mobile Wallet App (Android/iOS)',
-        provider: 'CPALead',
-        providerKey: 'cpalead',
-        category: 'Other Tasks',
-        subTabKey: 'cpalead',
-        rewardUSD: 1.50,
-        estimatedTime: '3 mins',
-        difficulty: 'Easy',
-        description: 'Download the partner mobile app from App Store or Play Store, open it for 30 seconds, and register.',
-        instructions: [
-            'Click "Download App" to navigate to CPALead offer link.',
-            'Install the app from Google Play or Apple App Store.',
-            'Open the app and keep it active for at least 30 seconds.',
-            'Submit your registered email or username for instant reward credit.'
-        ],
-        actionLabel: 'Download App',
-        actionUrl: 'https://cpalead.com',
-        requiresProof: true,
-        proofType: 'text'
-    },
-    {
-        id: 'cpa-2',
-        title: 'Register & Verify Free Opinion Panel Account',
-        provider: 'CPALead',
-        providerKey: 'cpalead',
-        category: 'Other Tasks',
-        subTabKey: 'cpalead',
-        rewardUSD: 1.10,
-        estimatedTime: '3 mins',
-        difficulty: 'Very Easy',
-        description: 'Sign up for a free consumer opinion panel account and click the confirmation email link.',
-        instructions: [
-            'Click "Register Panel" to open the registration form.',
-            'Fill out your basic details and sign up.',
-            'Check your email inbox and click the email verification link.',
-            'Click "I Completed This" to receive reward in Task Wallet.'
-        ],
-        actionLabel: 'Register Panel',
-        actionUrl: 'https://cpalead.com',
-        requiresProof: false
-    },
-
-    // Other Tasks -> 2row
-    {
-        id: '2row-1',
-        title: '2row Institutional Global Consumer Electronics Survey',
-        provider: '2row',
-        providerKey: '2row',
-        category: 'Other Tasks',
-        subTabKey: '2row',
-        rewardUSD: 2.10,
-        estimatedTime: '8 mins',
-        difficulty: 'Medium',
-        description: 'Participate in 2row research study evaluating smartphone & laptop purchasing choices.',
-        instructions: [
-            'Click "Start 2row Survey" to begin.',
-            'Answer demographic questions truthfully.',
-            'Complete all survey pages until the Thank You completion screen.',
-            'The 2row postback system will automatically credit your account upon finish.'
-        ],
-        actionLabel: 'Start 2row Survey',
-        actionUrl: 'https://bitlabs.ai',
-        requiresProof: false
-    },
-    {
-        id: '2row-2',
-        title: '2row Digital Banking & Crypto Habits Poll',
-        provider: '2row',
-        providerKey: '2row',
-        category: 'Other Tasks',
-        subTabKey: '2row',
-        rewardUSD: 1.75,
-        estimatedTime: '5 mins',
-        difficulty: 'Easy',
-        description: 'Short market research poll on mobile banking apps and cross-border remittance.',
-        instructions: [
-            'Click "Launch Poll".',
-            'Provide honest feedback regarding your preferred remittance tools.',
-            'Click verify on completion.'
-        ],
-        actionLabel: 'Launch Poll',
-        actionUrl: 'https://bitlabs.ai',
-        requiresProof: false
-    },
-
-    // Other Tasks -> X (Twitter)
-    {
-        id: 'x-1',
-        title: 'Repost & Bookmark SmartExn Global Announcement on X',
-        provider: 'X (Twitter)',
-        providerKey: 'x',
-        category: 'Other Tasks',
-        subTabKey: 'x',
-        rewardUSD: 0.70,
-        estimatedTime: '1 min',
-        difficulty: 'Quick',
-        description: 'Repost (Retweet) the latest SmartExn launch post on X and bookmark it.',
-        instructions: [
-            'Click "Open Post on X".',
-            'Click the Repost button and Bookmark the post.',
-            'Copy your repost URL or enter your X handle below.',
-            'Submit proof for instant credit.'
-        ],
-        actionLabel: 'Open Post on X',
-        actionUrl: 'https://x.com',
-        requiresProof: true,
-        proofType: 'text'
-    },
-    {
-        id: 'x-2',
-        title: 'Comment & Tag 2 Friends on X Tech Discussion',
-        provider: 'X (Twitter)',
-        providerKey: 'x',
-        category: 'Other Tasks',
-        subTabKey: 'x',
-        rewardUSD: 0.95,
-        estimatedTime: '2 mins',
-        difficulty: 'Very Easy',
-        description: 'Leave a positive comment on the X thread and tag two crypto/gig enthusiast friends.',
-        instructions: [
-            'Open X post link.',
-            'Write a thoughtful comment and tag 2 friends.',
-            'Paste your comment link or username in the box below.'
-        ],
-        actionLabel: 'Join X Discussion',
-        actionUrl: 'https://x.com',
-        requiresProof: true,
-        proofType: 'text'
-    },
-
-    // Other Tasks -> Pollfish
-    {
-        id: 'poll-1',
-        title: 'Streaming Entertainment & Media Consumption Poll',
-        provider: 'Pollfish',
-        providerKey: 'pollfish',
-        category: 'Other Tasks',
-        subTabKey: 'pollfish',
-        rewardUSD: 1.25,
-        estimatedTime: '5 mins',
-        difficulty: 'Easy',
-        description: 'Interactive Pollfish survey with guaranteed payout on valid completion.',
-        instructions: [
-            'Click "Start Pollfish Survey".',
-            'Answer questions continuously without closing tab.',
-            'Get credited immediately upon reaching completion screen.'
-        ],
-        actionLabel: 'Start Pollfish Survey',
-        actionUrl: 'https://pollfish.com',
-        requiresProof: false
-    },
-
-    // Other Tasks -> AdGate
-    {
-        id: 'adgate-1',
-        title: 'Play "Block Master" & Reach Level 10',
-        provider: 'AdGate Media',
-        providerKey: 'adgate',
-        category: 'Other Tasks',
-        subTabKey: 'adgate',
-        rewardUSD: 3.50,
-        estimatedTime: '15 mins',
-        difficulty: 'Medium',
-        description: 'Fun mobile casual puzzle game offerwall. Pass Level 10 within 3 days.',
-        instructions: [
-            'Install game through AdGate offerwall link.',
-            'Play through and finish level 10.',
-            'Rewards credit automatically into your Task Wallet.'
-        ],
-        actionLabel: 'Play Game',
-        actionUrl: 'https://adgatemedia.com',
-        requiresProof: false
-    }
-];
+const DEFAULT_GIGS: JobGig[] = [];
 
 const UserWorkAndEarnDashboard: React.FC = () => {
     const { state, dispatch, refreshData } = useData();
     const { currentUser, userTasks = [], userTaskSubmissions = [], tasks = [], transactions = [], deposits = [], withdrawals = [] } = state;
     const navigate = useNavigate();
 
-    // Primary Tabs
-    const [dashboardTab, setDashboardTab] = useState<'available_jobs' | 'other_tasks'>('available_jobs');
+    // Custom Tabs from Admin Settings
+    const customEarnTabs = state.settings?.customEarnTabs;
+
+    // Dynamic Sub-Tabs for "Other Tasks"
+    const subTabs = useMemo(() => {
+        if (customEarnTabs !== undefined && customEarnTabs !== null) {
+            if (!Array.isArray(customEarnTabs) || customEarnTabs.length === 0) {
+                return [];
+            }
+            const otherTasksTabConfig = customEarnTabs.find(t => t.id === 'other_tasks' || t.title?.toLowerCase().includes('other'));
+            if (!otherTasksTabConfig || otherTasksTabConfig.enabled === false) {
+                return [];
+            }
+            if (Array.isArray(otherTasksTabConfig.subTabs)) {
+                return otherTasksTabConfig.subTabs
+                    .filter(st => st.enabled !== false)
+                    .map(st => ({
+                        id: st.id,
+                        name: st.name,
+                        providerKey: st.providerKey || st.id,
+                        badge: st.badge || st.name,
+                        description: st.description || ''
+                    }));
+            }
+            return [];
+        }
+        return [];
+    }, [customEarnTabs]);
 
     const otherTasksControl = getEffectiveModulePageControl(state.settings?.modulePagesConfig, 'workAndEarn', 'otherTasks');
-    const showOtherTasks = otherTasksControl.isEnabled && !otherTasksControl.isHiddenInNav;
+    const otherTasksTabConfig = (customEarnTabs || []).find(t => t.id === 'other_tasks' || t.title?.toLowerCase().includes('other'));
+    const isOtherTasksEnabled = otherTasksTabConfig ? otherTasksTabConfig.enabled !== false && otherTasksTabConfig.isHiddenInNav !== true : true;
+    const showOtherTasks = otherTasksControl.isEnabled && !otherTasksControl.isHiddenInNav && isOtherTasksEnabled && subTabs.length > 0;
+
+    // Primary Tabs
+    const [dashboardTab, setDashboardTab] = useState<'available_jobs' | 'other_tasks'>('available_jobs');
 
     const customDashboardTabs = useMemo(() => {
         const pages = state.settings?.modulePagesConfig?.workAndEarn || {};
@@ -409,40 +263,6 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     // Currency Formatting & Exchange
     const getCurrencySymbol = () => currencySymbols[currentUser.currency] || '$';
     const exchangeRate = state.settings?.exchangeRates?.[currentUser.currency] || 1;
-
-    // Custom Tabs from Admin Settings
-    const customEarnTabs = state.settings?.customEarnTabs;
-
-    // Dynamic Sub-Tabs for "Other Tasks"
-    const subTabs = useMemo(() => {
-        const defaultSubTabs = [
-            { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
-            { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
-            { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
-            { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
-            { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
-        ];
-
-        // If customEarnTabs is explicitly defined (even if [] or subTabs: []), use the saved configuration and NEVER fall back to defaults
-        if (customEarnTabs !== undefined && customEarnTabs !== null) {
-            if (!Array.isArray(customEarnTabs) || customEarnTabs.length === 0) {
-                return [];
-            }
-            const otherTasksTabConfig = customEarnTabs.find(t => t.id === 'other_tasks' || t.title?.toLowerCase().includes('other'));
-            if (otherTasksTabConfig && Array.isArray(otherTasksTabConfig.subTabs)) {
-                return otherTasksTabConfig.subTabs.map(st => ({
-                    id: st.id,
-                    name: st.name,
-                    providerKey: st.providerKey || st.id,
-                    badge: st.badge || st.name,
-                    description: st.description || ''
-                }));
-            }
-            return [];
-        }
-
-        return defaultSubTabs;
-    }, [customEarnTabs]);
 
     // Comprehensive Work & Earn Financial Calculations
     const userIdStr = currentUser._id?.toString();
@@ -2468,7 +2288,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                         <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold font-mono ${
                             dashboardTab === 'available_jobs' ? 'bg-slate-950/80 text-amber-300' : 'bg-slate-950/60 text-slate-400'
                         }`}>
-                            {availableHubTasks.length + DEFAULT_GIGS.filter(g => g.category === 'Available Jobs').length}
+                            {availableHubTasks.length}
                         </span>
                     </button>
 
@@ -2520,7 +2340,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
                             <span className="text-[10px] sm:text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-lg sm:rounded-xl">
-                                {availableHubTasks.length + DEFAULT_GIGS.filter(g => g.category === 'Available Jobs').length} Jobs Available
+                                {availableHubTasks.length} Jobs Available
                             </span>
                         </div>
                     </div>

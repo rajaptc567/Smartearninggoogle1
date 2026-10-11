@@ -404,6 +404,7 @@ const SettingSchema = new mongoose.Schema({
     demoActivityTemplates: [DemoActivityTemplateSchema],
     notices: [NoticeSchema],
     faqs: { type: [FaqSchema], default: defaultFaqs },
+    tickerEnabled: { type: Boolean, default: true },
     tickerSpeed: { type: Number, default: 6 },
     tickerContentSource: { type: String, enum: ['hybrid', 'real_only', 'demo_only'], default: 'hybrid' },
     tickerRealActivities: {
@@ -1987,9 +1988,14 @@ SettingSchema.statics.getSettings = async function() {
         ];
         needsSave = true;
     }
+    if (settings.tickerEnabled === undefined) {
+        settings.tickerEnabled = true;
+        needsSave = true;
+    }
     if (needsSave) {
         settings.markModified('surveyConfig');
         settings.markModified('customEarnTabs');
+        settings.markModified('tickerEnabled');
         await settings.save();
     }
     return settings;
