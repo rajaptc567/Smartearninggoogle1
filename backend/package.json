@@ -6,7 +6,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --experimental-strip-types server.js",
     "dev": "nodemon server.js"
   },
   "dependencies": {
