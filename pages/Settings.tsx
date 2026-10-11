@@ -1155,7 +1155,8 @@ const Settings: React.FC = () => {
                       name: String(st.name || '').trim(),
                       providerKey: String(st.providerKey || st.id || '').trim(),
                       badge: String(st.badge || '').trim(),
-                      description: String(st.description || '').trim()
+                      description: String(st.description || '').trim(),
+                      enabled: st.enabled !== false
                   })).filter(st => st.name)
               }))
           };

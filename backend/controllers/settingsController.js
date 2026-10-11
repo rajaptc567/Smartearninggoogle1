@@ -438,13 +438,13 @@ export const updateSettings = async (req, res) => {
                     badge: String(st.badge || '').trim(),
                     description: String(st.description || '').trim(),
                     icon: String(st.icon || '').trim(),
-                    enabled: st.enabled !== false
+                    enabled: st.enabled !== false && st.enabled !== 'false'
                 })).filter(st => st.name) : [];
 
                 return {
                     id: String(tab.id || '').trim() || ('tab_' + Math.random().toString(36).substring(2, 8)),
                     title: String(tab.title || 'Tab').trim(),
-                    enabled: tab.enabled !== false,
+                    enabled: tab.enabled !== false && tab.enabled !== 'false',
                     subTabs: cleanSubTabs
                 };
             });

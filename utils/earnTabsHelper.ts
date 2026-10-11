@@ -23,9 +23,8 @@ export function getVisibleEarnTabs(
         if (tab.enabled === false) return false;
         if ((tab as any).isHiddenInNav === true) return false;
 
-        // If this tab represents "Other Tasks", check otherTasksControl
-        const isOther = tab.id === 'other_tasks' || tab.title?.toLowerCase().includes('other');
-        if (isOther) {
+        // If this tab represents the built-in "Other Tasks" tab, check otherTasksControl
+        if (tab.id === 'other_tasks') {
             if (!otherTasksControl.isEnabled || otherTasksControl.isHiddenInNav) {
                 return false;
             }
