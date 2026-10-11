@@ -3267,7 +3267,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             Leave all fields empty to allow all eligible workers.
                                         </p>
                                     </div>
-                                    {(targetingCountries.length > 0 || targetingCurrencies.length > 0 || targetingGenders.length > 0 || minAgeInput !== '' || maxAgeInput !== '' || targetingSelectedUserIds.length > 0 || targetingAudienceType !== 'all') && (
+                                    {(targetingCountries.length > 0 || targetingCurrencies.length > 0 || targetingGenders.length > 0 || minAgeInput !== '' || maxAgeInput !== '' || targetingSelectedUserIds.length > 0 || targetingAudienceType !== 'all' || targetingAccountStatus !== 'any' || targetingCompletionRules.length > 0 || targetingProfileRules.length > 0 || targetingSurveyAnswerRules.length > 0) && (
                                         <button
                                             type="button"
                                             onClick={() => {
