@@ -34,7 +34,7 @@ export const calculateUserAge = (dateOfBirth, referenceDate = new Date()) => {
 };
 
 const parseMinAge = (val) => {
-    if (val === null || val === undefined || val === '' || Number(val) === 0) return null;
+    if (val === null || val === undefined || val === '') return null;
     const num = Number(val);
     if (!Number.isFinite(num) || isNaN(num) || num < 0) {
         return 'INVALID';
@@ -205,11 +205,14 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
             return false;
         }
 
-        if (parsedMinAge !== null && parsedMaxAge !== null && parsedMinAge > parsedMaxAge) {
+        const hasMinAge = parsedMinAge !== null && parsedMinAge > 0;
+        const hasMaxAge = parsedMaxAge !== null;
+
+        if (hasMinAge && parsedMaxAge !== null && parsedMinAge > parsedMaxAge) {
             return false;
         }
 
-        const hasAgeRestriction = parsedMinAge !== null || parsedMaxAge !== null;
+        const hasAgeRestriction = hasMinAge || hasMaxAge;
 
         if (hasAgeRestriction) {
             const userAge = calculateUserAge(user.dateOfBirth);
@@ -217,11 +220,11 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
                 return false;
             }
 
-            if (parsedMinAge !== null && userAge < parsedMinAge) {
+            if (hasMinAge && userAge < parsedMinAge) {
                 return false;
             }
 
-            if (parsedMaxAge !== null && userAge > parsedMaxAge) {
+            if (hasMaxAge && userAge > parsedMaxAge) {
                 return false;
             }
         }

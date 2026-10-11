@@ -53,7 +53,7 @@ const Settings: React.FC = () => {
 
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'module_pages' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage' | 'faqs' | 'legal' | 'automation' | 'signup_form' | 'micro_task_hub'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'module_pages' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage' | 'faqs' | 'legal' | 'automation' | 'signup_form' | 'micro_task_hub' | 'audience_targeting'>('general');
   const [tierCurrencyFilter, setTierCurrencyFilter] = useState<Currency | ''>('');
   const [isDirty, setIsDirty] = useState(false);
 
@@ -156,6 +156,16 @@ const Settings: React.FC = () => {
         investmentActivePlanBypassEnabled: settings.investmentActivePlanBypassEnabled || false,
         investmentManualWhitelistEnabled: settings.investmentManualWhitelistEnabled || false,
         investmentManualWhitelistUserIds: settings.investmentManualWhitelistUserIds || [],
+        audienceTargeting: {
+            countriesEnabled: settings.audienceTargeting?.countriesEnabled !== false,
+            currenciesEnabled: settings.audienceTargeting?.currenciesEnabled !== false,
+            genderEnabled: settings.audienceTargeting?.genderEnabled !== false,
+            ageEnabled: settings.audienceTargeting?.ageEnabled !== false,
+            selectedUsersEnabled: settings.audienceTargeting?.selectedUsersEnabled !== false,
+            accountStatusEnabled: settings.audienceTargeting?.accountStatusEnabled !== false,
+            advancedE1Enabled: settings.audienceTargeting?.advancedE1Enabled !== false,
+            ...(settings.audienceTargeting || {})
+        },
         featuredPlanIds: settings.featuredPlanIds || [],
         faqs: settings.faqs || [],
         whatsappNumber: settings.whatsappNumber || '',
