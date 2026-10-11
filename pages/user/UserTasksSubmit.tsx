@@ -3280,6 +3280,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 setTargetingSelectedUserIds([]);
                                                 setSelectedUserIdsInput('');
                                                 setTargetingAudienceType('all');
+                                                setTargetingAccountStatus('any');
+                                                setTargetingCompletionRules([]);
+                                                setTargetingProfileRules([]);
+                                                setTargetingSurveyAnswerRules([]);
                                             }}
                                             className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
                                         >

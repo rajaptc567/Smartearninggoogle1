@@ -271,10 +271,16 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
         if (Array.isArray(completionRules) && completionRules.length > 0) {
             const submissions = Array.isArray(context.submissions) ? context.submissions : [];
             for (const rule of completionRules) {
-                const targetTaskId = String(rule.taskId || '');
+                if (!rule || typeof rule !== 'object') continue;
+                const targetTaskId = String(rule.taskId || '').trim();
                 const mustBeCompleted = rule.completed;
 
-                // Malformed rule guard
+                // Genuinely unconfigured or empty rule entry -> skip
+                if (!targetTaskId) {
+                    continue;
+                }
+
+                // Incomplete or malformed configured rule -> fail-safe
                 if (!isValidObjectId(targetTaskId) || typeof mustBeCompleted !== 'boolean') {
                     return false;
                 }
@@ -296,11 +302,17 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
             const validOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in'];
 
             for (const rule of profileRules) {
+                if (!rule || typeof rule !== 'object') continue;
                 const fieldKey = String(rule.fieldKey || '').trim();
                 const operator = String(rule.operator || '').trim().toLowerCase();
 
-                // Malformed rule guard
-                if (!fieldKey || !validOperators.includes(operator)) {
+                // Genuinely unconfigured or empty rule entry -> skip
+                if (!fieldKey) {
+                    continue;
+                }
+
+                // Malformed or insecure configured rule -> fail-safe
+                if (!validOperators.includes(operator)) {
                     return false;
                 }
                 if (/[.$]/.test(fieldKey)) {
@@ -324,11 +336,17 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
             const validOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in'];
 
             for (const rule of surveyAnswerRules) {
-                const targetTaskId = String(rule.taskId || '');
+                if (!rule || typeof rule !== 'object') continue;
+                const targetTaskId = String(rule.taskId || '').trim();
                 const questionId = String(rule.questionId || '').trim();
                 const operator = String(rule.operator || '').trim().toLowerCase();
 
-                // Malformed rule guard
+                // Genuinely unconfigured or empty rule entry -> skip
+                if (!targetTaskId && !questionId) {
+                    continue;
+                }
+
+                // Incomplete or malformed configured rule -> fail-safe
                 if (!isValidObjectId(targetTaskId) || !questionId || !validOperators.includes(operator)) {
                     return false;
                 }
