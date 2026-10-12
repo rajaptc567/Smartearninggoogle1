@@ -3293,7 +3293,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 {/* Audience Type Selector */}
-                                <div className="flex gap-4 py-2 border-b border-gray-100 dark:border-gray-800">
+                                <div className="flex gap-4 py-2 border-b border-gray-100 dark:border-gray-800" hidden={settings?.audienceTargeting?.selectedUsersEnabled === false}>
                                     <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 font-bold">
                                         <input 
                                            type="radio" 
@@ -3316,7 +3316,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                                 {/* Selected Users */}
                                 {targetingAudienceType === 'selected' && (
-                                    <div className="space-y-2 border-l-2 border-blue-500 pl-3 py-1">
+                                    <div className="space-y-2 border-l-2 border-blue-500 pl-3 py-1" hidden={settings?.audienceTargeting?.selectedUsersEnabled === false}>
                                         <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Selected User IDs (Max 500)</label>
                                         <div className="flex gap-2">
                                             <input
@@ -3369,7 +3369,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 )}
 
                                 {/* A. Countries */}
-                                <div className="space-y-2">
+                                <div className="space-y-2" hidden={settings?.audienceTargeting?.countriesEnabled === false}>
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                                         Target Countries
                                     </label>
@@ -3454,7 +3454,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 {/* B. Currencies */}
-                                <div className="space-y-1.5">
+                                <div className="space-y-1.5" hidden={settings?.audienceTargeting?.currenciesEnabled === false}>
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                                         Target Currencies
                                     </label>
@@ -3486,7 +3486,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 {/* C. Gender */}
-                                <div className="space-y-1.5">
+                                <div className="space-y-1.5" hidden={settings?.audienceTargeting?.genderEnabled === false}>
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                                         Target Gender
                                     </label>
@@ -3518,7 +3518,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 {/* D & E. Age Range */}
-                                <div className="space-y-1.5">
+                                <div className="space-y-1.5" hidden={settings?.audienceTargeting?.ageEnabled === false}>
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                                         Age Boundaries (Years)
                                     </label>
@@ -3556,7 +3556,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             </div>
 
                             {/* Advanced Audience Targeting Section (E1) */}
-                            <div className="p-4 md:p-5 rounded-xl bg-slate-900/40 border border-slate-700/60 space-y-4">
+                            <div className="p-4 md:p-5 rounded-xl bg-slate-900/40 border border-slate-700/60 space-y-4" hidden={settings?.audienceTargeting?.accountStatusEnabled === false && settings?.audienceTargeting?.advancedE1Enabled === false}>
                                 <div>
                                     <h5 className="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
                                         <span>⚡</span> Advanced Audience Targeting (E1 Rules)
@@ -3567,7 +3567,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 {/* Account Status */}
-                                <div>
+                                <div hidden={settings?.audienceTargeting?.accountStatusEnabled === false}>
                                     <label className="block text-xs font-bold text-slate-300 mb-1">Account Status Requirement</label>
                                     <select
                                         value={targetingAccountStatus}
@@ -3581,7 +3581,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 {/* Completion Rules */}
-                                <div className="space-y-2">
+                                <div className="space-y-2" hidden={settings?.audienceTargeting?.advancedE1Enabled === false}>
                                     <div className="flex items-center justify-between">
                                         <label className="block text-xs font-bold text-slate-300">Task Completion Rules</label>
                                         <button
@@ -3627,7 +3627,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 {/* Profile Attribute Rules */}
-                                <div className="space-y-2">
+                                <div className="space-y-2" hidden={settings?.audienceTargeting?.advancedE1Enabled === false}>
                                     <div className="flex items-center justify-between">
                                         <label className="block text-xs font-bold text-slate-300">Profile Attribute Rules (customFields)</label>
                                         <button
@@ -3687,7 +3687,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 {/* Survey Answer Rules */}
-                                <div className="space-y-2">
+                                <div className="space-y-2" hidden={settings?.audienceTargeting?.advancedE1Enabled === false}>
                                     <div className="flex items-center justify-between">
                                         <label className="block text-xs font-bold text-slate-300">Survey Answer Rules</label>
                                         <button
