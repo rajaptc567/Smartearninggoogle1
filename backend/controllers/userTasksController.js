@@ -5020,17 +5020,21 @@ export const addAdminCampaignFunds = async (req, res) => {
     let deductedAmountUSD = 0;
     let taskCredited = false;
     let targetSettingId = null;
+    let taskId = null;
+    let task = null;
+    let fundAmountUSD = 0;
+    let idempotencyKey = '';
     try {
         if (!req.user || !isUserAdmin(req.user)) {
             return res.status(403).json({ success: false, error: 'Administrative authorization required to add campaign funds.' });
         }
 
-        const taskId = req.params.id;
+        taskId = req.params.id;
         if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
             return res.status(400).json({ success: false, error: 'Invalid campaign ID.' });
         }
 
-        const task = await UserTask.findById(taskId);
+        task = await UserTask.findById(taskId);
         if (!task) {
             return res.status(404).json({ success: false, error: 'Task campaign not found.' });
         }
@@ -5039,10 +5043,10 @@ export const addAdminCampaignFunds = async (req, res) => {
         if (isNaN(amountNum) || !isFinite(amountNum) || amountNum <= 0) {
             return res.status(400).json({ success: false, error: 'Please specify a valid, positive funding amount.' });
         }
-        const fundAmountUSD = Number(amountNum.toFixed(2));
+        fundAmountUSD = Number(amountNum.toFixed(2));
 
         const rawIdempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey;
-        const idempotencyKey = typeof rawIdempotencyKey === 'string' ? rawIdempotencyKey.trim() : '';
+        idempotencyKey = typeof rawIdempotencyKey === 'string' ? rawIdempotencyKey.trim() : '';
 
         if (!idempotencyKey) {
             return res.status(400).json({
