@@ -5171,6 +5171,34 @@ export const addAdminCampaignFunds = async (req, res) => {
             settings: updatedSetting
         });
     } catch (err) {
+        if (idempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
+            const existingTx = await Transaction.findOne({ idempotencyKey });
+            if (existingTx) {
+                const currentCampaignId = (task && task._id) ? String(task._id) : String(req.params.id);
+                const typeMatches = existingTx.type === 'Admin Campaign Funding';
+                const campaignMatches = String(existingTx.campaignId) === currentCampaignId;
+                const userMatches = String(existingTx.userId) === String(adminUser ? adminUser._id : (req.user?._id || req.user?.id));
+                const txAmount = Number(existingTx.amountUSD != null ? existingTx.amountUSD : existingTx.amount);
+                const amountMatches = !isNaN(txAmount) && Math.abs(txAmount - fundAmountUSD) < 0.001;
+
+                if (!typeMatches || !campaignMatches || !userMatches || !amountMatches) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `Idempotency key collision detected for ${idempotencyKey}: type, campaign, user, or amount mismatch.`
+                    });
+                }
+                const freshTask = await UserTask.findById(taskId);
+                const currentSettings = await Setting.getSettings();
+                return res.status(200).json({
+                    success: true,
+                    message: 'Funding request already processed (idempotent concurrent resolution).',
+                    task: freshTask,
+                    transaction: existingTx,
+                    settings: currentSettings
+                });
+            }
+        }
+
         if (taskCredited && deductedAmountUSD > 0) {
             try {
                 await UserTask.findByIdAndUpdate(req.params.id, {
@@ -5197,33 +5225,6 @@ export const addAdminCampaignFunds = async (req, res) => {
                 );
             } catch (refundErr) {
                 console.error('CRITICAL: Failed compensating refund to Admin Campaign Budget in addAdminCampaignFunds:', refundErr);
-            }
-        }
-        if (idempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
-            const existingTx = await Transaction.findOne({ idempotencyKey });
-            if (existingTx) {
-                const currentCampaignId = (task && task._id) ? String(task._id) : String(req.params.id);
-                const typeMatches = existingTx.type === 'Admin Campaign Funding';
-                const campaignMatches = String(existingTx.campaignId) === currentCampaignId;
-                const userMatches = String(existingTx.userId) === String(adminUser ? adminUser._id : (req.user?._id || req.user?.id));
-                const txAmount = Number(existingTx.amountUSD != null ? existingTx.amountUSD : existingTx.amount);
-                const amountMatches = !isNaN(txAmount) && Math.abs(txAmount - fundAmountUSD) < 0.001;
-
-                if (!typeMatches || !campaignMatches || !userMatches || !amountMatches) {
-                    return res.status(409).json({
-                        success: false,
-                        error: `Idempotency key collision detected for ${idempotencyKey}: type, campaign, user, or amount mismatch.`
-                    });
-                }
-                const freshTask = await UserTask.findById(taskId);
-                const currentSettings = await Setting.getSettings();
-                return res.status(200).json({
-                    success: true,
-                    message: 'Funding request already processed (idempotent concurrent resolution).',
-                    task: freshTask,
-                    transaction: existingTx,
-                    settings: currentSettings
-                });
             }
         }
         return res.status(400).json({ success: false, error: err.message });
