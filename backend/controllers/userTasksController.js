@@ -5024,9 +5024,15 @@ export const addAdminCampaignFunds = async (req, res) => {
     let task = null;
     let fundAmountUSD = 0;
     let idempotencyKey = '';
+    let adminUser = null;
     try {
         if (!req.user || !isUserAdmin(req.user)) {
             return res.status(403).json({ success: false, error: 'Administrative authorization required to add campaign funds.' });
+        }
+
+        adminUser = await User.findById(req.user.id || req.user._id);
+        if (!adminUser) {
+            return res.status(401).json({ success: false, error: 'Authenticated admin user record not found.' });
         }
 
         taskId = req.params.id;
@@ -5059,7 +5065,7 @@ export const addAdminCampaignFunds = async (req, res) => {
         if (existingTx) {
             const typeMatches = existingTx.type === 'Admin Campaign Funding';
             const campaignMatches = String(existingTx.campaignId) === String(task._id);
-            const userMatches = String(existingTx.userId) === String(req.user._id || req.user.id);
+            const userMatches = String(existingTx.userId) === String(adminUser._id);
             const txAmount = Number(existingTx.amountUSD != null ? existingTx.amountUSD : existingTx.amount);
             const amountMatches = !isNaN(txAmount) && Math.abs(txAmount - fundAmountUSD) < 0.001;
 
@@ -5143,8 +5149,8 @@ export const addAdminCampaignFunds = async (req, res) => {
         taskCredited = true;
 
         const tx = await Transaction.create({
-            userId: req.user._id,
-            userName: req.user.username,
+            userId: adminUser._id,
+            userName: adminUser.username || adminUser.name || adminUser.email || 'Admin',
             currency: 'USD',
             type: 'Admin Campaign Funding',
             amount: fundAmountUSD,
@@ -5199,7 +5205,7 @@ export const addAdminCampaignFunds = async (req, res) => {
                 const currentCampaignId = (task && task._id) ? String(task._id) : String(req.params.id);
                 const typeMatches = existingTx.type === 'Admin Campaign Funding';
                 const campaignMatches = String(existingTx.campaignId) === currentCampaignId;
-                const userMatches = String(existingTx.userId) === String(req.user._id || req.user.id);
+                const userMatches = String(existingTx.userId) === String(adminUser ? adminUser._id : (req.user?._id || req.user?.id));
                 const txAmount = Number(existingTx.amountUSD != null ? existingTx.amountUSD : existingTx.amount);
                 const amountMatches = !isNaN(txAmount) && Math.abs(txAmount - fundAmountUSD) < 0.001;
 

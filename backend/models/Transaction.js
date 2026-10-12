@@ -90,12 +90,12 @@ const TransactionSchema = new mongoose.Schema({
     // Source of funds and Wallet attribution
     sourceWallet: {
         type: String,
-        enum: ['Investment', 'TaskEarnings', 'CampaignFunds', 'CampaignEscrow', 'External', 'MLMCommission', 'HeldUpgrade', 'System'],
+        enum: ['Investment', 'TaskEarnings', 'CampaignFunds', 'CampaignEscrow', 'External', 'MLMCommission', 'HeldUpgrade', 'System', 'AdminBudget'],
         default: 'System'
     },
     destinationWallet: {
         type: String,
-        enum: ['Investment', 'TaskEarnings', 'CampaignFunds', 'CampaignEscrow', 'External', 'MLMCommission', 'HeldUpgrade', 'System'],
+        enum: ['Investment', 'TaskEarnings', 'CampaignFunds', 'CampaignEscrow', 'External', 'MLMCommission', 'HeldUpgrade', 'System', 'AdminBudget'],
         default: 'System'
     },
     sourceBreakdown: {
