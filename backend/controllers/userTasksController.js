@@ -5154,12 +5154,25 @@ export const addAdminCampaignFunds = async (req, res) => {
         const updatedTask = await UserTask.findByIdAndUpdate(taskId, updateFields, { new: true });
 
         if (!updatedTask) {
-            // Rollback budget
-            await Setting.findOneAndUpdate(
-                { 'adminCampaignBudget.enabled': true },
-                { $inc: { 'adminCampaignBudget.remainingBudgetUSD': fundAmountUSD } }
-            );
-            return res.status(500).json({ success: false, error: 'Failed to update campaign task. Budget refunded. Manual reconciliation may be required.' });
+            let refundResult = null;
+            try {
+                refundResult = await Setting.findOneAndUpdate(
+                    { _id: targetSettingId },
+                    { $inc: { 'adminCampaignBudget.remainingBudgetUSD': fundAmountUSD } },
+                    { new: true }
+                );
+            } catch (e) {
+                console.error('Critical: Budget refund failed:', e);
+            }
+
+            if (!refundResult) {
+                await UserTask.findByIdAndUpdate(taskId, { $set: { reconciliationRequired: true } });
+                return res.status(500).json({ 
+                    success: false, 
+                    error: 'Failed to update campaign task and refund budget. Manual ledger reconciliation is CRITICAL.' 
+                });
+            }
+            return res.status(500).json({ success: false, error: 'Failed to update campaign task. Budget successfully refunded.' });
         }
         taskCredited = true;
 
