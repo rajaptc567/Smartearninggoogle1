@@ -5194,6 +5194,8 @@ export const addAdminCampaignFunds = async (req, res) => {
             }
         }
 
+        let compensationFailed = false;
+
         if (taskCredited && deductedAmountUSD > 0) {
             try {
                 await UserTask.findByIdAndUpdate(req.params.id, {
@@ -5202,11 +5204,13 @@ export const addAdminCampaignFunds = async (req, res) => {
                         campaignTotalFundedUSD: -deductedAmountUSD,
                         adminBudgetAllocatedUSD: -deductedAmountUSD,
                         totalBudget: -deductedAmountUSD
-                    }
+                    },
+                    $pop: { history: 1 }
                 });
                 taskCredited = false;
             } catch (revertTaskErr) {
-                console.error('Failed to revert task credit on error in addAdminCampaignFunds:', revertTaskErr);
+                console.error('CRITICAL: Failed to revert task credit on error in addAdminCampaignFunds:', revertTaskErr);
+                compensationFailed = true;
             }
         }
         if (settingDeducted && deductedAmountUSD > 0 && targetSettingId) {
@@ -5222,7 +5226,15 @@ export const addAdminCampaignFunds = async (req, res) => {
                 settingDeducted = false;
             } catch (refundErr) {
                 console.error('CRITICAL: Failed compensating refund to Admin Campaign Budget in addAdminCampaignFunds:', refundErr);
+                compensationFailed = true;
             }
+        }
+
+        if (compensationFailed) {
+            return res.status(500).json({
+                success: false,
+                error: 'Funding request failed and automated compensation rollback encountered a critical error. Manual ledger verification required.'
+            });
         }
 
         if (isIdempotentDuplicate && existingTx) {
@@ -5230,7 +5242,7 @@ export const addAdminCampaignFunds = async (req, res) => {
             const currentSettings = await Setting.getSettings();
             return res.status(200).json({
                 success: true,
-                message: 'Funding request already processed (idempotent concurrent resolution).',
+                message: 'Funding request already processed (idempotent concurrent resolution with verified compensation).',
                 task: freshTask,
                 transaction: existingTx,
                 settings: currentSettings
