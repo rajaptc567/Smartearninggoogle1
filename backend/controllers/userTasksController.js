@@ -5158,7 +5158,10 @@ export const addAdminCampaignFunds = async (req, res) => {
             try {
                 refundResult = await Setting.findOneAndUpdate(
                     { _id: targetSettingId },
-                    { $inc: { 'adminCampaignBudget.remainingBudgetUSD': fundAmountUSD } },
+                    { 
+                        $inc: { 'adminCampaignBudget.remainingBudgetUSD': fundAmountUSD },
+                        $set: { dataVersion: Date.now() }
+                    },
                     { new: true }
                 );
             } catch (e) {
@@ -5166,12 +5169,17 @@ export const addAdminCampaignFunds = async (req, res) => {
             }
 
             if (!refundResult) {
-                await UserTask.findByIdAndUpdate(taskId, { $set: { reconciliationRequired: true } });
+                try {
+                    await UserTask.findByIdAndUpdate(taskId, { $set: { reconciliationRequired: true } });
+                } catch (e) {
+                    console.error('CRITICAL: Failed to mark reconciliation required:', e);
+                }
                 return res.status(500).json({ 
                     success: false, 
                     error: 'Failed to update campaign task and refund budget. Manual ledger reconciliation is CRITICAL.' 
                 });
             }
+            settingDeducted = false;
             return res.status(500).json({ success: false, error: 'Failed to update campaign task. Budget successfully refunded.' });
         }
         taskCredited = true;
