@@ -5025,6 +5025,7 @@ export const addAdminCampaignFunds = async (req, res) => {
     let fundAmountUSD = 0;
     let idempotencyKey = '';
     let adminUser = null;
+    let historyAttemptId = null;
     try {
         if (!req.user || !isUserAdmin(req.user)) {
             return res.status(403).json({ success: false, error: 'Administrative authorization required to add campaign funds.' });
@@ -5119,6 +5120,7 @@ export const addAdminCampaignFunds = async (req, res) => {
         deductedAmountUSD = fundAmountUSD;
 
         // Atomically add funds to the SAME UserTask without creating a new campaign or resetting completedUsers
+        historyAttemptId = new mongoose.Types.ObjectId();
         const updateFields = {
             $inc: {
                 campaignAvailableBalanceUSD: fundAmountUSD,
@@ -5131,6 +5133,7 @@ export const addAdminCampaignFunds = async (req, res) => {
             },
             $push: {
                 history: {
+                    _id: historyAttemptId,
                     action: 'Funds Added',
                     previousStatus: task.status,
                     newStatus: task.status,
@@ -5198,16 +5201,29 @@ export const addAdminCampaignFunds = async (req, res) => {
 
         if (taskCredited && deductedAmountUSD > 0) {
             try {
-                await UserTask.findByIdAndUpdate(req.params.id, {
-                    $inc: {
-                        campaignAvailableBalanceUSD: -deductedAmountUSD,
-                        campaignTotalFundedUSD: -deductedAmountUSD,
-                        adminBudgetAllocatedUSD: -deductedAmountUSD,
-                        totalBudget: -deductedAmountUSD
+                const taskRollbackResult = await UserTask.findOneAndUpdate(
+                    {
+                        _id: req.params.id,
+                        ...(historyAttemptId ? { 'history._id': historyAttemptId } : {})
                     },
-                    $pop: { history: 1 }
-                });
-                taskCredited = false;
+                    {
+                        $inc: {
+                            campaignAvailableBalanceUSD: -deductedAmountUSD,
+                            campaignTotalFundedUSD: -deductedAmountUSD,
+                            adminBudgetAllocatedUSD: -deductedAmountUSD,
+                            totalBudget: -deductedAmountUSD
+                        },
+                        ...(historyAttemptId ? { $pull: { history: { _id: historyAttemptId } } } : {})
+                    },
+                    { new: true }
+                );
+
+                if (!taskRollbackResult) {
+                    console.error('CRITICAL: Failed to locate or revert task credit and history entry during compensation:', { taskId: req.params.id, historyAttemptId });
+                    compensationFailed = true;
+                } else {
+                    taskCredited = false;
+                }
             } catch (revertTaskErr) {
                 console.error('CRITICAL: Failed to revert task credit on error in addAdminCampaignFunds:', revertTaskErr);
                 compensationFailed = true;
@@ -5215,7 +5231,7 @@ export const addAdminCampaignFunds = async (req, res) => {
         }
         if (settingDeducted && deductedAmountUSD > 0 && targetSettingId) {
             try {
-                await Setting.findOneAndUpdate(
+                const settingRefundResult = await Setting.findOneAndUpdate(
                     { _id: targetSettingId },
                     {
                         $inc: { 'adminCampaignBudget.remainingBudgetUSD': deductedAmountUSD },
@@ -5223,7 +5239,13 @@ export const addAdminCampaignFunds = async (req, res) => {
                     },
                     { new: true }
                 );
-                settingDeducted = false;
+
+                if (!settingRefundResult) {
+                    console.error('CRITICAL: Failed compensating refund to Admin Campaign Budget in addAdminCampaignFunds (setting not found):', targetSettingId);
+                    compensationFailed = true;
+                } else {
+                    settingDeducted = false;
+                }
             } catch (refundErr) {
                 console.error('CRITICAL: Failed compensating refund to Admin Campaign Budget in addAdminCampaignFunds:', refundErr);
                 compensationFailed = true;
@@ -5233,7 +5255,7 @@ export const addAdminCampaignFunds = async (req, res) => {
         if (compensationFailed) {
             return res.status(500).json({
                 success: false,
-                error: 'Funding request failed and automated compensation rollback encountered a critical error. Manual ledger verification required.'
+                error: 'Funding request failed and automated compensation rollback encountered a critical error or could not verify updates. Manual ledger verification required.'
             });
         }
 
