@@ -295,6 +295,10 @@ const UserTaskSchema = new mongoose.Schema({
     date: {
         type: Date,
         default: Date.now
+    },
+    reconciliationRequired: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 
