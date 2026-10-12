@@ -5152,6 +5152,15 @@ export const addAdminCampaignFunds = async (req, res) => {
         }
 
         const updatedTask = await UserTask.findByIdAndUpdate(taskId, updateFields, { new: true });
+
+        if (!updatedTask) {
+            // Rollback budget
+            await Setting.findOneAndUpdate(
+                { 'adminCampaignBudget.enabled': true },
+                { $inc: { 'adminCampaignBudget.remainingBudgetUSD': fundAmountUSD } }
+            );
+            return res.status(500).json({ success: false, error: 'Failed to update campaign task. Budget refunded. Manual reconciliation may be required.' });
+        }
         taskCredited = true;
 
         const tx = await Transaction.create({
