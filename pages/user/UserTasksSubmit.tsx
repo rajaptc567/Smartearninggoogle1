@@ -3257,7 +3257,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             )}
 
                             {/* Audience Targeting Section (Optional) (Phase D-2B) */}
-                            <div className="p-4 md:p-5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/80 space-y-4">
+                            <div
+                                className="p-4 md:p-5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/80 space-y-4"
+                                hidden={
+                                    settings?.audienceTargeting?.countriesEnabled === false &&
+                                    settings?.audienceTargeting?.currenciesEnabled === false &&
+                                    settings?.audienceTargeting?.genderEnabled === false &&
+                                    settings?.audienceTargeting?.ageEnabled === false &&
+                                    settings?.audienceTargeting?.selectedUsersEnabled === false &&
+                                    settings?.audienceTargeting?.accountStatusEnabled === false &&
+                                    settings?.audienceTargeting?.advancedE1Enabled === false
+                                }
+                            >
                                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-2.5">
                                     <div>
                                         <h4 className="text-xs font-black uppercase tracking-wider text-gray-900 dark:text-white flex items-center gap-2">
