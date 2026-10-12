@@ -5171,8 +5171,11 @@ export const addAdminCampaignFunds = async (req, res) => {
             settings: updatedSetting
         });
     } catch (err) {
+        let isIdempotentDuplicate = false;
+        let existingTx = null;
+
         if (idempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
-            const existingTx = await Transaction.findOne({ idempotencyKey });
+            existingTx = await Transaction.findOne({ idempotencyKey });
             if (existingTx) {
                 const currentCampaignId = (task && task._id) ? String(task._id) : String(req.params.id);
                 const typeMatches = existingTx.type === 'Admin Campaign Funding';
@@ -5187,15 +5190,7 @@ export const addAdminCampaignFunds = async (req, res) => {
                         error: `Idempotency key collision detected for ${idempotencyKey}: type, campaign, user, or amount mismatch.`
                     });
                 }
-                const freshTask = await UserTask.findById(taskId);
-                const currentSettings = await Setting.getSettings();
-                return res.status(200).json({
-                    success: true,
-                    message: 'Funding request already processed (idempotent concurrent resolution).',
-                    task: freshTask,
-                    transaction: existingTx,
-                    settings: currentSettings
-                });
+                isIdempotentDuplicate = true;
             }
         }
 
@@ -5209,6 +5204,7 @@ export const addAdminCampaignFunds = async (req, res) => {
                         totalBudget: -deductedAmountUSD
                     }
                 });
+                taskCredited = false;
             } catch (revertTaskErr) {
                 console.error('Failed to revert task credit on error in addAdminCampaignFunds:', revertTaskErr);
             }
@@ -5223,10 +5219,24 @@ export const addAdminCampaignFunds = async (req, res) => {
                     },
                     { new: true }
                 );
+                settingDeducted = false;
             } catch (refundErr) {
                 console.error('CRITICAL: Failed compensating refund to Admin Campaign Budget in addAdminCampaignFunds:', refundErr);
             }
         }
+
+        if (isIdempotentDuplicate && existingTx) {
+            const freshTask = await UserTask.findById(taskId);
+            const currentSettings = await Setting.getSettings();
+            return res.status(200).json({
+                success: true,
+                message: 'Funding request already processed (idempotent concurrent resolution).',
+                task: freshTask,
+                transaction: existingTx,
+                settings: currentSettings
+            });
+        }
+
         return res.status(400).json({ success: false, error: err.message });
     }
 };
