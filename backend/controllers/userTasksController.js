@@ -5045,6 +5045,9 @@ export const addAdminCampaignFunds = async (req, res) => {
         if (!task) {
             return res.status(404).json({ success: false, error: 'Task campaign not found.' });
         }
+        if (task.reconciliationRequired) {
+            return res.status(500).json({ success: false, error: 'Reconciliation required for this campaign.' });
+        }
 
         const amountNum = Number(req.body.amount);
         if (isNaN(amountNum) || !isFinite(amountNum) || amountNum <= 0) {
@@ -5253,6 +5256,11 @@ export const addAdminCampaignFunds = async (req, res) => {
         }
 
         if (compensationFailed) {
+            try {
+                await UserTask.findByIdAndUpdate(taskId, { $set: { reconciliationRequired: true } });
+            } catch (e) {
+                console.error('CRITICAL: Failed to mark reconciliation required:', e);
+            }
             return res.status(500).json({
                 success: false,
                 error: 'Funding request failed and automated compensation rollback encountered a critical error or could not verify updates. Manual ledger verification required.'
