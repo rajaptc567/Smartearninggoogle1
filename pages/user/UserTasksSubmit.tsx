@@ -393,8 +393,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         variant="secondary"
                         className="py-1.5 px-3 font-bold text-[10px] uppercase tracking-wider h-9"
                         disabled={currentPage === 1}
-                        onClick={() => setPage(1)
-}
+                        onClick={() => setPage(1)}
                     >
                         &laquo; First
                     </Button>
@@ -402,8 +401,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         variant="secondary"
                         className="py-1.5 px-3 font-bold text-[10px] uppercase tracking-wider h-9"
                         disabled={currentPage === 1}
-                        onClick={() => setPage(currentPage - 1)
-}
+                        onClick={() => setPage(currentPage - 1)}
                     >
                         &larr; Prev
                     </Button>
@@ -420,22 +418,19 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         className={`py-1.5 px-3 font-black text-xs min-w-[2.25rem] h-9 flex items-center justify-center rounded-xl transition-all ${
                                             currentPage === p ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' : ''
                                         }`}
-                                        onClick={() => setPage(p)
-}
+                                        onClick={() => setPage(p)}
                                     >
                                         {p}
                                     </Button>
                                 </React.Fragment>
                             );
-                        })
-}
+                        })}
 
                     <Button
                         variant="secondary"
                         className="py-1.5 px-3 font-bold text-[10px] uppercase tracking-wider h-9"
                         disabled={currentPage === totalPages}
-                        onClick={() => setPage(currentPage + 1)
-}
+                        onClick={() => setPage(currentPage + 1)}
                     >
                         Next &rarr;
                     </Button>
@@ -443,8 +438,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         variant="secondary"
                         className="py-1.5 px-3 font-bold text-[10px] uppercase tracking-wider h-9"
                         disabled={currentPage === totalPages}
-                        onClick={() => setPage(totalPages)
-}
+                        onClick={() => setPage(totalPages)}
                     >
                         Last &raquo;
                     </Button>
@@ -714,13 +708,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         const finalLabel = count > 0 ? `${label} #${count + 1}` : label;
         
         const newProof = {
-            id: `${type}_${Date.now()
-}_${Math.random().toString(36).substring(2, 7)
-}`,
+            id: `${type}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
             type,
             label: finalLabel,
-            instruction: type === 'screenshot' ? 'Please upload screenshot proof of completion.' : `Please provide your ${label.toLowerCase()
-} details.`
+            instruction: type === 'screenshot' ? 'Please upload screenshot proof of completion.' : `Please provide your ${label.toLowerCase()} details.`
         };
         setRequiredProofsList([...requiredProofsList, newProof]);
     };
@@ -864,9 +855,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             const transferAmtUSD = Number((transferAmtUserCurr / rate).toFixed(2));
 
             if (currentUser.walletBalance < transferAmtUserCurr) {
-                alert(`Insufficient balance in Investment Wallet. Available: ${currentUser.walletBalance.toFixed(2)
-} ${userCurr}, Requested: ${transferAmtUserCurr.toFixed(2)
-} ${userCurr}. Please top up your Investment Wallet first.`);
+                alert(`Insufficient balance in Investment Wallet. Available: ${currentUser.walletBalance.toFixed(2)} ${userCurr}, Requested: ${transferAmtUserCurr.toFixed(2)} ${userCurr}. Please top up your Investment Wallet first.`);
                 setIsTransferringFundsModal(false);
                 return;
             }
@@ -892,9 +881,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                     amount: -transferAmtUserCurr,
                     amountUSD: transferAmtUSD,
                     exchangeRate: rate,
-                    description: `Transferred ${transferAmtUserCurr.toFixed(2)
-} ${userCurr} ($${transferAmtUSD.toFixed(2)
-} USD) from Investment Wallet to Task Wallet`,
+                    description: `Transferred ${transferAmtUserCurr.toFixed(2)} ${userCurr} ($${transferAmtUSD.toFixed(2)} USD) from Investment Wallet to Task Wallet`,
                     status: 'Approved',
                     date: new Date().toISOString()
                 }
@@ -961,9 +948,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
             const currentTaskEarnings = netAvailableTaskEarningsUSD;
             if (currentTaskEarnings < transferAmtUSD) {
-                alert(`Insufficient Task Earnings. Available: $${currentTaskEarnings.toFixed(2)
-} USD, Requested: $${transferAmtUSD.toFixed(2)
-} USD.`);
+                alert(`Insufficient Task Earnings. Available: $${currentTaskEarnings.toFixed(2)} USD, Requested: $${transferAmtUSD.toFixed(2)} USD.`);
                 setIsTransferringFundsModal(false);
                 return;
             }
@@ -1100,9 +1085,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
             const totalProvidedUSD = taskEarningsTransferUSD + investmentTransferUSD;
             if (totalProvidedUSD < shortfallUSD - 0.01) {
-                alert(`Your combined available funds ($${(currentTaskEarnings + currentInvestmentUSD).toFixed(2)
-} USD) are insufficient for the shortfall of $${shortfallUSD.toFixed(2)
-} USD. Please deposit funds into your Investment Wallet.`);
+                alert(`Your combined available funds ($${(currentTaskEarnings + currentInvestmentUSD).toFixed(2)} USD) are insufficient for the shortfall of $${shortfallUSD.toFixed(2)} USD. Please deposit funds into your Investment Wallet.`);
                 setIsTransferringFundsModal(false);
                 return;
             }
@@ -1551,8 +1534,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 const subConfig = activeCategoryConfig[subKey];
                 minPayout = subConfig.minPayout ?? config.minRewardAmount;
                 minSlots = subConfig.minSlots ?? config.minQuantity;
-                presetName = `${category} ${subConfig.displayName || subKey.charAt(0).toUpperCase() + subKey.slice(1)
-}`;
+                presetName = `${category} ${subConfig.displayName || subKey.charAt(0).toUpperCase() + subKey.slice(1)}`;
                 isPresetFound = true;
             }
         }
@@ -1654,12 +1636,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             }
         } else {
             if (isNaN(submittedReward) || submittedReward < minPayout) {
-                errors.rewardPerTask = `Reward per task ($${submittedReward < 0 ? 0 : submittedReward.toFixed(3)
-}) is below required minimum of $${minPayout.toFixed(3)
-} USD for ${presetName || 'this campaign'}.`;
-                errorMessages.push(`• Reward per task ($${submittedReward < 0 ? '0.000' : submittedReward.toFixed(3)
-} USD) is below required minimum of $${minPayout.toFixed(3)
-} USD.`);
+                errors.rewardPerTask = `Reward per task ($${submittedReward < 0 ? 0 : submittedReward.toFixed(3)}) is below required minimum of $${minPayout.toFixed(3)} USD for ${presetName || 'this campaign'}.`;
+                errorMessages.push(`• Reward per task ($${submittedReward < 0 ? '0.000' : submittedReward.toFixed(3)} USD) is below required minimum of $${minPayout.toFixed(3)} USD.`);
                 if (!firstErrorFieldId) firstErrorFieldId = 'campaign-reward-field';
             }
         }
@@ -1773,9 +1751,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 return;
             }
             if (adminRemainingBudgetUSD < grandTotalUSD) {
-                alert(`Insufficient Admin Campaign Budget. Required: $${grandTotalUSD.toFixed(2)
-} USD, Available in Admin Budget: $${adminRemainingBudgetUSD.toFixed(2)
-} USD. Please allocate more budget in Settings.`);
+                alert(`Insufficient Admin Campaign Budget. Required: $${grandTotalUSD.toFixed(2)} USD, Available in Admin Budget: $${adminRemainingBudgetUSD.toFixed(2)} USD. Please allocate more budget in Settings.`);
                 return;
             }
             await executeTaskCreation(finalTitle, legacyRequireTextProof, legacyTextProofInstruction, legacyRequireUsername, legacyUsernameInstruction, legacyRequireUserId, legacyUserIdInstruction, legacyRequireEmail, legacyEmailInstruction, legacyRequireScreenshot, legacyScreenshotInstruction, undefined, undefined, publishNow);
@@ -1958,8 +1934,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         type: 'Campaign Creation',
                         amount: -(result.task.totalBudget || grandTotalUSD),
                         exchangeRate: rate,
-                        description: `Created Campaign: ${result.task.title} (${result.task.targetQuantity} slots @ $${(Number(result.task.rewardPerTask) || 0).toFixed(2)
-}/task)`,
+                        description: `Created Campaign: ${result.task.title} (${result.task.targetQuantity} slots @ $${(Number(result.task.rewardPerTask) || 0).toFixed(2)}/task)`,
                         status: 'Approved',
                         date: new Date().toISOString()
                     }
@@ -2699,6 +2674,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
     return (
         <div className="space-y-4 md:space-y-8 max-w-7xl mx-auto pb-20">
+            {/* Header */}
             {!hideHeaderAndTabs && (
                 <div className="bg-[#0f172a] p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none"></div>
@@ -2743,17 +2719,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         }`}>
                                             {tab.count}
                                         </span>
-                                    )
-}
+                                    )}
                                 </button>
-                            ))
-}
+                            ))}
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* Top Balance Widget & Quick Actions */}
             {!hideHeaderAndTabs && (
                 <div className="bg-gradient-to-r from-blue-950 to-slate-900 p-4 md:p-6 rounded-2xl md:rounded-[2rem] text-white shadow-xl flex flex-col lg:flex-row justify-between items-center gap-4 md:gap-6 border border-blue-500/15">
                     <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-row items-center sm:gap-6 w-full lg:w-auto">
@@ -2764,8 +2738,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             <div>
                                 <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-blue-300 block leading-none mb-0.5 md:mb-1">Campaign Balance</span>
                                 <span className="text-xs md:text-2xl font-black tracking-tight text-white block">
-                                    ${availableCampaignWalletUSD.toFixed(2)
-}
+                                    ${availableCampaignWalletUSD.toFixed(2)}
                                 </span>
                             </div>
                         </div>
@@ -2777,8 +2750,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             <div>
                                 <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-emerald-400 block leading-none mb-0.5 md:mb-1">MLM Balance</span>
                                 <span className="text-xs md:text-2xl font-black tracking-tight text-white block truncate">
-                                    {(currentUser.walletBalance || 0).toFixed(2)
-} {currentUser.currency || 'USD'}
+                                    {(currentUser.walletBalance || 0).toFixed(2)} {currentUser.currency || 'USD'}
                                 </span>
                             </div>
                         </div>
@@ -2791,8 +2763,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                         <Button 
                             variant="primary" 
-                            onClick={() => setShowConvertModal(true)
-}
+                            onClick={() => setShowConvertModal(true)}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 md:px-6 md:py-3.5 rounded-xl md:rounded-2xl shadow-lg flex items-center gap-1.5 transition-transform hover:scale-105 w-full sm:w-auto justify-center text-[10px] md:text-sm"
                         >
                             <span>Convert & Transfer to Main Wallet</span>
@@ -2800,16 +2771,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </Button>
                     </div>
                 </div>
-            )
-}
+            )}
 
             {!isEnabled && (
                 <div className="bg-red-500/10 border-2 border-red-500/30 text-red-600 dark:text-red-400 p-6 rounded-3xl font-bold text-center">
                     User task submissions are currently disabled by the administrator.
                 </div>
-            )
-}
+            )}
 
+            {/* TAB 1: CREATE CAMPAIGN */}
             {activeTab === 'submit' && isEnabled && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl p-6 md:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
@@ -2845,9 +2815,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 {!isAdminBudgetEnabled 
                                                     ? 'Admin Campaign Budget is disabled in Settings. Please enable it before creating campaigns.' 
                                                     : isInsufficientAdminBudget 
-                                                        ? `Estimated campaign cost ($${grandTotalUSD.toFixed(2)
-} USD) exceeds available remaining budget ($${adminRemainingBudgetUSD.toFixed(2)
-} USD).`
+                                                        ? `Estimated campaign cost ($${grandTotalUSD.toFixed(2)} USD) exceeds available remaining budget ($${adminRemainingBudgetUSD.toFixed(2)} USD).`
                                                         : 'This campaign is funded directly from the finite Admin Campaign Budget into Escrow. No personal wallet deductions occur.'}
                                             </p>
                                         </div>
@@ -2857,22 +2825,19 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 <span className={`font-mono font-black text-sm sm:text-base ${
                                                     isInsufficientAdminBudget ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
                                                 }`}>
-                                                    ${adminRemainingBudgetUSD.toFixed(2)
-} USD
+                                                    ${adminRemainingBudgetUSD.toFixed(2)} USD
                                                 </span>
                                             </div>
                                             <div className="text-right border-l dark:border-gray-700 pl-3">
                                                 <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 block">Campaign Cost</span>
                                                 <span className="font-mono font-bold text-sm sm:text-base text-gray-900 dark:text-white">
-                                                    ${grandTotalUSD.toFixed(2)
-} USD
+                                                    ${grandTotalUSD.toFixed(2)} USD
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            )
-}
+                            )}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
@@ -2911,8 +2876,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     >
                                         {availableCategories.map(cat => (
                                             <option key={cat.key} value={cat.displayName}>{cat.displayName}</option>
-                                        ))
-}
+                                        ))}
                                     </select>
                                 </div>
 
@@ -2920,14 +2884,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <label className="block text-xs font-black uppercase text-gray-500 mb-2">Action / SubType</label>
                                     <select 
                                         value={subType} 
-                                        onChange={(e) => setSubType(e.target.value)
-}
+                                        onChange={(e) => setSubType(e.target.value)}
                                         className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         {availableSubTypes.map(sub => (
                                             <option key={sub.key} value={sub.displayName}>{sub.displayName}</option>
-                                        ))
-}
+                                        ))}
                                     </select>
                                 </div>
                             </div>
@@ -2937,8 +2899,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <label className="block text-xs font-black uppercase text-blue-600 dark:text-blue-400">Select Watch Time Duration Tier</label>
                                     <select
                                         value={watchTimeTierIndex}
-                                        onChange={(e) => setWatchTimeTierIndex(Number(e.target.value))
-}
+                                        onChange={(e) => setWatchTimeTierIndex(Number(e.target.value))}
                                         className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         {activeWatchTimeTiers.map((tier: any, idx: number) => {
@@ -2948,12 +2909,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     {tier.duration} (Min Amount: ${tier.minPayout} | Min Slots: {tier.minSlots})
                                                 </option>
                                             );
-                                        })
-}
+                                        })}
                                     </select>
                                 </div>
-                            )
-}
+                            )}
 
                             <div id="campaign-title-field">
                                 <label className="block text-xs font-black uppercase text-gray-500 mb-2">Campaign Title</label>
@@ -2975,8 +2934,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <p className="text-xs font-bold text-red-600 dark:text-red-400 mt-1.5 flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1">
                                         <span>⚠️</span> {fieldErrors.title}
                                     </p>
-                                )
-}
+                                )}
                             </div>
 
                             {!isSurveyCampaign && (
@@ -3002,12 +2960,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <p className="text-xs font-bold text-red-600 dark:text-red-400 mt-1.5 flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1">
                                             <span>⚠️</span> {fieldErrors.link}
                                         </p>
-                                    )
-}
+                                    )}
                                 </div>
-                            )
-}
+                            )}
 
+                            {/* Interactive Survey Questionnaire Builder */}
                             {isSurveyCampaign && (
                                 <div className="space-y-4">
                                     <SurveyBuilder
@@ -3026,16 +2983,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         systemQuestionBank={settings?.surveyConfig?.questionBank || []}
                                     />
                                 </div>
-                            )
-}
+                            )}
 
                             <div>
                                 <label className="block text-xs font-black uppercase text-gray-500 mb-2">Description & Proof Instructions</label>
                                 <textarea 
                                     rows={3}
                                     value={description}
-                                    onChange={(e) => setDescription(e.target.value)
-}
+                                    onChange={(e) => setDescription(e.target.value)}
                                     placeholder="Provide clear instructions for workers (e.g. Sign up with email, submit your username and screenshot)"
                                     className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 ></textarea>
@@ -3049,9 +3004,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                                 const rewardVal = rewardPerTask === '' || rewardPerTask === undefined || rewardPerTask === null ? 0 : Number(rewardPerTask);
                                 const isRewardBelowMin = isNaN(rewardVal) || rewardVal < limits.minPayout;
-                                const rewardErrText = fieldErrors.rewardPerTask || (isRewardBelowMin ? `Entered reward ($${rewardVal < 0 ? '0.000' : rewardVal.toFixed(3)
-}) is below the required minimum of $${limits.minPayout.toFixed(3)
-} USD.` : null);
+                                const rewardErrText = fieldErrors.rewardPerTask || (isRewardBelowMin ? `Entered reward ($${rewardVal < 0 ? '0.000' : rewardVal.toFixed(3)}) is below the required minimum of $${limits.minPayout.toFixed(3)} USD.` : null);
 
                                 return (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -3083,14 +3036,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         {qtyErrText}
                                                     </div>
                                                 </div>
-                                            )
-}
+                                            )}
                                         </div>
 
                                         <div id="campaign-reward-field">
                                             <label className="block text-xs font-black uppercase text-gray-500 mb-2">
-                                                Reward Per Task (Min ${limits.minPayout.toFixed(3)
-} USD)
+                                                Reward Per Task (Min ${limits.minPayout.toFixed(3)} USD)
                                             </label>
                                             <input 
                                                 type="number" 
@@ -3102,8 +3053,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     setRewardPerTask(val === '' ? '' as any : Number(val));
                                                     if (fieldErrors.rewardPerTask) setFieldErrors(prev => ({ ...prev, rewardPerTask: undefined }));
                                                 }}
-                                                placeholder={`Min $${limits.minPayout.toFixed(3)
-}`}
+                                                placeholder={`Min $${limits.minPayout.toFixed(3)}`}
                                                 className={`w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border text-gray-900 dark:text-white font-medium text-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                                                     rewardErrText 
                                                         ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20 text-red-900 dark:text-red-200' 
@@ -3118,14 +3068,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         {rewardErrText}
                                                     </div>
                                                 </div>
-                                            )
-}
+                                            )}
                                         </div>
                                     </div>
                                 );
-                            })()
-}
+                            })()}
 
+                            {/* Module A: Dynamic Proof Requirements Form Builder (Standard Campaigns Only) */}
                             {!isSurveyCampaign ? (
                                 <div id="campaign-proofs-container" className={`space-y-4 pt-6 border-t rounded-xl p-3 transition-all ${
                                     fieldErrors.proofs ? 'border-2 border-red-500 bg-red-50/30 dark:bg-red-950/20' : 'border-gray-100 dark:border-gray-700'
@@ -3135,8 +3084,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in">
                                             <span>⚠️</span> {fieldErrors.proofs}
                                         </div>
-                                    )
-}
+                                    )}
                                     
                                     <div className="bg-gray-50 dark:bg-gray-900 p-4 sm:p-5 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
                                         <div className="flex flex-col gap-2">
@@ -3232,6 +3180,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             </button>
                                         </div>
 
+                                        {/* Configured Proofs List */}
                                         <div className="space-y-3 pt-2">
                                             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Active Proof Requirements list:</span>
                                             {requiredProofsList.length === 0 ? (
@@ -3256,8 +3205,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             </div>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => removeProofItem(proof.id)
-}
+                                                                onClick={() => removeProofItem(proof.id)}
                                                                 className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"
                                                             >
                                                                 <span>🗑️</span> Remove
@@ -3276,8 +3224,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                     });
                                                                 }
                                                             }}
-                                                            placeholder={`Instruction for worker (e.g. Enter your ${proof.label.toLowerCase()
-})`}
+                                                            placeholder={`Instruction for worker (e.g. Enter your ${proof.label.toLowerCase()})`}
                                                             className={`w-full px-3.5 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
                                                                 fieldErrors.proofInstructions?.[proof.id]
                                                                     ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20'
@@ -3288,12 +3235,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <p className="text-[11px] font-bold text-red-600 dark:text-red-400 mt-1 flex items-center gap-1 animate-in fade-in">
                                                                 <span>⚠️</span> {fieldErrors.proofInstructions[proof.id]}
                                                             </p>
-                                                        )
-}
+                                                        )}
                                                     </div>
                                                 ))
-                                            )
-}
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -3309,9 +3254,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     </div>
                                 </div>
-                            )
-}
+                            )}
 
+                            {/* Audience Targeting Section (Optional) (Phase D-2B) */}
                             <div className="p-4 md:p-5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/80 space-y-4">
                                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-2.5">
                                     <div>
@@ -3344,10 +3289,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         >
                                             Clear Targeting
                                         </button>
-                                    )
-}
+                                    )}
                                 </div>
 
+                                {/* Audience Type Selector */}
                                 <div className="flex gap-4 py-2 border-b border-gray-100 dark:border-gray-800">
                                     <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 font-bold">
                                         <input 
@@ -3362,14 +3307,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <input 
                                            type="radio" 
                                            checked={targetingAudienceType === 'selected'} 
-                                           onChange={() => setTargetingAudienceType('selected')
-} 
+                                           onChange={() => setTargetingAudienceType('selected')} 
                                            className="accent-blue-600"
                                         />
                                         Selected Users
                                     </label>
                                 </div>
 
+                                {/* Selected Users */}
+                                {targetingAudienceType === 'selected' && (
                                     <div className="space-y-2 border-l-2 border-blue-500 pl-3 py-1">
                                         <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Selected User IDs (Max 500)</label>
                                         <div className="flex gap-2">
@@ -3377,8 +3323,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 id="targeting-selected-user-ids-input"
                                                 type="text"
                                                 value={selectedUserIdsInput}
-                                                onChange={(e) => setSelectedUserIdsInput(e.target.value)
-}
+                                                onChange={(e) => setSelectedUserIdsInput(e.target.value)}
                                                 placeholder="Enter User ID and press Enter"
                                                 className="flex-1 px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
                                                 onKeyDown={(e) => {
@@ -3412,19 +3357,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     {uid}
                                                     <button
                                                         type="button"
-                                                        onClick={() => setTargetingSelectedUserIds(prev => prev.filter(id => id !== uid))
-}
+                                                        onClick={() => setTargetingSelectedUserIds(prev => prev.filter(id => id !== uid))}
                                                         className="hover:text-red-600 font-extrabold ml-1"
                                                     >
                                                         ×
                                                     </button>
                                                 </span>
-                                            ))
-}
+                                            ))}
                                         </div>
                                     </div>
-                                )
-}
+                                )}
+
+                                {/* A. Countries */}
                                 <div className="space-y-2">
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                                         Target Countries
@@ -3452,15 +3396,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     {isSelected ? '✓ ' : '+ '}{c}
                                                 </button>
                                             );
-                                        })
-}
+                                        })}
                                     </div>
                                     <div className="flex gap-2">
                                         <input
                                             type="text"
                                             value={customCountryInput}
-                                            onChange={(e) => setCustomCountryInput(e.target.value)
-}
+                                            onChange={(e) => setCustomCountryInput(e.target.value)}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter') {
                                                     e.preventDefault();
@@ -3500,19 +3442,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     {c}
                                                     <button
                                                         type="button"
-                                                        onClick={() => setTargetingCountries(prev => prev.filter(tc => tc.toLowerCase() !== c.toLowerCase()))
-}
+                                                        onClick={() => setTargetingCountries(prev => prev.filter(tc => tc.toLowerCase() !== c.toLowerCase()))}
                                                         className="hover:text-red-600 font-extrabold ml-1"
                                                     >
                                                         ×
                                                     </button>
-</span>
-                                            ))
-}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
-)
-}
+                                {/* B. Currencies */}
                                 <div className="space-y-1.5">
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                                         Target Currencies
@@ -3540,13 +3481,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     {isSelected ? '✓ ' : '+ '}{curr}
                                                 </button>
                                             );
-                                        })
-}
+                                        })}
                                     </div>
                                 </div>
 
-)
-}
+                                {/* C. Gender */}
                                 <div className="space-y-1.5">
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                                         Target Gender
@@ -3574,13 +3513,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     {isSelected ? '✓ ' : '+ '}{g}
                                                 </button>
                                             );
-                                        })
-}
+                                        })}
                                     </div>
                                 </div>
 
-)
-}
+                                {/* D & E. Age Range */}
                                 <div className="space-y-1.5">
                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                                         Age Boundaries (Years)
@@ -3595,8 +3532,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 min="0"
                                                 step="1"
                                                 value={minAgeInput === null || minAgeInput === undefined ? '' : minAgeInput}
-                                                onChange={(e) => setMinAgeInput(e.target.value === '' ? '' : e.target.value)
-}
+                                                onChange={(e) => setMinAgeInput(e.target.value === '' ? '' : e.target.value)}
                                                 placeholder="e.g. 18 (Blank = No Min)"
                                                 className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                                             />
@@ -3610,8 +3546,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 min="0"
                                                 step="1"
                                                 value={maxAgeInput === null || maxAgeInput === undefined ? '' : maxAgeInput}
-                                                onChange={(e) => setMaxAgeInput(e.target.value === '' ? '' : e.target.value)
-}
+                                                onChange={(e) => setMaxAgeInput(e.target.value === '' ? '' : e.target.value)}
                                                 placeholder="e.g. 65 (Blank = No Max)"
                                                 className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                                             />
@@ -3619,9 +3554,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </div>
                                 </div>
                             </div>
-)
-}
 
+                            {/* Advanced Audience Targeting Section (E1) */}
+                            <div className="p-4 md:p-5 rounded-xl bg-slate-900/40 border border-slate-700/60 space-y-4">
                                 <div>
                                     <h5 className="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
                                         <span>⚡</span> Advanced Audience Targeting (E1 Rules)
@@ -3631,29 +3566,27 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </p>
                                 </div>
 
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-300 mb-1">Account Status Requirement</label>
-                                        <select
-                                            value={targetingAccountStatus}
-                                            onChange={(e) => setTargetingAccountStatus(e.target.value as any)
-}
-                                            className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
-                                        >
-                                            <option value="any">Any (Active or Inactive)</option>
-                                            <option value="active">Active Workers Only (status === Active)</option>
-                                            <option value="inactive">Inactive Workers Only</option>
-                                        </select>
-                                    </div>
-                                )
-}
+                                {/* Account Status */}
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-300 mb-1">Account Status Requirement</label>
+                                    <select
+                                        value={targetingAccountStatus}
+                                        onChange={(e) => setTargetingAccountStatus(e.target.value as any)}
+                                        className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                    >
+                                        <option value="any">Any (Active or Inactive)</option>
+                                        <option value="active">Active Workers Only (status === Active)</option>
+                                        <option value="inactive">Inactive Workers Only</option>
+                                    </select>
+                                </div>
 
+                                {/* Completion Rules */}
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                         <label className="block text-xs font-bold text-slate-300">Task Completion Rules</label>
                                         <button
                                             type="button"
-                                            onClick={() => setTargetingCompletionRules(prev => [...prev, { taskId: '', completed: true }])
-}
+                                            onClick={() => setTargetingCompletionRules(prev => [...prev, { taskId: '', completed: true }])}
                                             className="text-[11px] font-bold text-blue-400 hover:underline"
                                         >
                                             + Add Completion Rule
@@ -3672,8 +3605,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 className="flex-1 px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
                                             />
                                             <select
-                                                value={String(rule.completed)
-}
+                                                value={String(rule.completed)}
                                                 onChange={(e) => {
                                                     const val = e.target.value === 'true';
                                                     setTargetingCompletionRules(prev => prev.map((r, i) => i === idx ? { ...r, completed: val } : r));
@@ -3685,24 +3617,22 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             </select>
                                             <button
                                                 type="button"
-                                                onClick={() => setTargetingCompletionRules(prev => prev.filter((_, i) => i !== idx))
-}
+                                                onClick={() => setTargetingCompletionRules(prev => prev.filter((_, i) => i !== idx))}
                                                 className="text-red-400 hover:text-red-300 px-2 text-xs font-bold"
                                             >
                                                 ✕
                                             </button>
                                         </div>
-                                    ))
-}
+                                    ))}
                                 </div>
 
+                                {/* Profile Attribute Rules */}
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                         <label className="block text-xs font-bold text-slate-300">Profile Attribute Rules (customFields)</label>
                                         <button
                                             type="button"
-                                            onClick={() => setTargetingProfileRules(prev => [...prev, { fieldKey: 'education', operator: 'equals', value: '' }])
-}
+                                            onClick={() => setTargetingProfileRules(prev => [...prev, { fieldKey: 'education', operator: 'equals', value: '' }])}
                                             className="text-[11px] font-bold text-blue-400 hover:underline"
                                         >
                                             + Add Profile Rule
@@ -3747,24 +3677,22 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setTargetingProfileRules(prev => prev.filter((_, i) => i !== idx))
-}
+                                                onClick={() => setTargetingProfileRules(prev => prev.filter((_, i) => i !== idx))}
                                                 className="text-red-400 hover:text-red-300 text-xs font-bold text-center"
                                             >
                                                 Remove
                                             </button>
                                         </div>
-                                    ))
-}
+                                    ))}
                                 </div>
 
+                                {/* Survey Answer Rules */}
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                         <label className="block text-xs font-bold text-slate-300">Survey Answer Rules</label>
                                         <button
                                             type="button"
-                                            onClick={() => setTargetingSurveyAnswerRules(prev => [...prev, { taskId: '', questionId: '', operator: 'equals', value: '' }])
-}
+                                            onClick={() => setTargetingSurveyAnswerRules(prev => [...prev, { taskId: '', questionId: '', operator: 'equals', value: '' }])}
                                             className="text-[11px] font-bold text-blue-400 hover:underline"
                                         >
                                             + Add Survey Answer Rule
@@ -3819,34 +3747,26 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setTargetingSurveyAnswerRules(prev => prev.filter((_, i) => i !== idx))
-}
+                                                onClick={() => setTargetingSurveyAnswerRules(prev => prev.filter((_, i) => i !== idx))}
                                                 className="text-red-400 hover:text-red-300 text-xs font-bold text-center"
                                             >
                                                 Remove
                                             </button>
                                         </div>
-                                    ))
-}
+                                    ))}
                                 </div>
                             </div>
 
-)
-}
-)
-}
+                            {/* Base Creation Fee Notice Banner above launch campaign button */}
                             <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-xs space-y-1.5">
                                 <div className="flex justify-between items-center font-black text-amber-900 dark:text-amber-300">
                                     <span className="flex items-center gap-1.5">
                                         <span>🏷️</span> Base Campaign Creation Fee:
                                     </span>
                                     <span className="font-mono text-sm font-bold text-amber-700 dark:text-amber-400">
-                                        ${campaignFeeUSD.toFixed(2)
-} USD
+                                        ${campaignFeeUSD.toFixed(2)} USD
                                     </span>
                                 </div>
-)
-}
                                 <p className="text-amber-800 dark:text-amber-300/90 text-[11px] leading-relaxed font-medium">
                                     ℹ️ <strong>Note:</strong> The base creation fee is a one-time fee for campaign creation. You can pause, resume, or reuse this campaign anytime without paying this fee again!
                                 </p>
@@ -3859,8 +3779,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         variant="primary" 
                                         isLoading={isSubmitting} 
                                         disabled={isSubmitting || !isAdminBudgetEnabled || isInsufficientAdminBudget}
-                                        onClick={(e) => handleCreateCampaign(e, true)
-}
+                                        onClick={(e) => handleCreateCampaign(e, true)}
                                         className={`w-full py-3.5 text-sm md:text-base font-bold shadow-md rounded-xl transition-colors ${
                                             (!isAdminBudgetEnabled || isInsufficientAdminBudget)
                                                 ? 'bg-gray-400 cursor-not-allowed text-white'
@@ -3871,21 +3790,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             !isAdminBudgetEnabled 
                                                 ? '⚠️ Admin Budget Disabled' 
                                                 : isInsufficientAdminBudget 
-                                                    ? `⚠️ Insufficient Admin Budget ($${adminRemainingBudgetUSD.toFixed(2)
-} vs $${grandTotalUSD.toFixed(2)
-} Required)`
-                                                    : `🚀 Publish Now (Live) — Total: $${grandTotalUSD.toFixed(2)
-} USD`
-                                        )
-}
+                                                    ? `⚠️ Insufficient Admin Budget ($${adminRemainingBudgetUSD.toFixed(2)} vs $${grandTotalUSD.toFixed(2)} Required)`
+                                                    : `🚀 Publish Now (Live) — Total: $${grandTotalUSD.toFixed(2)} USD`
+                                        )}
                                     </Button>
                                     <Button 
                                         type="button" 
                                         variant="secondary" 
                                         isLoading={isSubmitting} 
                                         disabled={isSubmitting || !isAdminBudgetEnabled || isInsufficientAdminBudget}
-                                        onClick={(e) => handleCreateCampaign(e, false)
-}
+                                        onClick={(e) => handleCreateCampaign(e, false)}
                                         className="w-full py-3 text-sm font-semibold rounded-xl border border-slate-600 hover:bg-slate-800 text-slate-200 transition-colors"
                                     >
                                         {isSubmitting ? 'Saving...' : '💾 Save as Pending (Review Later)'}
@@ -3899,14 +3813,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     disabled={isSubmitting}
                                     className="w-full py-3.5 text-sm md:text-base font-bold shadow-md rounded-xl transition-colors bg-blue-600 hover:bg-blue-700 text-white"
                                 >
-                                    {isSubmitting ? 'Launching...' : `🚀 Launch Campaign — Total: $${grandTotalUSD.toFixed(2)
-} USD`}
+                                    {isSubmitting ? 'Launching...' : `🚀 Launch Campaign — Total: $${grandTotalUSD.toFixed(2)} USD`}
                                 </Button>
-                            )
-}
+                            )}
                         </form>
                     </div>
 
+                    {/* Summary Card */}
                     <div className="bg-[#0f172a] text-white rounded-2xl p-6 md:p-8 shadow-sm border border-slate-800 flex flex-col justify-between">
                         <div>
                             <h3 className="text-xl font-bold uppercase tracking-tight text-blue-400 mb-6">Campaign Summary (USD)</h3>
@@ -3917,65 +3830,57 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-800">
                                     <span className="text-gray-400">Reward / Task</span>
-                                    <span className="font-bold">{(typeof rewardPerTask === 'number' ? rewardPerTask : Number(rewardPerTask) || 0).toFixed(2)
-} USD</span>
+                                    <span className="font-bold">{(typeof rewardPerTask === 'number' ? rewardPerTask : Number(rewardPerTask) || 0).toFixed(2)} USD</span>
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-800">
                                     <span className="text-gray-400">Subtotal Rewards</span>
-                                    <span className="font-bold">{subtotal.toFixed(2)
-} USD</span>
+                                    <span className="font-bold">{subtotal.toFixed(2)} USD</span>
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-800">
                                     <span className="text-gray-400">Admin Commission ({config.commissionPercent}%)</span>
-                                    <span className="font-bold">{adminCommission.toFixed(2)
-} USD</span>
+                                    <span className="font-bold">{adminCommission.toFixed(2)} USD</span>
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-800">
                                     <div className="flex flex-col">
                                         <span className="text-gray-400">Base Creation Fee</span>
                                         <span className="text-[10px] text-amber-400/90 font-medium">One-time fee (Reuse campaign anytime without fee)</span>
                                     </div>
-                                    <span className="font-bold text-amber-400">${campaignFeeUSD.toFixed(2)
-} USD</span>
+                                    <span className="font-bold text-amber-400">${campaignFeeUSD.toFixed(2)} USD</span>
                                 </div>
                                 <div className="flex justify-between py-3 text-lg font-black text-emerald-400 border-t border-gray-700 mt-2">
                                     <span>Total Launch Amount</span>
-                                    <span>${grandTotalUSD.toFixed(2)
-} USD</span>
+                                    <span>${grandTotalUSD.toFixed(2)} USD</span>
                                 </div>
                                 {getSelectionLimits().isPresetFound && (
                                     <div className="mt-4 p-4 rounded-xl bg-blue-950/40 border border-blue-900 text-xs space-y-2">
                                         <p className="font-bold text-blue-400 uppercase tracking-wider">🔒 Admin Verified Preset</p>
                                         <p className="text-gray-300">This task type is configured platform-wide:</p>
                                         <ul className="list-disc pl-4 text-gray-400 space-y-1">
-                                            <li>Min Required Price: <strong>${getSelectionLimits().minPayout.toFixed(3)
-} USD</strong></li>
+                                            <li>Min Required Price: <strong>${getSelectionLimits().minPayout.toFixed(3)} USD</strong></li>
                                             <li>Min Required Slots: <strong>{getSelectionLimits().minSlots} users</strong></li>
                                         </ul>
                                     </div>
-                                )
-}
+                                )}
                             </div>
                         </div>
 
                         <div className="mt-8 p-4 bg-slate-900/80 rounded-xl border border-slate-800">
                             <p className="text-xs text-gray-400 leading-relaxed">
                                 {isAdminMode ? (
-                                    <>Funds will be deducted directly from the finite <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)
-} USD). Personal wallet balances are unaffected.</>
+                                    <>Funds will be deducted directly from the finite <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)} USD). Personal wallet balances are unaffected.</>
                                 ) : (
                                     <>Funds will be deducted from your wallet balance in USD equivalent. When workers submit proof (screenshot, ID, or link), the campaign creator needs to approve the task and its proof. Only then will workers receive their USD rewards instantly!</>
-                                )
-}
+                                )}
                             </p>
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* TAB 2: BROWSE & EARN TASKS */}
             {activeTab === 'browse' && (
                 <div className="space-y-6">
+                    {/* PERSISTENT REQUIRED SURVEYS BANNER & POPUP MODAL */}
                     {pendingMandatorySurveys.length > 0 && (
                         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
                             <div className="flex items-center justify-between">
@@ -4009,8 +3914,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         <span className="text-emerald-400 font-bold font-mono text-xs">
                                                             +${rewardUSD} USD
                                                         </span>
-                                                    )
-}
+                                                    )}
                                                 </div>
                                                 <h5 className="text-sm font-bold text-white line-clamp-1">{survey.title}</h5>
                                                 <p className="text-xs text-slate-400 line-clamp-2">{survey.description}</p>
@@ -4021,27 +3925,23 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 </div>
                                             </div>
                                             <Button
-                                                onClick={() => setActiveMandatorySurvey(survey)
-}
+                                                onClick={() => setActiveMandatorySurvey(survey)}
                                                 className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider py-2.5 rounded-xl shadow-md shadow-amber-500/20"
                                             >
                                                 Complete Survey Now
                                             </Button>
                                         </div>
                                     );
-                                })
-}
+                                })}
                             </div>
                         </div>
-                    )
-}
+                    )}
 
                     {popupEligibleSurveys.length > 0 && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md overflow-y-auto">
                             <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 relative">
                                 <button
-                                    onClick={() => handleDismissPopup(popupEligibleSurveys.map(s => String(s._id)))
-}
+                                    onClick={() => handleDismissPopup(popupEligibleSurveys.map(s => String(s._id)))}
                                     className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-lg transition-all"
                                     title="Close popup (requirement remains active)"
                                 >
@@ -4074,25 +3974,21 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
                                                         {rewardUSD > 0 && (
                                                             <span className="text-emerald-400 font-bold">
-                                                                +{formatCurrency(rewardUSD * exchangeRate, currentUser.currency)
-}
+                                                                +{formatCurrency(rewardUSD * exchangeRate, currentUser.currency)}
                                                             </span>
-                                                        )
-}
+                                                        )}
                                                         <span>⏱️ {estimatedTime} mins</span>
                                                     </div>
                                                 </div>
                                                 <Button
-                                                    onClick={() => setActiveMandatorySurvey(survey)
-}
+                                                    onClick={() => setActiveMandatorySurvey(survey)}
                                                     className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-lg shadow-amber-500/20 shrink-0 w-full sm:w-auto"
                                                 >
                                                     Complete Survey
                                                 </Button>
                                             </div>
                                         );
-                                    })
-}
+                                    })}
                                 </div>
 
                                 <div className="text-center pt-2 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -4102,8 +3998,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <Button
                                         variant="secondary"
                                         size="sm"
-                                        onClick={() => handleDismissPopup(popupEligibleSurveys.map(s => String(s._id)))
-}
+                                        onClick={() => handleDismissPopup(popupEligibleSurveys.map(s => String(s._id)))}
                                         className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0"
                                     >
                                         Dismiss Popup
@@ -4111,8 +4006,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
                             </div>
                         </div>
-                    )
-}
+                    )}
 
                     {activeMandatorySurvey && (
                         <SurveyRunnerModal
@@ -4130,8 +4024,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 }
                             }}
                         />
-                    )
-}
+                    )}
+                    {/* 1. Description / Detail Hero Summary Card (Topmost) */}
                     {!hideHeroBanner && (
                         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 p-6 md:p-8 rounded-[2rem] text-white shadow-xl space-y-6 border border-blue-400/20">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -4162,6 +4056,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </div>
                                 </div>
                             </div>
+                            {/* How It Works - 4 Steps Banner */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t border-white/15">
                                 <div className="bg-white/10 backdrop-blur-sm p-3 rounded-2xl border border-white/10 space-y-1">
                                     <span className="text-xs font-black text-amber-300 uppercase tracking-wider block">1. Pick a Task</span>
@@ -4181,17 +4076,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
                             </div>
                         </div>
-                    )
-}
+                    )}
 
+                    {/* 2. Navigation Tabs (Available Jobs vs Other Tasks) - Placed below description card and above search bar */}
                     {!hideSubTabs && (
                         <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-xl border border-slate-800 space-y-3 sm:space-y-4">
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
                                 <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
                                     <button
                                         type="button"
-                                        onClick={() => setAvailableTasksSubTab('available_jobs')
-}
+                                        onClick={() => setAvailableTasksSubTab('available_jobs')}
                                         className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                                             availableTasksSubTab === 'available_jobs'
                                                 ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
@@ -4210,8 +4104,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <button
                                             key={tab.id}
                                             type="button"
-                                            onClick={() => setAvailableTasksSubTab(tab.id)
-}
+                                            onClick={() => setAvailableTasksSubTab(tab.id)}
                                             className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                                                 availableTasksSubTab === tab.id
                                                     ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
@@ -4221,14 +4114,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                             <span>{tab.title}</span>
                                         </button>
-                                    ))
-}
+                                    ))}
                                 </div>
                             </div>
                         </div>
-                    )
-}
+                    )}
 
+                    {/* 3. Content Section: Custom Earn Tabs Card OR Available Jobs Search + List */}
                     {availableTasksSubTab !== 'available_jobs' && visibleEarnTabs.some(t => t.id === availableTasksSubTab) ? (
                         <OtherTasksCard hideHeader={false} tabId={availableTasksSubTab} />
                     ) : (
@@ -4245,9 +4137,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <p className="text-xs text-slate-400 mt-1">Browse active micro-tasks approved by admin, follow instructions carefully, and earn rewards paid in USD.</p>
                                     </div>
                                 </div>
-                            )
-}
+                            )}
 
+                            {/* Filter & Search Bar */}
                     <div className="bg-slate-950/80 p-4 md:p-5 rounded-2xl shadow-md border border-slate-800 flex flex-col md:flex-row gap-4 items-center justify-between">
                         <div className="relative w-full md:w-96">
                             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs">🔍</span>
@@ -4295,8 +4187,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 >
                                     {['All', 'YouTube', 'Facebook', 'Telegram', 'TikTok', 'Twitter', 'Instagram', 'Custom'].map(cat => (
                                         <option key={cat} value={cat}>{cat}</option>
-                                    ))
-}
+                                    ))}
                                 </select>
                             </div>
                             <div className="flex items-center gap-1.5 w-full sm:w-auto">
@@ -4343,16 +4234,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         Required For Withdrawal
                                                     </span>
                                                 </div>
-                                            )
-}
+                                            )}
                                             {isLocked && (
                                                 <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] rounded-2xl z-10 flex items-center justify-center p-3 text-center">
                                                     <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold font-mono">
                                                         🔒 Locked (Required Survey Pending)
                                                     </span>
                                                 </div>
-                                            )
-}
+                                            )}
                                             <div className="space-y-2.5">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <span className="inline-block px-2.5 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 font-bold text-[10px] uppercase tracking-wider truncate max-w-[120px]">
@@ -4389,8 +4278,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                     {spotsLeft > 0 ? `${spotsLeft} left` : 'Full'}
                                                                 </span>
                                                             </>
-                                                        )
-}
+                                                        )}
                                                     </div>
                                                     <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-800/50">
                                                         <div 
@@ -4438,27 +4326,22 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                                                             </svg>
                                                         </button>
-                                                    )
-}
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
                                     );
-                                })
-}
+                                })}
                             </div>
 
-                            {renderPagination(browsePage, totalBrowsePages, setBrowsePage)
-}
+                            {renderPagination(browsePage, totalBrowsePages, setBrowsePage)}
                                 </div>
-                            )
-}
+                            )}
                         </div>
-                    )
-}
+                    )}
                 </div>
-            )
-}
+            )}
+            {/* TAB 3: MY CAMPAIGNS */}
             {activeTab === 'my-tasks' && (() => {
                 const activeCampaignsCount = mySubmittedTasks.filter(t => (t.status === 'Approved' || t.status === 'Active') && (t.isUnlimitedResponses ? (t.rewardPerTask === 0 || (((t.campaignAvailableBalanceUSD || 0) >= t.rewardPerTask) && t.campaignFundingStatus !== 'paused_insufficient_funds')) : t.currentCompletions < t.targetQuantity)).length;
                 const pausedCampaignsCount = mySubmittedTasks.filter(t => t.status === 'On Hold' || (t.isUnlimitedResponses && t.campaignFundingStatus === 'paused_insufficient_funds')).length;
@@ -4491,6 +4374,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                     return (
                         <div className="space-y-6">
+                            {/* Notice Banner for Pause/Resume Feedback inside Detail View */}
                             {campaignNotice && (
                                 <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300 shadow-md">
                                     <div className="flex items-center gap-3">
@@ -4505,26 +4389,23 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 <p className="text-xs text-gray-600 dark:text-gray-300 font-medium mt-0.5">
                                                     {campaignNotice.subtext}
                                                 </p>
-                                            )
-}
+                                            )}
                                         </div>
                                     </div>
                                     <button
-                                        onClick={() => setCampaignNotice(null)
-}
+                                        onClick={() => setCampaignNotice(null)}
                                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 font-bold text-sm"
                                     >
                                         ✕
                                     </button>
                                 </div>
-                            )
-}
+                            )}
 
+                            {/* Header */}
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm">
                                 <div className="space-y-1">
                                     <button 
-                                        onClick={() => setSelectedCampaignForDetail(null)
-}
+                                        onClick={() => setSelectedCampaignForDetail(null)}
                                         className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 mb-2"
                                     >
                                         ← Back to My Campaigns
@@ -4535,20 +4416,19 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <p className="text-xs text-gray-500 font-medium">Manage submissions, review proofs, reward workers, or delete this campaign.</p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
+                                    {/* Survey Analytics & Results */}
                                     {(task.isSurvey || task.category?.toLowerCase() === 'survey' || task.category?.toLowerCase() === 'surveys & feedback' || task.surveyConfig) && (
                                         <button
-                                            onClick={() => setSurveyAnalyticsTaskId(task._id)
-}
+                                            onClick={() => setSurveyAnalyticsTaskId(task._id)}
                                             className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-amber-500/20 flex items-center gap-1.5"
                                         >
                                             📊 Survey Analytics & Results
                                         </button>
-                                    )
-}
+                                    )}
+                                    {/* Pause/Play */}
                                     {(task.status === 'Approved' || task.status === 'Active' || task.status === 'On Hold') && (
                                         <button
-                                            onClick={() => handleToggleCampaignStatus(task)
-}
+                                            onClick={() => handleToggleCampaignStatus(task)}
                                             className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-wider transition-all shadow-sm ${
                                                 task.status === 'Approved' || task.status === 'Active'
                                                     ? 'bg-yellow-50 hover:bg-yellow-100 text-yellow-600 border-yellow-200 dark:bg-yellow-950/20 dark:hover:bg-yellow-900/30 dark:border-yellow-900/40'
@@ -4557,8 +4437,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         >
                                             {task.status === 'Approved' || task.status === 'Active' ? '⏸ Pause Campaign' : '▶ Resume Campaign'}
                                         </button>
-                                    )
-}
+                                    )}
+                                    {/* Submit for review button */}
                                     {task.status === 'Rejected' && !task.resubmittedForReview && (
                                         <button
                                             onClick={() => {
@@ -4569,8 +4449,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         >
                                             🔄 Submit for Review
                                         </button>
-                                    )
-}
+                                    )}
 
                                     <button
                                         onClick={async () => {
@@ -4585,7 +4464,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
                             </div>
 
+                            {/* Campaign Info Grid (Dual-Panel Bento Layout) */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {/* Left Panel: Identity, URL Access & Core Instructions (Col span 2) */}
                                 <div className="md:col-span-2 space-y-4">
                                     <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 p-6 shadow-sm space-y-4">
                                         <div className="flex items-center gap-1.5">
@@ -4594,17 +4475,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
 
                                         <div className="space-y-3.5">
+                                            {/* Campaign Title */}
                                             <div className="p-3.5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/40">
                                                 <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Campaign Title</span>
                                                 <h4 className="text-sm font-black text-gray-900 dark:text-white mt-0.5 break-words">{task.title}</h4>
                                             </div>
 
+                                            {/* Target URL with Visiting & Copying Actions */}
                                             <div className="p-3.5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/40">
                                                 <div className="flex justify-between items-center mb-1">
                                                     <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Campaign Landing URL / Target Link</span>
                                                     <span 
-                                                        onClick={() => handleCopyCampaignLink(task.link)
-}
+                                                        onClick={() => handleCopyCampaignLink(task.link)}
                                                         className="text-[10px] font-black text-blue-500 hover:underline cursor-pointer"
                                                     >
                                                         {copiedCampaignLink ? '✅ Copied!' : '📋 Copy URL'}
@@ -4621,8 +4503,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         🚀 Visit Landing Page
                                                     </a>
                                                     <button 
-                                                        onClick={() => handleCopyCampaignLink(task.link)
-}
+                                                        onClick={() => handleCopyCampaignLink(task.link)}
                                                         className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700/60 dark:hover:bg-gray-700 dark:border-gray-600 rounded-xl text-xs font-bold transition-all"
                                                     >
                                                         📋 {copiedCampaignLink ? 'Link Copied!' : 'Copy to Clipboard'}
@@ -4630,6 +4511,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 </div>
                                             </div>
 
+                                            {/* Complete Instructions & Description */}
                                             <div className="p-3.5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/40">
                                                 <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Instructions to Workers</span>
                                                 <div className="mt-1.5 text-xs text-gray-700 dark:text-gray-300 font-medium whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto pr-2">
@@ -4640,7 +4522,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </div>
                                 </div>
 
+                                {/* Right Panel: Budgets, Slots, Status & Proof Criteria */}
                                 <div className="space-y-4">
+                                    {/* Financials & Progress Box */}
                                     <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 p-6 shadow-sm space-y-4">
                                         <div className="flex items-center gap-1.5">
                                             <span className="p-1 bg-green-50 dark:bg-green-950/40 text-green-600 rounded-md text-xs">💸</span>
@@ -4662,28 +4546,23 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         </div>
                                                         <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30">
                                                             <span className="text-gray-400 text-[10px] block font-medium uppercase">Worker Rewards Budget</span>
-                                                            <p className="font-bold text-gray-900 dark:text-white font-mono text-sm mt-0.5">${fin.subtotal.toFixed(2)
-} USD</p>
+                                                            <p className="font-bold text-gray-900 dark:text-white font-mono text-sm mt-0.5">${fin.subtotal.toFixed(2)} USD</p>
                                                         </div>
                                                         <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30">
                                                             <span className="text-gray-400 text-[10px] block font-medium uppercase">Admin Commission</span>
-                                                            <p className="font-bold text-gray-900 dark:text-white font-mono text-sm mt-0.5">${fin.adminCommission.toFixed(2)
-} USD</p>
+                                                            <p className="font-bold text-gray-900 dark:text-white font-mono text-sm mt-0.5">${fin.adminCommission.toFixed(2)} USD</p>
                                                         </div>
                                                         <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30">
                                                             <span className="text-gray-400 text-[10px] block font-medium uppercase">Slots + Commission Budget</span>
-                                                            <p className="font-bold text-blue-600 dark:text-blue-400 font-mono text-sm mt-0.5">${fin.slotsAndCommissionBudget.toFixed(2)
-} USD</p>
+                                                            <p className="font-bold text-blue-600 dark:text-blue-400 font-mono text-sm mt-0.5">${fin.slotsAndCommissionBudget.toFixed(2)} USD</p>
                                                         </div>
                                                         <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30">
                                                             <span className="text-gray-400 text-[10px] block font-medium uppercase">Campaign Creation Fee</span>
-                                                            <p className="font-bold text-indigo-600 dark:text-indigo-400 font-mono text-sm mt-0.5">${fin.campaignCreationFee.toFixed(2)
-} USD</p>
+                                                            <p className="font-bold text-indigo-600 dark:text-indigo-400 font-mono text-sm mt-0.5">${fin.campaignCreationFee.toFixed(2)} USD</p>
                                                         </div>
                                                         <div className="p-3 bg-purple-50 dark:bg-purple-950/40 rounded-2xl border border-purple-200 dark:border-purple-900/50 col-span-2">
                                                             <span className="text-purple-600 dark:text-purple-300 text-[10px] block font-extrabold uppercase tracking-wider">Total Campaign Launch Cost</span>
-                                                            <p className="font-black text-purple-700 dark:text-purple-200 font-mono text-base mt-0.5">${fin.grandTotalLaunchCost.toFixed(2)
-} USD</p>
+                                                            <p className="font-black text-purple-700 dark:text-purple-200 font-mono text-base mt-0.5">${fin.grandTotalLaunchCost.toFixed(2)} USD</p>
                                                         </div>
                                                         <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30 col-span-2">
                                                             <span className="text-gray-400 text-[10px] block font-medium uppercase">Created Date & Time</span>
@@ -4693,8 +4572,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         </div>
                                                     </div>
                                                 );
-                                            })()
-}
+                                            })()}
 
                                             <div className="pt-2 border-t dark:border-gray-700 flex justify-between items-center text-xs">
                                                 <span className="text-gray-400 font-medium uppercase text-[10px]">Campaign Status</span>
@@ -4705,13 +4583,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         <Badge variant="warning">🟡 Paused</Badge>
                                                     ) : (
                                                         <Badge variant="secondary">{task.status}</Badge>
-                                                    )
-}
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
+                                    {/* Proof Requirements Criteria */}
                                     <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 p-6 shadow-sm space-y-4">
                                         <div className="flex items-center gap-1.5">
                                             <span className="p-1 bg-yellow-50 dark:bg-yellow-950/40 text-yellow-600 rounded-md text-xs">🔒</span>
@@ -4719,6 +4597,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
 
                                         <div className="space-y-3.5 text-xs">
+                                            {/* Screenshot Proof */}
                                             <div className="flex items-start gap-2.5">
                                                 <span className={`text-base ${task.requireScreenshot ? 'text-blue-500' : 'text-gray-300'}`}>
                                                     {task.requireScreenshot ? '📸' : '📷'}
@@ -4732,11 +4611,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     </p>
                                                     {task.requireScreenshot && (
                                                         <p className="text-[10px] text-gray-500 mt-0.5 italic">{task.screenshotInstruction || 'Please upload screenshot proof of completion.'}</p>
-                                                    )
-}
+                                                    )}
                                                 </div>
                                             </div>
 
+                                            {/* Text Proof */}
                                             <div className="flex items-start gap-2.5">
                                                 <span className={`text-base ${task.requireTextProof ? 'text-blue-500' : 'text-gray-300'}`}>
                                                     ✍
@@ -4750,11 +4629,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     </p>
                                                     {task.requireTextProof && (
                                                         <p className="text-[10px] text-gray-500 mt-0.5 italic">{task.textProofInstruction || 'Please enter confirmation text.'}</p>
-                                                    )
-}
+                                                    )}
                                                 </div>
                                             </div>
 
+                                            {/* Username Proof */}
                                             <div className="flex items-start gap-2.5">
                                                 <span className={`text-base ${task.requireUsername ? 'text-blue-500' : 'text-gray-300'}`}>
                                                     👤
@@ -4768,11 +4647,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     </p>
                                                     {task.requireUsername && (
                                                         <p className="text-[10px] text-gray-500 mt-0.5 italic">{task.usernameInstruction || 'Please provide your account username.'}</p>
-                                                    )
-}
+                                                    )}
                                                 </div>
                                             </div>
 
+                                            {/* User ID Proof */}
                                             <div className="flex items-start gap-2.5">
                                                 <span className={`text-base ${task.requireUserId ? 'text-blue-500' : 'text-gray-300'}`}>
                                                     🆔
@@ -4786,11 +4665,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     </p>
                                                     {task.requireUserId && (
                                                         <p className="text-[10px] text-gray-500 mt-0.5 italic">{task.userIdInstruction || 'Please provide your profile ID.'}</p>
-                                                    )
-}
+                                                    )}
                                                 </div>
                                             </div>
 
+                                            {/* Email Proof */}
                                             <div className="flex items-start gap-2.5">
                                                 <span className={`text-base ${task.requireEmail ? 'text-blue-500' : 'text-gray-300'}`}>
                                                     ✉
@@ -4804,13 +4683,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     </p>
                                                     {task.requireEmail && (
                                                         <p className="text-[10px] text-gray-500 mt-0.5 italic">{task.emailInstruction || 'Please provide email address.'}</p>
-                                                    )
-}
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
+                                    {/* Campaign Status History Log */}
                                     <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 p-6 shadow-sm space-y-4">
                                         <div className="flex items-center gap-1.5">
                                             <span className="p-1 bg-purple-50 dark:bg-purple-950/40 text-purple-600 rounded-md text-xs">📜</span>
@@ -4828,17 +4707,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             {h.timestamp ? new Date(h.timestamp).toLocaleString() : ''}
                                                         </span>
                                                     </div>
-                                                ))
-}
+                                                ))}
                                             </div>
                                         ) : (
                                             <p className="text-xs text-gray-400 italic">No historical status logs recorded yet.</p>
-                                        )
-}
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
+                            {/* Submissions Manager */}
                             <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm overflow-hidden">
                                 <div className="p-6 border-b dark:border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                     <div>
@@ -4846,6 +4724,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <p className="text-[11px] text-gray-400 mt-0.5 font-medium">Click any worker row to inspect detailed screenshot and text proof, then approve/reject.</p>
                                     </div>
 
+                                    {/* Tabs */}
                                     <div className="flex gap-2 bg-gray-50 dark:bg-gray-900 p-1 rounded-2xl border dark:border-gray-700">
                                         {(['Pending', 'Approved', 'Rejected'] as const).map(tab => {
                                             const count = tab === 'Pending' ? pendingCount : tab === 'Approved' ? approvedCount : rejectedCount;
@@ -4865,11 +4744,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     {tab === 'Pending' ? '⏳' : tab === 'Approved' ? '✅' : '❌'} {tab} ({count})
                                                 </button>
                                             );
-                                        })
-}
+                                        })}
                                     </div>
                                 </div>
 
+                                {/* Bulk Action Bar if items are selected */}
                                 {selectedIds.length > 0 && detailSubmissionTab === 'Pending' && (
                                     <div className="bg-blue-50 dark:bg-blue-950/40 border-b dark:border-blue-900/50 p-4 flex justify-between items-center animate-in slide-in-from-top duration-200">
                                         <span className="text-xs font-bold text-blue-800 dark:text-blue-300">
@@ -4877,8 +4756,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </span>
                                         <div className="flex gap-2">
                                             <button
-                                                onClick={() => handleBulkApprove(selectedIds)
-}
+                                                onClick={() => handleBulkApprove(selectedIds)}
                                                 className="px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-green-600/10"
                                             >
                                                 ✔ Bulk Approve
@@ -4894,13 +4772,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             </button>
                                         </div>
                                     </div>
-                                )
-}
+                                )}
 
+                                {/* Submissions list */}
                                 {filteredSubmissions.length === 0 ? (
                                     <div className="p-12 text-center text-gray-500 font-medium text-xs">
-                                        No {detailSubmissionTab.toLowerCase()
-} submissions found for this campaign.
+                                        No {detailSubmissionTab.toLowerCase()} submissions found for this campaign.
                                     </div>
                                 ) : (
                                     <div className="overflow-x-auto">
@@ -4923,8 +4800,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 className="rounded border-gray-300 dark:border-gray-700 focus:ring-blue-500 w-4 h-4 cursor-pointer"
                                                             />
                                                         </th>
-                                                    )
-}
+                                                    )}
                                                     <th className="p-4 w-16 text-center"># Sequence</th>
                                                     <th className="p-4">Worker Name</th>
                                                     <th className="p-4">Submitted At</th>
@@ -4936,13 +4812,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 {filteredSubmissions.map((sub, idx) => (
                                                     <tr 
                                                         key={sub._id} 
-                                                        onClick={() => setSelectedWorkerSubmissionForDetails(sub)
-}
+                                                        onClick={() => setSelectedWorkerSubmissionForDetails(sub)}
                                                         className="hover:bg-gray-50/50 dark:hover:bg-gray-900/10 cursor-pointer transition-colors"
                                                     >
                                                         {detailSubmissionTab === 'Pending' && (
-                                                            <td className="p-4 text-center" onClick={(e) => e.stopPropagation()
-}>
+                                                            <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                                 <input
                                                                     type="checkbox"
                                                                     checked={!!selectedSubmissions[sub._id]}
@@ -4955,12 +4829,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                     className="rounded border-gray-300 dark:border-gray-700 focus:ring-blue-500 w-4 h-4 cursor-pointer"
                                                                 />
                                                             </td>
-                                                        )
-}
+                                                        )}
                                                         <td className="p-4 font-mono font-bold text-gray-400 text-center">{idx + 1}</td>
                                                         <td className="p-4 text-gray-900 dark:text-white font-bold">{sub.workerName}</td>
-                                                        <td className="p-4 text-gray-500 text-xs">{new Date(sub.createdAt).toLocaleString()
-}</td>
+                                                        <td className="p-4 text-gray-500 text-xs">{new Date(sub.createdAt).toLocaleString()}</td>
                                                         <td className="p-4">
                                                             {(sub.isAutoApproved || sub.autoApproved || sub.approvalType === 'auto' || (sub.adminNotes && sub.adminNotes.toLowerCase().includes('auto-approved'))) ? (
                                                                 <span className="px-2.5 py-1 text-[10px] font-black uppercase rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-sm flex items-center gap-1 inline-flex">
@@ -4987,17 +4859,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 )
                                                             ) : (
                                                                 <Badge variant="danger">Rejected</Badge>
-                                                            )
-}
+                                                            )}
                                                         </td>
-                                                        <td className="p-4 text-right" onClick={(e) => e.stopPropagation()
-}>
+                                                        <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
                                                             <div className="flex justify-end gap-2">
                                                                 {sub.status === 'Pending' && (
                                                                     <>
                                                                         <button
-                                                                            onClick={() => handleApproveSubmission(sub._id)
-}
+                                                                            onClick={() => handleApproveSubmission(sub._id)}
                                                                             className="px-2.5 py-1 bg-green-50 hover:bg-green-100 text-green-600 border border-green-200 dark:bg-green-950/20 dark:hover:bg-green-900/30 dark:border-green-900/40 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
                                                                         >
                                                                             ✔ Accept
@@ -5012,11 +4881,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                             ✖ Reject
                                                                         </button>
                                                                     </>
-                                                                )
-}
+                                                                )}
                                                                 <button
-                                                                    onClick={() => setSelectedWorkerSubmissionForDetails(sub)
-}
+                                                                    onClick={() => setSelectedWorkerSubmissionForDetails(sub)}
                                                                     className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 dark:bg-blue-950/20 dark:hover:bg-blue-900/30 dark:border-blue-900/40 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
                                                                 >
                                                                     👁 View Detail
@@ -5024,13 +4891,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             </div>
                                                         </td>
                                                     </tr>
-                                                ))
-}
+                                                ))}
                                             </tbody>
                                         </table>
                                     </div>
-                                )
-}
+                                )}
                             </div>
                         </div>
                     );
@@ -5038,7 +4903,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                 return (
                     <div className="space-y-6">
+                        {/* ========================================================================= */}
+                        {/* CAMPAIGN FUNDS & TRANSFER BALANCE SUMMARY CARD WITH BREAKDOWN & AMOUNT TRAIL */}
+                        {/* ========================================================================= */}
                         <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 md:p-6 shadow-xl border dark:border-gray-700/80 space-y-4 sm:space-y-6">
+                            {/* Card Header & Quick Actions */}
                             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 sm:gap-4 pb-3.5 sm:pb-5 border-b border-gray-100 dark:border-gray-700/60">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -5057,6 +4926,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </p>
                                 </div>
 
+                                {/* Quick Actions */}
                                 {(() => {
                                     const isDepositEnabled = settings?.myCampaignActionsConfig?.deposit !== false;
                                     const isTransferEnabled = settings?.myCampaignActionsConfig?.transfer !== false;
@@ -5072,47 +4942,40 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 >
                                                     <span>💳 Deposit</span>
                                                 </Link>
-                                            )
-}
+                                            )}
                                             {isTransferEnabled && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => setShowTransferModal(true)
-}
+                                                    onClick={() => setShowTransferModal(true)}
                                                     className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-1"
                                                 >
                                                     <span>📥 Transfer</span>
                                                 </button>
-                                            )
-}
+                                            )}
                                             {isConvertEnabled && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => setShowConvertModal(true)
-}
+                                                    onClick={() => setShowConvertModal(true)}
                                                     className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all border border-indigo-200 dark:border-indigo-800 flex items-center justify-center gap-1"
                                                 >
                                                     <span>🔄 Convert</span>
                                                 </button>
-                                            )
-}
+                                            )}
                                             {isAnalyticsEnabled && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => setShowAnalyticsModal(true)
-}
+                                                    onClick={() => setShowAnalyticsModal(true)}
                                                     className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/80 text-purple-700 dark:text-purple-300 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all border border-purple-200 dark:border-purple-800 flex items-center justify-center gap-1"
                                                 >
                                                     <span>📊 Analytics</span>
                                                 </button>
-                                            )
-}
+                                            )}
                                         </div>
                                     );
-                                })()
-}
+                                })()}
                             </div>
 
+                            {/* Compact Mobile-Friendly Campaign Financial Metrics Grid */}
                             <div className="space-y-2 sm:space-y-3">
                                 <div className="flex items-center justify-between flex-wrap gap-1.5 sm:gap-2">
                                     <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-1">
@@ -5124,84 +4987,84 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+                                    {/* Card 1: Transfer from Deposit & Investment */}
                                     <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 dark:from-emerald-950/60 dark:to-teal-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[8px] sm:text-[9px] font-black text-emerald-600 dark:text-emerald-300 uppercase tracking-wider leading-tight">Deposit & Investment</span>
                                             <span className="text-xs">📈</span>
                                         </div>
                                         <div className="text-sm sm:text-base md:text-lg font-black text-emerald-600 dark:text-emerald-300 font-mono mt-1 sm:mt-1.5">
-                                            ${depositAndInvestmentUSD.toFixed(2)
-}
+                                            ${depositAndInvestmentUSD.toFixed(2)}
                                         </div>
                                         <div className="text-[8px] sm:text-[9px] font-bold text-emerald-600/80 dark:text-emerald-300/80 mt-0.5 sm:mt-1 truncate">
                                             To Campaign
                                         </div>
                                     </div>
 
+                                    {/* Card 2: Transfer from Task Earnings */}
                                     <div className="bg-gradient-to-br from-purple-500/10 to-fuchsia-500/10 dark:from-purple-950/60 dark:to-fuchsia-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-purple-200 dark:border-purple-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[8px] sm:text-[9px] font-black text-purple-600 dark:text-purple-300 uppercase tracking-wider leading-tight">Task Earnings</span>
                                             <span className="text-xs">🔄</span>
                                         </div>
                                         <div className="text-sm sm:text-base md:text-lg font-black text-purple-600 dark:text-purple-300 font-mono mt-1 sm:mt-1.5">
-                                            ${taskEarningsTransferredUSD.toFixed(2)
-}
+                                            ${taskEarningsTransferredUSD.toFixed(2)}
                                         </div>
                                         <div className="text-[8px] sm:text-[9px] font-bold text-purple-600/80 dark:text-purple-300/80 mt-0.5 sm:mt-1 truncate">
                                             To Campaign
                                         </div>
                                     </div>
 
+                                    {/* Card 3: Total Funding Transferred */}
                                     <div className="bg-gradient-to-br from-teal-500/10 to-cyan-500/10 dark:from-teal-950/60 dark:to-cyan-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-teal-200 dark:border-teal-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[8px] sm:text-[9px] font-black text-teal-600 dark:text-teal-300 uppercase tracking-wider leading-tight">Total Inflow</span>
                                             <span className="text-xs">📥</span>
                                         </div>
                                         <div className="text-sm sm:text-base md:text-lg font-black text-teal-600 dark:text-teal-300 font-mono mt-1 sm:mt-1.5">
-                                            ${totalTransferredInUSD.toFixed(2)
-}
+                                            ${totalTransferredInUSD.toFixed(2)}
                                         </div>
                                         <div className="text-[8px] sm:text-[9px] font-bold text-teal-600/80 dark:text-teal-300/80 mt-0.5 sm:mt-1 truncate">
                                             Total Funding
                                         </div>
                                     </div>
 
+                                    {/* Card 4: Used / Spent in Campaign */}
                                     <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 dark:from-amber-950/60 dark:to-orange-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-amber-200 dark:border-amber-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[8px] sm:text-[9px] font-black text-amber-600 dark:text-amber-300 uppercase tracking-wider leading-tight">Budget Deployed</span>
                                             <span className="text-xs">🛒</span>
                                         </div>
                                         <div className="text-sm sm:text-base md:text-lg font-black text-amber-600 dark:text-amber-300 font-mono mt-1 sm:mt-1.5">
-                                            ${campaignPurchasesUSD.toFixed(2)
-}
+                                            ${campaignPurchasesUSD.toFixed(2)}
                                         </div>
                                         <div className="text-[8px] sm:text-[9px] font-bold text-amber-600/80 dark:text-amber-300/80 mt-0.5 sm:mt-1 truncate">
                                             Used in Campaigns
                                         </div>
                                     </div>
 
+                                    {/* Card 5: Remaining Available Campaign Balance */}
                                     <div className="bg-gradient-to-br from-indigo-500/10 to-blue-500/10 dark:from-indigo-950/60 dark:to-blue-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-indigo-200 dark:border-indigo-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[8px] sm:text-[9px] font-black text-indigo-600 dark:text-indigo-300 uppercase tracking-wider leading-tight">Remaining Funds</span>
                                             <span className="text-xs">💰</span>
                                         </div>
                                         <div className="text-sm sm:text-base md:text-lg font-black text-indigo-900 dark:text-indigo-100 font-mono mt-1 sm:mt-1.5">
-                                            ${availableTransferBalanceUSD.toFixed(2)
-}
+                                            ${availableTransferBalanceUSD.toFixed(2)}
                                         </div>
                                         <div className="text-[8px] sm:text-[9px] font-bold text-indigo-600/80 dark:text-indigo-300/80 mt-0.5 sm:mt-1 truncate">
                                             Available Balance
                                         </div>
                                     </div>
 
+                                    {/* Card 6: Live Escrow Reserved */}
                                     <div className="bg-gradient-to-br from-sky-500/10 to-blue-500/10 dark:from-sky-950/60 dark:to-blue-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-sky-200 dark:border-sky-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[8px] sm:text-[9px] font-black text-sky-600 dark:text-sky-300 uppercase tracking-wider leading-tight">Escrow Reserved</span>
                                             <span className="text-xs">🛡️</span>
                                         </div>
                                         <div className="text-sm sm:text-base md:text-lg font-black text-sky-600 dark:text-sky-300 font-mono mt-1 sm:mt-1.5">
-                                            ${activeCampaignEscrowUSD.toFixed(2)
-}
+                                            ${activeCampaignEscrowUSD.toFixed(2)}
                                         </div>
                                         <div className="text-[8px] sm:text-[9px] font-bold text-sky-600/80 dark:text-sky-300/80 mt-0.5 sm:mt-1 truncate" title="Locked for active spots & review proofs">
                                             Locked for proofs
@@ -5210,6 +5073,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
                             </div>
 
+                            {/* Campaign Status Records Grid */}
                             <div className="space-y-2 sm:space-y-3 pt-1 sm:pt-2">
                                 <div className="flex items-center justify-between flex-wrap gap-1.5 sm:gap-2">
                                     <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-1">
@@ -5221,6 +5085,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 sm:gap-2.5">
+                                    {/* Status 1: Active / Running */}
                                     <div className="p-2 sm:p-3 bg-emerald-500/10 rounded-lg sm:rounded-xl border border-emerald-500/20 flex flex-col justify-between">
                                         <span className="text-[8px] sm:text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400 truncate">Active / Running</span>
                                         <div className="text-sm sm:text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5 sm:mt-1">
@@ -5228,6 +5093,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     </div>
 
+                                    {/* Status 2: Paused / Non-Active */}
                                     <div className="p-2 sm:p-3 bg-amber-500/10 rounded-lg sm:rounded-xl border border-amber-500/20 flex flex-col justify-between">
                                         <span className="text-[8px] sm:text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 truncate">Paused</span>
                                         <div className="text-sm sm:text-lg font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5 sm:mt-1">
@@ -5235,6 +5101,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     </div>
 
+                                    {/* Status 3: Pending Approval */}
                                     <div className="p-2 sm:p-3 bg-blue-500/10 rounded-lg sm:rounded-xl border border-blue-500/20 flex flex-col justify-between">
                                         <span className="text-[8px] sm:text-[9px] font-black uppercase text-blue-600 dark:text-blue-400 truncate">Pending</span>
                                         <div className="text-sm sm:text-lg font-black text-blue-600 dark:text-blue-400 font-mono mt-0.5 sm:mt-1">
@@ -5242,6 +5109,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     </div>
 
+                                    {/* Status 4: Approved */}
                                     <div className="p-2 sm:p-3 bg-teal-500/10 rounded-lg sm:rounded-xl border border-teal-500/20 flex flex-col justify-between">
                                         <span className="text-[8px] sm:text-[9px] font-black uppercase text-teal-600 dark:text-teal-400 truncate">Approved</span>
                                         <div className="text-sm sm:text-lg font-black text-teal-600 dark:text-teal-400 font-mono mt-0.5 sm:mt-1">
@@ -5249,6 +5117,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     </div>
 
+                                    {/* Status 5: Completed */}
                                     <div className="p-2 sm:p-3 bg-purple-500/10 rounded-lg sm:rounded-xl border border-purple-500/20 flex flex-col justify-between">
                                         <span className="text-[8px] sm:text-[9px] font-black uppercase text-purple-600 dark:text-purple-400 truncate">Completed</span>
                                         <div className="text-sm sm:text-lg font-black text-purple-600 dark:text-purple-400 font-mono mt-0.5 sm:mt-1">
@@ -5256,6 +5125,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     </div>
 
+                                    {/* Status 6: Rejected / Deleted */}
                                     <div className="p-2 sm:p-3 bg-rose-500/10 rounded-lg sm:rounded-xl border border-rose-500/20 flex flex-col justify-between">
                                         <span className="text-[8px] sm:text-[9px] font-black uppercase text-rose-600 dark:text-rose-400 truncate">Rejected</span>
                                         <div className="text-sm sm:text-lg font-black text-rose-600 dark:text-rose-400 font-mono mt-0.5 sm:mt-1">
@@ -5267,6 +5137,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                         </div>
 
+                        {/* Notice Banner for Pause/Resume Feedback */}
                         {campaignNotice && (
                             <div className="p-2.5 sm:p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 animate-in fade-in slide-in-from-top-2 duration-300 shadow-sm">
                                 <div className="flex items-center gap-2 sm:gap-3">
@@ -5281,8 +5152,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             <p className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-300 font-medium mt-0.5">
                                                 {campaignNotice.subtext}
                                             </p>
-                                        )
-}
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 self-end sm:self-center">
@@ -5296,8 +5166,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         >
                                             View Paused
                                         </button>
-                                    )
-}
+                                    )}
                                     {myCampaignFilter !== 'approved' && campaignNotice.text.includes('resumed') && (
                                         <button
                                             onClick={() => {
@@ -5308,21 +5177,20 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         >
                                             View Active
                                         </button>
-                                    )
-}
+                                    )}
                                     <button
-                                        onClick={() => setCampaignNotice(null)
-}
+                                        onClick={() => setCampaignNotice(null)}
                                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 font-bold text-sm"
                                     >
                                         ✕
                                     </button>
                                 </div>
                             </div>
-                        )
-}
+                        )}
 
+                        {/* Filter & Search Bar */}
                         <div className="bg-white dark:bg-gray-800 p-2.5 sm:p-4 md:p-5 rounded-2xl sm:rounded-3xl shadow-md border dark:border-gray-700/60 space-y-2.5 sm:space-y-3.5">
+                            {/* Row 1: Status Filters */}
                             <div className="flex flex-wrap gap-1 sm:gap-2 w-full">
                                 <button
                                     onClick={() => {
@@ -5404,6 +5272,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </button>
                             </div>
 
+                            {/* Row 2: Search & Per Page Filter */}
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 pt-2 sm:pt-3 border-t border-gray-100 dark:border-gray-700/60">
                                 <div className="relative w-full sm:w-80">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
@@ -5445,6 +5314,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             </div>
                         ) : (
                             <div className="space-y-3 sm:space-y-4">
+                                {/* Mobile Compact Cards View (< md) */}
                                 <div className="block md:hidden space-y-2">
                                     {paginatedMyCampaigns.map(task => {
                                         const fin = getCampaignFin(task);
@@ -5456,6 +5326,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 key={task._id} 
                                                 className="bg-white dark:bg-gray-800 rounded-xl p-2.5 sm:p-3 border border-gray-200/90 dark:border-gray-700/80 shadow-xs space-y-2"
                                             >
+                                                {/* Header Row: Title & Status */}
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="min-w-0 flex-1 space-y-0.5">
                                                         <div className="flex items-center gap-1 text-[9px] text-gray-400 font-semibold truncate">
@@ -5492,16 +5363,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                                                                 {task.status}
                                                             </span>
-                                                        )
-}
+                                                        )}
                                                     </div>
                                                 </div>
 
+                                                {/* Specs & Budget Strip */}
                                                 <div className="flex items-center justify-between gap-1 text-[10px] bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-lg border border-gray-100 dark:border-gray-800 font-mono">
                                                     <div>
                                                         <span className="text-gray-400 font-sans">Budget: </span>
-                                                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">${fin.grandTotalLaunchCost.toFixed(2)
-} USD</span>
+                                                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">${fin.grandTotalLaunchCost.toFixed(2)} USD</span>
                                                     </div>
                                                     <div>
                                                         <span className="text-gray-400 font-sans">Slots: </span>
@@ -5509,6 +5379,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     </div>
                                                 </div>
 
+                                                {/* Campaign URL Link */}
                                                 {taskUrl && (
                                                     <div className="flex items-center gap-1.5 text-[9.5px] bg-blue-50/60 dark:bg-blue-950/30 px-2 py-1 rounded-lg border border-blue-100/80 dark:border-blue-900/40 min-w-0">
                                                         <span className="text-blue-600 dark:text-blue-400 font-black shrink-0 text-[8.5px] uppercase tracking-wider">URL:</span>
@@ -5518,8 +5389,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             rel="noopener noreferrer"
                                                             className="text-blue-600 dark:text-blue-400 font-medium truncate flex-1 hover:underline font-mono"
                                                             title={taskUrl}
-                                                            onClick={(e) => e.stopPropagation()
-}
+                                                            onClick={(e) => e.stopPropagation()}
                                                         >
                                                             {taskUrl}
                                                         </a>
@@ -5529,35 +5399,33 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             rel="noopener noreferrer"
                                                             className="shrink-0 text-blue-500 hover:text-blue-700 text-[10px] font-bold px-0.5"
                                                             title="Open URL in new tab"
-                                                            onClick={(e) => e.stopPropagation()
-}
+                                                            onClick={(e) => e.stopPropagation()}
                                                         >
                                                             ↗
                                                         </a>
                                                     </div>
-                                                )
-}
+                                                )}
 
+                                                {/* Campaign Instructions */}
                                                 {taskInstructions && (
                                                     <div className="text-[9.5px] text-gray-600 dark:text-gray-300 bg-gray-50/80 dark:bg-gray-900/40 px-2 py-1 rounded-lg border border-gray-100 dark:border-gray-800/80 leading-snug">
                                                         <span className="text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider text-[8px] mr-1">Instructions:</span>
                                                         <span className="line-clamp-2">{taskInstructions}</span>
                                                     </div>
-                                                )
-}
+                                                )}
 
+                                                {/* Rejection notice if present */}
                                                 {task.status === 'Rejected' && task.adminNotes && (
                                                     <p className="text-[9px] text-red-600 dark:text-red-400 font-medium bg-red-50 dark:bg-red-950/30 p-1.5 rounded border border-red-100 dark:border-red-900/30 leading-tight">
                                                         Note: {task.adminNotes}
                                                     </p>
-                                                )
-}
+                                                )}
 
+                                                {/* Actions Row */}
                                                 <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-gray-100 dark:border-gray-700/60">
                                                     {(task.status === 'Approved' || task.status === 'Active' || task.status === 'On Hold') && (
                                                         <button
-                                                            onClick={() => handleToggleCampaignStatus(task)
-}
+                                                            onClick={() => handleToggleCampaignStatus(task)}
                                                             className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-wider transition-all ${
                                                                 task.status === 'Approved' || task.status === 'Active'
                                                                     ? 'bg-yellow-50 hover:bg-yellow-100 text-yellow-600 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-900/40 dark:text-yellow-400'
@@ -5566,8 +5434,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         >
                                                             {task.status === 'Approved' || task.status === 'Active' ? '⏸ Pause' : '▶ Resume'}
                                                         </button>
-                                                    )
-}
+                                                    )}
 
                                                     {task.status === 'Rejected' && !task.resubmittedForReview && (
                                                         <button
@@ -5579,8 +5446,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         >
                                                             🔄 Review
                                                         </button>
-                                                    )
-}
+                                                    )}
 
                                                     <button
                                                         onClick={() => {
@@ -5596,18 +5462,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                                                     {(task.isSurvey || task.category?.toLowerCase() === 'survey' || task.category?.toLowerCase() === 'surveys & feedback' || task.surveyConfig) && (
                                                         <button
-                                                            onClick={() => setSurveyAnalyticsTaskId(task._id)
-}
+                                                            onClick={() => setSurveyAnalyticsTaskId(task._id)}
                                                             className="px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/40 dark:text-amber-400 text-[9px] font-black uppercase tracking-wider"
                                                         >
                                                             📊 Results
                                                         </button>
-                                                    )
-}
+                                                    )}
 
                                                     <button
-                                                        onClick={() => handleDeleteCampaign(task._id)
-}
+                                                        onClick={() => handleDeleteCampaign(task._id)}
                                                         className="px-2 py-0.5 rounded-md bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 dark:bg-red-950/20 dark:border-red-900/40 dark:text-red-400 text-[9px] font-black uppercase tracking-wider"
                                                     >
                                                         🗑 Del
@@ -5615,10 +5478,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 </div>
                                             </div>
                                         );
-                                    })
-}
+                                    })}
                                 </div>
 
+                                {/* Desktop Table View (>= md) */}
                                 <div className="hidden md:block bg-white dark:bg-gray-800 rounded-3xl shadow-xl overflow-hidden border dark:border-gray-700">
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left border-collapse">
@@ -5656,15 +5519,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                         </a>
                                                                         <span className="text-[10px]">↗</span>
                                                                     </div>
-                                                                )
-}
+                                                                )}
                                                                 {taskInstructions && (
                                                                     <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 max-w-sm" title={taskInstructions}>
                                                                         <span className="text-[10px] font-bold uppercase text-gray-400 mr-1">Instructions:</span>
                                                                         {taskInstructions}
                                                                     </p>
-                                                                )
-}
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td className="p-3.5 md:p-5 text-gray-500">{task.category} ({task.subType})</td>
@@ -5673,17 +5534,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 const fin = getCampaignFin(task);
                                                                 return (
                                                                     <div>
-                                                                        <span className="text-emerald-500 font-bold block">${fin.grandTotalLaunchCost.toFixed(2)
-} USD</span>
+                                                                        <span className="text-emerald-500 font-bold block">${fin.grandTotalLaunchCost.toFixed(2)} USD</span>
                                                                         <span className="text-[10px] text-gray-400 block font-normal">
-                                                                            (Budget: ${fin.slotsAndCommissionBudget.toFixed(2)
-} + Fee: ${fin.campaignCreationFee.toFixed(2)
-})
+                                                                            (Budget: ${fin.slotsAndCommissionBudget.toFixed(2)} + Fee: ${fin.campaignCreationFee.toFixed(2)})
                                                                         </span>
                                                                     </div>
                                                                 );
-                                                            })()
-}
+                                                            })()}
                                                         </td>
                                                         <td className="p-3.5 md:p-5 text-gray-500">{task.isUnlimitedResponses ? `${task.currentCompletions} (Unlimited)` : `${task.currentCompletions} / ${task.targetQuantity}`}</td>
                                                         <td className="p-3.5 md:p-5">
@@ -5707,27 +5564,24 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                             <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">Review Closed</span>
                                                                         ) : (
                                                                             <span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-900/30">Review Eligible</span>
-                                                                        )
-}
+                                                                        )}
                                                                     </div>
                                                                 ) : (
                                                                     <Badge variant="danger">{task.status}</Badge>
-                                                                )
-}
+                                                                )}
                                                                 {task.status === 'Rejected' && task.adminNotes && (
                                                                     <p className="text-[10px] text-red-500 max-w-[150px] font-medium leading-tight mt-1">
                                                                         Reason: {task.adminNotes}
                                                                     </p>
-                                                                )
-}
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td className="p-3.5 md:p-5 text-right">
                                                             <div className="flex justify-end items-center gap-2">
+                                                                {/* Pause / Play Button */}
                                                                 {(task.status === 'Approved' || task.status === 'Active' || task.status === 'On Hold') && (
                                                                     <button
-                                                                        onClick={() => handleToggleCampaignStatus(task)
-}
+                                                                        onClick={() => handleToggleCampaignStatus(task)}
                                                                         title={task.status === 'Approved' || task.status === 'Active' ? "Pause Campaign" : "Resume Campaign"}
                                                                         className={`p-1.5 md:p-2 rounded-xl border transition-all text-xs font-bold uppercase tracking-wider flex items-center justify-center ${
                                                                             task.status === 'Approved' || task.status === 'Active'
@@ -5737,9 +5591,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                     >
                                                                         {task.status === 'Approved' || task.status === 'Active' ? '⏸ Pause' : '▶ Resume'}
                                                                     </button>
-                                                                )
-}
+                                                                )}
 
+                                                                {/* Submit for Review Button */}
                                                                 {task.status === 'Rejected' && !task.resubmittedForReview && (
                                                                     <button
                                                                         onClick={() => {
@@ -5751,9 +5605,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                     >
                                                                         🔄 Review
                                                                     </button>
-                                                                )
-}
+                                                                )}
 
+                                                                {/* Detail Button */}
                                                                 <button
                                                                     onClick={() => {
                                                                         setSelectedCampaignForDetail(task);
@@ -5767,21 +5621,20 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                     👁 Detail
                                                                 </button>
 
+                                                                {/* Survey Analytics Button */}
                                                                 {(task.isSurvey || task.category?.toLowerCase() === 'survey' || task.category?.toLowerCase() === 'surveys & feedback' || task.surveyConfig) && (
                                                                     <button
-                                                                        onClick={() => setSurveyAnalyticsTaskId(task._id)
-}
+                                                                        onClick={() => setSurveyAnalyticsTaskId(task._id)}
                                                                         title="Survey Responses & Analytics"
                                                                         className="p-1.5 md:p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 dark:bg-amber-950/20 dark:hover:bg-amber-900/30 dark:border-amber-900/40 dark:text-amber-400 transition-all text-xs font-bold uppercase tracking-wider flex items-center gap-1"
                                                                     >
                                                                         📊 Results
                                                                     </button>
-                                                                )
-}
+                                                                )}
 
+                                                                {/* Delete Button */}
                                                                 <button
-                                                                    onClick={() => handleDeleteCampaign(task._id)
-}
+                                                                    onClick={() => handleDeleteCampaign(task._id)}
                                                                     title="Delete Campaign"
                                                                     className="p-1.5 md:p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 dark:bg-red-950/20 dark:hover:bg-red-900/30 dark:border-red-900/40 dark:text-red-400 transition-all text-xs font-bold uppercase tracking-wider"
                                                                 >
@@ -5791,22 +5644,19 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         </td>
                                                     </tr>
                                                     );
-                                                })
-}
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>
                                 </div>
-                                {renderPagination(myCampaignsPage, totalMyCampaignsPages, setMyCampaignsPage)
-}
+                                {renderPagination(myCampaignsPage, totalMyCampaignsPages, setMyCampaignsPage)}
                             </div>
-                        )
-}
+                        )}
                     </div>
                 );
-            })()
-}
+            })()}
 
+             {/* TAB: PENDING PAYMENT TASKS */}
             {activeTab === 'pending-payment' && (
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -5856,8 +5706,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <tr 
                                                         key={sub._id} 
                                                         className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20 cursor-pointer transition-colors"
-                                                        onClick={() => setSelectedSubmissionForDetails(sub)
-}
+                                                        onClick={() => setSelectedSubmissionForDetails(sub)}
                                                         title="Click to view details"
                                                     >
                                                         <td className="p-3.5 md:p-5 text-gray-900 dark:text-white font-bold">{sub.taskTitle || 'Engagement Task'}</td>
@@ -5881,21 +5730,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         </td>
                                                     </tr>
                                                 );
-                                            })
-}
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
-                            {renderPagination(pendingPage, totalPendingPages, setPendingPage)
-}
+                            {renderPagination(pendingPage, totalPendingPages, setPendingPage)}
                         </div>
-                    )
-}
+                    )}
                 </div>
-            )
-}
+            )}
 
+            {/* TAB: COMPLETED TASKS */}
             {activeTab === 'completed-tasks' && (
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-[2rem] shadow-md border dark:border-gray-700/60 animate-transition">
@@ -5960,8 +5806,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 <tr 
                                                     key={sub._id} 
                                                     className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20 cursor-pointer transition-colors"
-                                                    onClick={() => setSelectedSubmissionForDetails(sub)
-}
+                                                    onClick={() => setSelectedSubmissionForDetails(sub)}
                                                     title="Click to view details"
                                                 >
                                                     <td className="p-3.5 md:p-5 text-gray-900 dark:text-white font-bold">{sub.taskTitle || 'Engagement Task'}</td>
@@ -5974,17 +5819,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         +{sub.rewardAmount} USD
                                                     </td>
                                                     <td className="p-3.5 md:p-5">
-                                                        {renderDisputeStageBadge(sub)
-}
+                                                        {renderDisputeStageBadge(sub)}
                                                     </td>
-                                                    <td className="p-3.5 md:p-5" onClick={(e) => e.stopPropagation()
-}>
+                                                    <td className="p-3.5 md:p-5" onClick={(e) => e.stopPropagation()}>
                                                         <div className="flex items-center gap-2 justify-end mb-1">
                                                             <Button 
                                                                 variant="secondary" 
                                                                 className="text-[10px] md:text-xs py-1 px-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold uppercase tracking-wider shrink-0"
-                                                                onClick={() => setSelectedSubmissionForDetails(sub)
-}
+                                                                onClick={() => setSelectedSubmissionForDetails(sub)}
                                                             >
                                                                 👁 Detail
                                                             </Button>
@@ -6029,8 +5871,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                             <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800">
                                                                                 ⏰ {remStr}
                                                                             </span>
-                                                                        )
-}
+                                                                        )}
                                                                         <Button 
                                                                             variant="secondary" 
                                                                             className="text-[10px] md:text-xs py-1.5 px-3 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/40 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 font-bold uppercase tracking-wider"
@@ -6054,30 +5895,25 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                         <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider">🤝 Creator Reviewing</span>
                                                                         <span className="text-[10px] font-extrabold text-amber-600 dark:text-amber-400">⏰ Auto-approves: {getRemainingTimeString(sub.disputeReviewDeadline || (sub.updatedAt || sub.createdAt ? new Date(new Date(sub.updatedAt || sub.createdAt).getTime() + (settings?.systemLimits?.disputeReviewTimeoutDays ?? 3) * 86400000) : null)) || '3 days'}</span>
                                                                     </>
-                                                                )
-}
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <span className="text-gray-400 dark:text-gray-600 font-bold text-xs">—</span>
-                                                        )
-}
+                                                        )}
                                                     </td>
                                                 </tr>
-                                            ))
-}
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
-                            {renderPagination(completedPage, totalCompletedPages, setCompletedPage)
-}
+                            {renderPagination(completedPage, totalCompletedPages, setCompletedPage)}
                         </div>
-                    )
-}
+                    )}
                 </div>
-            )
-}
+            )}
 
+            {/* TAB: REVIEW PROOFS (CAMPAIGN OWNER REVIEW) */}
             {activeTab === 'review-proofs' && (
                 <div className="space-y-6 animate-in fade-in duration-300">
                     <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
@@ -6087,6 +5923,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 As the creator of these campaigns, you can inspect worker proofs and approve to release payments or reject them with a reason.
                             </p>
                         </div>
+                        {/* Filter Sub-Tabs */}
                         <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto">
                             <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl border dark:border-gray-700 w-full sm:w-auto justify-center sm:justify-start">
                                 {(['All', 'Pending', 'Disputed', 'Approved', 'Rejected'] as const).map(status => (
@@ -6110,8 +5947,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     : campaignSubmissions.filter(s => s.status === status).length
                                         })
                                     </button>
-                                ))
-}
+                                ))}
                             </div>
 
                             <div className="relative w-full sm:w-64">
@@ -6153,8 +5989,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             {paginatedReviewSubmissions.map(sub => (
                                                 <tr 
                                                     key={sub._id} 
-                                                    onClick={() => setSelectedWorkerSubmissionForDetails(sub)
-}
+                                                    onClick={() => setSelectedWorkerSubmissionForDetails(sub)}
                                                     className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20 cursor-pointer transition-colors"
                                                 >
                                                     <td className="p-3.5 md:p-5">
@@ -6176,8 +6011,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                                 {isImg ? '📸' : '✍'} {item.label}
                                                                             </span>
                                                                         );
-                                                                    })
-}
+                                                                    })}
                                                                 </div>
                                                             ) : (
                                                                 <div className="flex flex-wrap gap-1">
@@ -6185,39 +6019,32 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
                                                                             ✍ Text Answer
                                                                         </span>
-                                                                    )
-}
+                                                                    )}
                                                                     {sub.proofUsername && (
                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
                                                                             👤 @{sub.proofUsername}
                                                                         </span>
-                                                                    )
-}
+                                                                    )}
                                                                     {sub.proofUserIdVal && (
                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm font-mono">
                                                                             🆔 ID: {sub.proofUserIdVal}
                                                                         </span>
-                                                                    )
-}
+                                                                    )}
                                                                     {sub.proofEmail && (
                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
                                                                             ✉ Email
                                                                         </span>
-                                                                    )
-}
+                                                                    )}
                                                                     {sub.proofImage && (
                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
                                                                             📸 Screenshot
                                                                         </span>
-                                                                    )
-}
+                                                                    )}
                                                                     {!sub.proofText && !sub.proofUsername && !sub.proofUserIdVal && !sub.proofEmail && !sub.proofImage && (
                                                                         <span className="text-xs italic text-gray-400">No proofs submitted</span>
-                                                                    )
-}
+                                                                    )}
                                                                 </div>
-                                                            )
-}
+                                                            )}
                                                             <span className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5 mt-1">
                                                                 🔍 Click to inspect proofs & files
                                                             </span>
@@ -6226,8 +6053,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <td className="p-3.5 md:p-5 font-mono font-black text-emerald-500">
                                                         +{sub.rewardAmount} USD
                                                     </td>
-                                                    <td className="p-3.5 md:p-5" onClick={(e) => e.stopPropagation()
-}>
+                                                    <td className="p-3.5 md:p-5" onClick={(e) => e.stopPropagation()}>
                                                         <div className="space-y-1">
                                                             <Badge variant={sub.status === 'Approved' ? 'success' : sub.status === 'Pending' ? 'warning' : 'danger'}>
                                                                 {sub.status}
@@ -6236,16 +6062,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 <p className="text-[10px] text-red-500 max-w-[150px] line-clamp-2" title={sub.rejectionReason}>
                                                                     <strong>Reason:</strong> {sub.rejectionReason}
                                                                 </p>
-                                                            )
-}
+                                                            )}
                                                         </div>
                                                     </td>
-                                                    <td className="p-3.5 md:p-5 text-right" onClick={(e) => e.stopPropagation()
-}>
+                                                    <td className="p-3.5 md:p-5 text-right" onClick={(e) => e.stopPropagation()}>
                                                         <div className="flex justify-end gap-2">
                                                             <button
-                                                                onClick={() => setSelectedWorkerSubmissionForDetails(sub)
-}
+                                                                onClick={() => setSelectedWorkerSubmissionForDetails(sub)}
                                                                 className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 dark:bg-blue-950/20 dark:hover:bg-blue-900/30 dark:border-blue-900/40 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm"
                                                             >
                                                                 👁 Detail
@@ -6254,8 +6077,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 <>
                                                                     <button
                                                                         className="px-2.5 py-1 bg-green-50 hover:bg-green-100 text-green-600 border border-green-200 dark:bg-green-950/20 dark:hover:bg-green-900/30 dark:border-green-900/40 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-sm"
-                                                                        onClick={() => handleApproveSubmission(sub._id)
-}
+                                                                        onClick={() => handleApproveSubmission(sub._id)}
                                                                     >
                                                                         Accept
                                                                     </button>
@@ -6269,26 +6091,22 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                         Reject
                                                                     </button>
                                                                 </>
-                                                            )
-}
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
-                                            ))
-}
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
-                            {renderPagination(reviewPage, totalReviewPages, setReviewPage)
-}
+                            {renderPagination(reviewPage, totalReviewPages, setReviewPage)}
                         </div>
-                    )
-}
+                    )}
                 </div>
-            )
-}
+            )}
 
+            {/* TAB 5: CURRENCY CONVERTER & WITHDRAW */}
             {activeTab === 'converter' && (
                 (state.settings?.campaignConvertEnabled === false || state.settings?.modulePagesConfig?.workAndEarn?.convert?.isEnabled === false) ? (
                     <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 md:p-10 shadow-xl border dark:border-gray-700 max-w-2xl mx-auto text-center space-y-4">
@@ -6329,8 +6147,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline flex items-center gap-1"
                                         title="Click to lookup and auto-fill available campaign balance"
                                     >
-                                        🔍 Lookup: ${availableCampaignWalletUSD.toFixed(2)
-} USD
+                                        🔍 Lookup: ${availableCampaignWalletUSD.toFixed(2)} USD
                                     </button>
                                 </div>
                                 <input 
@@ -6338,8 +6155,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     step="0.01"
                                     required
                                     value={convertAmount} 
-                                    onChange={(e) => setConvertAmount(Number(e.target.value))
-}
+                                    onChange={(e) => setConvertAmount(Number(e.target.value))}
                                     className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
                                 />
                             </div>
@@ -6377,21 +6193,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         <div className="mt-8 p-6 bg-blue-500/10 border-2 border-blue-500/30 rounded-3xl text-center space-y-2">
                             <p className="text-xs uppercase font-black text-blue-500 tracking-wider">Conversion Successful</p>
                             <p className="text-3xl font-black text-gray-900 dark:text-white">
-                                {(conversionResult.fromAmount ?? conversionResult.data?.fromAmount)
-} {(conversionResult.fromCurrency ?? conversionResult.data?.fromCurrency)
-} = <span className="text-emerald-500">{(conversionResult.toAmount ?? conversionResult.data?.toAmount)
-} {(conversionResult.toCurrency ?? conversionResult.data?.toCurrency)
-}</span>
+                                {(conversionResult.fromAmount ?? conversionResult.data?.fromAmount)} {(conversionResult.fromCurrency ?? conversionResult.data?.fromCurrency)} = <span className="text-emerald-500">{(conversionResult.toAmount ?? conversionResult.data?.toAmount)} {(conversionResult.toCurrency ?? conversionResult.data?.toCurrency)}</span>
                             </p>
                             <p className="text-xs text-gray-500">Converted using active platform exchange rates and credited to wallet.</p>
                         </div>
-                    )
-}
+                    )}
                 </div>
                 )
-            )
-}
+            )}
 
+            {/* INTERACTIVE SURVEY RUNNER MODAL */}
             {selectedTaskForProof && (selectedTaskForProof.isSurvey || selectedTaskForProof.category?.toLowerCase() === 'survey' || selectedTaskForProof.category?.toLowerCase() === 'surveys & feedback' || selectedTaskForProof.surveyConfig) ? (
                 !isSurveyGloballyEnabled ? (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -6403,8 +6214,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             <p className="text-sm text-slate-400">
                                 Surveys and feedback campaigns are currently disabled by platform administration. Please check back later.
                             </p>
-                            <Button variant="secondary" onClick={() => setSelectedTaskForProof(null)
-} className="w-full">
+                            <Button variant="secondary" onClick={() => setSelectedTaskForProof(null)} className="w-full">
                                 Close
                             </Button>
                         </div>
@@ -6413,8 +6223,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                     <SurveyRunnerModal
                         task={selectedTaskForProof}
                         currentUserId={currentUser?._id || ''}
-                        onClose={() => setSelectedTaskForProof(null)
-}
+                        onClose={() => setSelectedTaskForProof(null)}
                         onCompleted={() => {
                             setSelectedTaskForProof(null);
                             setActiveTab('browse');
@@ -6426,10 +6235,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                     <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6 my-8">
                         <div className="flex justify-between items-center">
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Task: {selectedTaskForProof.title}</h3>
-                            <button onClick={() => setSelectedTaskForProof(null)
-} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
+                            <button onClick={() => setSelectedTaskForProof(null)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
                         </div>
 
+                        {/* Professional Step Indicator */}
                         <div className="flex items-center justify-between mb-6 w-full max-w-xs mx-auto relative">
                             <div className="absolute top-[15px] left-0 w-full h-0.5 bg-gray-200 dark:bg-gray-700 -z-0"></div>
                             {[
@@ -6460,8 +6269,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         }`}>{s.label}</span>
                                     </div>
                                 );
-                            })
-}
+                            })}
                         </div>
 
                         {proofStep === 1 ? (
@@ -6502,8 +6310,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{req.instruction || 'Please provide required input.'}</span>
                                                         </div>
                                                     </div>
-                                                ))
-}
+                                                ))}
                                             </div>
                                         ) : (
                                             <div className="space-y-2 text-xs text-blue-800 dark:text-blue-300 font-bold">
@@ -6515,8 +6322,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.textProofInstruction || 'Proof text or URL.'}</span>
                                                         </div>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {selectedTaskForProof.requireUsername && (
                                                     <div className="flex items-start gap-2">
                                                         <span className="text-blue-500 mt-0.5">✔</span>
@@ -6525,8 +6331,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.usernameInstruction || 'Your profile username.'}</span>
                                                         </div>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {selectedTaskForProof.requireUserId && (
                                                     <div className="flex items-start gap-2">
                                                         <span className="text-blue-500 mt-0.5">✔</span>
@@ -6535,8 +6340,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.userIdInstruction || 'Your platform unique ID.'}</span>
                                                         </div>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {selectedTaskForProof.requireEmail && (
                                                     <div className="flex items-start gap-2">
                                                         <span className="text-blue-500 mt-0.5">✔</span>
@@ -6545,8 +6349,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.emailInstruction || 'Your registered email.'}</span>
                                                         </div>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {selectedTaskForProof.requireScreenshot && (
                                                     <div className="flex items-start gap-2">
                                                         <span className="text-blue-500 mt-0.5">✔</span>
@@ -6555,8 +6358,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.screenshotInstruction || 'Upload a screenshot image.'}</span>
                                                         </div>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail && !selectedTaskForProof.requireScreenshot && (
                                                     <div className="flex items-start gap-2">
                                                         <span className="text-blue-500 mt-0.5">✔</span>
@@ -6565,17 +6367,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">A screenshot or verification text.</span>
                                                         </div>
                                                     </div>
-                                                )
-}
+                                                )}
                                             </div>
-                                        )
-}
+                                        )}
                                     </div>
                                 </div>
 
                                 <div className="flex gap-4 pt-4 border-t dark:border-gray-700">
-                                    <Button type="button" variant="secondary" onClick={() => setSelectedTaskForProof(null)
-} className="flex-1 py-3 text-xs font-bold uppercase tracking-wider">
+                                    <Button type="button" variant="secondary" onClick={() => setSelectedTaskForProof(null)} className="flex-1 py-3 text-xs font-bold uppercase tracking-wider">
                                         Close
                                     </Button>
                                     <Button 
@@ -6622,8 +6421,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 <input 
                                                                     type="file" 
                                                                     accept="image/*"
-                                                                    onChange={(e) => handleDynamicImageUpload(req.id, e)
-}
+                                                                    onChange={(e) => handleDynamicImageUpload(req.id, e)}
                                                                     className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700"
                                                                 />
                                                             </div>
@@ -6633,8 +6431,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 <input 
                                                                     type="url" 
                                                                     value={value.startsWith('data:') ? '' : value}
-                                                                    onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))
-}
+                                                                    onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))}
                                                                     placeholder="https://imgur.com/screenshot.png"
                                                                     className="w-full px-4 py-2 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
                                                                 />
@@ -6649,36 +6446,31 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                             const next = { ...prev };
                                                                             delete next[req.id];
                                                                             return next;
-                                                                        })
-}
+                                                                        })}
                                                                         className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
                                                                     >
                                                                         &times;
                                                                     </button>
                                                                 </div>
-                                                            )
-}
+                                                            )}
                                                         </div>
                                                     ) : (
                                                         <input 
                                                             type={req.type === 'email' ? 'email' : 'text'}
                                                             required
                                                             value={value}
-                                                            onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))
-}
-                                                            placeholder={`Enter your ${req.label.toLowerCase()
-}`}
+                                                            onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))}
+                                                            placeholder={`Enter your ${req.label.toLowerCase()}`}
                                                             className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
                                                         />
-                                                    )
-}
+                                                    )}
                                                 </div>
                                             );
-                                        })
-}
+                                        })}
                                     </div>
                                 ) : (
                                     <>
+                                        {/* Legacy Proof Form (for old campaigns) */}
                                         {(selectedTaskForProof.requireTextProof || (!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail && !selectedTaskForProof.requireScreenshot)) && (
                                             <div>
                                                 <label className="block text-xs font-black uppercase text-gray-500 mb-2">
@@ -6688,14 +6480,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     type="text" 
                                                     required={selectedTaskForProof.requireTextProof}
                                                     value={proofText}
-                                                    onChange={(e) => setProofText(e.target.value)
-}
+                                                    onChange={(e) => setProofText(e.target.value)}
                                                     placeholder="e.g. My Telegram/YouTube username @john_doe"
                                                     className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
                                                 />
                                             </div>
-                                        )
-}
+                                        )}
 
                                         {selectedTaskForProof.requireUsername && (
                                             <div>
@@ -6706,14 +6496,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     type="text" 
                                                     required={selectedTaskForProof.requireUsername}
                                                     value={proofUsername}
-                                                    onChange={(e) => setProofUsername(e.target.value)
-}
+                                                    onChange={(e) => setProofUsername(e.target.value)}
                                                     placeholder="Enter your username"
                                                     className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
                                                 />
                                             </div>
-                                        )
-}
+                                        )}
 
                                         {selectedTaskForProof.requireUserId && (
                                             <div>
@@ -6724,14 +6512,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     type="text" 
                                                     required={selectedTaskForProof.requireUserId}
                                                     value={proofUserIdVal}
-                                                    onChange={(e) => setProofUserIdVal(e.target.value)
-}
+                                                    onChange={(e) => setProofUserIdVal(e.target.value)}
                                                     placeholder="Enter your profile ID / User ID"
                                                     className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
                                                 />
                                             </div>
-                                        )
-}
+                                        )}
 
                                         {selectedTaskForProof.requireEmail && (
                                             <div>
@@ -6742,14 +6528,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     type="email" 
                                                     required={selectedTaskForProof.requireEmail}
                                                     value={proofEmail}
-                                                    onChange={(e) => setProofEmail(e.target.value)
-}
+                                                    onChange={(e) => setProofEmail(e.target.value)}
                                                     placeholder="Enter your registered email"
                                                     className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
                                                 />
                                             </div>
-                                        )
-}
+                                        )}
 
                                         {(selectedTaskForProof.requireScreenshot || (!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail)) && (
                                             <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700">
@@ -6772,8 +6556,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <input 
                                                         type="url" 
                                                         value={proofImage.startsWith('data:') ? '' : proofImage}
-                                                        onChange={(e) => setProofImage(e.target.value)
-}
+                                                        onChange={(e) => setProofImage(e.target.value)}
                                                         placeholder="https://imgur.com/screenshot.png"
                                                         className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
                                                     />
@@ -6784,21 +6567,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         <img src={proofImage} alt="Proof preview" className="w-full h-full object-cover" />
                                                         <button 
                                                             type="button" 
-                                                            onClick={() => setProofImage('')
-}
+                                                            onClick={() => setProofImage('')}
                                                             className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
                                                         >
                                                             &times;
                                                         </button>
                                                     </div>
-                                                )
-}
+                                                )}
                                             </div>
-                                        )
-}
+                                        )}
                                     </>
-                                )
-}
+                                )}
 
                                 <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-3">
                                     <p className="text-xs font-bold text-amber-700 dark:text-amber-400 leading-relaxed flex items-start gap-2">
@@ -6811,8 +6590,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <input 
                                             type="checkbox" 
                                             checked={proofAgreed}
-                                            onChange={(e) => setProofAgreed(e.target.checked)
-}
+                                            onChange={(e) => setProofAgreed(e.target.checked)}
                                             className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                         />
                                         <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
@@ -6822,8 +6600,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 <div className="flex gap-4 pt-4 border-t dark:border-gray-700">
-                                    <Button type="button" variant="secondary" onClick={() => setProofStep(1)
-} className="flex-1 py-3 text-xs font-bold uppercase tracking-wider">
+                                    <Button type="button" variant="secondary" onClick={() => setProofStep(1)} className="flex-1 py-3 text-xs font-bold uppercase tracking-wider">
                                         &larr; Back
                                     </Button>
                                     <Button type="submit" variant="primary" isLoading={isSubmittingProof} className="flex-[2] py-3 text-xs font-black uppercase tracking-widest bg-blue-600 text-white shadow-lg">
@@ -6831,19 +6608,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </Button>
                                 </div>
                             </form>
-                        )
-}
+                        )}
                     </div>
                 </div>
             ) : null}
 
+            {/* DISPUTE MODAL */}
             {selectedSubmissionForDispute && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6">
                         <div className="flex justify-between items-center">
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Raise Dispute: {selectedSubmissionForDispute.taskTitle}</h3>
-                            <button onClick={() => setSelectedSubmissionForDispute(null)
-} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
+                            <button onClick={() => setSelectedSubmissionForDispute(null)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
                         </div>
 
                         <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl text-xs text-gray-600 dark:text-gray-300 space-y-2">
@@ -6862,8 +6638,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     rows={3}
                                     required
                                     value={disputeDescription}
-                                    onChange={(e) => setDisputeDescription(e.target.value)
-}
+                                    onChange={(e) => setDisputeDescription(e.target.value)}
                                     placeholder="Explain why your task submission was correct and should be approved. Provide detailed context..."
                                     className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                 ></textarea>
@@ -6888,8 +6663,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <input 
                                             type="url" 
                                             value={disputeProofImage.startsWith('data:') ? '' : disputeProofImage}
-                                            onChange={(e) => setDisputeProofImage(e.target.value)
-}
+                                            onChange={(e) => setDisputeProofImage(e.target.value)}
                                             placeholder="https://imgur.com/screenshot.png"
                                             className="w-full px-4 py-2 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                         />
@@ -6900,21 +6674,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             <img src={disputeProofImage} alt="Dispute preview" className="w-full h-full object-cover" />
                                             <button 
                                                 type="button" 
-                                                onClick={() => setDisputeProofImage('')
-}
+                                                onClick={() => setDisputeProofImage('')}
                                                 className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
                                             >
                                                 &times;
                                             </button>
                                         </div>
-                                    )
-}
+                                    )}
                                 </div>
                             </div>
 
                             <div className="flex gap-4 pt-2">
-                                <Button type="button" variant="secondary" onClick={() => setSelectedSubmissionForDispute(null)
-} className="flex-1 py-3 text-xs font-bold uppercase">
+                                <Button type="button" variant="secondary" onClick={() => setSelectedSubmissionForDispute(null)} className="flex-1 py-3 text-xs font-bold uppercase">
                                     Cancel
                                 </Button>
                                 <Button type="submit" variant="primary" isLoading={isSubmittingDispute} className="flex-1 py-3 text-xs font-bold uppercase">
@@ -6924,24 +6695,21 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </form>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* CAMPAIGN REVIEW RESUBMISSION MODAL */}
             {selectedCampaignForReview && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6">
                         <div className="flex justify-between items-center">
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Submit for One-Time Review</h3>
-                            <button onClick={() => setSelectedCampaignForReview(null)
-} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
+                            <button onClick={() => setSelectedCampaignForReview(null)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
                         </div>
 
                         <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-2xl text-xs text-amber-800 dark:text-amber-400 space-y-2">
                             <p className="font-bold">⚠️ Review Submission Guidelines:</p>
                             <p>You are requesting a <strong>one-time, final review</strong> from the Admin for this campaign. Please ensure you have fixed any issues reported in the rejection reason below.</p>
-                            <p>Upon resubmitting, the budget of <strong className="text-emerald-500">{(selectedCampaignForReview.totalBudget + (settings.userTaskConfig?.campaignFeeEnabled ? (settings.userTaskConfig?.campaignFeeAmount || 0) : 0)).toFixed(2)
-} USD</strong> {(settings.userTaskConfig?.campaignFeeEnabled && (settings.userTaskConfig?.campaignFeeAmount || 0) > 0) ? `(including a ${settings.userTaskConfig?.campaignFeeAmount.toFixed(2)
-} USD campaign creation fee)` : ''} will be deducted from your wallet to fund the active slots. If the Admin rejects the campaign again, this entire deducted amount (Base Fee + Budget) will be fully refunded to your balance.</p>
+                            <p>Upon resubmitting, the budget of <strong className="text-emerald-500">{(selectedCampaignForReview.totalBudget + (settings.userTaskConfig?.campaignFeeEnabled ? (settings.userTaskConfig?.campaignFeeAmount || 0) : 0)).toFixed(2)} USD</strong> {(settings.userTaskConfig?.campaignFeeEnabled && (settings.userTaskConfig?.campaignFeeAmount || 0) > 0) ? `(including a ${settings.userTaskConfig?.campaignFeeAmount.toFixed(2)} USD campaign creation fee)` : ''} will be deducted from your wallet to fund the active slots. If the Admin rejects the campaign again, this entire deducted amount (Base Fee + Budget) will be fully refunded to your balance.</p>
                         </div>
 
                         <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-2xl text-xs space-y-1">
@@ -6956,16 +6724,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     rows={4}
                                     required
                                     value={reviewExplanation}
-                                    onChange={(e) => setReviewExplanation(e.target.value)
-}
+                                    onChange={(e) => setReviewExplanation(e.target.value)}
                                     placeholder="Explain how you fixed the issue, or provide additional notes for the Admin to approve your campaign..."
                                     className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                 ></textarea>
                             </div>
 
                             <div className="flex gap-4 pt-2">
-                                <Button type="button" variant="secondary" onClick={() => setSelectedCampaignForReview(null)
-} className="flex-1 py-3 text-xs font-bold uppercase">
+                                <Button type="button" variant="secondary" onClick={() => setSelectedCampaignForReview(null)} className="flex-1 py-3 text-xs font-bold uppercase">
                                     Cancel
                                 </Button>
                                 <Button type="submit" variant="primary" isLoading={isSubmittingReview} className="flex-1 py-3 text-xs font-bold uppercase">
@@ -6975,23 +6741,21 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </form>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* CONVERT & TRANSFER TASK WALLET MODAL */}
             {showConvertModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border dark:border-gray-700 space-y-6">
                         <div className="flex justify-between items-center">
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Task Wallet Conversion</h3>
-                            <button onClick={() => setShowConvertModal(false)
-} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
+                            <button onClick={() => setShowConvertModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
                         </div>
 
                         <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl space-y-3">
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-500 font-medium">Campaign Balance (USD):</span>
-                                <span className="font-bold text-gray-900 dark:text-white">${availableCampaignWalletUSD.toFixed(2)
-} USD</span>
+                                <span className="font-bold text-gray-900 dark:text-white">${availableCampaignWalletUSD.toFixed(2)} USD</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-500 font-medium">Base Currency:</span>
@@ -7004,8 +6768,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             <div className="border-t dark:border-gray-700 pt-3 flex justify-between items-center">
                                 <span className="text-xs font-black uppercase text-gray-500">Converted Amount:</span>
                                 <span className="text-lg font-black text-emerald-500">
-                                    {(availableCampaignWalletUSD * (rates[currentUser.currency || 'USD'] || 1)).toFixed(2)
-} {currentUser.currency || 'USD'}
+                                    {(availableCampaignWalletUSD * (rates[currentUser.currency || 'USD'] || 1)).toFixed(2)} {currentUser.currency || 'USD'}
                                 </span>
                             </div>
                         </div>
@@ -7015,8 +6778,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </p>
 
                         <div className="flex gap-4 pt-2">
-                            <Button type="button" variant="secondary" onClick={() => setShowConvertModal(false)
-} className="flex-1 py-3">
+                            <Button type="button" variant="secondary" onClick={() => setShowConvertModal(false)} className="flex-1 py-3">
                                 Cancel
                             </Button>
                             <Button 
@@ -7031,25 +6793,22 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* SCREENSHOT PREVIEW OVERLAY */}
             {selectedProofImage && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedProofImage(null)
-}>
-                    <div className="max-w-4xl max-h-[90vh] bg-white dark:bg-gray-800 p-5 rounded-3xl shadow-2xl relative overflow-auto space-y-4" onClick={e => e.stopPropagation()
-}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedProofImage(null)}>
+                    <div className="max-w-4xl max-h-[90vh] bg-white dark:bg-gray-800 p-5 rounded-3xl shadow-2xl relative overflow-auto space-y-4" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center">
                             <h4 className="font-bold text-gray-900 dark:text-white">Proof Screenshot Preview</h4>
-                            <button onClick={() => setSelectedProofImage(null)
-} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white text-3xl font-black">&times;</button>
+                            <button onClick={() => setSelectedProofImage(null)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white text-3xl font-black">&times;</button>
                         </div>
                         <img src={selectedProofImage} alt="Proof" className="max-w-full h-auto rounded-2xl mx-auto border dark:border-gray-700 shadow-lg" referrerPolicy="no-referrer" />
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* SUBMISSION DETAILS MODAL */}
             {selectedSubmissionForDetails && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 max-w-lg w-full shadow-2xl border dark:border-gray-700/60 flex flex-col max-h-[85vh] overflow-hidden">
@@ -7058,11 +6817,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 <h3 className="text-lg font-bold text-gray-900 dark:text-white uppercase tracking-tight">Submission Details</h3>
                                 <p className="text-[10px] text-gray-500 font-mono">ID: {selectedSubmissionForDetails._id}</p>
                             </div>
-                            <button onClick={() => setSelectedSubmissionForDetails(null)
-} className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl">&times;</button>
+                            <button onClick={() => setSelectedSubmissionForDetails(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl">&times;</button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+                            {/* Task Info Section */}
                             {(() => {
                                 const matchingTask = userTasks.find(t => t._id?.toString() === selectedSubmissionForDetails.taskId?.toString());
                                 const taskDesc = selectedSubmissionForDetails.taskDescription || matchingTask?.description;
@@ -7081,8 +6840,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     {taskDesc}
                                                 </p>
                                             </div>
-                                        )
-}
+                                        )}
 
                                         {matchingTask?.link && (
                                             <div className="pt-1">
@@ -7091,20 +6849,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     🔗 {matchingTask.link}
                                                 </a>
                                             </div>
-                                        )
-}
+                                        )}
                                     </div>
                                 );
-                            })()
-}
+                            })()}
 
+                            {/* Status and Payment Information */}
                             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl border dark:border-gray-700 space-y-3">
                                 <h5 className="text-xs uppercase font-black text-gray-500">Payment & Status Details</h5>
                                 <div className="grid grid-cols-2 gap-3 text-xs">
                                     <div>
                                         <span className="text-gray-400 block mb-0.5">Status</span>
-                                        {renderDisputeStageBadge(selectedSubmissionForDetails)
-}
+                                        {renderDisputeStageBadge(selectedSubmissionForDetails)}
                                     </div>
                                     <div>
                                         <span className="text-gray-400 block mb-0.5">Reward Amount</span>
@@ -7126,30 +6882,26 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <div className="text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 p-2.5 rounded-xl font-medium mt-1">
                                         🎉 Payment of +${selectedSubmissionForDetails.rewardAmount} USD was fully credited to your Available Task Balance. You can convert and transfer it to your Main MLM balance at any time!
                                     </div>
-                                )
-}
+                                )}
 
                                 {selectedSubmissionForDetails.status === 'Pending' && (
                                     <div className="text-[11px] text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 p-2.5 rounded-xl font-medium mt-1">
                                         ⏳ The campaign creator is currently reviewing your proofs. Payout will occur instantly upon approval.
                                     </div>
-                                )
-}
+                                )}
 
                                 {selectedSubmissionForDetails.status === 'Rejected' && (
                                     <div className="text-[11px] text-red-600 dark:text-red-400 bg-red-500/10 p-2.5 rounded-xl font-medium mt-1">
                                         ❌ This submission was rejected.
                                         {selectedSubmissionForDetails.rejectionReason && (
                                             <p className="mt-1 font-bold">Reason: {selectedSubmissionForDetails.rejectionReason}</p>
-                                        )
-}
+                                        )}
                                     </div>
-                                )
-}
+                                )}
 
-                                {renderDisputeTimerBox(selectedSubmissionForDetails, settings)
-}
+                                {renderDisputeTimerBox(selectedSubmissionForDetails, settings)}
 
+                                {/* DISPUTE INFORMATION & EXTRA PROOF SUBMITTED BY WORKER */}
                                 {(() => {
                                     const workerDispute = state.disputes?.find((d: any) => 
                                         String(d.submissionId) === String(selectedSubmissionForDetails._id) || 
@@ -7186,8 +6938,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         {extraDisputeReason}
                                                     </p>
                                                 </div>
-                                            )
-}
+                                            )}
 
                                             {extraDisputeProof && (
                                                 <div className="bg-white dark:bg-gray-900 p-2.5 rounded-xl border border-amber-200/60 dark:border-amber-800/40">
@@ -7197,8 +6948,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                                                         <div 
                                                             className="relative group w-28 h-28 rounded-xl overflow-hidden border border-amber-300 dark:border-amber-700 cursor-zoom-in shadow-md"
-                                                            onClick={() => setSelectedProofImage(extraDisputeProof)
-}
+                                                            onClick={() => setSelectedProofImage(extraDisputeProof)}
                                                         >
                                                             <img 
                                                                 src={extraDisputeProof} 
@@ -7225,8 +6975,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         </div>
                                                     </div>
                                                 </div>
-                                            )
-}
+                                            )}
 
                                             {selectedSubmissionForDetails.disputeCreatorNotes && (
                                                 <div className="bg-white dark:bg-gray-900 p-2.5 rounded-xl border border-red-200 dark:border-red-900/40">
@@ -7237,16 +6986,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         {selectedSubmissionForDetails.disputeCreatorNotes}
                                                     </p>
                                                 </div>
-                                            )
-}
+                                            )}
 
                                             <DisputeTimeline submission={selectedSubmissionForDetails} dispute={workerDispute} settings={settings} />
                                         </div>
                                     );
-                                })()
-}
+                                })()}
                             </div>
 
+                            {/* Submitted Proofs Section */}
                             <div className="space-y-2">
                                 <h5 className="text-xs uppercase font-black text-gray-500">Your Submitted Proofs</h5>
                                 {selectedSubmissionForDetails.submittedProofs && Array.isArray(selectedSubmissionForDetails.submittedProofs) && selectedSubmissionForDetails.submittedProofs.length > 0 ? (
@@ -7258,8 +7006,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <span className="text-[10px] uppercase font-bold text-blue-500 block">{item.label}</span>
                                                     {isImage ? (
                                                         <div className="mt-2">
-                                                            <div className="relative group w-24 h-24 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(item.value)
-}>
+                                                            <div className="relative group w-24 h-24 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(item.value)}>
                                                                 <img src={item.value} alt={item.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
                                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                                                     <span className="text-white text-lg">🔍</span>
@@ -7269,12 +7016,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         </div>
                                                     ) : (
                                                         <p className="font-medium text-xs text-gray-800 dark:text-gray-200 mt-1 break-all">{item.value}</p>
-                                                    )
-}
+                                                    )}
                                                 </div>
                                             );
-                                        })
-}
+                                        })}
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
@@ -7283,35 +7028,30 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 <span className="text-[10px] uppercase font-bold text-gray-400 block">Text Proof</span>
                                                 <p className="text-xs text-gray-800 dark:text-gray-200 mt-1 break-all">{selectedSubmissionForDetails.proofText}</p>
                                             </div>
-                                        )
-}
+                                        )}
                                         {selectedSubmissionForDetails.proofUsername && (
                                             <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border dark:border-gray-700">
                                                 <span className="text-[10px] uppercase font-bold text-gray-400 block">Username</span>
                                                 <p className="font-mono text-xs text-gray-800 dark:text-gray-200 mt-1">{selectedSubmissionForDetails.proofUsername}</p>
                                             </div>
-                                        )
-}
+                                        )}
                                         {selectedSubmissionForDetails.proofUserIdVal && (
                                             <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border dark:border-gray-700">
                                                 <span className="text-[10px] uppercase font-bold text-gray-400 block">User ID</span>
                                                 <p className="font-mono text-xs text-gray-800 dark:text-gray-200 mt-1">{selectedSubmissionForDetails.proofUserIdVal}</p>
                                             </div>
-                                        )
-}
+                                        )}
                                         {selectedSubmissionForDetails.proofEmail && (
                                             <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border dark:border-gray-700">
                                                 <span className="text-[10px] uppercase font-bold text-gray-400 block">Email Address</span>
                                                 <p className="text-xs text-gray-800 dark:text-gray-200 mt-1">{selectedSubmissionForDetails.proofEmail}</p>
                                             </div>
-                                        )
-}
+                                        )}
                                         {selectedSubmissionForDetails.proofImage && (
                                             <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border dark:border-gray-700">
                                                 <span className="text-[10px] uppercase font-bold text-gray-400 block">Screenshot Proof</span>
                                                 <div className="mt-2">
-                                                    <div className="relative group w-24 h-24 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(selectedSubmissionForDetails.proofImage)
-}>
+                                                    <div className="relative group w-24 h-24 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(selectedSubmissionForDetails.proofImage)}>
                                                         <img src={selectedSubmissionForDetails.proofImage} alt="Screenshot Proof" className="w-full h-full object-cover group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
                                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                                             <span className="text-white text-lg">🔍</span>
@@ -7320,25 +7060,22 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <a href={selectedSubmissionForDetails.proofImage} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1.5 inline-block font-bold">Open Original Screenshot</a>
                                                 </div>
                                             </div>
-                                        )
-}
+                                        )}
                                     </div>
-                                )
-}
+                                )}
                             </div>
                         </div>
 
                         <div className="pt-4 border-t dark:border-gray-700 flex justify-end">
-                            <Button type="button" variant="secondary" onClick={() => setSelectedSubmissionForDetails(null)
-} className="px-5 py-2">
+                            <Button type="button" variant="secondary" onClick={() => setSelectedSubmissionForDetails(null)} className="px-5 py-2">
                                 Close
                             </Button>
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* Modal: Rejection Reason Feedback */}
             {rejectingSubId && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border dark:border-gray-700 animate-in fade-in zoom-in duration-200">
@@ -7348,8 +7085,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     {rejectingSubId === 'bulk' ? 'Bulk Reject Submissions' : 'Reject Proof Submission'}
                                 </h4>
                                 <button 
-                                    onClick={() => setRejectingSubId(null)
-}
+                                    onClick={() => setRejectingSubId(null)}
                                     className="text-gray-400 hover:text-gray-600 dark:hover:text-white text-xl"
                                 >
                                     &times;
@@ -7367,8 +7103,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     rows={4}
                                     placeholder="e.g. Invalid/unclear screenshot proof or incorrect username provided."
                                     value={rejectionFeedback}
-                                    onChange={(e) => setRejectionFeedback(e.target.value)
-}
+                                    onChange={(e) => setRejectionFeedback(e.target.value)}
                                     className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                 />
                             </div>
@@ -7386,8 +7121,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </Button>
                                 <button
                                     type="button"
-                                    disabled={isSubmitting || !rejectionFeedback.trim()
-}
+                                    disabled={isSubmitting || !rejectionFeedback.trim()}
                                     onClick={() => {
                                         if (rejectingSubId === 'bulk') {
                                             const filteredSubmissions = userTaskSubmissions.filter(s => s.taskId?.toString() === selectedCampaignForDetail?._id?.toString() && s.status === 'Pending');
@@ -7405,31 +7139,33 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* Modal: Detailed Worker Submission Viewer */}
             {selectedWorkerSubmissionForDetails && (() => {
                 const sub = selectedWorkerSubmissionForDetails;
                 const task = selectedCampaignForDetail || mySubmittedTasks.find(t => t._id?.toString() === sub.taskId?.toString());
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden border dark:border-gray-700 animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+                            {/* Header */}
                             <div className="p-5 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/10">
                                 <div>
                                     <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest block font-mono">Verification Workspace</span>
                                     <h4 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight mt-0.5">Worker: {sub.workerName}</h4>
                                 </div>
                                 <button 
-                                    onClick={() => setSelectedWorkerSubmissionForDetails(null)
-}
+                                    onClick={() => setSelectedWorkerSubmissionForDetails(null)}
                                     className="text-gray-400 hover:text-gray-600 dark:hover:text-white text-2xl font-bold"
                                 >
                                     &times;
                                 </button>
                             </div>
 
+                            {/* Main Body - Split Layout */}
                             <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs md:text-sm font-medium">
                                 
+                                {/* LEFT COLUMN: Campaign Guidelines Reference */}
                                 <div className="space-y-4 border-b md:border-b-0 md:border-r dark:border-gray-700 pb-5 md:pb-0 md:pr-6">
                                     <div className="flex items-center gap-1.5">
                                         <span className="p-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-xl text-xs">📋</span>
@@ -7438,18 +7174,19 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                                     {task ? (
                                         <div className="space-y-3.5 pt-1">
+                                            {/* Campaign Title & Type */}
                                             <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30">
                                                 <span className="text-gray-400 text-[10px] block uppercase font-bold">Campaign Title</span>
                                                 <p className="font-bold text-gray-900 dark:text-white mt-0.5 break-words">{task.title}</p>
                                                 <p className="text-[10px] text-gray-400 font-semibold mt-1">Category: {task.category} ({task.subType})</p>
                                             </div>
 
+                                            {/* Target URL */}
                                             <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30">
                                                 <div className="flex justify-between items-center mb-0.5">
                                                     <span className="text-gray-400 text-[10px] uppercase font-bold">Campaign URL</span>
                                                     <span 
-                                                        onClick={() => handleCopyCampaignLink(task.link)
-}
+                                                        onClick={() => handleCopyCampaignLink(task.link)}
                                                         className="text-[10px] font-bold text-blue-500 hover:underline cursor-pointer"
                                                     >
                                                         {copiedCampaignLink ? '✅ Copied!' : '📋 Copy'}
@@ -7460,6 +7197,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 </a>
                                             </div>
 
+                                            {/* Description & Instructions */}
                                             <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30">
                                                 <span className="text-gray-400 text-[10px] block uppercase font-bold">Instructions Given to Worker</span>
                                                 <div className="text-gray-700 dark:text-gray-300 font-medium mt-1 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto pr-1 text-xs">
@@ -7467,6 +7205,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 </div>
                                             </div>
 
+                                            {/* Required Proofs Setup */}
                                             <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700/30 space-y-2 text-xs">
                                                 <span className="text-gray-400 text-[10px] block uppercase font-bold mb-1">Required Proof Criteria</span>
                                                 
@@ -7475,38 +7214,34 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         <span className="font-bold text-gray-900 dark:text-white block text-[11px]">📸 Screenshot Required</span>
                                                         <p className="text-gray-500 italic text-[10px]">{task.screenshotInstruction || 'Please upload screenshot proof.'}</p>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {task.requireTextProof && (
                                                     <div className="border-l-2 border-blue-500 pl-2">
                                                         <span className="font-bold text-gray-900 dark:text-white block text-[11px]">✍ Text Answer Required</span>
                                                         <p className="text-gray-500 italic text-[10px]">{task.textProofInstruction}</p>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {task.requireUsername && (
                                                     <div className="border-l-2 border-blue-500 pl-2">
                                                         <span className="font-bold text-gray-900 dark:text-white block text-[11px]">👤 Username Required</span>
                                                         <p className="text-gray-500 italic text-[10px]">{task.usernameInstruction}</p>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {task.requireUserId && (
                                                     <div className="border-l-2 border-blue-500 pl-2">
                                                         <span className="font-bold text-gray-900 dark:text-white block text-[11px]">🆔 Platform User ID Required</span>
                                                         <p className="text-gray-500 italic text-[10px]">{task.userIdInstruction}</p>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {task.requireEmail && (
                                                     <div className="border-l-2 border-blue-500 pl-2">
                                                         <span className="font-bold text-gray-900 dark:text-white block text-[11px]">✉ Email Address Required</span>
                                                         <p className="text-gray-500 italic text-[10px]">{task.emailInstruction}</p>
                                                     </div>
-                                                )
-}
+                                                )}
                                             </div>
 
+                                            {/* Pricing Information */}
                                             <div className="grid grid-cols-2 gap-2 text-xs">
                                                 <div className="p-2.5 bg-gray-50 dark:bg-gray-900/40 rounded-xl border dark:border-gray-700/30">
                                                     <span className="text-gray-400 font-bold block uppercase text-[9px]">Rate Per Task</span>
@@ -7520,16 +7255,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     ) : (
                                         <div className="p-6 text-center text-gray-400 italic text-xs">Campaign information is unavailable.</div>
-                                    )
-}
+                                    )}
                                 </div>
 
+                                {/* RIGHT COLUMN: Worker's Submission */}
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-1.5">
                                         <span className="p-1.5 bg-green-50 dark:bg-green-950/40 text-green-600 rounded-xl text-xs">👤</span>
                                         <h5 className="font-black text-xs uppercase tracking-widest text-green-600 dark:text-green-400">Worker Submitted Evidence</h5>
                                     </div>
 
+                                    {/* Worker Meta / Profile details */}
                                     <div className="grid grid-cols-2 gap-3 bg-gray-50 dark:bg-gray-900/40 p-4 rounded-2xl border dark:border-gray-700/30 text-xs">
                                         <div>
                                             <span className="text-[10px] text-gray-400 font-bold uppercase">Worker User ID</span>
@@ -7537,8 +7273,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                         <div>
                                             <span className="text-[10px] text-gray-400 font-bold uppercase">Submitted Date & Time</span>
-                                            <p className="text-gray-900 dark:text-white font-bold mt-0.5">{new Date(sub.createdAt).toLocaleString()
-}</p>
+                                            <p className="text-gray-900 dark:text-white font-bold mt-0.5">{new Date(sub.createdAt).toLocaleString()}</p>
                                         </div>
                                         <div>
                                             <span className="text-[10px] text-gray-400 font-bold uppercase">Submission Status</span>
@@ -7551,8 +7286,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <Badge variant="info">Disputed</Badge>
                                                 ) : (
                                                     <Badge variant="danger">Rejected</Badge>
-                                                )
-}
+                                                )}
                                             </div>
                                         </div>
                                         <div>
@@ -7561,14 +7295,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     </div>
 
+                                    {/* Rejection Feedback if Rejected */}
                                     {sub.status === 'Rejected' && sub.rejectionReason && (
                                         <div className="p-3.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-2xl text-xs">
                                             <span className="text-red-600 dark:text-red-400 font-black block uppercase text-[10px] tracking-wider mb-0.5">Rejection Feedback Provided</span>
                                             <p className="text-red-700 dark:text-red-300 font-bold">{sub.rejectionReason}</p>
                                         </div>
-                                    )
-}
+                                    )}
 
+                                    {/* DISPUTE EVIDENCE & EXTRA PROOF SUBMITTED BY WORKER (CREATOR VIEW) */}
                                     {(() => {
                                         const creatorDispute = state.disputes?.find((d: any) => 
                                             String(d.submissionId) === String(sub._id) || 
@@ -7611,8 +7346,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             {getRemainingTimeString(sub.disputeReviewDeadline || (sub.updatedAt || sub.createdAt ? new Date(new Date(sub.updatedAt || sub.createdAt).getTime() + (settings?.systemLimits?.disputeReviewTimeoutDays ?? 3) * 86400000) : null)) || `${settings?.systemLimits?.disputeReviewTimeoutDays ?? 3} days`} left (Auto-approves task if unacted)
                                                         </span>
                                                     </div>
-                                                )
-}
+                                                )}
 
                                                 {extraDisputeReason && (
                                                     <div className="bg-white dark:bg-gray-900 p-2.5 rounded-xl border border-amber-200/60 dark:border-amber-800/40">
@@ -7623,8 +7357,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             {extraDisputeReason}
                                                         </p>
                                                     </div>
-                                                )
-}
+                                                )}
 
                                                 {extraDisputeProof && (
                                                     <div className="bg-white dark:bg-gray-900 p-2.5 rounded-xl border border-amber-200/60 dark:border-amber-800/40">
@@ -7634,8 +7367,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                                                             <div 
                                                                 className="relative group w-32 h-32 rounded-xl overflow-hidden border border-amber-300 dark:border-amber-700 cursor-zoom-in shadow-md"
-                                                                onClick={() => setSelectedProofImage(extraDisputeProof)
-}
+                                                                onClick={() => setSelectedProofImage(extraDisputeProof)}
                                                             >
                                                                 <img 
                                                                     src={extraDisputeProof} 
@@ -7662,8 +7394,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             </div>
                                                         </div>
                                                     </div>
-                                                )
-}
+                                                )}
 
                                                 {sub.disputeCreatorNotes && (
                                                     <div className="bg-white dark:bg-gray-900 p-2.5 rounded-xl border border-red-200 dark:border-red-900/40">
@@ -7674,22 +7405,21 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             {sub.disputeCreatorNotes}
                                                         </p>
                                                     </div>
-                                                )
-}
+                                                )}
 
                                                 <DisputeTimeline submission={sub} dispute={creatorDispute} settings={settings} />
                                             </div>
                                         );
-                                    })()
-}
+                                    })()}
 
+                                    {/* Survey Questionnaire Responses Breakdown */}
                                     {((sub.surveyResponses && sub.surveyResponses.length > 0) || sub.surveyQualificationStatus || task?.isSurvey || task?.surveyConfig) && (
                                         <div className="space-y-2 mb-4">
                                             <SurveySubmissionViewer submission={sub} surveyConfig={task?.surveyConfig} />
                                         </div>
-                                    )
-}
+                                    )}
 
+                                    {/* Evidence inputs */}
                                     <div className="space-y-3.5 pt-1">
                                         <span className="text-[10px] text-gray-400 font-bold uppercase block">Submitted Proof Values</span>
                                         
@@ -7702,8 +7432,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">{item.label || `Proof #${idx + 1}`}</span>
                                                             {isImage ? (
                                                                 <div className="mt-2">
-                                                                    <div className="relative group w-32 h-32 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(item.value)
-}>
+                                                                    <div className="relative group w-32 h-32 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(item.value)}>
                                                                         <img src={item.value} alt={item.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
                                                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                                                             <span className="text-white text-lg">🔍</span>
@@ -7713,12 +7442,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 </div>
                                                             ) : (
                                                                 <p className="text-gray-900 dark:text-white font-bold mt-1 break-all">{item.value}</p>
-                                                            )
-}
+                                                            )}
                                                         </div>
                                                     );
-                                                })
-}
+                                                })}
                                             </div>
                                         ) : (
                                             <div className="space-y-3 text-xs">
@@ -7727,35 +7454,30 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Proof Text / Answer</span>
                                                         <p className="text-gray-900 dark:text-white font-bold mt-1 break-all">{sub.proofText}</p>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {sub.proofUsername && (
                                                     <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-2xl border dark:border-gray-700/40">
                                                         <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Username provided</span>
                                                         <p className="text-gray-900 dark:text-white font-bold font-mono mt-1">{sub.proofUsername}</p>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {sub.proofUserIdVal && (
                                                     <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-2xl border dark:border-gray-700/40">
                                                         <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Worker User ID</span>
                                                         <p className="text-gray-900 dark:text-white font-bold font-mono mt-1">{sub.proofUserIdVal}</p>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {sub.proofEmail && (
                                                     <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-2xl border dark:border-gray-700/40">
                                                         <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Email address</span>
                                                         <p className="text-gray-900 dark:text-white font-bold mt-1">{sub.proofEmail}</p>
                                                     </div>
-                                                )
-}
+                                                )}
                                                 {sub.proofImage && (
                                                     <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-2xl border dark:border-gray-700/40">
                                                         <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Screenshot Proof</span>
                                                         <div className="mt-2">
-                                                            <div className="relative group w-32 h-32 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(sub.proofImage)
-}>
+                                                            <div className="relative group w-32 h-32 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(sub.proofImage)}>
                                                                 <img src={sub.proofImage} alt="Screenshot Proof" className="w-full h-full object-cover group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
                                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                                                     <span className="text-white text-lg">🔍</span>
@@ -7764,18 +7486,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             <a href={sub.proofImage} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1.5 inline-block font-bold">Open Full Screenshot</a>
                                                         </div>
                                                     </div>
-                                                )
-}
+                                                )}
                                             </div>
-                                        )
-}
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
+                            {/* Footer actions */}
                             <div className="p-5 border-t dark:border-gray-700 flex justify-between bg-gray-50/50 dark:bg-gray-900/10">
-                                <Button type="button" variant="secondary" onClick={() => setSelectedWorkerSubmissionForDetails(null)
-}>
+                                <Button type="button" variant="secondary" onClick={() => setSelectedWorkerSubmissionForDetails(null)}>
                                     Close Window
                                 </Button>
                                 {(sub.status === 'Pending' || (sub.status === 'Disputed' && sub.disputeStage === 'CreatorReview')) && (
@@ -7800,15 +7520,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             ✖ Reject Proof
                                         </button>
                                     </div>
-                                )
-}
+                                )}
                             </div>
                         </div>
                     </div>
                 );
-            })()
-}
+            })()}
 
+            {/* INSUFFICIENT FUNDS / FUNDING COMPLETE MODAL */}
             {insufficientFundsModal && insufficientFundsModal.isOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
                     {insufficientFundsModal.fundingCompleted ? (
@@ -7823,35 +7542,29 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Your Task Wallet has been funded! You are ready to launch your campaign.</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setInsufficientFundsModal(null)
-} className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl">&times;</button>
+                                <button onClick={() => setInsufficientFundsModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl">&times;</button>
                             </div>
 
+                            {/* Breakdown */}
                             <div className="bg-emerald-50/60 dark:bg-emerald-950/30 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 space-y-3 text-xs">
                                 <div className="flex justify-between items-center">
                                     <span className="text-gray-500 dark:text-gray-400 uppercase font-bold">Updated Task Wallet Balance:</span>
                                     <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                                        ${insufficientFundsModal.availableTaskWalletUSD.toFixed(2)
-} USD
+                                        ${insufficientFundsModal.availableTaskWalletUSD.toFixed(2)} USD
                                     </span>
                                 </div>
                                 {insufficientFundsModal.lastTransferredUserCurr !== undefined && insufficientFundsModal.lastTransferredUserCurr > 0 && (
                                     <div className="flex justify-between items-center pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40">
                                         <span className="text-gray-500 dark:text-gray-400 uppercase font-bold">Amount Transferred:</span>
                                         <span className="font-mono font-bold text-gray-900 dark:text-white">
-                                            {insufficientFundsModal.lastTransferredUserCurr.toFixed(2)
-} {insufficientFundsModal.userCurrency} (${insufficientFundsModal.lastTransferredUSD?.toFixed(2)
-} USD)
+                                            {insufficientFundsModal.lastTransferredUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${insufficientFundsModal.lastTransferredUSD?.toFixed(2)} USD)
                                         </span>
                                     </div>
-                                )
-}
+                                )}
                                 <div className="flex justify-between items-center pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40">
                                     <span className="text-gray-500 dark:text-gray-400 uppercase font-bold">Campaign Cost:</span>
                                     <span className="font-mono font-bold text-gray-900 dark:text-white">
-                                        ${insufficientFundsModal.requiredAmountUSD.toFixed(2)
-} USD ({insufficientFundsModal.requiredAmountUserCurr.toFixed(2)
-} {insufficientFundsModal.userCurrency})
+                                        ${insufficientFundsModal.requiredAmountUSD.toFixed(2)} USD ({insufficientFundsModal.requiredAmountUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency})
                                     </span>
                                 </div>
                             </div>
@@ -7867,8 +7580,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </Button>
                                 <Button
                                     variant="secondary"
-                                    onClick={() => setInsufficientFundsModal(null)
-}
+                                    onClick={() => setInsufficientFundsModal(null)}
                                     className="w-full py-2.5 text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-gray-700"
                                 >
                                     Cancel
@@ -7887,54 +7599,46 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Your Campaign Wallet balance is insufficient to launch this campaign. Transfer funds directly from your Task Earnings or Investment Module.</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setInsufficientFundsModal(null)
-} className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl">&times;</button>
+                                <button onClick={() => setInsufficientFundsModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl">&times;</button>
                             </div>
 
+                            {/* Cost & Balance Breakdown */}
                             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl border dark:border-gray-700/60 space-y-2.5 text-xs">
                                 <div className="flex justify-between items-center">
                                     <span className="text-gray-500 uppercase font-bold">Campaign Total Cost:</span>
                                     <span className="font-mono font-black text-gray-900 dark:text-white text-sm">
-                                        ${insufficientFundsModal.requiredAmountUSD.toFixed(2)
-} USD ({insufficientFundsModal.requiredAmountUserCurr.toFixed(2)
-} {insufficientFundsModal.userCurrency})
+                                        ${insufficientFundsModal.requiredAmountUSD.toFixed(2)} USD ({insufficientFundsModal.requiredAmountUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency})
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800">
                                     <span className="text-gray-500 uppercase font-bold">Current Campaign Wallet Balance:</span>
                                     <span className="font-mono font-bold text-red-500">
-                                        ${insufficientFundsModal.availableTaskWalletUSD.toFixed(2)
-} USD
+                                        ${insufficientFundsModal.availableTaskWalletUSD.toFixed(2)} USD
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800">
                                     <span className="text-gray-500 uppercase font-bold">Available Task Earnings Balance:</span>
                                     <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
-                                        ${(insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0).toFixed(2)
-} USD
+                                        ${(insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0).toFixed(2)} USD
                                     </span>
                                 </div>
                                 {allowInvestmentFunding && (
                                     <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800">
                                         <span className="text-gray-500 uppercase font-bold">Available Investment Balance:</span>
                                         <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                                            {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)
-} {insufficientFundsModal.userCurrency} (${insufficientFundsModal.availableInvestmentUSD.toFixed(2)
-} USD)
+                                            {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${insufficientFundsModal.availableInvestmentUSD.toFixed(2)} USD)
                                         </span>
                                     </div>
-                                )
-}
+                                )}
                                 <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800 bg-amber-500/10 p-3 rounded-xl font-bold">
                                     <span className="text-amber-700 dark:text-amber-400 uppercase">Shortfall Required to Transfer:</span>
                                     <span className="font-mono text-amber-700 dark:text-amber-400 text-sm">
-                                        {insufficientFundsModal.shortfallUserCurr.toFixed(2)
-} {insufficientFundsModal.userCurrency} (${insufficientFundsModal.shortfallUSD.toFixed(2)
-} USD)
+                                        {insufficientFundsModal.shortfallUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${insufficientFundsModal.shortfallUSD.toFixed(2)} USD)
                                     </span>
                                 </div>
                             </div>
 
+                            {/* Select Funding Source */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-extrabold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">
                                     Select Funding Source Option:
@@ -7955,8 +7659,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             💼 Task Earnings
                                         </span>
                                         <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400 font-bold mt-0.5">
-                                            ${(insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0).toFixed(2)
-} USD
+                                            ${(insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0).toFixed(2)} USD
                                         </span>
                                     </button>
 
@@ -7976,12 +7679,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 🏦 Investment
                                             </span>
                                             <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
-                                                {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)
-} {insufficientFundsModal.userCurrency}
+                                                {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency}
                                             </span>
                                         </button>
-                                    )
-}
+                                    )}
 
                                     {allowInvestmentFunding && (
                                         <button
@@ -7999,15 +7700,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 🔀 Combined
                                             </span>
                                             <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 font-bold mt-0.5">
-                                                ${((insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0) + insufficientFundsModal.availableInvestmentUSD).toFixed(2)
-} USD
+                                                ${((insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0) + insufficientFundsModal.availableInvestmentUSD).toFixed(2)} USD
                                             </span>
                                         </button>
-                                    )
-}
+                                    )}
                                 </div>
                             </div>
 
+                            {/* Automatic Notice & Pre-filled Deficit Calculations */}
                             {(() => {
                                 const rate = rates[insufficientFundsModal.userCurrency] || 1;
                                 const availTaskEarningsUSD = insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0;
@@ -8028,6 +7728,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                                 return (
                                     <div className="space-y-3">
+                                        {/* Notice Message when Task Earnings is Insufficient */}
                                         {fundingSource === 'task_earnings' && isTaskEarningsDeficit && (
                                             <div className="bg-amber-50 dark:bg-amber-950/50 p-4 rounded-2xl border border-amber-300 dark:border-amber-800 space-y-2">
                                                 <div className="flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-300">
@@ -8044,24 +7745,20 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <div className="bg-amber-100/70 dark:bg-amber-900/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 space-y-1 text-[11px] font-mono">
                                                         <div className="flex justify-between">
                                                             <span>Task Earnings Contribution:</span>
-                                                            <strong className="text-blue-600 dark:text-blue-400">${availTaskEarningsUSD.toFixed(2)
-} USD</strong>
+                                                            <strong className="text-blue-600 dark:text-blue-400">${availTaskEarningsUSD.toFixed(2)} USD</strong>
                                                         </div>
                                                         <div className="flex justify-between pt-1 border-t border-amber-200/60 dark:border-amber-800/50">
                                                             <span>Auto Pre-filled from Investment:</span>
                                                             <strong className="text-emerald-700 dark:text-emerald-400 font-black">
-                                                                {remainingFromInvestmentUserCurr.toFixed(2)
-} {insufficientFundsModal.userCurrency} (${remainingFromInvestmentUSD.toFixed(2)
-} USD)
+                                                                {remainingFromInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${remainingFromInvestmentUSD.toFixed(2)} USD)
                                                             </strong>
                                                         </div>
                                                     </div>
-                                                )
-}
+                                                )}
                                             </div>
-                                        )
-}
+                                        )}
 
+                                        {/* Notice Message when Investment is Insufficient */}
                                         {allowInvestmentFunding && fundingSource === 'investment' && isInvestmentDeficit && (
                                             <div className="bg-amber-50 dark:bg-amber-950/50 p-4 rounded-2xl border border-amber-300 dark:border-amber-800 space-y-2">
                                                 <div className="flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-300">
@@ -8074,19 +7771,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 <div className="bg-amber-100/70 dark:bg-amber-900/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 space-y-1 text-[11px] font-mono">
                                                     <div className="flex justify-between">
                                                         <span>Investment Module Contribution:</span>
-                                                        <strong className="text-emerald-700 dark:text-emerald-400">{availInvestmentUserCurr.toFixed(2)
-} {insufficientFundsModal.userCurrency}</strong>
+                                                        <strong className="text-emerald-700 dark:text-emerald-400">{availInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency}</strong>
                                                     </div>
                                                     <div className="flex justify-between pt-1 border-t border-amber-200/60 dark:border-amber-800/50">
                                                         <span>Auto Pre-filled from Task Earnings:</span>
-                                                        <strong className="text-blue-600 dark:text-blue-400 font-black">${remainingFromTaskEarningsUSD.toFixed(2)
-} USD</strong>
+                                                        <strong className="text-blue-600 dark:text-blue-400 font-black">${remainingFromTaskEarningsUSD.toFixed(2)} USD</strong>
                                                     </div>
                                                 </div>
                                             </div>
-                                        )
-}
+                                        )}
 
+                                        {/* Combined Split Mode Summary */}
                                         {allowInvestmentFunding && fundingSource === 'combined' && (
                                             <div className="bg-purple-50 dark:bg-purple-950/40 p-4 rounded-2xl border border-purple-200 dark:border-purple-900/50 space-y-2 text-xs">
                                                 <h4 className="font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">
@@ -8095,44 +7790,36 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 <div className="space-y-1 font-mono text-[11px]">
                                                     <div className="flex justify-between">
                                                         <span>From Task Earnings:</span>
-                                                        <strong className="text-blue-600 dark:text-blue-400">${Math.min(availTaskEarningsUSD, shortfallUSD).toFixed(2)
-} USD</strong>
+                                                        <strong className="text-blue-600 dark:text-blue-400">${Math.min(availTaskEarningsUSD, shortfallUSD).toFixed(2)} USD</strong>
                                                     </div>
                                                     <div className="flex justify-between pt-1 border-t dark:border-purple-900/50">
                                                         <span>From Investment Module:</span>
                                                         <strong className="text-emerald-600 dark:text-emerald-400">
-                                                            {((shortfallUSD - Math.min(availTaskEarningsUSD, shortfallUSD)) * rate).toFixed(2)
-} {insufficientFundsModal.userCurrency} (${Math.max(0, shortfallUSD - availTaskEarningsUSD).toFixed(2)
-} USD)
+                                                            {((shortfallUSD - Math.min(availTaskEarningsUSD, shortfallUSD)) * rate).toFixed(2)} {insufficientFundsModal.userCurrency} (${Math.max(0, shortfallUSD - availTaskEarningsUSD).toFixed(2)} USD)
                                                         </strong>
                                                     </div>
                                                 </div>
                                             </div>
-                                        )
-}
+                                        )}
 
+                                        {/* Sufficiency Status Badge */}
                                         {isCombinedSufficient ? (
                                             <div className="bg-emerald-50 dark:bg-emerald-950/50 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-800 dark:text-emerald-200 font-medium flex items-center gap-2">
                                                 <span className="text-emerald-600 dark:text-emerald-400 text-sm">✅</span>
-                                                <span>Available balance (${totalAvailableUSD.toFixed(2)
-} USD) is sufficient to fund the required shortfall of ${shortfallUSD.toFixed(2)
-} USD.</span>
+                                                <span>Available balance (${totalAvailableUSD.toFixed(2)} USD) is sufficient to fund the required shortfall of ${shortfallUSD.toFixed(2)} USD.</span>
                                             </div>
                                         ) : (
                                             <div className="bg-red-50 dark:bg-red-950/50 p-3 rounded-xl border border-red-200 dark:border-red-800/60 text-xs text-red-700 dark:text-red-300 font-medium flex items-center gap-2">
                                                 <span className="text-red-500 text-sm">❌</span>
-                                                <span>Available balance (${totalAvailableUSD.toFixed(2)
-} USD) is less than the required shortfall (${shortfallUSD.toFixed(2)
-} USD). {allowInvestmentFunding ? 'Please deposit funds into your Investment Wallet.' : 'Please deposit funds to Work & Earn.'}</span>
+                                                <span>Available balance (${totalAvailableUSD.toFixed(2)} USD) is less than the required shortfall (${shortfallUSD.toFixed(2)} USD). {allowInvestmentFunding ? 'Please deposit funds into your Investment Wallet.' : 'Please deposit funds to Work & Earn.'}</span>
                                             </div>
-                                        )
-}
+                                        )}
 
+                                        {/* Action Button: Transfer and Launch Campaign */}
                                         <div className="pt-2">
                                             <Button
                                                 variant="primary"
-                                                onClick={() => handleTransferAndLaunchCampaign()
-}
+                                                onClick={() => handleTransferAndLaunchCampaign()}
                                                 disabled={isTransferringFundsModal || isSubmitting || !isCombinedSufficient}
                                                 className="w-full py-4 text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-400 shadow-xl flex items-center justify-center gap-2 text-white"
                                             >
@@ -8141,8 +7828,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     </div>
                                 );
-                            })()
-}
+                            })()}
 
                             <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800">
                                 <Link to={allowInvestmentFunding ? "/member/deposit" : "/member/deposit"} className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1">
@@ -8150,20 +7836,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </Link>
                                 <Button
                                     variant="secondary"
-                                    onClick={() => setInsufficientFundsModal(null)
-}
+                                    onClick={() => setInsufficientFundsModal(null)}
                                     className="py-2 px-4 text-xs font-bold uppercase"
                                 >
                                     Cancel
                                 </Button>
                             </div>
                         </div>
-                    )
-}
+                    )}
                 </div>
-            )
-}
+            )}
 
+            {/* FUNDING & CAMPAIGN CREATION SUCCESS MODAL */}
             {fundingSuccessModal && fundingSuccessModal.isOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 md:p-8 max-w-md w-full shadow-2xl border border-emerald-200 dark:border-emerald-900/50 flex flex-col space-y-5 text-center">
@@ -8175,20 +7859,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
                                 {isAdminMode ? (
                                     fundingSuccessModal.isPublishedNow ? (
-                                        <>Your campaign has been successfully <strong>published live</strong> to all eligible workers and funded directly from the <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)
-} USD). Personal wallet balances were not deducted.</>
+                                        <>Your campaign has been successfully <strong>published live</strong> to all eligible workers and funded directly from the <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)} USD). Personal wallet balances were not deducted.</>
                                     ) : (
-                                        <>Your campaign has been successfully saved as <strong>Pending</strong> review and funded directly from the <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)
-} USD). Personal wallet balances were not deducted.</>
+                                        <>Your campaign has been successfully saved as <strong>Pending</strong> review and funded directly from the <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)} USD). Personal wallet balances were not deducted.</>
                                     )
                                 ) : fundingSuccessModal.transferredUserCurr > 0 ? (
-                                    <>Successfully transferred <strong className="text-emerald-600 dark:text-emerald-400">{fundingSuccessModal.transferredUserCurr.toFixed(2)
-} {fundingSuccessModal.userCurrency} (${fundingSuccessModal.transferredUSD.toFixed(2)
-} USD)</strong> from your Investment Module into your Campaign Wallet, and your campaign has been launched!</>
+                                    <>Successfully transferred <strong className="text-emerald-600 dark:text-emerald-400">{fundingSuccessModal.transferredUserCurr.toFixed(2)} {fundingSuccessModal.userCurrency} (${fundingSuccessModal.transferredUSD.toFixed(2)} USD)</strong> from your Investment Module into your Campaign Wallet, and your campaign has been launched!</>
                                 ) : (
                                     <>Your campaign has been successfully created and submitted for Admin approval. It is now live in your campaigns list.</>
-                                )
-}
+                                )}
                             </p>
                         </div>
 
@@ -8198,10 +7877,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             </span>
                             <span className="text-2xl font-mono font-black text-emerald-600 dark:text-emerald-300">
                                 {isAdminMode 
-                                    ? `$${(settings.adminCampaignBudget?.remainingBudgetUSD ?? 0).toFixed(2)
-} USD`
-                                    : `$${fundingSuccessModal.newTaskWalletUSD.toFixed(2)
-} USD`
+                                    ? `$${(settings.adminCampaignBudget?.remainingBudgetUSD ?? 0).toFixed(2)} USD`
+                                    : `$${fundingSuccessModal.newTaskWalletUSD.toFixed(2)} USD`
                                 }
                             </span>
                         </div>
@@ -8229,9 +7906,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* FORM VALIDATION NOTICE POPUP MODAL */}
             {validationNoticeModal.isOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 md:p-8 max-w-md w-full shadow-2xl border border-red-200 dark:border-red-900/50 flex flex-col space-y-5">
@@ -8246,8 +7923,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
                             </div>
                             <button
-                                onClick={() => setValidationNoticeModal(prev => ({ ...prev, isOpen: false }))
-}
+                                onClick={() => setValidationNoticeModal(prev => ({ ...prev, isOpen: false }))}
                                 className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl leading-none"
                             >
                                 &times;
@@ -8261,8 +7937,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <li key={i} className="text-xs font-semibold text-gray-800 dark:text-gray-200 leading-snug">
                                         {msg}
                                     </li>
-                                ))
-}
+                                ))}
                             </ul>
                         </div>
 
@@ -8297,9 +7972,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* ========================================================================= */}
+            {/* 1. TRANSFER FUNDS TO CAMPAIGN WALLET MODAL */}
+            {/* ========================================================================= */}
             {showTransferModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 md:p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6">
@@ -8314,21 +7991,20 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
                             </div>
                             <button
-                                onClick={() => setShowTransferModal(false)
-}
+                                onClick={() => setShowTransferModal(false)}
                                 className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl leading-none"
                             >
                                 &times;
                             </button>
                         </div>
 
+                        {/* Source Selection */}
                         <div className="space-y-2">
                             <label className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 tracking-wider">Select Transfer Direction / Source:</label>
                             <div className="grid grid-cols-3 gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => setTransferSource('Main')
-}
+                                    onClick={() => setTransferSource('Main')}
                                     className={`p-3 rounded-2xl border text-left transition-all ${
                                         transferSource === 'Main'
                                             ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20'
@@ -8337,15 +8013,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 >
                                     <span className="text-[9px] font-black uppercase block text-gray-400 truncate">💳 Main &rarr; Campaign</span>
                                     <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
-                                        ${((currentUser.walletBalance || 0) / (rates[currentUser.currency || 'USD'] || 1)).toFixed(2)
-} USD
+                                        ${((currentUser.walletBalance || 0) / (rates[currentUser.currency || 'USD'] || 1)).toFixed(2)} USD
                                     </span>
                                 </button>
 
                                 <button
                                     type="button"
-                                    onClick={() => setTransferSource('Investment')
-}
+                                    onClick={() => setTransferSource('Investment')}
                                     className={`p-3 rounded-2xl border text-left transition-all ${
                                         transferSource === 'Investment'
                                             ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
@@ -8354,15 +8028,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 >
                                     <span className="text-[9px] font-black uppercase block text-gray-400 truncate">📈 Invest &rarr; Campaign</span>
                                     <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
-                                        ${((currentUser.investmentBalance || 0) / (rates[currentUser.currency || 'USD'] || 1)).toFixed(2)
-} USD
+                                        ${((currentUser.investmentBalance || 0) / (rates[currentUser.currency || 'USD'] || 1)).toFixed(2)} USD
                                     </span>
                                 </button>
 
                                 <button
                                     type="button"
-                                    onClick={() => setTransferSource('CampaignToMain')
-}
+                                    onClick={() => setTransferSource('CampaignToMain')}
                                     className={`p-3 rounded-2xl border text-left transition-all ${
                                         transferSource === 'CampaignToMain'
                                             ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-500 text-purple-700 dark:text-purple-300 ring-2 ring-purple-500/20'
@@ -8371,13 +8043,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 >
                                     <span className="text-[9px] font-black uppercase block text-purple-500 dark:text-purple-400 truncate">🔄 Campaign &rarr; Main</span>
                                     <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
-                                        ${availableCampaignWalletUSD.toFixed(2)
-} USD
+                                        ${availableCampaignWalletUSD.toFixed(2)} USD
                                     </span>
                                 </button>
                             </div>
                         </div>
 
+                        {/* Transfer Amount Input */}
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
                                 <label className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 tracking-wider">Transfer Amount ($ USD):</label>
@@ -8390,13 +8062,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     min="1"
                                     step="1"
                                     value={transferInputAmount}
-                                    onChange={(e) => setTransferInputAmount(e.target.value)
-}
+                                    onChange={(e) => setTransferInputAmount(e.target.value)}
                                     className="w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 font-mono font-black text-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                         </div>
 
+                        {/* Live Balance Impact Preview */}
                         {(() => {
                             const amtUSD = typeof transferInputAmount === 'number' ? transferInputAmount : parseFloat(transferInputAmount as string) || 0;
                             const rate = rates[currentUser.currency || 'USD'] || 1;
@@ -8411,15 +8083,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <div className="flex justify-between font-medium">
                                             <span className="text-gray-500 dark:text-gray-400">Campaign Wallet After Transfer:</span>
                                             <span className={`font-mono font-bold ${currentCampaignWalletUSD < amtUSD ? 'text-red-500' : 'text-purple-600 dark:text-purple-300'}`}>
-                                                ${newCampaignWalletUSD.toFixed(2)
-} USD
+                                                ${newCampaignWalletUSD.toFixed(2)} USD
                                             </span>
                                         </div>
                                         <div className="flex justify-between font-medium pt-1 border-t border-purple-200 dark:border-purple-800">
                                             <span className="text-emerald-600 dark:text-emerald-400 font-bold">New Main Wallet Balance:</span>
                                             <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                                                {newMainUserCurr.toFixed(2)
-} {currentUser.currency || 'USD'}
+                                                {newMainUserCurr.toFixed(2)} {currentUser.currency || 'USD'}
                                             </span>
                                         </div>
                                     </div>
@@ -8436,28 +8106,24 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <div className="flex justify-between font-medium">
                                             <span className="text-gray-500">Source Balance After Transfer:</span>
                                             <span className={`font-mono font-bold ${newSourceBalanceUSD < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
-                                                ${newSourceBalanceUSD.toFixed(2)
-} USD
+                                                ${newSourceBalanceUSD.toFixed(2)} USD
                                             </span>
                                         </div>
                                         <div className="flex justify-between font-medium pt-1 border-t border-gray-200 dark:border-gray-700">
                                             <span className="text-blue-600 dark:text-blue-400 font-bold">New Campaign Wallet Balance:</span>
                                             <span className="font-mono font-black text-blue-600 dark:text-blue-400 text-sm">
-                                                ${newCampaignWalletUSD.toFixed(2)
-} USD
+                                                ${newCampaignWalletUSD.toFixed(2)} USD
                                             </span>
                                         </div>
                                     </div>
                                 );
                             }
-                        })()
-}
+                        })()}
 
                         <div className="flex gap-3 pt-2">
                             <button
                                 type="button"
-                                onClick={() => setShowTransferModal(false)
-}
+                                onClick={() => setShowTransferModal(false)}
                                 className="flex-1 py-3 px-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-black uppercase tracking-wider"
                             >
                                 Cancel
@@ -8475,17 +8141,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     if (transferSource === 'CampaignToMain') {
                                         const currentCampaignWalletUSD = availableCampaignWalletUSD;
                                         if (transferUSD > currentCampaignWalletUSD) {
-                                            alert(`Insufficient funds in Campaign Wallet. Available: $${currentCampaignWalletUSD.toFixed(2)
-} USD`);
+                                            alert(`Insufficient funds in Campaign Wallet. Available: $${currentCampaignWalletUSD.toFixed(2)} USD`);
                                             return;
                                         }
 
                                         try {
                                             const res = await convertTaskWalletBalance({ userId: currentUser._id, amountUSD: transferUSD });
                                             dispatch({ type: 'UPDATE_USER', payload: res.user || res });
-                                            alert(`Successfully transferred $${transferUSD.toFixed(2)
-} USD (${transferInUserCurr.toFixed(2)
-} ${userCurr}) from Campaign Wallet back to Main Wallet!`);
+                                            alert(`Successfully transferred $${transferUSD.toFixed(2)} USD (${transferInUserCurr.toFixed(2)} ${userCurr}) from Campaign Wallet back to Main Wallet!`);
                                             setShowTransferModal(false);
                                         } catch (err: any) {
                                             alert(err.message || 'Transfer failed');
@@ -8496,8 +8159,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             : (currentUser.investmentBalance || 0) / rate;
 
                                         if (transferUSD > availableSourceUSD) {
-                                            alert(`Insufficient funds in ${transferSource} Wallet. Available: $${availableSourceUSD.toFixed(2)
-} USD`);
+                                            alert(`Insufficient funds in ${transferSource} Wallet. Available: $${availableSourceUSD.toFixed(2)} USD`);
                                             return;
                                         }
 
@@ -8525,9 +8187,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* ========================================================================= */}
+            {/* 2. CONVERT TASK EARNINGS MODAL */}
+            {/* ========================================================================= */}
             {showConvertModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 md:p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6">
@@ -8542,25 +8206,25 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
                             </div>
                             <button
-                                onClick={() => setShowConvertModal(false)
-}
+                                onClick={() => setShowConvertModal(false)}
                                 className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl leading-none"
                             >
                                 &times;
                             </button>
                         </div>
 
+                        {/* Available Task Earnings */}
                         <div className="p-4 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/40 flex justify-between items-center">
                             <div>
                                 <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Available Task Rewards Balance</span>
                                 <p className="text-xl font-mono font-black text-indigo-700 dark:text-indigo-300 mt-0.5">
-                                    ${netAvailableTaskEarningsUSD.toFixed(2)
-} USD
+                                    ${netAvailableTaskEarningsUSD.toFixed(2)} USD
                                 </p>
                             </div>
                             <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase">0% Conversion Fee</span>
                         </div>
 
+                        {/* Convert Amount Input */}
                         <div className="space-y-2">
                             <label className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 tracking-wider">Amount to Convert ($ USD):</label>
                             <div className="relative">
@@ -8570,8 +8234,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     min="1"
                                     step="1"
                                     value={convertInputAmount}
-                                    onChange={(e) => setConvertInputAmount(e.target.value)
-}
+                                    onChange={(e) => setConvertInputAmount(e.target.value)}
                                     className="w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 font-mono font-black text-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
@@ -8580,8 +8243,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         <div className="flex gap-3 pt-2">
                             <button
                                 type="button"
-                                onClick={() => setShowConvertModal(false)
-}
+                                onClick={() => setShowConvertModal(false)}
                                 className="flex-1 py-3 px-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-black uppercase tracking-wider"
                             >
                                 Cancel
@@ -8594,8 +8256,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                                     const taskEarningsUSD = netAvailableTaskEarningsUSD;
                                     if (convertUSD > taskEarningsUSD) {
-                                        alert(`Insufficient Task Earnings. Available: $${taskEarningsUSD.toFixed(2)
-} USD`);
+                                        alert(`Insufficient Task Earnings. Available: $${taskEarningsUSD.toFixed(2)} USD`);
                                         return;
                                     }
 
@@ -8621,9 +8282,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* ========================================================================= */}
+            {/* 3. CAMPAIGN FUNDS & WALLET ANALYTICS MODAL */}
+            {/* ========================================================================= */}
             {showAnalyticsModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 md:p-8 max-w-2xl w-full shadow-2xl border dark:border-gray-700 space-y-6 max-h-[90vh] overflow-y-auto">
@@ -8638,45 +8301,45 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
                             </div>
                             <button
-                                onClick={() => setShowAnalyticsModal(false)
-}
+                                onClick={() => setShowAnalyticsModal(false)}
                                 className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl leading-none"
                             >
                                 &times;
                             </button>
                         </div>
 
+                        {/* Metrics Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {/* Metric 1 */}
                             <div className="p-4 bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-100 dark:border-blue-900/40">
                                 <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">Wallet Utilization Rate</span>
                                 <div className="text-xl font-mono font-black text-gray-900 dark:text-white mt-1">
                                     {transferredInUSD > 0 ? ((campaignPurchasesUSD / transferredInUSD) * 100).toFixed(1) : '0.0'}%
                                 </div>
                                 <div className="w-full bg-blue-200 dark:bg-blue-900 h-1.5 rounded-full mt-2 overflow-hidden">
-                                    <div className="bg-blue-600 h-full rounded-full" style={{ width: `${Math.min(100, transferredInUSD > 0 ? (campaignPurchasesUSD / transferredInUSD) * 100 : 0)
-}%` }} />
+                                    <div className="bg-blue-600 h-full rounded-full" style={{ width: `${Math.min(100, transferredInUSD > 0 ? (campaignPurchasesUSD / transferredInUSD) * 100 : 0)}%` }} />
                                 </div>
                             </div>
 
+                            {/* Metric 2 */}
                             <div className="p-4 bg-purple-50/60 dark:bg-purple-950/30 rounded-2xl border border-purple-100 dark:border-purple-900/40">
                                 <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">Average Campaign Cost</span>
                                 <div className="text-xl font-mono font-black text-purple-700 dark:text-purple-300 mt-1">
                                     ${mySubmittedTasks.length > 0 ? (campaignPurchasesUSD / mySubmittedTasks.length).toFixed(2) : '0.00'}
                                 </div>
                             </div>
+                            {/* Metric 3 */}
                             <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/40">
                                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Total Campaign Outlay</span>
                                 <div className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-300 mt-1">
-                                    ${campaignPurchasesUSD.toFixed(2)
-}
+                                    ${campaignPurchasesUSD.toFixed(2)}
                                 </div>
                             </div>
                         </div>
 
                         <div className="pt-4 border-t dark:border-gray-700 flex justify-end">
                             <button
-                                onClick={() => setShowAnalyticsModal(false)
-}
+                                onClick={() => setShowAnalyticsModal(false)}
                                 className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors dark:bg-gray-700 dark:hover:bg-gray-600"
                             >
                                 Close Analytics
@@ -8684,20 +8347,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
                 </div>
-            )
-}
+            )}
 
+            {/* CREATOR SURVEY ANALYTICS & RESULTS MODAL */}
             {surveyAnalyticsTaskId && (
                 <SurveyAnalyticsModal
                     taskId={surveyAnalyticsTaskId}
-                    isOpen={Boolean(surveyAnalyticsTaskId)
-}
-                    onClose={() => setSurveyAnalyticsTaskId(null)
-}
+                    isOpen={Boolean(surveyAnalyticsTaskId)}
+                    onClose={() => setSurveyAnalyticsTaskId(null)}
                     campaignTitle={mySubmittedTasks.find(t => t._id === surveyAnalyticsTaskId)?.title}
                 />
-            )
-}
+            )}
         </div>
     );
 };
