@@ -929,3 +929,550 @@ export const MASTER_MEMBER_SURVEY_TEMPLATE = {
         ]
     }
 };
+
+export const MASTER_57_MEMBER_SURVEY_TEMPLATE = {
+    name: 'SmartExn Complete Member Profile & Earning Preferences Survey (57 Questions)',
+    description: 'Comprehensive 57-question master survey covering demographics, education, digital skills, social media platforms, online earning history, task preferences, payment provider preferences (withdrawal, deposit, current), SmartExn usage, bug reports, and future feedback.',
+    category: 'Member Intelligence & Experience',
+    version: 1,
+    enabled: true,
+    estimatedTimeMinutes: 7,
+    isMasterDefault: false,
+    rewardConfig: {
+        mode: 'no_reward',
+        amount: 0,
+        currency: 'USD'
+    },
+    requirementConfig: {
+        mode: 'optional'
+    },
+    recompletionPolicy: {
+        policy: 'never',
+        intervalDays: 30
+    },
+    surveyConfig: {
+        title: 'SmartExn Complete Member Profile & Earning Preferences Survey',
+        description: 'Please complete this comprehensive 57-question feedback survey to help us tailor earning tasks, optimize withdrawal channels, and prioritize new features.',
+        category: 'Member Intelligence & Experience',
+        version: 1,
+        estimatedTimeMinutes: 7,
+        consentRequired: true,
+        consentText: 'I confirm that I am participating voluntarily and will provide honest, accurate feedback to help improve the SmartExn platform.',
+        approvalMode: 'auto',
+        qualityRules: {
+            minCompletionTimeSeconds: 50,
+            flagFastCompletion: true,
+            attentionCheckRequired: false,
+            autoRejectOnFail: false
+        },
+        sections: [
+            { id: 'sec_1_57', title: '1. Basic Profile and Demographics', description: 'General background and demographics.' },
+            { id: 'sec_2_57', title: '2. Education and Professional Background', description: 'Education and employment context.' },
+            { id: 'sec_3_57', title: '3. Digital Skills and Languages', description: 'Technical literacy and language proficiency.' },
+            { id: 'sec_4_57', title: '4. Social Media and Online Platforms', description: 'Social media usage and platform preferences.' },
+            { id: 'sec_5_57', title: '5. Online Earning Experience', description: 'Prior experience with online microtask and reward platforms.' },
+            { id: 'sec_6_57', title: '6. Earning Interests and Task Preferences', description: 'Task types, schedule, and payout priorities.' },
+            { id: 'sec_7_57', title: '7. Payment Methods and Provider Preferences', description: 'Current providers, withdrawal preferences, and deposit preferences.' },
+            { id: 'sec_8_57', title: '8. SmartExn Usage and Experience', description: 'Discovery, login frequency, and platform rating.' },
+            { id: 'sec_9_57', title: '9. Task Experience, Bugs and Technical Problems', description: 'Technical issue reports and task instruction clarity.' },
+            { id: 'sec_10_57', title: '10. Trust, Recommendations and Future Preferences', description: 'Privacy trust, NPS, and feature suggestions.' },
+            { id: 'sec_11_57', title: '11. Final Feedback and Suggestions', description: 'Beta testing interest and final comments.' }
+        ],
+        questions: [
+            // Section 1: Basic Profile and Demographics (Q1 - Q5)
+            {
+                id: 'q1_57_welcome',
+                sectionId: 'sec_1_57',
+                type: 'single_choice',
+                title: 'Welcome to the SmartExn Complete Member Profile & Earning Preferences Survey (57 Questions). We collect this feedback to personalize earning opportunities, improve payout flows, and build features that matter to you.',
+                required: true,
+                options: ['I understand and wish to proceed with the survey']
+            },
+            {
+                id: 'q2_57_age',
+                sectionId: 'sec_1_57',
+                type: 'single_choice',
+                title: 'What is your age group?',
+                required: true,
+                options: ['18–24 years', '25–34 years', '35–44 years', '45–54 years', '55 years or older', 'Prefer not to say']
+            },
+            {
+                id: 'q3_57_gender',
+                sectionId: 'sec_1_57',
+                type: 'single_choice',
+                title: 'What is your gender identity?',
+                required: true,
+                options: ['Male', 'Female', 'Non-binary', 'Prefer not to say', 'Other']
+            },
+            {
+                id: 'q4_57_country',
+                sectionId: 'sec_1_57',
+                type: 'short_text',
+                title: 'Which country do you currently reside in?',
+                required: true,
+                validation: { minLength: 2, maxLength: 60 }
+            },
+            {
+                id: 'q5_57_language',
+                sectionId: 'sec_1_57',
+                type: 'single_choice',
+                title: 'What is your primary spoken language?',
+                required: true,
+                options: ['English', 'Spanish', 'French', 'Arabic', 'Hindi', 'Portuguese', 'Other']
+            },
+
+            // Section 2: Education and Professional Background (Q6 - Q10)
+            {
+                id: 'q6_57_education',
+                sectionId: 'sec_2_57',
+                type: 'single_choice',
+                title: 'What is the highest level of education you have completed?',
+                required: true,
+                options: ['High School Diploma', "Bachelor's Degree", "Master's Degree", 'Doctorate / Ph.D.', 'Vocational / Technical Certification', 'Other', 'Prefer not to say']
+            },
+            {
+                id: 'q7_57_employment',
+                sectionId: 'sec_2_57',
+                type: 'single_choice',
+                title: 'Which of the following best describes your current employment status?',
+                required: true,
+                options: ['Full-time employee', 'Part-time employee', 'Freelancer', 'Self-employed / Business owner', 'Student', 'Currently unemployed', 'Homemaker', 'Retired', 'Prefer not to say'],
+                profileMapping: { enabled: true, fieldKey: 'employmentStatus' }
+            },
+            {
+                id: 'q8_57_industry',
+                sectionId: 'sec_2_57',
+                type: 'single_choice',
+                title: 'What field or industry do you work or study in?',
+                required: true,
+                options: ['Technology / IT', 'Education', 'Finance / Accounting', 'Healthcare', 'Marketing / Sales', 'E-commerce', 'Freelancing', 'Content Creation', 'Engineering', 'Other', 'Prefer not to say'],
+                profileMapping: { enabled: true, fieldKey: 'industry' }
+            },
+            {
+                id: 'q9_57_experience',
+                sectionId: 'sec_2_57',
+                type: 'single_choice',
+                title: 'How many years of professional or digital work experience do you have?',
+                required: true,
+                options: ['Less than 1 year', '1–3 years', '3–5 years', '5–10 years', '10+ years']
+            },
+            {
+                id: 'q10_57_income',
+                sectionId: 'sec_2_57',
+                type: 'single_choice',
+                title: 'Which approximate monthly personal income range best describes your earnings?',
+                required: false,
+                options: ['I currently have no personal income', 'Under $100', '$100–$249', '$250–$499', '$500–$999', '$1,000–$2,499', '$2,500 or more', 'Prefer not to say']
+            },
+
+            // Section 3: Digital Skills and Languages (Q11 - Q15)
+            {
+                id: 'q11_57_literacy',
+                sectionId: 'sec_3_57',
+                type: 'single_choice',
+                title: 'How would you rate your overall computer and internet literacy?',
+                required: true,
+                options: ['Beginner', 'Intermediate', 'Advanced', 'Expert']
+            },
+            {
+                id: 'q12_57_tools',
+                sectionId: 'sec_3_57',
+                type: 'multiple_choice',
+                title: 'Which programming, design, or technical tools are you familiar with?',
+                required: true,
+                options: ['HTML / CSS / JavaScript', 'Graphic Design (Canva / Photoshop)', 'Video Editing (Premiere / CapCut)', 'Data Entry (Excel / Google Sheets)', 'Writing / Copywriting', 'None']
+            },
+            {
+                id: 'q13_57_english',
+                sectionId: 'sec_3_57',
+                type: 'yes_no',
+                title: 'Can you communicate and work in English fluently?',
+                required: true
+            },
+            {
+                id: 'q14_57_other_langs',
+                sectionId: 'sec_3_57',
+                type: 'multiple_choice',
+                title: 'What other languages are you proficient in for reading and writing?',
+                required: false,
+                options: ['Spanish', 'French', 'Arabic', 'Portuguese', 'Hindi', 'German', 'Mandarin', 'None']
+            },
+            {
+                id: 'q15_57_screen_time',
+                sectionId: 'sec_3_57',
+                type: 'single_choice',
+                title: 'How many hours per day do you spend actively using computers or smartphones?',
+                required: true,
+                options: ['Less than 2 hours', '2–4 hours', '4–6 hours', '6–8 hours', '8+ hours']
+            },
+
+            // Section 4: Social Media and Online Platforms (Q16 - Q22)
+            {
+                id: 'q16_57_social_active',
+                sectionId: 'sec_4_57',
+                type: 'yes_no',
+                title: 'Do you actively use social media platforms?',
+                required: true
+            },
+            {
+                id: 'q17_57_platforms',
+                sectionId: 'sec_4_57',
+                type: 'multiple_choice',
+                title: 'Which of the following social media platforms do you use regularly?',
+                required: true,
+                showIf: { questionId: 'q16_57_social_active', operator: 'equals', value: 'Yes' },
+                options: [
+                    'Facebook',
+                    'YouTube',
+                    'Instagram',
+                    'TikTok',
+                    'WhatsApp',
+                    'X/Twitter',
+                    'LinkedIn',
+                    'Snapchat',
+                    'Telegram',
+                    'Reddit'
+                ]
+            },
+            {
+                id: 'q18_57_top_platform',
+                sectionId: 'sec_4_57',
+                type: 'single_choice',
+                title: 'Which social media platform do you spend the most time on daily?',
+                required: true,
+                showIf: { questionId: 'q16_57_social_active', operator: 'equals', value: 'Yes' },
+                options: ['Facebook', 'YouTube', 'Instagram', 'TikTok', 'WhatsApp', 'X/Twitter', 'LinkedIn', 'Snapchat', 'Telegram', 'Reddit', 'Other']
+            },
+            {
+                id: 'q19_57_content_creator',
+                sectionId: 'sec_4_57',
+                type: 'yes_no',
+                title: 'Do you manage or create content for any online channels or business pages?',
+                required: true,
+                showIf: { questionId: 'q16_57_social_active', operator: 'equals', value: 'Yes' }
+            },
+            {
+                id: 'q20_57_followers',
+                sectionId: 'sec_4_57',
+                type: 'single_choice',
+                title: 'How many total followers or subscribers do you have across your main social profiles?',
+                required: true,
+                showIf: { questionId: 'q16_57_social_active', operator: 'equals', value: 'Yes' },
+                options: ['Under 500', '500 – 5,000', '5,000 – 50,000', '50,000+']
+            },
+            {
+                id: 'q21_57_promo_social',
+                sectionId: 'sec_4_57',
+                type: 'yes_no',
+                title: 'Have you ever used social media to promote products, affiliate links, or services?',
+                required: true,
+                showIf: { questionId: 'q16_57_social_active', operator: 'equals', value: 'Yes' }
+            },
+            {
+                id: 'q22_57_social_purpose',
+                sectionId: 'sec_4_57',
+                type: 'single_choice',
+                title: 'What is your primary purpose for using social media?',
+                required: true,
+                showIf: { questionId: 'q16_57_social_active', operator: 'equals', value: 'Yes' },
+                options: ['Entertainment and connection', 'News and education', 'Business and professional networking', 'Online earning and side gigs', 'Content creation and branding']
+            },
+
+            // Section 5: Online Earning Experience (Q23 - Q28)
+            {
+                id: 'q23_57_prev_earning',
+                sectionId: 'sec_5_57',
+                type: 'yes_no',
+                title: 'Have you previously earned money online through micro-tasks, surveys, or freelance gigs?',
+                required: true
+            },
+            {
+                id: 'q24_57_prev_platforms',
+                sectionId: 'sec_5_57',
+                type: 'multiple_choice',
+                title: 'What types of online earning platforms have you used before?',
+                required: true,
+                showIf: { questionId: 'q23_57_prev_earning', operator: 'equals', value: 'Yes' },
+                options: ['Micro-task websites', 'Paid survey panels', 'Offerwalls and gaming apps', 'Freelance platforms', 'PTC / Click sites']
+            },
+            {
+                id: 'q25_57_prev_sat',
+                sectionId: 'sec_5_57',
+                type: 'rating',
+                title: 'How satisfied were you with your previous online earning experiences overall?',
+                required: true,
+                minRating: 1,
+                maxRating: 5,
+                showIf: { questionId: 'q23_57_prev_earning', operator: 'equals', value: 'Yes' }
+            },
+            {
+                id: 'q26_57_prev_frustration',
+                sectionId: 'sec_5_57',
+                type: 'single_choice',
+                title: 'What was the biggest frustration or problem you faced on other earning platforms?',
+                required: true,
+                showIf: { questionId: 'q23_57_prev_earning', operator: 'equals', value: 'Yes' },
+                options: ['Low payout rates', 'High minimum withdrawal thresholds', 'Delayed or rejected payouts', 'Account bans without explanation', 'Spammy or low-quality tasks', 'Too many ads']
+            },
+            {
+                id: 'q27_57_annual_earnings',
+                sectionId: 'sec_5_57',
+                type: 'single_choice',
+                title: 'Approximately how much total income have you generated from online side gigs in the past 12 months?',
+                required: true,
+                options: ['$0', 'Under $50', '$50–$200', '$200–$500', '$500–$1,000', '$1,000+']
+            },
+            {
+                id: 'q28_57_earning_motivation',
+                sectionId: 'sec_5_57',
+                type: 'single_choice',
+                title: 'What motivated you to start exploring online earning opportunities?',
+                required: true,
+                options: ['Supplement primary income', 'Financial freedom and flexibility', 'Paying for education or bills', 'Learning new digital skills', 'Curiosity and spare time']
+            },
+
+            // Section 6: Earning Interests and Task Preferences (Q29 - Q35)
+            {
+                id: 'q29_57_task_types',
+                sectionId: 'sec_6_57',
+                type: 'multiple_choice',
+                title: 'Which types of online tasks do you enjoy completing the most?',
+                required: true,
+                options: ['Social media engagement (likes/follows/shares)', 'Website testing and reviews', 'Survey completion and market research', 'Content creation and video watching', 'Data entry and transcription', 'App installation and feedback']
+            },
+            {
+                id: 'q30_57_daily_time',
+                sectionId: 'sec_6_57',
+                type: 'single_choice',
+                title: 'How much time per day are you willing to dedicate to completing earning tasks on SmartExn?',
+                required: true,
+                options: ['Less than 30 minutes', '30–60 minutes', '1–2 hours', '2–4 hours', '4+ hours']
+            },
+            {
+                id: 'q31_57_pref_schedule',
+                sectionId: 'sec_6_57',
+                type: 'single_choice',
+                title: 'What is your preferred schedule for completing tasks?',
+                required: true,
+                options: ['Early morning', 'Afternoon / Daytime', 'Evening / Nighttime', 'Flexible throughout the day']
+            },
+            {
+                id: 'q32_57_payout_speed_imp',
+                sectionId: 'sec_6_57',
+                type: 'rating',
+                title: 'How important is task payout speed when deciding which tasks to complete?',
+                required: true,
+                minRating: 1,
+                maxRating: 5
+            },
+            {
+                id: 'q33_57_complex_tasks',
+                sectionId: 'sec_6_57',
+                type: 'yes_no',
+                title: 'Would you be interested in higher-paying complex tasks that require verification or testing?',
+                required: true
+            },
+            {
+                id: 'q34_57_notifications',
+                sectionId: 'sec_6_57',
+                type: 'multiple_choice',
+                title: 'How do you prefer to receive notifications about new high-value tasks?',
+                required: true,
+                options: ['Platform notifications', 'Email alerts', 'WhatsApp notifications', 'Telegram bot', 'Push notifications']
+            },
+            {
+                id: 'q35_57_fair_pay',
+                sectionId: 'sec_6_57',
+                type: 'single_choice',
+                title: 'What level of earnings per task do you consider fair for a 5-minute micro-task?',
+                required: true,
+                options: ['Under $0.10', '$0.10 – $0.25', '$0.25 – $0.50', '$0.50 – $1.00', '$1.00+']
+            },
+
+            // Section 7: Payment Methods and Provider Preferences (Q36 - Q43)
+            {
+                id: 'q36_57_current_providers',
+                sectionId: 'sec_7_57',
+                type: 'short_text',
+                title: 'A. Which online payment providers does the user currently use? (Please enter up to three provider names)',
+                required: true,
+                validation: { minLength: 2, maxLength: 100 }
+            },
+            {
+                id: 'q37_57_withdrawal_providers',
+                sectionId: 'sec_7_57',
+                type: 'short_text',
+                title: 'B. Which payment providers would the user prefer for withdrawals from SmartExn? (Please enter up to three provider names)',
+                required: true,
+                validation: { minLength: 2, maxLength: 100 }
+            },
+            {
+                id: 'q38_57_deposit_providers',
+                sectionId: 'sec_7_57',
+                type: 'short_text',
+                title: 'C. Which payment providers would the user prefer for deposits, if they ever choose to deposit? (Please enter up to three provider names)',
+                required: true,
+                validation: { minLength: 2, maxLength: 100 }
+            },
+            {
+                id: 'q39_57_currency',
+                sectionId: 'sec_7_57',
+                type: 'single_choice',
+                title: 'What is your preferred currency for receiving earnings?',
+                required: true,
+                options: ['USD ($)', 'EUR (€)', 'USDT / Crypto', 'Local Currency', 'GBP (£)']
+            },
+            {
+                id: 'q40_57_payout_issues',
+                sectionId: 'sec_7_57',
+                type: 'yes_no',
+                title: 'Have you ever experienced delays or issues receiving payouts on online platforms?',
+                required: true
+            },
+            {
+                id: 'q41_57_payment_feature',
+                sectionId: 'sec_7_57',
+                type: 'single_choice',
+                title: 'What payment method feature is most important to you?',
+                required: true,
+                options: ['Low withdrawal threshold', 'Instant or fast processing', 'Low transaction fees', 'High security and global acceptance', 'Cryptographic or digital wallet support']
+            },
+            {
+                id: 'q42_57_payout_mode',
+                sectionId: 'sec_7_57',
+                type: 'single_choice',
+                title: 'Do you prefer automated payouts or manual admin approval for withdrawals?',
+                required: true,
+                options: ['Automated instant payouts', 'Manual review within 24 hours', 'No preference']
+            },
+            {
+                id: 'q43_57_payment_sat',
+                sectionId: 'sec_7_57',
+                type: 'rating',
+                title: 'How satisfied are you with the payment options currently available in online gig platforms generally?',
+                required: true,
+                minRating: 1,
+                maxRating: 5
+            },
+
+            // Section 8: SmartExn Usage and Experience (Q44 - Q47)
+            {
+                id: 'q44_57_discovery',
+                sectionId: 'sec_8_57',
+                type: 'single_choice',
+                title: 'How did you first discover SmartExn?',
+                required: true,
+                options: ['Google Search', 'YouTube Video', 'Social Media (Facebook/TikTok/Instagram)', 'Friend Referral', 'Online Community / Forum', 'Advertisement', 'Direct URL']
+            },
+            {
+                id: 'q45_57_tenure',
+                sectionId: 'sec_8_57',
+                type: 'single_choice',
+                title: 'How long have you been registered as a member on SmartExn?',
+                required: true,
+                options: ['Less than a week', '1–4 weeks', '1–3 months', '3–6 months', '6+ months']
+            },
+            {
+                id: 'q46_57_login_freq',
+                sectionId: 'sec_8_57',
+                type: 'single_choice',
+                title: 'How frequently do you log in and check SmartExn?',
+                required: true,
+                options: ['Multiple times per day', 'Once a day', '2–3 times per week', 'Once a week or less', 'First time today']
+            },
+            {
+                id: 'q47_57_ui_rating',
+                sectionId: 'sec_8_57',
+                type: 'rating',
+                title: 'How would you rate the overall user interface and design of SmartExn?',
+                required: true,
+                minRating: 1,
+                maxRating: 5
+            },
+
+            // Section 9: Task Experience, Bugs and Technical Problems (Q48 - Q51)
+            {
+                id: 'q48_57_bugs_encountered',
+                sectionId: 'sec_9_57',
+                type: 'yes_no',
+                title: 'Have you encountered any technical bugs or errors while using SmartExn?',
+                required: true
+            },
+            {
+                id: 'q49_57_bug_types',
+                sectionId: 'sec_9_57',
+                type: 'multiple_choice',
+                title: 'If you encountered bugs, what type of problem was it?',
+                required: true,
+                showIf: { questionId: 'q48_57_bugs_encountered', operator: 'equals', value: 'Yes' },
+                options: ['Loading slow or lagging', 'Task submission error', 'Authentication / login issue', 'Payout withdrawal delay or error', 'Mobile display problem', 'None']
+            },
+            {
+                id: 'q50_57_instructions_clarity',
+                sectionId: 'sec_9_57',
+                type: 'rating',
+                title: 'How easy is it to understand instructions for completing tasks on SmartExn?',
+                required: true,
+                minRating: 1,
+                maxRating: 5
+            },
+            {
+                id: 'q51_57_rejection_issue',
+                sectionId: 'sec_9_57',
+                type: 'yes_no',
+                title: 'Have you ever had a task submission rejected incorrectly?',
+                required: true
+            },
+
+            // Section 10: Trust, Recommendations and Future Preferences (Q52 - Q54)
+            {
+                id: 'q52_57_trust',
+                sectionId: 'sec_10_57',
+                type: 'rating',
+                title: 'How much do you trust SmartExn with your account data and privacy?',
+                required: true,
+                minRating: 1,
+                maxRating: 5
+            },
+            {
+                id: 'q53_57_nps',
+                sectionId: 'sec_10_57',
+                type: 'opinion_scale',
+                title: 'How likely are you to recommend SmartExn to friends, family, or colleagues? (0 = Not at all likely, 10 = Extremely likely)',
+                required: true,
+                minRating: 0,
+                maxRating: 10
+            },
+            {
+                id: 'q54_57_feature_suggestion',
+                sectionId: 'sec_10_57',
+                type: 'long_text',
+                title: 'What new feature or improvement would you like SmartExn to build next?',
+                required: true
+            },
+
+            // Section 11: Final Feedback and Suggestions (Q55 - Q57)
+            {
+                id: 'q55_57_beta_interest',
+                sectionId: 'sec_11_57',
+                type: 'yes_no',
+                title: 'Would you be interested in participating in beta testing for new SmartExn features?',
+                required: true
+            },
+            {
+                id: 'q56_57_best_thing',
+                sectionId: 'sec_11_57',
+                type: 'long_text',
+                title: 'What is the single best thing about SmartExn in your opinion?',
+                required: true
+            },
+            {
+                id: 'q57_57_final_comments',
+                sectionId: 'sec_11_57',
+                type: 'long_text',
+                title: 'Is there any final feedback, suggestion, or comment you would like to share with the team?',
+                required: false
+            }
+        ]
+    }
+};

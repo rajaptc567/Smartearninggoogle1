@@ -1,5 +1,5 @@
 import AdminSurveyTemplate from '../models/AdminSurveyTemplate.js';
-import { MASTER_MEMBER_SURVEY_TEMPLATE } from '../data/defaultAdminSurveyTemplates.js';
+import { MASTER_MEMBER_SURVEY_TEMPLATE, MASTER_57_MEMBER_SURVEY_TEMPLATE } from '../data/defaultAdminSurveyTemplates.js';
 
 /**
  * Seed master template if collection is empty or missing master default
@@ -14,7 +14,15 @@ const seedMasterTemplateIfEmpty = async (userId) => {
                 createdBy: userId || null
             };
             await AdminSurveyTemplate.create(masterDoc);
-            console.log('[ADMIN SURVEY TEMPLATES] Default Master Member Survey Template seeded successfully.');
+
+            const master57Doc = {
+                ...MASTER_57_MEMBER_SURVEY_TEMPLATE,
+                isMasterDefault: false,
+                createdBy: userId || null
+            };
+            await AdminSurveyTemplate.create(master57Doc);
+
+            console.log('[ADMIN SURVEY TEMPLATES] Default Master Survey Templates (51 and 57 questions) seeded successfully.');
         } else {
             // Ensure factory master template reflects updated default rewardConfig (no_reward)
             const masterTmpl = await AdminSurveyTemplate.findOne({ isMasterDefault: true });
@@ -25,6 +33,18 @@ const seedMasterTemplateIfEmpty = async (userId) => {
                     currency: 'USD'
                 };
                 await masterTmpl.save();
+            }
+
+            // Ensure 57-question template exists
+            const existing57 = await AdminSurveyTemplate.findOne({ name: /Complete Member Profile & Earning Preferences Survey/i });
+            if (!existing57) {
+                const master57Doc = {
+                    ...MASTER_57_MEMBER_SURVEY_TEMPLATE,
+                    isMasterDefault: false,
+                    createdBy: userId || null
+                };
+                await AdminSurveyTemplate.create(master57Doc);
+                console.log('[ADMIN SURVEY TEMPLATES] 57-question master survey template seeded successfully.');
             }
         }
     } catch (err) {
