@@ -803,220 +803,381 @@ export const AdminSurveyTemplates: React.FC = () => {
                 </div>
             )}
 
-            {/* Filter & Search Bar */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="relative w-full sm:w-72">
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search templates..."
-                        className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                </div>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 shrink-0">
-                        <Filter className="w-3.5 h-3.5" />
-                        <span className="font-bold">Status:</span>
-                    </div>
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value as any)}
-                        className="p-2 rounded-xl border dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs font-bold text-gray-700 dark:text-gray-300"
-                    >
-                        <option value="all">All Statuses ({templates.length})</option>
-                        <option value="enabled">Enabled Only ({templates.filter(t => t.enabled).length})</option>
-                        <option value="disabled">Disabled Only ({templates.filter(t => !t.enabled).length})</option>
-                    </select>
-
-                    {categories.length > 0 && (
-                        <select
-                            value={filterCategory}
-                            onChange={(e) => setFilterCategory(e.target.value)}
-                            className="p-2 rounded-xl border dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs font-bold text-gray-700 dark:text-gray-300"
-                        >
-                            <option value="all">All Categories</option>
-                            {categories.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
-                    )}
-                </div>
+            {/* Tab Navigation */}
+            <div className="flex items-center gap-2 border-b dark:border-gray-700 pb-3">
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('templates')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                        activeTab === 'templates'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border dark:border-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                    <FileText className="w-4 h-4" /> Survey Templates ({templates.length})
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('campaigns')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                        activeTab === 'campaigns'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border dark:border-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                    <Activity className="w-4 h-4" /> Active Survey Campaigns ({userTasks.filter(t => t.isSurveyCampaign || t.isAdminResearchSurvey || t.sourceAdminSurveyTemplateId).length})
+                </button>
             </div>
 
-            {/* Template Grid */}
-            {loading ? (
-                <div className="p-12 text-center bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700">
-                    <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                    <p className="text-xs font-bold text-gray-500">Loading admin survey templates...</p>
+            {/* Campaigns Tab View */}
+            {activeTab === 'campaigns' && (
+                <div className="space-y-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border dark:border-gray-700 flex items-center justify-between">
+                        <div>
+                            <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                                Active Survey Campaigns
+                            </h3>
+                            <p className="text-xs text-gray-500">
+                                Monitor funded campaigns, balance levels, and manage live state (Resume/Pause/Add Funds).
+                            </p>
+                        </div>
+                    </div>
+
+                    {userTasks.filter(t => t.isSurveyCampaign || t.isAdminResearchSurvey || t.sourceAdminSurveyTemplateId).length === 0 ? (
+                        <div className="p-12 text-center bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 space-y-3">
+                            <Activity className="w-12 h-12 text-gray-400 mx-auto" />
+                            <h3 className="text-base font-bold text-gray-800 dark:text-white">No Active Survey Campaigns Found</h3>
+                            <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                Click "Use Template" on any survey template in the templates tab to launch a live survey campaign.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                            {userTasks
+                                .filter(t => t.isSurveyCampaign || t.isAdminResearchSurvey || t.sourceAdminSurveyTemplateId)
+                                .map(task => {
+                                    const isPaused = task.status === 'On Hold';
+                                    const fundingStatus = task.campaignFundingStatus || 'funded';
+                                    const isLowBalance = fundingStatus === 'low_balance' || fundingStatus === 'paused_insufficient_funds';
+
+                                    return (
+                                        <div key={task._id} className="rounded-3xl border p-5 flex flex-col justify-between bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm">
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-md ${
+                                                        task.status === 'Approved' || task.status === 'Active'
+                                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                                            : task.status === 'On Hold'
+                                                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                    }`}>
+                                                        {task.status}
+                                                    </span>
+                                                    <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                                                        {task.subType || 'Survey'}
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    <h3 className="text-base font-black text-gray-900 dark:text-white leading-snug line-clamp-2">
+                                                        {task.title}
+                                                    </h3>
+                                                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                                        {task.description || 'No description.'}
+                                                    </p>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2 pt-2 border-t dark:border-gray-750 text-[11px]">
+                                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border">
+                                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Balance / Budget</span>
+                                                        <span className="font-mono font-bold text-emerald-600">
+                                                            ${(task.campaignAvailableBalanceUSD ?? task.totalBudget ?? 0).toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border">
+                                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Completions</span>
+                                                        <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                            {task.currentCompletions || 0} / {task.isUnlimitedResponses ? '∞' : task.targetQuantity}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {isLowBalance && (
+                                                    <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-[11px] text-rose-800 dark:text-rose-300 flex items-center gap-2">
+                                                        <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+                                                        <span>Campaign paused due to insufficient funding balance. Add funds to resume.</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-5 pt-3.5 border-t dark:border-gray-750 flex items-center justify-between gap-1.5 flex-wrap">
+                                                <div className="flex items-center gap-1">
+                                                    {isPaused ? (
+                                                        <Button
+                                                            variant="primary"
+                                                            size="sm"
+                                                            onClick={() => handleResumeCampaign(task)}
+                                                            className="text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1"
+                                                        >
+                                                            <Play className="w-3 h-3 fill-white" /> Resume
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={() => handlePauseCampaign(task)}
+                                                            className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1"
+                                                        >
+                                                            <Pause className="w-3 h-3" /> Pause
+                                                        </Button>
+                                                    )}
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => setFundingModalTask(task)}
+                                                        className="text-xs font-bold flex items-center gap-1 text-indigo-600"
+                                                    >
+                                                        <DollarSign className="w-3 h-3" /> Add Funds
+                                                    </Button>
+                                                </div>
+
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    onClick={() => setHistoryModalTask(task)}
+                                                    title="Analytics & History"
+                                                    className="text-xs font-bold flex items-center gap-1"
+                                                >
+                                                    <History className="w-3 h-3" /> History
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                        </div>
+                    )}
                 </div>
-            ) : filteredTemplates.length === 0 ? (
-                <div className="p-12 text-center bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 space-y-3">
-                    <FileText className="w-12 h-12 text-gray-400 mx-auto" />
-                    <h3 className="text-base font-bold text-gray-800 dark:text-white">No Admin Survey Templates Found</h3>
-                    <p className="text-xs text-gray-500 max-w-md mx-auto">
-                        {searchQuery ? 'No templates match your search query.' : 'Click "Restore Factory Master" to seed the default SmartExn Member Survey Template.'}
-                    </p>
-                    <Button variant="primary" onClick={handleResetMasterDefault} className="text-xs">
-                        Restore Factory Master
-                    </Button>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {filteredTemplates.map(template => {
-                        const questionCount = template.surveyConfig?.questions?.length || 0;
-                        const sectionCount = template.surveyConfig?.sections?.length || 0;
-                        const isMaster = template.isMasterDefault === true;
+            )}
 
-                        return (
-                            <div 
-                                key={template._id}
-                                className={`rounded-3xl border p-5 flex flex-col justify-between transition-all bg-white dark:bg-gray-800 ${
-                                    isMaster 
-                                        ? 'border-indigo-400 dark:border-indigo-600/80 shadow-indigo-500/5 shadow-lg' 
-                                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                                }`}
-                            >
-                                <div className="space-y-3.5">
-                                    {/* Top Bar Badges */}
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                            {isMaster && (
-                                                <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-md bg-indigo-500 text-white flex items-center gap-1 shadow-sm">
-                                                    <Sparkles className="w-3 h-3" /> Master Default
-                                                </span>
-                                            )}
-                                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                                                v{template.version}
-                                            </span>
-                                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
-                                                {template.category || 'General'}
-                                            </span>
-                                        </div>
+            {/* Templates Tab View */}
+            {activeTab === 'templates' && (
+                <>
+                    {/* Filter & Search Bar */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="relative w-full sm:w-72">
+                            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search templates..."
+                                className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
 
-                                        <button
-                                            type="button"
-                                            onClick={(e) => handleToggleEnabled(template._id, e)}
-                                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase transition-all ${
-                                                template.enabled 
-                                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
-                                                    : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30'
-                                            }`}
-                                        >
-                                            {template.enabled ? (
-                                                <>
-                                                    <ToggleRight className="w-3.5 h-3.5" /> Enabled
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <ToggleLeft className="w-3.5 h-3.5" /> Disabled
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
-
-                                    {/* Title & Description */}
-                                    <div>
-                                        <h3 className="text-base font-black text-gray-900 dark:text-white leading-snug line-clamp-2">
-                                            {template.name}
-                                        </h3>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-3 leading-relaxed">
-                                            {template.description || 'No description provided.'}
-                                        </p>
-                                    </div>
-
-                                    {/* Metrics / Details Pills */}
-                                    <div className="grid grid-cols-2 gap-2 pt-2 border-t dark:border-gray-750 text-[11px]">
-                                        <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Structure</span>
-                                            <span className="font-bold text-gray-800 dark:text-gray-200">
-                                                {questionCount} Questions {sectionCount > 0 && `• ${sectionCount} Sec`}
-                                            </span>
-                                        </div>
-                                        <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Est. Time</span>
-                                            <span className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1">
-                                                <Clock className="w-3 h-3 text-gray-400" /> {template.estimatedTimeMinutes || 5} min
-                                            </span>
-                                        </div>
-                                        <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Reward Mode</span>
-                                            <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                                                {template.rewardConfig?.mode === 'no_reward' && 'No Reward'}
-                                                {template.rewardConfig?.mode === 'fixed' && `Fixed: $${(template.rewardConfig?.amount || 0).toFixed(2)}`}
-                                                {template.rewardConfig?.mode === 'custom' && `Custom: $${(template.rewardConfig?.amount || 0).toFixed(2)}`}
-                                            </span>
-                                        </div>
-                                        <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Requirement</span>
-                                            <span className="font-bold text-amber-600 dark:text-amber-400 truncate block">
-                                                {template.requirementConfig?.mode === 'optional' && 'Optional'}
-                                                {template.requirementConfig?.mode === 'mandatory_all' && 'Mandatory (All)'}
-                                                {template.requirementConfig?.mode === 'mandatory_targeted' && 'Mandatory (Targeted)'}
-                                                {template.requirementConfig?.mode === 'mandatory_before_withdrawal' && 'Pre-Withdrawal'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Action Buttons Footer */}
-                                <div className="mt-5 pt-3.5 border-t dark:border-gray-750 flex items-center justify-between gap-1.5 flex-wrap">
-                                    <div className="flex items-center gap-1">
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() => setPreviewTemplate(template)}
-                                            title="Preview Questions & Logic"
-                                            className="px-2.5 py-1 text-xs font-bold"
-                                        >
-                                            <Eye className="w-3.5 h-3.5" />
-                                        </Button>
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() => handleOpenEdit(template)}
-                                            title="Edit Template"
-                                            className="px-2.5 py-1 text-xs font-bold"
-                                        >
-                                            <Edit3 className="w-3.5 h-3.5" />
-                                        </Button>
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={(e) => handleDuplicate(template._id, e)}
-                                            title="Duplicate Template"
-                                            className="px-2.5 py-1 text-xs font-bold"
-                                        >
-                                            <Copy className="w-3.5 h-3.5" />
-                                        </Button>
-                                        {!isMaster && (
-                                            <Button
-                                                variant="danger"
-                                                size="sm"
-                                                onClick={(e) => handleDelete(template, e)}
-                                                title="Delete Template"
-                                                className="px-2.5 py-1 text-xs font-bold text-rose-500 hover:text-white"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
-                                        )}
-                                    </div>
-
-                                    <Button
-                                        variant="primary"
-                                        size="sm"
-                                        onClick={() => handleOpenUseTemplate(template)}
-                                        className="text-xs font-black uppercase tracking-wider flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
-                                    >
-                                        <Play className="w-3 h-3 fill-white" /> Use Template
-                                    </Button>
-                                </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500 shrink-0">
+                                <Filter className="w-3.5 h-3.5" />
+                                <span className="font-bold">Status:</span>
                             </div>
-                        );
-                    })}
-                </div>
+                            <select
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value as any)}
+                                className="p-2 rounded-xl border dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs font-bold text-gray-700 dark:text-gray-300"
+                            >
+                                <option value="all">All Statuses ({templates.length})</option>
+                                <option value="enabled">Enabled Only ({templates.filter(t => t.enabled).length})</option>
+                                <option value="disabled">Disabled Only ({templates.filter(t => !t.enabled).length})</option>
+                            </select>
+
+                            {categories.length > 0 && (
+                                <select
+                                    value={filterCategory}
+                                    onChange={(e) => setFilterCategory(e.target.value)}
+                                    className="p-2 rounded-xl border dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs font-bold text-gray-700 dark:text-gray-300"
+                                >
+                                    <option value="all">All Categories</option>
+                                    {categories.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Template Grid */}
+                    {loading ? (
+                        <div className="p-12 text-center bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700">
+                            <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                            <p className="text-xs font-bold text-gray-500">Loading admin survey templates...</p>
+                        </div>
+                    ) : filteredTemplates.length === 0 ? (
+                        <div className="p-12 text-center bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 space-y-3">
+                            <FileText className="w-12 h-12 text-gray-400 mx-auto" />
+                            <h3 className="text-base font-bold text-gray-800 dark:text-white">No Admin Survey Templates Found</h3>
+                            <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                {searchQuery ? 'No templates match your search query.' : 'Click "Restore Factory Master" to seed the default SmartExn Member Survey Template.'}
+                            </p>
+                            <Button variant="primary" onClick={handleResetMasterDefault} className="text-xs">
+                                Restore Factory Master
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                            {filteredTemplates.map(template => {
+                                const questionCount = template.surveyConfig?.questions?.length || 0;
+                                const sectionCount = template.surveyConfig?.sections?.length || 0;
+                                const isMaster = template.isMasterDefault === true;
+
+                                return (
+                                    <div 
+                                        key={template._id}
+                                        className={`rounded-3xl border p-5 flex flex-col justify-between transition-all bg-white dark:bg-gray-800 ${
+                                            isMaster 
+                                                ? 'border-indigo-400 dark:border-indigo-600/80 shadow-indigo-500/5 shadow-lg' 
+                                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                        }`}
+                                    >
+                                        <div className="space-y-3.5">
+                                            {/* Top Bar Badges */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    {isMaster && (
+                                                        <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-md bg-indigo-500 text-white flex items-center gap-1 shadow-sm">
+                                                            <Sparkles className="w-3 h-3" /> Master Default
+                                                        </span>
+                                                    )}
+                                                    <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                        v{template.version}
+                                                    </span>
+                                                    <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                                                        {template.category || 'General'}
+                                                    </span>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => handleToggleEnabled(template._id, e)}
+                                                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase transition-all ${
+                                                        template.enabled 
+                                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                                                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                                                    }`}
+                                                >
+                                                    {template.enabled ? (
+                                                        <>
+                                                            <ToggleRight className="w-3.5 h-3.5" /> Enabled
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <ToggleLeft className="w-3.5 h-3.5" /> Disabled
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+
+                                            {/* Title & Description */}
+                                            <div>
+                                                <h3 className="text-base font-black text-gray-900 dark:text-white leading-snug line-clamp-2">
+                                                    {template.name}
+                                                </h3>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-3 leading-relaxed">
+                                                    {template.description || 'No description provided.'}
+                                                </p>
+                                            </div>
+
+                                            {/* Metrics / Details Pills */}
+                                            <div className="grid grid-cols-2 gap-2 pt-2 border-t dark:border-gray-750 text-[11px]">
+                                                <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
+                                                    <span className="text-[10px] uppercase font-bold text-gray-400 block">Structure</span>
+                                                    <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                        {questionCount} Questions {sectionCount > 0 && `• ${sectionCount} Sec`}
+                                                    </span>
+                                                </div>
+                                                <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
+                                                    <span className="text-[10px] uppercase font-bold text-gray-400 block">Est. Time</span>
+                                                    <span className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1">
+                                                        <Clock className="w-3 h-3 text-gray-400" /> {template.estimatedTimeMinutes || 5} min
+                                                    </span>
+                                                </div>
+                                                <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
+                                                    <span className="text-[10px] uppercase font-bold text-gray-400 block">Reward Mode</span>
+                                                    <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                                                        {template.rewardConfig?.mode === 'no_reward' && 'No Reward'}
+                                                        {template.rewardConfig?.mode === 'fixed' && `Fixed: $${(template.rewardConfig?.amount || 0).toFixed(2)}`}
+                                                        {template.rewardConfig?.mode === 'custom' && `Custom: $${(template.rewardConfig?.amount || 0).toFixed(2)}`}
+                                                    </span>
+                                                </div>
+                                                <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
+                                                    <span className="text-[10px] uppercase font-bold text-gray-400 block">Requirement</span>
+                                                    <span className="font-bold text-amber-600 dark:text-amber-400 truncate block">
+                                                        {template.requirementConfig?.mode === 'optional' && 'Optional'}
+                                                        {template.requirementConfig?.mode === 'mandatory_all' && 'Mandatory (All)'}
+                                                        {template.requirementConfig?.mode === 'mandatory_targeted' && 'Mandatory (Targeted)'}
+                                                        {template.requirementConfig?.mode === 'mandatory_before_withdrawal' && 'Pre-Withdrawal'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Action Buttons Footer */}
+                                        <div className="mt-5 pt-3.5 border-t dark:border-gray-750 flex items-center justify-between gap-1.5 flex-wrap">
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    onClick={() => setPreviewTemplate(template)}
+                                                    title="Preview Questions & Logic"
+                                                    className="px-2.5 py-1 text-xs font-bold"
+                                                >
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                </Button>
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    onClick={() => handleOpenEdit(template)}
+                                                    title="Edit Template"
+                                                    className="px-2.5 py-1 text-xs font-bold"
+                                                >
+                                                    <Edit3 className="w-3.5 h-3.5" />
+                                                </Button>
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    onClick={(e) => handleDuplicate(template._id, e)}
+                                                    title="Duplicate Template"
+                                                    className="px-2.5 py-1 text-xs font-bold"
+                                                >
+                                                    <Copy className="w-3.5 h-3.5" />
+                                                </Button>
+                                                {!isMaster && (
+                                                    <Button
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={(e) => handleDelete(template, e)}
+                                                        title="Delete Template"
+                                                        className="px-2.5 py-1 text-xs font-bold text-rose-500 hover:text-white"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                            </div>
+
+                                            <Button
+                                                variant="primary"
+                                                size="sm"
+                                                onClick={() => handleOpenUseTemplate(template)}
+                                                className="text-xs font-black uppercase tracking-wider flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                                            >
+                                                <Play className="w-3 h-3 fill-white" /> Use Template
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </>
             )}
 
             {/* PREVIEW MODAL */}
@@ -2041,6 +2202,26 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             : 'Admin budget allocation'}
                                     </span>
                                 </div>
+
+                                {launchResponseLimitMode === 'unlimited' && Number(campaignRewardPerTask) > 0 && (
+                                    <div className="md:col-span-3 p-4 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-2">
+                                        <label className="block text-xs font-black uppercase text-emerald-900 dark:text-emerald-200 mb-1">
+                                            Initial Campaign Funding (USD) *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0.01"
+                                            required
+                                            value={campaignInitialFundingUSD}
+                                            onChange={(e) => setCampaignInitialFundingUSD(Math.max(0, Number(e.target.value)))}
+                                            className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold font-mono"
+                                        />
+                                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block">
+                                            Starting funding balance for this paid unlimited survey. If funding drops below the low balance threshold, the campaign will automatically be placed On Hold.
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                         {/* Fine-tune Questionnaire with Existing SurveyBuilder */}
@@ -2110,6 +2291,119 @@ export const AdminSurveyTemplates: React.FC = () => {
                                 </Button>
                             </div>
                         </form>
+                    </div>
+                </Modal>
+            )}
+
+            {/* ADD FUNDS MODAL */}
+            {fundingModalTask && (
+                <Modal isOpen={true} onClose={() => setFundingModalTask(null)}>
+                    <div className="p-6 max-w-md space-y-5">
+                        <div className="flex items-center justify-between border-b dark:border-gray-700 pb-3">
+                            <h3 className="text-base font-black text-gray-900 dark:text-white uppercase">
+                                Add Campaign Funds
+                            </h3>
+                            <button onClick={() => setFundingModalTask(null)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="space-y-1 text-xs text-gray-500">
+                            <p>Campaign: <strong className="text-gray-800 dark:text-gray-200">{fundingModalTask.title}</strong></p>
+                            <p>Current Balance: <strong className="font-mono text-emerald-600">${(fundingModalTask.campaignAvailableBalanceUSD || 0).toFixed(2)} USD</strong></p>
+                        </div>
+                        <form onSubmit={handleAddFundsSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300 mb-1">
+                                    Amount to Add (USD) *
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="1"
+                                    required
+                                    value={addFundsAmount}
+                                    onChange={(e) => setAddFundsAmount(Number(e.target.value))}
+                                    className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold font-mono"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300 mb-1">
+                                    Idempotency Key (Optional)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={fundingIdempotencyKey}
+                                    onChange={(e) => setFundingIdempotencyKey(e.target.value)}
+                                    placeholder="auto-generated if blank"
+                                    className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button type="button" variant="secondary" onClick={() => setFundingModalTask(null)}>
+                                    Cancel
+                                </Button>
+                                <Button type="submit" variant="primary" isLoading={isAddingFunds} className="bg-emerald-600 hover:bg-emerald-700">
+                                    Add Funds
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </Modal>
+            )}
+
+            {/* CAMPAIGN HISTORY / ANALYTICS MODAL */}
+            {historyModalTask && (
+                <Modal isOpen={true} onClose={() => setHistoryModalTask(null)}>
+                    <div className="p-6 max-w-2xl max-h-[85vh] overflow-y-auto space-y-4">
+                        <div className="flex items-center justify-between border-b dark:border-gray-700 pb-3">
+                            <h3 className="text-base font-black text-gray-900 dark:text-white uppercase">
+                                Campaign Analytics & History: {historyModalTask.title}
+                            </h3>
+                            <button onClick={() => setHistoryModalTask(null)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-gray-50 dark:bg-gray-900 p-3 rounded-xl">
+                            <div>
+                                <span className="text-[10px] uppercase font-bold text-gray-400 block">Status</span>
+                                <span className="font-bold text-gray-800 dark:text-gray-200">{historyModalTask.status}</span>
+                            </div>
+                            <div>
+                                <span className="text-[10px] uppercase font-bold text-gray-400 block">Funding Status</span>
+                                <span className="font-bold text-indigo-600">{historyModalTask.campaignFundingStatus || 'funded'}</span>
+                            </div>
+                            <div>
+                                <span className="text-[10px] uppercase font-bold text-gray-400 block">Available Balance</span>
+                                <span className="font-bold font-mono text-emerald-600">${(historyModalTask.campaignAvailableBalanceUSD || 0).toFixed(2)}</span>
+                            </div>
+                            <div>
+                                <span className="text-[10px] uppercase font-bold text-gray-400 block">Completions</span>
+                                <span className="font-bold">{historyModalTask.currentCompletions || 0} / {historyModalTask.isUnlimitedResponses ? '∞' : historyModalTask.targetQuantity}</span>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <h4 className="text-xs font-black uppercase text-gray-600 dark:text-gray-400">Activity History</h4>
+                            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                                {Array.isArray(historyModalTask.history) && historyModalTask.history.length > 0 ? (
+                                    historyModalTask.history.map((h: any, i: number) => (
+                                        <div key={i} className="p-2.5 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs space-y-1 border dark:border-gray-800">
+                                            <div className="flex items-center justify-between font-bold text-gray-800 dark:text-gray-200">
+                                                <span>{h.action}</span>
+                                                <span className="text-[10px] text-gray-400">{new Date(h.timestamp || Date.now()).toLocaleString()}</span>
+                                            </div>
+                                            {h.details && <p className="text-[11px] text-gray-500">{h.details}</p>}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-xs text-gray-400 italic">No activity history recorded.</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex justify-end pt-2">
+                            <Button variant="secondary" size="sm" onClick={() => setHistoryModalTask(null)}>
+                                Close
+                            </Button>
+                        </div>
                     </div>
                 </Modal>
             )}
