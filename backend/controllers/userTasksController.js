@@ -5080,6 +5080,12 @@ export const addAdminCampaignFunds = async (req, res) => {
                 });
             }
             const freshTask = await UserTask.findById(taskId);
+            if (freshTask && freshTask.reconciliationRequired) {
+                return res.status(500).json({
+                    success: false,
+                    error: 'Reconciliation required for this campaign due to an unresolved compensation failure.'
+                });
+            }
             const currentSettings = await Setting.getSettings();
             return res.status(200).json({
                 success: true,
@@ -5208,12 +5214,14 @@ export const addAdminCampaignFunds = async (req, res) => {
         });
     } catch (err) {
         let isIdempotentDuplicate = false;
+        let isCollisionMismatch = false;
+        let collisionError = '';
         let existingTx = null;
 
         if (idempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
             existingTx = await Transaction.findOne({ idempotencyKey });
             if (existingTx) {
-                const currentCampaignId = (task && task._id) ? String(task._id) : String(req.params.id);
+                const currentCampaignId = (task && task._id) ? String(task._id) : String(taskId || req.params.id);
                 const typeMatches = existingTx.type === 'Admin Campaign Funding';
                 const campaignMatches = String(existingTx.campaignId) === currentCampaignId;
                 const userMatches = String(existingTx.userId) === String(adminUser ? adminUser._id : (req.user?._id || req.user?.id));
@@ -5221,12 +5229,11 @@ export const addAdminCampaignFunds = async (req, res) => {
                 const amountMatches = !isNaN(txAmount) && Math.abs(txAmount - fundAmountUSD) < 0.001;
 
                 if (!typeMatches || !campaignMatches || !userMatches || !amountMatches) {
-                    return res.status(409).json({
-                        success: false,
-                        error: `Idempotency key collision detected for ${idempotencyKey}: type, campaign, user, or amount mismatch.`
-                    });
+                    isCollisionMismatch = true;
+                    collisionError = `Idempotency key collision detected for ${idempotencyKey}: type, campaign, user, or amount mismatch.`;
+                } else {
+                    isIdempotentDuplicate = true;
                 }
-                isIdempotentDuplicate = true;
             }
         }
 
@@ -5236,7 +5243,7 @@ export const addAdminCampaignFunds = async (req, res) => {
             try {
                 const taskRollbackResult = await UserTask.findOneAndUpdate(
                     {
-                        _id: req.params.id,
+                        _id: taskId || req.params.id,
                         ...(historyAttemptId ? { 'history._id': historyAttemptId } : {})
                     },
                     {
@@ -5252,7 +5259,7 @@ export const addAdminCampaignFunds = async (req, res) => {
                 );
 
                 if (!taskRollbackResult) {
-                    console.error('CRITICAL: Failed to locate or revert task credit and history entry during compensation:', { taskId: req.params.id, historyAttemptId });
+                    console.error('CRITICAL: Failed to locate or revert task credit and history entry during compensation:', { taskId: taskId || req.params.id, historyAttemptId });
                     compensationFailed = true;
                 } else {
                     taskCredited = false;
@@ -5286,10 +5293,13 @@ export const addAdminCampaignFunds = async (req, res) => {
         }
 
         if (compensationFailed) {
-            try {
-                await UserTask.findByIdAndUpdate(taskId, { $set: { reconciliationRequired: true } });
-            } catch (e) {
-                console.error('CRITICAL: Failed to mark reconciliation required:', e);
+            const targetTaskId = taskId || req.params.id;
+            if (targetTaskId) {
+                try {
+                    await UserTask.findByIdAndUpdate(targetTaskId, { $set: { reconciliationRequired: true } });
+                } catch (e) {
+                    console.error('CRITICAL: Failed to mark reconciliation required:', e);
+                }
             }
             return res.status(500).json({
                 success: false,
@@ -5297,8 +5307,21 @@ export const addAdminCampaignFunds = async (req, res) => {
             });
         }
 
+        if (isCollisionMismatch) {
+            return res.status(409).json({
+                success: false,
+                error: collisionError
+            });
+        }
+
         if (isIdempotentDuplicate && existingTx) {
-            const freshTask = await UserTask.findById(taskId);
+            const freshTask = await UserTask.findById(taskId || req.params.id);
+            if (freshTask && freshTask.reconciliationRequired) {
+                return res.status(500).json({
+                    success: false,
+                    error: 'Reconciliation required for this campaign due to an unresolved compensation failure.'
+                });
+            }
             const currentSettings = await Setting.getSettings();
             return res.status(200).json({
                 success: true,
