@@ -2839,6 +2839,9 @@ const autoApproveStaleSubmissions = async () => {
                 continue;
             }
 
+            let workerCredited = false;
+            let creditedAmount = 0;
+
             try {
                 const updatedSub = await UserTaskSubmission.findOneAndUpdate(
                     { _id: submission._id, rewardClaimed: { $ne: true } },
@@ -2863,41 +2866,76 @@ const autoApproveStaleSubmissions = async () => {
                     continue;
                 }
 
-                const worker = await User.findById(updatedSub.workerId);
-                if (worker) {
-                    let rewardInUSD = updatedSub.rewardAmount;
-                    if (rewardInUSD > 0) {
-                        worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
-                        await worker.save();
+                const rewardInUSD = Number((updatedSub.rewardAmount || 0).toFixed(2));
+                if (rewardInUSD > 0) {
+                    const updatedWorker = await User.findByIdAndUpdate(
+                        updatedSub.workerId,
+                        { $inc: { taskEarningsBalance: rewardInUSD } },
+                        { new: true }
+                    );
 
-                        const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
-                        if (!existingTx) {
-                            const tx = await Transaction.create({
-                                userId: worker._id,
-                                userName: worker.username,
-                                currency: 'USD',
-                                type: 'Task Reward',
-                                amount: rewardInUSD,
-                                description: `Completed User Task (Auto-Approved): ${updatedSub.taskTitle || 'Engagement Task'}`,
-                                status: 'Approved',
-                                submissionId: updatedSub._id,
-                                campaignId: updatedSub.taskId
-                            });
-                            updatedSub.rewardTransactionId = tx._id;
-                            await updatedSub.save();
-                        }
+                    if (!updatedWorker) {
+                        throw new Error(`Worker ${updatedSub.workerId} not found during auto-approval credit.`);
+                    }
+
+                    workerCredited = true;
+                    creditedAmount = rewardInUSD;
+
+                    const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
+                    if (!existingTx) {
+                        const tx = await Transaction.create({
+                            userId: updatedWorker._id,
+                            userName: updatedWorker.username,
+                            currency: 'USD',
+                            type: 'Task Reward',
+                            amount: rewardInUSD,
+                            amountUSD: rewardInUSD,
+                            description: `Completed User Task (Auto-Approved): ${updatedSub.taskTitle || 'Engagement Task'}`,
+                            status: 'Approved',
+                            submissionId: updatedSub._id,
+                            campaignId: updatedSub.taskId,
+                            idempotencyKey: `task_reward_${updatedSub._id}`
+                        });
+                        updatedSub.rewardTransactionId = tx._id;
+                        await UserTaskSubmission.findByIdAndUpdate(updatedSub._id, { $set: { rewardTransactionId: tx._id } });
                     }
 
                     await Notification.create({
-                        userId: worker._id,
+                        userId: updatedWorker._id,
                         subject: 'Task Auto-Approved! ⏱️✅',
-                        message: rewardInUSD > 0
-                            ? `Your proof for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${timeoutDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`
-                            : `Your submission for campaign "${updatedSub.taskTitle}" was approved. Thank you for your participation!`,
+                        message: `Your proof for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${timeoutDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
+                        senderType: 'System'
+                    });
+                } else {
+                    await Notification.create({
+                        userId: updatedSub.workerId,
+                        subject: 'Task Auto-Approved! ⏱️✅',
+                        message: `Your submission for campaign "${updatedSub.taskTitle}" was approved. Thank you for your participation!`,
                         senderType: 'System'
                     });
                 }
             } catch (err) {
+                if (workerCredited && creditedAmount > 0) {
+                    try {
+                        await User.findByIdAndUpdate(submission.workerId, { $inc: { taskEarningsBalance: -creditedAmount } });
+                    } catch (revErr) {
+                        console.error('Critical: Failed to reverse worker earnings on stale auto-approve failure:', revErr);
+                    }
+                }
+
+                try {
+                    await UserTaskSubmission.findByIdAndUpdate(submission._id, {
+                        $set: {
+                            status: 'Pending',
+                            paid: false,
+                            rewardClaimed: false,
+                            rewardPaidAt: null
+                        }
+                    });
+                } catch (revSubErr) {
+                    console.error('Warning: Failed to revert submission on stale auto-approve failure:', revSubErr);
+                }
+
                 await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
                 console.error('Error auto-approving stale submission:', err);
             }
@@ -2917,6 +2955,9 @@ const autoApproveStaleSubmissions = async () => {
                 // Target completion limit reached or worker already completed. Skip auto-approval/rewarding.
                 continue;
             }
+
+            let disputeWorkerCredited = false;
+            let disputeCreditedAmount = 0;
 
             try {
                 const updatedSub = await UserTaskSubmission.findOneAndUpdate(
@@ -2952,41 +2993,77 @@ const autoApproveStaleSubmissions = async () => {
                     });
                 }
 
-                const worker = await User.findById(updatedSub.workerId);
-                if (worker) {
-                    let rewardInUSD = updatedSub.rewardAmount;
-                    if (rewardInUSD > 0) {
-                        worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
-                        await worker.save();
+                const rewardInUSD = Number((updatedSub.rewardAmount || 0).toFixed(2));
+                if (rewardInUSD > 0) {
+                    const updatedWorker = await User.findByIdAndUpdate(
+                        updatedSub.workerId,
+                        { $inc: { taskEarningsBalance: rewardInUSD } },
+                        { new: true }
+                    );
 
-                        const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
-                        if (!existingTx) {
-                            const tx = await Transaction.create({
-                                userId: worker._id,
-                                userName: worker.username,
-                                currency: 'USD',
-                                type: 'Task Reward',
-                                amount: rewardInUSD,
-                                description: `Completed User Task (Auto-Approved Dispute): ${updatedSub.taskTitle || 'Engagement Task'}`,
-                                status: 'Approved',
-                                submissionId: updatedSub._id,
-                                campaignId: updatedSub.taskId
-                            });
-                            updatedSub.rewardTransactionId = tx._id;
-                            await updatedSub.save();
-                        }
+                    if (!updatedWorker) {
+                        throw new Error(`Worker ${updatedSub.workerId} not found during dispute auto-approval credit.`);
+                    }
+
+                    disputeWorkerCredited = true;
+                    disputeCreditedAmount = rewardInUSD;
+
+                    const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
+                    if (!existingTx) {
+                        const tx = await Transaction.create({
+                            userId: updatedWorker._id,
+                            userName: updatedWorker.username,
+                            currency: 'USD',
+                            type: 'Task Reward',
+                            amount: rewardInUSD,
+                            amountUSD: rewardInUSD,
+                            description: `Completed User Task (Auto-Approved Dispute): ${updatedSub.taskTitle || 'Engagement Task'}`,
+                            status: 'Approved',
+                            submissionId: updatedSub._id,
+                            campaignId: updatedSub.taskId,
+                            idempotencyKey: `task_reward_${updatedSub._id}`
+                        });
+                        updatedSub.rewardTransactionId = tx._id;
+                        await UserTaskSubmission.findByIdAndUpdate(updatedSub._id, { $set: { rewardTransactionId: tx._id } });
                     }
 
                     await Notification.create({
-                        userId: worker._id,
+                        userId: updatedWorker._id,
                         subject: 'Dispute Auto-Approved! ⏱️⚖️✅',
-                        message: rewardInUSD > 0
-                            ? `Your dispute for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${disputeReviewDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`
-                            : `Your dispute for campaign "${updatedSub.taskTitle}" was resolved and approved.`,
+                        message: `Your dispute for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${disputeReviewDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
+                        senderType: 'System'
+                    });
+                } else {
+                    await Notification.create({
+                        userId: updatedSub.workerId,
+                        subject: 'Dispute Auto-Approved! ⏱️⚖️✅',
+                        message: `Your dispute for campaign "${updatedSub.taskTitle}" was resolved and approved.`,
                         senderType: 'System'
                     });
                 }
             } catch (err) {
+                if (disputeWorkerCredited && disputeCreditedAmount > 0) {
+                    try {
+                        await User.findByIdAndUpdate(submission.workerId, { $inc: { taskEarningsBalance: -disputeCreditedAmount } });
+                    } catch (revErr) {
+                        console.error('Critical: Failed to reverse worker earnings on stale dispute auto-approve failure:', revErr);
+                    }
+                }
+
+                try {
+                    await UserTaskSubmission.findByIdAndUpdate(submission._id, {
+                        $set: {
+                            status: 'Disputed',
+                            paid: false,
+                            rewardClaimed: false,
+                            rewardPaidAt: null,
+                            disputeStage: 'CreatorReview'
+                        }
+                    });
+                } catch (revSubErr) {
+                    console.error('Warning: Failed to revert submission on stale dispute auto-approve failure:', revSubErr);
+                }
+
                 await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
                 console.error('Error auto-approving stale dispute:', err);
             }
@@ -3593,6 +3670,9 @@ export const submitUserTaskProof = async (req, res) => {
         if (canAutoApprove) {
             const claimedTask = await claimTaskCompletionSlot(task._id, worker._id, allowRecompletion);
             if (claimedTask) {
+                let workerCredited = false;
+                let creditedAmount = 0;
+
                 try {
                     submission.status = 'Approved';
                     submission.paid = true;
@@ -3604,29 +3684,61 @@ export const submitUserTaskProof = async (req, res) => {
                     submission.adminNotes = 'Survey auto-approved upon passing all attention, consistency, and qualification checks.';
                     await submission.save();
 
-                    if (task.rewardPerTask > 0) {
-                        worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + task.rewardPerTask).toFixed(2));
-                        await worker.save();
+                    const rewardInUSD = Number((task.rewardPerTask || 0).toFixed(2));
+                    if (rewardInUSD > 0) {
+                        const updatedWorker = await User.findByIdAndUpdate(
+                            worker._id,
+                            { $inc: { taskEarningsBalance: rewardInUSD } },
+                            { new: true }
+                        );
 
-                        const tx = await Transaction.create({
-                            userId: worker._id,
-                            userName: worker.username,
-                            currency: 'USD',
-                            type: 'Survey Reward',
-                            amount: task.rewardPerTask,
-                            amountUSD: task.rewardPerTask,
-                            campaignId: task._id,
-                            submissionId: submission._id,
-                            sourceWallet: 'CampaignEscrow',
-                            destinationWallet: 'TaskEarnings',
-                            description: `Earned reward for completing survey: "${task.title}"`,
-                            status: 'Approved',
-                            idempotencyKey: `survey_reward_${submission._id}`
-                        });
-                        submission.rewardTransactionId = tx._id;
-                        await submission.save();
+                        if (!updatedWorker) {
+                            throw new Error(`Failed to credit worker earnings: Worker ${worker._id} not found.`);
+                        }
+
+                        workerCredited = true;
+                        creditedAmount = rewardInUSD;
+
+                        const existingTx = await Transaction.findOne({ submissionId: submission._id, type: 'Survey Reward' });
+                        if (!existingTx) {
+                            const tx = await Transaction.create({
+                                userId: updatedWorker._id,
+                                userName: updatedWorker.username,
+                                currency: 'USD',
+                                type: 'Survey Reward',
+                                amount: rewardInUSD,
+                                amountUSD: rewardInUSD,
+                                campaignId: task._id,
+                                submissionId: submission._id,
+                                sourceWallet: 'CampaignEscrow',
+                                destinationWallet: 'TaskEarnings',
+                                description: `Earned reward for completing survey: "${task.title}"`,
+                                status: 'Approved',
+                                idempotencyKey: `survey_reward_${submission._id}`
+                            });
+                            submission.rewardTransactionId = tx._id;
+                            await UserTaskSubmission.findByIdAndUpdate(submission._id, { $set: { rewardTransactionId: tx._id } });
+                        }
                     }
                 } catch (autoApproveErr) {
+                    if (workerCredited && creditedAmount > 0) {
+                        try {
+                            await User.findByIdAndUpdate(worker._id, { $inc: { taskEarningsBalance: -creditedAmount } });
+                        } catch (revWorkerErr) {
+                            console.error('Critical: Failed to reverse worker earnings during survey auto-approval failure:', revWorkerErr);
+                        }
+                    }
+
+                    try {
+                        submission.status = 'Pending';
+                        submission.paid = false;
+                        submission.rewardClaimed = false;
+                        submission.rewardPaidAt = null;
+                        await submission.save();
+                    } catch (revSubErr) {
+                        console.error('Warning: Failed to revert submission status during auto-approval failure:', revSubErr);
+                    }
+
                     await releaseTaskCompletionSlot(task._id, worker._id);
                     throw autoApproveErr;
                 }
@@ -3678,36 +3790,75 @@ export const submitUserTaskProof = async (req, res) => {
                 );
 
                 if (claimSub) {
-                    submission.status = 'Approved';
-                    submission.paid = true;
-                    submission.rewardClaimed = true;
-                    submission.rewardPaidAt = claimSub.rewardPaidAt;
-                    submission.rewardAmount = screeningRewardAmount;
-                    submission.adminNotes = claimSub.adminNotes;
+                    let screenoutCredited = false;
+                    try {
+                        submission.status = 'Approved';
+                        submission.paid = true;
+                        submission.rewardClaimed = true;
+                        submission.rewardPaidAt = claimSub.rewardPaidAt;
+                        submission.rewardAmount = screeningRewardAmount;
+                        submission.adminNotes = claimSub.adminNotes;
 
-                    // Strictly credit Task Earnings balance (Preserve wallet separation)
-                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + screeningRewardAmount).toFixed(2));
-                    await worker.save();
+                        // Strictly credit Task Earnings balance atomically (Preserve wallet separation)
+                        const updatedWorker = await User.findByIdAndUpdate(
+                            worker._id,
+                            { $inc: { taskEarningsBalance: screeningRewardAmount } },
+                            { new: true }
+                        );
 
-                    // Create ledger entry using existing financial mechanism
-                    const tx = await Transaction.create({
-                        userId: worker._id,
-                        userName: worker.username,
-                        currency: 'USD',
-                        type: 'Survey Screenout Reward',
-                        amount: screeningRewardAmount,
-                        amountUSD: screeningRewardAmount,
-                        campaignId: task._id,
-                        submissionId: claimSub._id,
-                        sourceWallet: 'CampaignEscrow',
-                        destinationWallet: 'TaskEarnings',
-                        description: `Screenout micro-reward for survey: "${task.title}"`,
-                        status: 'Approved'
-                    });
+                        if (!updatedWorker) {
+                            throw new Error(`Failed to credit screenout reward: Worker ${worker._id} not found.`);
+                        }
 
-                    claimSub.rewardTransactionId = tx._id;
-                    await claimSub.save();
-                    submission.rewardTransactionId = tx._id;
+                        screenoutCredited = true;
+
+                        // Create ledger entry using existing financial mechanism with unique idempotencyKey
+                        const tx = await Transaction.create({
+                            userId: updatedWorker._id,
+                            userName: updatedWorker.username,
+                            currency: 'USD',
+                            type: 'Survey Screenout Reward',
+                            amount: screeningRewardAmount,
+                            amountUSD: screeningRewardAmount,
+                            campaignId: task._id,
+                            submissionId: claimSub._id,
+                            sourceWallet: 'CampaignEscrow',
+                            destinationWallet: 'TaskEarnings',
+                            description: `Screenout micro-reward for survey: "${task.title}"`,
+                            status: 'Approved',
+                            idempotencyKey: `survey_screenout_${claimSub._id}`
+                        });
+
+                        claimSub.rewardTransactionId = tx._id;
+                        await UserTaskSubmission.findByIdAndUpdate(claimSub._id, { $set: { rewardTransactionId: tx._id } });
+                        submission.rewardTransactionId = tx._id;
+                    } catch (screenoutErr) {
+                        if (screenoutCredited) {
+                            try {
+                                await User.findByIdAndUpdate(worker._id, { $inc: { taskEarningsBalance: -screeningRewardAmount } });
+                            } catch (revErr) {
+                                console.error('Critical: Failed to reverse screenout earnings on transaction failure:', revErr);
+                            }
+                        }
+
+                        try {
+                            await UserTaskSubmission.findByIdAndUpdate(claimSub._id, {
+                                $set: {
+                                    status: 'Pending',
+                                    paid: false,
+                                    rewardClaimed: false,
+                                    rewardPaidAt: null
+                                }
+                            });
+                            submission.status = 'Pending';
+                            submission.paid = false;
+                            submission.rewardClaimed = false;
+                        } catch (revSubErr) {
+                            console.error('Warning: Failed to revert submission on screenout failure:', revSubErr);
+                        }
+
+                        throw screenoutErr;
+                    }
                 }
             }
         }
@@ -3854,6 +4005,11 @@ export const updateSubmissionStatus = async (req, res) => {
                 });
             }
 
+            // Early check: if already approved or rewarded, return idempotently without touching slots
+            if (submission.status === 'Approved' || submission.rewardClaimed) {
+                return res.status(200).json({ success: true, data: submission, task: task || null, message: 'Submission already processed or rewarded.' });
+            }
+
             // First claim completion slot atomically
             const claimedTask = await claimTaskCompletionSlot(submission.taskId, submission.workerId);
             if (!claimedTask) {
@@ -3862,6 +4018,9 @@ export const updateSubmissionStatus = async (req, res) => {
                     error: 'Cannot approve submission: campaign target completion limit has been reached.'
                 });
             }
+
+            let workerCredited = false;
+            let creditedAmount = 0;
 
             try {
                 // Atomic update to claim reward idempotently
@@ -3905,34 +4064,66 @@ export const updateSubmissionStatus = async (req, res) => {
                     }
                 }
 
-                const worker = await User.findById(targetSubmission.workerId);
-                if (worker) {
-                    let rewardInUSD = targetSubmission.rewardAmount;
-                    if (rewardInUSD > 0) {
-                        worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
-                        await worker.save();
+                const rewardInUSD = Number((targetSubmission.rewardAmount || 0).toFixed(2));
+                if (rewardInUSD > 0) {
+                    const updatedWorker = await User.findByIdAndUpdate(
+                        targetSubmission.workerId,
+                        { $inc: { taskEarningsBalance: rewardInUSD } },
+                        { new: true }
+                    );
 
-                        // Prevent duplicate transaction
-                        const existingTx = await Transaction.findOne({ submissionId: targetSubmission._id, type: 'Task Reward' });
-                        if (!existingTx) {
-                            const tx = await Transaction.create({
-                                userId: worker._id,
-                                userName: worker.username,
-                                currency: 'USD',
-                                type: 'Task Reward',
-                                amount: rewardInUSD,
-                                description: `Completed User Task: ${targetSubmission.taskTitle || 'Engagement Task'}`,
-                                status: 'Approved',
-                                submissionId: targetSubmission._id,
-                                campaignId: targetSubmission.taskId,
-                                idempotencyKey: `task_reward_${targetSubmission._id}`
-                            });
-                            targetSubmission.rewardTransactionId = tx._id;
-                            await targetSubmission.save();
-                        }
+                    if (!updatedWorker) {
+                        throw new Error(`Failed to credit worker earnings: Worker ${targetSubmission.workerId} not found.`);
+                    }
+
+                    workerCredited = true;
+                    creditedAmount = rewardInUSD;
+
+                    // Prevent duplicate transaction with unique idempotencyKey
+                    const existingTx = await Transaction.findOne({ submissionId: targetSubmission._id, type: 'Task Reward' });
+                    if (!existingTx) {
+                        const tx = await Transaction.create({
+                            userId: updatedWorker._id,
+                            userName: updatedWorker.username,
+                            currency: 'USD',
+                            type: 'Task Reward',
+                            amount: rewardInUSD,
+                            amountUSD: rewardInUSD,
+                            description: `Completed User Task: ${targetSubmission.taskTitle || 'Engagement Task'}`,
+                            status: 'Approved',
+                            submissionId: targetSubmission._id,
+                            campaignId: targetSubmission.taskId,
+                            idempotencyKey: `task_reward_${targetSubmission._id}`
+                        });
+                        targetSubmission.rewardTransactionId = tx._id;
+                        await UserTaskSubmission.findByIdAndUpdate(targetSubmission._id, { $set: { rewardTransactionId: tx._id } });
                     }
                 }
             } catch (approveErr) {
+                // Compensate worker earnings if credited before transaction or post-credit failure
+                if (workerCredited && creditedAmount > 0) {
+                    try {
+                        await User.findByIdAndUpdate(targetSubmission.workerId, { $inc: { taskEarningsBalance: -creditedAmount } });
+                    } catch (revWorkerErr) {
+                        console.error('Critical: Failed to reverse worker earnings during manual approval rollback:', revWorkerErr);
+                    }
+                }
+
+                // Revert submission reward claim status if updatedSub claimed it
+                try {
+                    await UserTaskSubmission.findByIdAndUpdate(req.params.subId, {
+                        $set: {
+                            status: oldStatus,
+                            paid: false,
+                            rewardClaimed: false,
+                            rewardPaidAt: null,
+                            ...(oldStatus === 'Disputed' ? { disputeStage: submission.disputeStage || 'CreatorReview' } : {})
+                        }
+                    });
+                } catch (revSubErr) {
+                    console.error('Warning: Failed to revert submission state during approval failure:', revSubErr);
+                }
+
                 await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
                 throw approveErr;
             }
