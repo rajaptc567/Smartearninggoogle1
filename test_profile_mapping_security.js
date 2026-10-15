@@ -445,6 +445,10 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
     assert.strictEqual(updatedTask.currentCompletions, 1, 'Completion slot behaviour must remain consistent (incremented completions)');
 
     // 2. Pending / manual review survey submission test (does not auto-approve)
+    // Use a fresh worker to prevent stale profile data from the zero-reward test
+    const userIdManual = 'worker_ctrl_manual';
+    db.users.set(userIdManual, { _id: userIdManual, username: 'workerManual', customFields: {} });
+
     const taskIdManual = 'task_ctrl_manual';
     db.tasks.set(taskIdManual, {
         _id: taskIdManual,
@@ -476,9 +480,12 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
         return sub;
     };
 
+    const workerBeforeManual = db.users.get(userIdManual);
+    const preSubmissionHobby = workerBeforeManual.customFields?.hobby;
+
     const reqManual = {
         params: { id: taskIdManual },
-        user: { _id: userId, id: userId, role: 'user', username: 'worker1' },
+        user: { _id: userIdManual, id: userIdManual, role: 'user', username: 'workerManual' },
         body: {
             surveyResponses: [{ questionId: 'q1', value: 'Cycling' }],
             surveyCompletionTimeSeconds: 60,
@@ -497,9 +504,8 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
     assert.strictEqual(resManual.statusCode, 201, 'submitUserTaskProof manual review submission should return 201: ' + JSON.stringify(resManual.jsonData));
     assert.strictEqual(resManual.jsonData.data.status, 'Pending', 'Manual review submission must remain Pending');
     
-    const workerAfterManual = db.users.get(userId);
-    // The user's profile should NOT be updated.
-    assert.strictEqual(workerAfterManual.customFields.hobby, undefined, 'Pending submission must not update profile fields before approval');
+    const workerAfterManual = db.users.get(userIdManual);
+    assert.strictEqual(workerAfterManual.customFields?.hobby, preSubmissionHobby, 'Pending submission must not update profile fields before approval and remain unchanged from pre-submission state');
 
     // Restore original create stub
     UserTaskSubmission.create = origSubCreateManual;
