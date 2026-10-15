@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
-import { applySurveyProfileMappings } from './backend/controllers/userTasksController.js';
+import { applySurveyProfileMappings, submitUserTaskProof } from './backend/controllers/userTasksController.js';
 import User from './backend/models/User.js';
+import UserTask from './backend/models/UserTask.js';
+import UserTaskSubmission from './backend/models/UserTaskSubmission.js';
+import Setting from './backend/models/Setting.js';
+import Transaction from './backend/models/Transaction.js';
+import Notification from './backend/models/Notification.js';
 
 console.log('Running Profile Mapping and Survey Approval Security Regression Suite...\n');
 
@@ -272,6 +277,226 @@ async function testZeroRewardAutoApprovedUpdatesProfile() {
     console.log('Test 6 (Zero-reward auto-approved survey profile mapping success) passed.');
 }
 
+// Test 7: Controller-level test exercising actual submitUserTaskProof auto-approval path for zero-reward survey and pending manual review
+async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
+    db.clear();
+    const userId = 'worker_ctrl_1';
+    const taskId = 'task_ctrl_zero';
+
+    db.users.set(userId, { _id: userId, username: 'worker1', customFields: {} });
+    db.tasks.set(taskId, {
+        _id: taskId,
+        title: 'Zero Reward Survey Task',
+        isSurvey: true,
+        status: 'Approved',
+        rewardPerTask: 0,
+        targetQuantity: 10,
+        currentCompletions: 0,
+        surveyConfig: {
+            questions: [
+                { id: 'q1', title: 'Hobby', type: 'text', profileMapping: { enabled: true, fieldKey: 'hobby' } }
+            ]
+        }
+    });
+
+    const origTaskFindById = UserTask.findById;
+    const origUserFindById = User.findById;
+    const origSettingGetSettings = Setting.getSettings;
+    const origSubFindOne = UserTaskSubmission.findOne;
+    const origSubFind = UserTaskSubmission.find;
+    const origSubCreate = UserTaskSubmission.create;
+    const origTxFindOne = Transaction.findOne;
+    const origTxCreate = Transaction.create;
+    const origNotifCreate = Notification.create;
+    const origUserUpdateOne = User.updateOne;
+
+    UserTask.findById = (id) => {
+        const t = db.tasks.get(String(id));
+        const res = t ? { ...t, save: async () => {} } : null;
+        return {
+            lean: () => Promise.resolve(res),
+            session: () => ({
+                lean: () => Promise.resolve(res)
+            }),
+            then: (resolve, reject) => Promise.resolve(res).then(resolve, reject)
+        };
+    };
+    UserTask.find = () => ({
+        lean: () => Promise.resolve([])
+    });
+    UserTask.findOneAndUpdate = async (query, update) => {
+        const t = db.tasks.get(String(query._id));
+        if (t) {
+            if (update.$inc) {
+                for (const [k, v] of Object.entries(update.$inc)) {
+                    t[k] = (t[k] || 0) + v;
+                }
+            }
+        }
+        return t;
+    };
+    User.findById = async (id) => {
+        const u = db.users.get(String(id));
+        return u ? { ...u } : null;
+    };
+    User.findByIdAndUpdate = async (id, update) => {
+        const u = db.users.get(String(id));
+        if (u) {
+            if (update.$inc) {
+                for (const [k, v] of Object.entries(update.$inc)) {
+                    u[k] = (u[k] || 0) + v;
+                }
+            }
+            if (update.$set) Object.assign(u, update.$set);
+        }
+        return u;
+    };
+    Setting.getSettings = async () => ({
+        surveyCampaignsEnabled: true,
+        campaignLiveRules: { autoApproval: true },
+        surveyConfig: { approvalSettings: { mode: 'auto' }, securityRules: { enforceAntiSpeeding: false } }
+    });
+    UserTaskSubmission.findOne = async (query) => {
+        let found = null;
+        if (query) {
+            for (const sub of db.submissions.values()) {
+                if (query.taskId && String(sub.taskId) !== String(query.taskId)) continue;
+                if (query.workerId && String(sub.workerId) !== String(query.workerId)) continue;
+                if (query.status && query.status.$in && !query.status.$in.includes(sub.status)) continue;
+                found = sub;
+                break;
+            }
+        }
+        return {
+            sort: () => ({
+                lean: () => Promise.resolve(found ? { ...found } : null)
+            }),
+            lean: () => Promise.resolve(found ? { ...found } : null),
+            then: (resolve) => resolve(found ? { ...found } : null)
+        };
+    };
+    UserTaskSubmission.find = () => ({
+        sort: () => ({
+            lean: () => Promise.resolve([])
+        })
+    });
+    UserTaskSubmission.create = async (data) => {
+        const sub = {
+            _id: 'sub_ctrl_' + Date.now(),
+            ...data,
+            save: async function() {
+                db.submissions.set(String(this._id), this);
+                return this;
+            }
+        };
+        db.submissions.set(String(sub._id), sub);
+        return sub;
+    };
+    UserTaskSubmission.findByIdAndUpdate = async (id, update) => {
+        const sub = db.submissions.get(String(id));
+        if (sub && update.$set) Object.assign(sub, update.$set);
+        return sub;
+    };
+    Transaction.findOne = async () => null;
+
+    let txCreatedCount = 0;
+    Transaction.create = async (tx) => {
+        txCreatedCount++;
+        return tx;
+    };
+    Notification.create = async () => ({});
+
+    // 1. Zero-reward auto-approved survey submission test
+    const reqZero = {
+        params: { id: taskId },
+        user: { _id: userId, id: userId, role: 'user', username: 'worker1' },
+        body: {
+            surveyResponses: [{ questionId: 'q1', value: 'Photography' }],
+            surveyCompletionTimeSeconds: 60,
+            consentAgreed: true
+        }
+    };
+    const resZero = {
+        statusCode: 200,
+        jsonData: null,
+        status(code) { this.statusCode = code; return this; },
+        json(data) { this.jsonData = data; return this; }
+    };
+
+    await submitUserTaskProof(reqZero, resZero);
+
+    if (resZero.statusCode !== 201) {
+        console.log('FAIL JSON:', resZero.jsonData);
+    }
+
+    assert.strictEqual(resZero.statusCode, 201, 'submitUserTaskProof for zero-reward survey should return 201 Created');
+    assert.strictEqual(resZero.jsonData.success, true);
+    assert.strictEqual(resZero.jsonData.data.status, 'Approved', 'Zero-reward valid survey must reach Approved status via auto-approval');
+    assert.strictEqual(txCreatedCount, 0, 'No reward transaction must be created for zero-reward submission');
+    
+    const updatedWorker = db.users.get(userId);
+    assert.strictEqual(updatedWorker.customFields.hobby.value, 'Photography', 'Profile mapping must be successfully applied for zero-reward auto-approved survey');
+
+    const updatedTask = db.tasks.get(taskId);
+    assert.strictEqual(updatedTask.currentCompletions, 1, 'Completion slot behaviour must remain consistent (incremented completions)');
+
+    // 2. Pending / manual review survey submission test (does not auto-approve)
+    const taskIdManual = 'task_ctrl_manual';
+    db.tasks.set(taskIdManual, {
+        _id: taskIdManual,
+        title: 'Manual Review Survey Task',
+        isSurvey: true,
+        status: 'Approved',
+        rewardPerTask: 5.0,
+        surveyApprovalMode: 'manual',
+        targetQuantity: 10,
+        currentCompletions: 0,
+        surveyConfig: {
+            questions: [
+                { id: 'q1', title: 'Hobby', type: 'text', profileMapping: { enabled: true, fieldKey: 'hobby' } }
+            ]
+        }
+    });
+
+    const reqManual = {
+        params: { id: taskIdManual },
+        user: { _id: userId, id: userId, role: 'user', username: 'worker1' },
+        body: {
+            surveyResponses: [{ questionId: 'q1', value: 'Cycling' }],
+            surveyCompletionTimeSeconds: 60,
+            consentAgreed: true
+        }
+    };
+    const resManual = {
+        statusCode: 200,
+        jsonData: null,
+        status(code) { this.statusCode = code; return this; },
+        json(data) { this.jsonData = data; return this; }
+    };
+
+    await submitUserTaskProof(reqManual, resManual);
+
+    assert.strictEqual(resManual.statusCode, 201, 'submitUserTaskProof manual review submission should return 201');
+    assert.strictEqual(resManual.jsonData.data.status, 'Pending', 'Manual review submission must remain Pending');
+    
+    const workerAfterManual = db.users.get(userId);
+    assert.strictEqual(workerAfterManual.customFields.hobby.value, 'Photography', 'Pending submission must not update profile fields before approval');
+
+    // Restore stubs
+    UserTask.findById = origTaskFindById;
+    User.findById = origUserFindById;
+    Setting.getSettings = origSettingGetSettings;
+    UserTaskSubmission.findOne = origSubFindOne;
+    UserTaskSubmission.find = origSubFind;
+    UserTaskSubmission.create = origSubCreate;
+    Transaction.findOne = origTxFindOne;
+    Transaction.create = origTxCreate;
+    Notification.create = origNotifCreate;
+    User.updateOne = origUserUpdateOne;
+
+    console.log('Test 7 (Controller-level submitUserTaskProof zero-reward auto-approval and pending blocking) passed.');
+}
+
 async function runAll() {
     await testDuplicateQuestionAnswersMapping();
     await testSkippedQuestionIsolation();
@@ -279,6 +504,7 @@ async function runAll() {
     await testApprovedSubmissionUpdatesProfile();
     await testInvalidOrFailedSubmissionsNoMapping();
     await testZeroRewardAutoApprovedUpdatesProfile();
+    await testSubmitUserTaskProofControllerZeroRewardAndPending();
     console.log('\nAll profile mapping security and zero-reward regression tests passed successfully!');
 }
 
