@@ -282,6 +282,7 @@ const toWorkerSafeUserTask = (task, meta = {}) => {
 
 // Concurrency-safe atomic completion slot claiming (Phase D-3 & Parts E, F, G, N)
 const claimTaskCompletionSlot = async (taskId, workerId, allowRecompletion = false) => {
+    console.log('DEBUG: claimTaskCompletionSlot called', taskId, workerId);
     if (!taskId || !workerId) return null;
 
     const workerObjId = mongoose.Types.ObjectId.isValid(workerId)
@@ -4428,6 +4429,7 @@ export const submitUserTaskProof = async (req, res) => {
 export const updateSubmissionStatus = async (req, res) => {
     try {
         const { status, adminNotes, rejectionReason } = req.body;
+        console.log('DEBUG: updateSubmissionStatus start', req.params.subId, status);
         const submission = await UserTaskSubmission.findById(req.params.subId);
         if (!submission) return res.status(404).json({ success: false, error: 'Submission not found' });
 
@@ -4460,7 +4462,9 @@ export const updateSubmissionStatus = async (req, res) => {
             const reason = rejectionReason || adminNotes || 'No reason specified';
             submission.rejectionReason = reason;
             submission.rejectedAt = new Date();
+            console.log('DEBUG: Before Setting.getSettings()');
             const settings = await Setting.getSettings();
+            console.log('DEBUG: After Setting.getSettings()');
             if (oldStatus === 'Disputed' && submission.disputeStage === 'CreatorReview') {
                 submission.disputeStage = 'RejectedByCreator';
                 submission.disputeCreatorNotes = reason;
@@ -4490,6 +4494,7 @@ export const updateSubmissionStatus = async (req, res) => {
                 submissionId: submission._id,
                 type: { $in: ['Task Reward', 'Survey Reward', 'Survey Screenout Reward'] }
             });
+            console.log('DEBUG: existingTx found?', !!existingTx);
 
             if (oldStatus === 'Approved') {
                 if (!existingTx && Number(submission.rewardAmount || 0) > 0) {
@@ -4558,6 +4563,7 @@ export const updateSubmissionStatus = async (req, res) => {
             }
 
             if (submission.rewardClaimed && Number(submission.rewardAmount || 0) > 0) {
+                console.log('DEBUG: Historical inconsistency detected: submission.rewardClaimed is true.');
                 return res.status(400).json({
                     success: false,
                     error: 'Historical inconsistency detected: reward marked claimed but no matching ledger transaction found. Controlled reconciliation required.'
@@ -4565,6 +4571,7 @@ export const updateSubmissionStatus = async (req, res) => {
             }
 
             if (task && task.status === 'Rejected') {
+                console.log('DEBUG: Cannot approve submission: task rejected.');
                 return res.status(400).json({
                     success: false,
                     error: 'Cannot approve submission: the campaign associated with this submission has been rejected.'
@@ -4574,6 +4581,7 @@ export const updateSubmissionStatus = async (req, res) => {
             // Claim completion slot atomically
             const claimedTask = await claimTaskCompletionSlot(submission.taskId, submission.workerId);
             if (!claimedTask) {
+                console.log('DEBUG: Cannot approve submission: campaign target completion limit has been reached or task inactive.');
                 return res.status(400).json({
                     success: false,
                     error: 'Cannot approve submission: campaign target completion limit has been reached.'
@@ -4661,7 +4669,9 @@ export const updateSubmissionStatus = async (req, res) => {
                         txCreated = true;
                     } catch (txErr) {
                         if (txErr.code === 11000 || (txErr.name === 'MongoServerError' && txErr.code === 11000)) {
+                            console.log('DEBUG: E11000 caught');
                             const dupeTx = await Transaction.findOne({ idempotencyKey });
+                            console.log('DEBUG: dupeTx found?', !!dupeTx);
                             if (dupeTx) {
                                 let dupeReversalSucceeded = false;
                                 try {

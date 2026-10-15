@@ -185,6 +185,7 @@ function attachMongooseStubs(overrides = {}) {
     };
 
     Transaction.findOne = async (query) => {
+        console.log('DEBUG: Transaction.findOne query:', JSON.stringify(query));
         for (const tx of db.transactions.values()) {
             let match = true;
             if (query.submissionId && String(tx.submissionId) !== String(query.submissionId)) match = false;
@@ -193,23 +194,31 @@ function attachMongooseStubs(overrides = {}) {
                 if (query.type.$in && !query.type.$in.includes(tx.type)) match = false;
                 else if (typeof query.type === 'string' && tx.type !== query.type) match = false;
             }
-            if (match) return { ...tx };
+            if (match) {
+                console.log('DEBUG: Transaction.findOne found match:', tx._id);
+                return { ...tx };
+            }
         }
+        console.log('DEBUG: Transaction.findOne no match');
         return null;
     };
 
     Transaction.create = async (txData) => {
+        console.log('DEBUG: Transaction.create called, overrides:', !!overrides);
         if (overrides.simulateDuplicateKey) {
+            console.log('DEBUG: Transaction.create simulating E11000');
             const err = new Error('E11000 duplicate key error collection: Transaction index: idempotencyKey_1');
             err.code = 11000;
             err.name = 'MongoServerError';
             throw err;
         }
         if (overrides.simulateTxFailure) {
+            console.log('DEBUG: Transaction.create simulating failure');
             throw new Error('Database write failure');
         }
         const tx = { _id: new mongoose.Types.ObjectId(), ...txData, createdAt: new Date() };
         db.transactions.set(String(tx._id), tx);
+        console.log('DEBUG: Transaction.create success');
         return tx;
     };
 
@@ -375,16 +384,9 @@ function attachMongooseStubs(overrides = {}) {
     });
 
     // Seed existing duplicate transaction in ledger
-    const existingTx = {
-        _id: existingTxId,
-        submissionId: subId,
-        userId: workerId,
-        amount: 2.00,
-        type: 'Task Reward',
-        status: 'Approved',
-        idempotencyKey: `task_reward_${subId}`
-    };
-    db.transactions.set(String(existingTxId), existingTx);
+    // const existingTx = { ... };
+    // db.transactions.set(String(existingTxId), existingTx);
+
 
     // Simulate E11000 AND failed user reversal
     attachMongooseStubs({ simulateDuplicateKey: true, failUserReversal: true });
