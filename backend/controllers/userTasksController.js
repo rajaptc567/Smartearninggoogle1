@@ -4117,10 +4117,10 @@ export const submitUserTaskProof = async (req, res) => {
                                     console.error('Warning: Failed to update rewardTransactionId on submission:', linkErr);
                                 }
                             }
+                        }
 
-                            if (isSurveyTask && !isScreenout) {
-                                await applySurveyProfileMappings(worker, task, submission.surveyResponses, isScreenout, submission);
-                            }
+                        if (isSurveyTask && !isScreenout) {
+                            await applySurveyProfileMappings(worker, task, submission.surveyResponses, isScreenout, submission);
                         }
                     } catch (autoApproveErr) {
                         if (dupeReversalFailed) {

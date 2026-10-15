@@ -46,7 +46,7 @@ User.updateOne = async (query, update) => {
     return { matchedCount: 1 };
 };
 
-// Test 1: Duplicate question IDs with conflicting answers -> profile mapping uses authoritative accepted response
+// Test 1: Duplicate question IDs with conflicting answers -> profile mapping uses authoritative accepted response (first accepted)
 async function testDuplicateQuestionAnswersMapping() {
     db.clear();
     const userId = 'user_1';
@@ -71,18 +71,17 @@ async function testDuplicateQuestionAnswersMapping() {
         surveyQualificationStatus: 'Qualified',
         surveyResponses: [
             { questionId: 'q1', value: '25' },
-            { questionId: 'q1', value: '99' } // duplicate/conflicting answer
+            { questionId: 'q1', value: '99' } // conflicting duplicate response that must not overwrite authoritative first response
         ]
     };
 
     const user = db.users.get(userId);
     const task = db.tasks.get(taskId);
 
-    // applySurveyProfileMappings uses authoritative submission.surveyResponses
     await applySurveyProfileMappings(user, task, submission.surveyResponses, false, submission);
 
     const updatedUser = db.users.get(userId);
-    assert.strictEqual(updatedUser.customFields.age.value, '25', 'Profile mapping must use authoritative response');
+    assert.strictEqual(updatedUser.customFields.age.value, '25', 'Profile mapping must use authoritative first accepted response');
     assert.strictEqual(updatedUser.customFields.existingField.value, 'keep_me', 'Unrelated customFields must remain unchanged');
     console.log('Test 1 (Duplicate question answers authoritative mapping & unrelated customFields preserved) passed.');
 }
@@ -203,30 +202,63 @@ async function testApprovedSubmissionUpdatesProfile() {
     console.log('Test 4 (Approved submission profile mapping success) passed.');
 }
 
-// Test 5: Rejected or disqualified submission must not update profile fields
-async function testRejectedOrDisqualifiedNoMapping() {
+// Test 5: Rejected, disqualified, screenout, attention-check-failed, or quality-failed submissions must not update profile fields
+async function testInvalidOrFailedSubmissionsNoMapping() {
     db.clear();
-    const userId = 'user_5';
-    const taskId = 'task_5';
+    const taskId = 'task_fail';
+    const task = {
+        _id: taskId,
+        isSurvey: true,
+        surveyConfig: {
+            questions: [{ id: 'q1', title: 'Q1', type: 'text', profileMapping: { enabled: true, fieldKey: 'testField' } }]
+        }
+    };
+
+    const failingSubmissions = [
+        { _id: 'sub_rej', status: 'Rejected', attentionCheckPassed: true, surveyQualificationStatus: 'Qualified', surveyResponses: [{ questionId: 'q1', value: 'val' }] },
+        { _id: 'sub_disq', status: 'Approved', attentionCheckPassed: true, surveyQualificationStatus: 'Disqualified', surveyResponses: [{ questionId: 'q1', value: 'val' }] },
+        { _id: 'sub_screen', status: 'Approved', attentionCheckPassed: true, surveyQualificationStatus: 'Screenout', surveyResponses: [{ questionId: 'q1', value: 'val' }] },
+        { _id: 'sub_att', status: 'Approved', attentionCheckPassed: false, surveyQualificationStatus: 'Qualified', surveyResponses: [{ questionId: 'q1', value: 'val' }] },
+        { _id: 'sub_qual', status: 'Approved', attentionCheckPassed: true, surveyQualificationStatus: 'Qualified', qualityFlags: ['Suspicious activity'], surveyResponses: [{ questionId: 'q1', value: 'val' }] }
+    ];
+
+    for (const sub of failingSubmissions) {
+        const userId = `user_${sub._id}`;
+        db.users.set(userId, { _id: userId, customFields: {} });
+        const user = db.users.get(userId);
+        await applySurveyProfileMappings(user, task, sub.surveyResponses, false, sub);
+        const updatedUser = db.users.get(userId);
+        assert.strictEqual(updatedUser.customFields.testField, undefined, `Submission ${sub._id} must not update profile fields`);
+    }
+    console.log('Test 5 (Rejected, disqualified, screenout, attention/quality failed submissions blocking) passed.');
+}
+
+// Test 6: Zero-reward successfully auto-approved survey updates its intended mapped profile field
+async function testZeroRewardAutoApprovedUpdatesProfile() {
+    db.clear();
+    const userId = 'user_zero';
+    const taskId = 'task_zero';
     db.users.set(userId, { _id: userId, customFields: {} });
     db.tasks.set(taskId, {
         _id: taskId,
         isSurvey: true,
+        rewardPerTask: 0, // Zero reward survey
         surveyConfig: {
             questions: [
-                { id: 'q1', title: 'Q1', type: 'text', profileMapping: { enabled: true, fieldKey: 'occupation' } }
+                { id: 'q1', title: 'Q1', type: 'text', profileMapping: { enabled: true, fieldKey: 'hobbies' } }
             ]
         }
     });
 
     const submission = {
-        _id: 'sub_5',
+        _id: 'sub_zero',
         taskId,
         workerId: userId,
-        status: 'Rejected',
-        surveyQualificationStatus: 'Disqualified',
+        status: 'Approved', // Successfully auto-approved
+        attentionCheckPassed: true,
+        surveyQualificationStatus: 'Qualified',
         surveyResponses: [
-            { questionId: 'q1', value: 'Engineer' }
+            { questionId: 'q1', value: 'Reading' }
         ]
     };
 
@@ -236,8 +268,8 @@ async function testRejectedOrDisqualifiedNoMapping() {
     await applySurveyProfileMappings(user, task, submission.surveyResponses, false, submission);
 
     const updatedUser = db.users.get(userId);
-    assert.strictEqual(updatedUser.customFields.occupation, undefined, 'Rejected or disqualified submission must not update profile fields');
-    console.log('Test 5 (Rejected/Disqualified submission profile mapping blocking) passed.');
+    assert.strictEqual(updatedUser.customFields.hobbies.value, 'Reading', 'Zero-reward auto-approved survey must successfully update mapped profile field');
+    console.log('Test 6 (Zero-reward auto-approved survey profile mapping success) passed.');
 }
 
 async function runAll() {
@@ -245,8 +277,9 @@ async function runAll() {
     await testSkippedQuestionIsolation();
     await testPendingSubmissionNoMapping();
     await testApprovedSubmissionUpdatesProfile();
-    await testRejectedOrDisqualifiedNoMapping();
-    console.log('\nAll profile mapping security regression tests passed successfully!');
+    await testInvalidOrFailedSubmissionsNoMapping();
+    await testZeroRewardAutoApprovedUpdatesProfile();
+    console.log('\nAll profile mapping security and zero-reward regression tests passed successfully!');
 }
 
 runAll().catch(err => {
