@@ -423,6 +423,9 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
         json(data) { this.jsonData = data; return this; }
     };
 
+    const initialWorker = db.users.get(userId);
+    const initialBalance = initialWorker.taskEarningsBalance || 0;
+
     await submitUserTaskProof(reqZero, resZero);
 
     if (resZero.statusCode !== 201) {
@@ -436,6 +439,7 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
     
     const updatedWorker = db.users.get(userId);
     assert.strictEqual(updatedWorker.customFields.hobby.value, 'Photography', 'Profile mapping must be successfully applied for zero-reward auto-approved survey');
+    assert.strictEqual(updatedWorker.taskEarningsBalance || 0, initialBalance, 'Zero-reward survey should not increase reward balance');
 
     const updatedTask = db.tasks.get(taskId);
     assert.strictEqual(updatedTask.currentCompletions, 1, 'Completion slot behaviour must remain consistent (incremented completions)');
