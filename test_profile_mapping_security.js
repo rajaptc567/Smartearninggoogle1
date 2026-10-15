@@ -510,6 +510,43 @@ async function testExplicitRequirementVerification() {
     console.log('Test 8 (Requirement verification) completed successfully.');
 }
 
+// Test 9: Authoritative mapping regression - Client input "Photography" is ignored in favor of server authoritative "Reading"
+async function testAuthoritativeMappingRegression() {
+    db.clear();
+    const userId = 'user_9';
+    const taskId = 'task_9';
+    db.users.set(userId, { _id: userId, customFields: {} });
+    db.tasks.set(taskId, {
+        _id: taskId,
+        isSurvey: true,
+        surveyConfig: {
+            questions: [
+                { id: 'q1', title: 'Hobby', type: 'text', profileMapping: { enabled: true, fieldKey: 'hobby' } }
+            ]
+        }
+    });
+
+    // Authoritative response is "Reading", client input would have been "Photography"
+    const authoritativeResponses = [{ questionId: 'q1', value: 'Reading' }];
+
+    const submission = {
+        _id: 'sub_9',
+        taskId,
+        workerId: userId,
+        status: 'Approved',
+        surveyResponses: authoritativeResponses
+    };
+
+    const user = db.users.get(userId);
+    const task = db.tasks.get(taskId);
+
+    await applySurveyProfileMappings(user, task, authoritativeResponses, false, submission);
+
+    const updatedUser = db.users.get(userId);
+    assert.strictEqual(updatedUser.customFields.hobby.value, 'Reading', 'Profile mapping must use authoritative server response "Reading"');
+    console.log('Test 9 (Authoritative mapping regression) passed.');
+}
+
 async function runAll() {
     await testDuplicateQuestionAnswersMapping();
     await testSkippedQuestionIsolation();
@@ -519,6 +556,7 @@ async function runAll() {
     await testZeroRewardAutoApprovedUpdatesProfile();
     await testSubmitUserTaskProofControllerZeroRewardAndPending();
     await testExplicitRequirementVerification();
+    await testAuthoritativeMappingRegression();
     console.log('\nAll profile mapping security and zero-reward regression tests passed successfully!');
 }
 
