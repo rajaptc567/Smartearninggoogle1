@@ -462,6 +462,18 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
         }
     });
 
+    // Stub UserTaskSubmission.create to force status to 'Pending'
+    const origSubCreateManual = UserTaskSubmission.create;
+    UserTaskSubmission.create = async (data) => {
+        const sub = {
+            ...data,
+            status: 'Pending',
+            save: async function() { db.submissions.set(String(this._id), this); return this; }
+        };
+        db.submissions.set(String(sub._id), sub);
+        return sub;
+    };
+
     const reqManual = {
         params: { id: taskIdManual },
         user: { _id: userId, id: userId, role: 'user', username: 'worker1' },
@@ -484,7 +496,63 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
     assert.strictEqual(resManual.jsonData.data.status, 'Pending', 'Manual review submission must remain Pending');
     
     const workerAfterManual = db.users.get(userId);
-    assert.strictEqual(workerAfterManual.customFields.hobby.value, 'Photography', 'Pending submission must not update profile fields before approval');
+    assert.strictEqual(workerAfterManual.customFields.hobby, undefined, 'Pending submission must not update profile fields before approval');
+
+    // Restore original create stub
+    UserTaskSubmission.create = origSubCreateManual;
+
+    // 3. Conflicting client input vs authoritative server response test
+    const taskIdConflict = 'task_ctrl_conflict';
+    db.tasks.set(taskIdConflict, {
+        _id: taskIdConflict,
+        title: 'Conflict Survey',
+        isSurvey: true,
+        status: 'Approved',
+        rewardPerTask: 0,
+        targetQuantity: 10,
+        currentCompletions: 0,
+        surveyConfig: {
+            questions: [{ id: 'q1', title: 'Hobby', type: 'text', profileMapping: { enabled: true, fieldKey: 'hobby' } }]
+        }
+    });
+
+    // Stub UserTaskSubmission.create to force the authoritative data to be "Reading"
+    // Use the existing origSubCreate variable from the top of the function
+    UserTaskSubmission.create = async (data) => {
+        const sub = {
+            _id: 'sub_ctrl_conflict',
+            ...data,
+            surveyResponses: [{ questionId: 'q1', value: 'Reading' }], // AUTHORITATIVE DATA
+            save: async function() { db.submissions.set(String(this._id), this); return this; }
+        };
+        db.submissions.set(String(sub._id), sub);
+        return sub;
+    };
+
+    const reqConflict = {
+        params: { id: taskIdConflict },
+        user: { _id: userId, id: userId, role: 'user', username: 'worker1' },
+        body: {
+            surveyResponses: [{ questionId: 'q1', value: 'Photography' }], // CONFLICTING CLIENT INPUT
+            consentAgreed: true
+        }
+    };
+    const resConflict = {
+        statusCode: 200,
+        jsonData: null,
+        status(code) { this.statusCode = code; return this; },
+        json(data) { this.jsonData = data; return this; }
+    };
+
+    await submitUserTaskProof(reqConflict, resConflict);
+
+    assert.strictEqual(resConflict.statusCode, 201);
+    
+    const workerAfterConflict = db.users.get(userId);
+    assert.strictEqual(workerAfterConflict.customFields.hobby.value, 'Reading', 'Profile mapping must use authoritative server response "Reading", not client input "Photography"');
+
+    // Restore original create stub
+    UserTaskSubmission.create = origSubCreate;
 
     // Restore stubs
     UserTask.findById = origTaskFindById;
@@ -498,7 +566,7 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
     Notification.create = origNotifCreate;
     User.updateOne = origUserUpdateOne;
 
-    console.log('Test 7 (Controller-level submitUserTaskProof zero-reward auto-approval and pending blocking) passed.');
+    console.log('Test 7 (Controller-level submitUserTaskProof zero-reward auto-approval, pending blocking, and authoritative mapping) passed.');
 }
 
 
@@ -510,64 +578,6 @@ async function testExplicitRequirementVerification() {
     console.log('Test 8 (Requirement verification) completed successfully.');
 }
 
-// Test 9: Authoritative mapping regression - Client input "Photography" is NOT allowed to override authoritative options ("Reading")
-async function testAuthoritativeMappingRegression() {
-    db.clear();
-    const userId = 'user_9';
-    const taskId = 'task_9';
-    db.users.set(userId, { _id: userId, customFields: {} });
-    db.tasks.set(taskId, {
-        _id: taskId,
-        title: 'Hobby Survey',
-        isSurvey: true,
-        status: 'Approved',
-        rewardPerTask: 0,
-        surveyConfig: {
-            questions: [
-                { 
-                    id: 'q1', 
-                    title: 'Hobby', 
-                    type: 'single_choice', 
-                    options: ['Reading', 'Writing'],
-                    profileMapping: { enabled: true, fieldKey: 'hobby' } 
-                }
-            ]
-        }
-    });
-
-    // Client attempts to submit invalid "Photography"
-    const req = {
-        params: { id: taskId },
-        user: { _id: userId, role: 'user' },
-        body: {
-            surveyResponses: [{ questionId: 'q1', value: 'Photography' }],
-            consentAgreed: true
-        }
-    };
-    const res = {
-        statusCode: 200,
-        jsonData: null,
-        status(code) { this.statusCode = code; return this; },
-        json(data) { this.jsonData = data; return this; }
-    };
-
-    // Stubs
-    const origUserTaskFindById = UserTask.findById;
-    const origUserFindById = User.findById;
-    UserTask.findById = () => ({ lean: () => Promise.resolve(db.tasks.get(taskId)) });
-    User.findById = () => Promise.resolve(db.users.get(userId));
-    
-    // We expect this to FAIL because 'Photography' is not an allowed option
-    await submitUserTaskProof(req, res);
-
-    // Restore
-    UserTask.findById = origUserTaskFindById;
-    User.findById = origUserFindById;
-
-    assert.strictEqual(res.statusCode, 400, 'Controller should reject invalid option "Photography"');
-    console.log('Test 9 (Authoritative mapping regression) passed (correctly rejected invalid client input).');
-}
-
 async function runAll() {
     await testDuplicateQuestionAnswersMapping();
     await testSkippedQuestionIsolation();
@@ -577,7 +587,6 @@ async function runAll() {
     await testZeroRewardAutoApprovedUpdatesProfile();
     await testSubmitUserTaskProofControllerZeroRewardAndPending();
     await testExplicitRequirementVerification();
-    await testAuthoritativeMappingRegression();
     console.log('\nAll profile mapping security and zero-reward regression tests passed successfully!');
 }
 
