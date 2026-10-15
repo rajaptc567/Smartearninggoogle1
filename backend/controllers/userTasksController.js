@@ -282,7 +282,6 @@ const toWorkerSafeUserTask = (task, meta = {}) => {
 
 // Concurrency-safe atomic completion slot claiming (Phase D-3 & Parts E, F, G, N)
 const claimTaskCompletionSlot = async (taskId, workerId, allowRecompletion = false) => {
-    console.log('DEBUG: claimTaskCompletionSlot called', taskId, workerId);
     if (!taskId || !workerId) return null;
 
     const workerObjId = mongoose.Types.ObjectId.isValid(workerId)
@@ -3148,6 +3147,7 @@ const autoApproveStaleSubmissions = async () => {
 
             if (existingTx) {
                 // Reconcile without duplicate slot deduction or duplicate worker credit
+                const disputeReconciled = await reconcileSubmissionDispute(submission, 'Auto-approved because creator did not review dispute in time.');
                 await UserTaskSubmission.findByIdAndUpdate(submission._id, {
                     $set: {
                         status: 'Approved',
@@ -3158,11 +3158,10 @@ const autoApproveStaleSubmissions = async () => {
                         rewardClaimed: true,
                         rewardPaidAt: existingTx.date || existingTx.createdAt || new Date(),
                         rewardTransactionId: existingTx._id,
-                        disputeStage: 'Resolved',
+                        ...(disputeReconciled ? { disputeStage: 'Resolved' } : {}),
                         adminNotes: `Auto-approved dispute: creator did not review the dispute within the ${disputeReviewDays}-day limit (reconciled with existing transaction).`
                     }
                 });
-                await reconcileSubmissionDispute(submission, 'Auto-approved because creator did not review dispute in time.');
                 continue;
             }
 
@@ -3190,7 +3189,6 @@ const autoApproveStaleSubmissions = async () => {
                             approvalType: 'auto',
                             rewardClaimed: true,
                             rewardPaidAt: new Date(),
-                            disputeStage: 'Resolved',
                             adminNotes: `Auto-approved dispute: creator did not review the dispute within the ${disputeReviewDays}-day limit.`
                         }
                     },
@@ -3304,7 +3302,10 @@ const autoApproveStaleSubmissions = async () => {
                         }).catch(notifErr => console.error('Warning: Dispute auto-approval notification error:', notifErr));
 
                         // Mark Dispute document as resolved/closed ONLY after financial reward succeeds
-                        await reconcileSubmissionDispute(updatedSub, 'Auto-approved because creator did not review dispute in time.');
+                        const disputeReconciled = await reconcileSubmissionDispute(updatedSub, 'Auto-approved because creator did not review dispute in time.');
+                        if (disputeReconciled) {
+                            await UserTaskSubmission.findByIdAndUpdate(updatedSub._id, { $set: { disputeStage: 'Resolved' } });
+                        }
                     }
                 } else {
                     Notification.create({
@@ -3314,7 +3315,10 @@ const autoApproveStaleSubmissions = async () => {
                         senderType: 'System'
                     }).catch(notifErr => console.error('Warning: Dispute auto-approval notification error:', notifErr));
 
-                    await reconcileSubmissionDispute(updatedSub, 'Auto-approved dispute.');
+                    const disputeReconciled = await reconcileSubmissionDispute(updatedSub, 'Auto-approved dispute.');
+                    if (disputeReconciled) {
+                        await UserTaskSubmission.findByIdAndUpdate(updatedSub._id, { $set: { disputeStage: 'Resolved' } });
+                    }
                 }
             } catch (err) {
                 if (disputeDupeReversalFailed) {
@@ -4559,7 +4563,6 @@ export const updateSubmissionStatus = async (req, res) => {
             }
 
             if (submission.rewardClaimed && Number(submission.rewardAmount || 0) > 0) {
-                console.log('DEBUG: Historical inconsistency detected: submission.rewardClaimed is true.');
                 return res.status(400).json({
                     success: false,
                     error: 'Historical inconsistency detected: reward marked claimed but no matching ledger transaction found. Controlled reconciliation required.'
@@ -4567,7 +4570,6 @@ export const updateSubmissionStatus = async (req, res) => {
             }
 
             if (task && task.status === 'Rejected') {
-                console.log('DEBUG: Cannot approve submission: task rejected.');
                 return res.status(400).json({
                     success: false,
                     error: 'Cannot approve submission: the campaign associated with this submission has been rejected.'
@@ -4577,7 +4579,6 @@ export const updateSubmissionStatus = async (req, res) => {
             // Claim completion slot atomically
             const claimedTask = await claimTaskCompletionSlot(submission.taskId, submission.workerId);
             if (!claimedTask) {
-                console.log('DEBUG: Cannot approve submission: campaign target completion limit has been reached or task inactive.');
                 return res.status(400).json({
                     success: false,
                     error: 'Cannot approve submission: campaign target completion limit has been reached.'
@@ -4599,8 +4600,7 @@ export const updateSubmissionStatus = async (req, res) => {
                             paid: true,
                             rewardClaimed: true,
                             rewardPaidAt: new Date(),
-                            adminNotes: adminNotes !== undefined ? adminNotes : submission.adminNotes,
-                            ...(oldStatus === 'Disputed' ? { disputeStage: 'Resolved' } : {})
+                            adminNotes: adminNotes !== undefined ? adminNotes : submission.adminNotes
                         }
                     },
                     { new: true }
@@ -4665,9 +4665,7 @@ export const updateSubmissionStatus = async (req, res) => {
                         txCreated = true;
                     } catch (txErr) {
                         if (txErr.code === 11000 || (txErr.name === 'MongoServerError' && txErr.code === 11000)) {
-                            console.log('DEBUG: E11000 caught');
                             const dupeTx = await Transaction.findOne({ idempotencyKey });
-                            console.log('DEBUG: dupeTx found?', !!dupeTx);
                             if (dupeTx) {
                                 let dupeReversalSucceeded = false;
                                 try {
@@ -4733,7 +4731,10 @@ export const updateSubmissionStatus = async (req, res) => {
 
                 // Safely reconcile any associated unresolved dispute upon successful payout
                 const senderType = req.user && isUserAdmin(req.user) ? 'Admin' : 'System';
-                await reconcileSubmissionDispute(targetSubmission, adminNotes, senderType);
+                const disputeReconciled = await reconcileSubmissionDispute(targetSubmission, adminNotes, senderType);
+                if (disputeReconciled) {
+                    targetSubmission.disputeStage = 'Resolved';
+                }
                 await targetSubmission.save();
             } catch (approveErr) {
                 if (txCreated && createdTx) {

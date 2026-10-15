@@ -11,6 +11,7 @@ import UserTaskSubmission from './backend/models/UserTaskSubmission.js';
 import Transaction from './backend/models/Transaction.js';
 import Dispute from './backend/models/Dispute.js';
 import Notification from './backend/models/Notification.js';
+import Template from './backend/models/Template.js';
 
 console.log('Running Reward Accounting and Recovery Invariants Production Controller Test Suite...\n');
 
@@ -97,9 +98,17 @@ function attachMongooseStubs(overrides = {}) {
         return { ...u };
     };
 
-    UserTask.findById = async (id) => {
+    let txCreateAttempted = false;
+
+    UserTask.findById = (id) => {
         const t = db.tasks.get(String(id));
-        return t ? { ...t } : null;
+        const res = t ? { ...t } : null;
+        return {
+            ...res,
+            lean: () => Promise.resolve(res ? { ...res } : null),
+            then: (resolve, reject) => Promise.resolve(res ? { ...res } : null).then(resolve, reject),
+            catch: (reject) => Promise.resolve(res ? { ...res } : null).catch(reject)
+        };
     };
 
     UserTask.findByIdAndUpdate = async (id, update) => {
@@ -126,47 +135,28 @@ function attachMongooseStubs(overrides = {}) {
 
     UserTask.findOneAndUpdate = async (query, update) => {
         const taskId = query._id;
-        console.log('DEBUG: UserTask.findOneAndUpdate called', taskId);
         const t = db.tasks.get(String(taskId));
-        console.log('DEBUG: UserTask.findOneAndUpdate task from db', t);
-        if (!t) {
-            console.log('DEBUG: UserTask.findOneAndUpdate task not found in db', taskId);
-            return null;
-        }
+        if (!t) return null;
 
         // Simple filter check
-        if (query.status && query.status.$ne && t.status === query.status.$ne) {
-            console.log('DEBUG: UserTask.findOneAndUpdate status filter mismatch');
-            return null;
-        }
-        if (query.status && query.status.$in && !query.status.$in.includes(t.status)) {
-            console.log('DEBUG: UserTask.findOneAndUpdate status in mismatch');
-            return null;
-        }
-        if (query.campaignFundingStatus?.$ne && t.campaignFundingStatus === query.campaignFundingStatus.$ne) {
-            console.log('DEBUG: UserTask.findOneAndUpdate funding status mismatch');
-            return null;
-        }
-        if (query.campaignAvailableBalanceUSD?.$gte && t.campaignAvailableBalanceUSD < query.campaignAvailableBalanceUSD.$gte) {
-            console.log('DEBUG: UserTask.findOneAndUpdate balance mismatch');
-            return null;
-        }
+        if (query.status && query.status.$ne && t.status === query.status.$ne) return null;
+        if (query.status && query.status.$in && !query.status.$in.includes(t.status)) return null;
+        if (query.campaignFundingStatus?.$ne && t.campaignFundingStatus === query.campaignFundingStatus.$ne) return null;
+        if (query.campaignAvailableBalanceUSD?.$gte && t.campaignAvailableBalanceUSD < query.campaignAvailableBalanceUSD.$gte) return null;
 
         if (query.completedUsers?.$ne) {
             const hasUser = t.completedUsers.some(u => String(u) === String(query.completedUsers.$ne));
-            if (hasUser) {
-                console.log('DEBUG: UserTask.findOneAndUpdate completedUsers mismatch');
-                return null;
-            }
+            if (hasUser) return null;
+        }
+        if (query.completedUsers && !query.completedUsers.$ne) {
+            const hasUser = (t.completedUsers || []).some(u => String(u) === String(query.completedUsers));
+            if (!hasUser) return null;
         }
 
         if (query.$expr && query.$expr.$lt) {
             const current = t.currentCompletions || 0;
             const target = t.targetQuantity || 0;
-            if (current >= target) {
-                console.log('DEBUG: UserTask.findOneAndUpdate completion limit reached', current, target);
-                return null;
-            }
+            if (current >= target) return null;
         }
         return UserTask.findByIdAndUpdate(taskId, update);
     };
@@ -216,7 +206,10 @@ function attachMongooseStubs(overrides = {}) {
     };
 
     Transaction.findOne = async (query) => {
-        console.log('DEBUG: Transaction.findOne query:', JSON.stringify(query));
+        if (overrides.simulateDuplicateKey && !txCreateAttempted && query.submissionId) {
+            // Simulate that concurrent transaction has not yet committed prior to Transaction.create
+            return null;
+        }
         for (const tx of db.transactions.values()) {
             let match = true;
             if (query.submissionId && String(tx.submissionId) !== String(query.submissionId)) match = false;
@@ -226,56 +219,59 @@ function attachMongooseStubs(overrides = {}) {
                 else if (typeof query.type === 'string' && tx.type !== query.type) match = false;
             }
             if (match) {
-                console.log('DEBUG: Transaction.findOne found match:', tx._id);
                 return { ...tx };
             }
         }
-        console.log('DEBUG: Transaction.findOne no match');
         return null;
     };
 
     Transaction.create = async (txData) => {
-        console.log('DEBUG: Transaction.create called, overrides:', !!overrides);
+        txCreateAttempted = true;
         if (overrides.simulateDuplicateKey) {
-            console.log('DEBUG: Transaction.create simulating E11000');
             const err = new Error('E11000 duplicate key error collection: Transaction index: idempotencyKey_1');
             err.code = 11000;
             err.name = 'MongoServerError';
             throw err;
         }
         if (overrides.simulateTxFailure) {
-            console.log('DEBUG: Transaction.create simulating failure');
             throw new Error('Database write failure');
         }
         const tx = { _id: new mongoose.Types.ObjectId(), ...txData, createdAt: new Date() };
         db.transactions.set(String(tx._id), tx);
-        console.log('DEBUG: Transaction.create success');
         return tx;
+    };
+
+    const matchDoc = (doc, cond) => {
+        if (!cond || typeof cond !== 'object') return true;
+        for (const [key, val] of Object.entries(cond)) {
+            if (key === '$and' && Array.isArray(val)) {
+                if (!val.every(subQ => matchDoc(doc, subQ))) return false;
+            } else if (key === '$or' && Array.isArray(val)) {
+                if (!val.some(subQ => matchDoc(doc, subQ))) return false;
+            } else {
+                const docVal = doc[key];
+                if (val && typeof val === 'object' && !(val instanceof mongoose.Types.ObjectId) && !Array.isArray(val)) {
+                    if (val.$ne !== undefined) {
+                        if (docVal !== undefined && String(docVal) === String(val.$ne)) return false;
+                    }
+                    if (val.$in !== undefined && Array.isArray(val.$in)) {
+                        if (!val.$in.some(item => String(item) === String(docVal))) return false;
+                    }
+                    if (val.$nin !== undefined && Array.isArray(val.$nin)) {
+                        if (val.$nin.some(item => String(item) === String(docVal))) return false;
+                    }
+                } else {
+                    if (docVal === undefined || String(docVal) !== String(val)) return false;
+                }
+            }
+        }
+        return true;
     };
 
     Dispute.find = async (query) => {
         const results = [];
         for (const disp of db.disputes.values()) {
-            let matches = true;
-
-            // Handle $and
-            if (query.$and) {
-                for (const andCond of query.$and) {
-                    if (andCond.$or) {
-                        let orMatch = false;
-                        for (const q of andCond.$or) {
-                            if (q._id && String(disp._id) === String(q._id)) orMatch = true;
-                            else if (q.submissionId && String(disp.submissionId) === String(q.submissionId)) orMatch = true;
-                            else if (q.referenceId && String(disp.referenceId) === String(q.referenceId)) orMatch = true;
-                            else if (q.status?.$ne && disp.status !== q.status.$ne) orMatch = true;
-                            else if (q.verdict?.$ne && disp.verdict !== q.verdict.$ne) orMatch = true;
-                        }
-                        if (!orMatch) matches = false;
-                    }
-                }
-            }
-
-            if (matches) {
+            if (matchDoc(disp, query)) {
                 results.push({
                     ...disp,
                     save: async function () {
@@ -319,6 +315,7 @@ function attachMongooseStubs(overrides = {}) {
     };
 
     Notification.create = async () => ({ _id: new mongoose.Types.ObjectId() });
+    Template.findOne = async () => null;
 }
 
 // -------------------------------------------------------------
@@ -431,7 +428,7 @@ function attachMongooseStubs(overrides = {}) {
         submissionId: subId,
         userId: workerId,
         amount: 2.00,
-        type: 'Other',
+        type: 'Task Reward',
         status: 'Approved',
         idempotencyKey: `task_reward_${subId}`
     };
