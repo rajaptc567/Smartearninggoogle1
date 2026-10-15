@@ -21,6 +21,68 @@ import {
 const isUserAdmin = (user) => Boolean(user && (user.role === 'admin' || user.role === 'super_admin'));
 
 /**
+ * Safely resolves and reconciles any unresolved Dispute documents associated with a submission
+ * (by disputeId, submissionId, or referenceId) to status 'Resolved' and verdict 'ReleaseToWorker'.
+ *
+ * @param {Object} submission - UserTaskSubmission document
+ * @param {string} [adminNotes] - Notes or reason for resolution
+ * @param {string} [senderType='System'] - Sender type for the audit log message ('Admin' | 'System')
+ * @returns {Promise<boolean>} Whether any dispute was reconciled
+ */
+export const reconcileSubmissionDispute = async (submission, adminNotes, senderType = 'System') => {
+    if (!submission) return false;
+    const disputeResponse = adminNotes || 'Resolved directly: payout released to worker.';
+    let disputeReconciled = false;
+
+    try {
+        const query = {
+            $and: [
+                {
+                    $or: [
+                        ...(submission.disputeId ? [{ _id: submission.disputeId }] : []),
+                        { submissionId: submission._id },
+                        { referenceId: String(submission._id) }
+                    ]
+                },
+                {
+                    $or: [
+                        { status: { $ne: 'Resolved' } },
+                        { verdict: { $ne: 'ReleaseToWorker' } }
+                    ]
+                }
+            ]
+        };
+
+        const unresolvedDisputes = await Dispute.find(query);
+        for (const disp of unresolvedDisputes) {
+            disp.status = 'Resolved';
+            disp.verdict = 'ReleaseToWorker';
+            disp.adminResponse = disputeResponse;
+            if (Array.isArray(disp.messages)) {
+                disp.messages.push({
+                    sender: senderType,
+                    message: `Dispute resolved: payout released to worker. Notes: ${disputeResponse}`,
+                    date: new Date()
+                });
+            }
+            await disp.save();
+            disputeReconciled = true;
+            if (!submission.disputeId) {
+                submission.disputeId = disp._id;
+            }
+        }
+
+        if (disputeReconciled || (submission.disputeStage && submission.disputeStage !== 'Resolved') || submission.disputeId) {
+            submission.disputeStage = 'Resolved';
+        }
+    } catch (dispErr) {
+        console.error('Warning: Failed to reconcile associated dispute:', dispErr);
+    }
+
+    return disputeReconciled;
+};
+
+/**
  * Evaluates whether an authenticated user is authorized to access the Micro Task Hub as a worker.
  * 
  * Access Rules:
@@ -2885,6 +2947,7 @@ const autoApproveStaleSubmissions = async () => {
             let creditedAmount = 0;
             let txCreated = false;
             let createdTx = null;
+            let dupeReversalFailed = false;
 
             try {
                 const updatedSub = await UserTaskSubmission.findOneAndUpdate(
@@ -2947,10 +3010,46 @@ const autoApproveStaleSubmissions = async () => {
                         if (txErr.code === 11000 || (txErr.name === 'MongoServerError' && txErr.code === 11000)) {
                             const dupeTx = await Transaction.findOne({ idempotencyKey });
                             if (dupeTx) {
-                                createdTx = dupeTx;
-                                txCreated = true;
-                                await User.findByIdAndUpdate(updatedSub.workerId, { $inc: { taskEarningsBalance: -creditedAmount } });
-                                workerCredited = false;
+                                let dupeReversalSucceeded = false;
+                                try {
+                                    const revUser = await User.findByIdAndUpdate(
+                                        updatedSub.workerId,
+                                        { $inc: { taskEarningsBalance: -creditedAmount } },
+                                        { new: true }
+                                    );
+                                    if (revUser) {
+                                        dupeReversalSucceeded = true;
+                                    }
+                                } catch (revErr) {
+                                    console.error('Critical: Failed to reverse duplicate worker credit on E11000 in stale auto-approve:', revErr);
+                                    dupeReversalSucceeded = false;
+                                }
+
+                                // Always release the duplicate completion slot claimed by this retry to preserve campaign accounting
+                                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+
+                                if (dupeReversalSucceeded) {
+                                    workerCredited = false;
+                                    creditedAmount = 0;
+                                    createdTx = dupeTx;
+                                    txCreated = true;
+                                } else {
+                                    // Worker balance reversal failed: prevent outer catch double reversal
+                                    dupeReversalFailed = true;
+                                    workerCredited = false;
+                                    createdTx = null;
+                                    txCreated = false;
+                                    try {
+                                        await UserTaskSubmission.findByIdAndUpdate(updatedSub._id, {
+                                            $set: {
+                                                reconciliationRequired: true,
+                                                adminNotes: `RECONCILIATION REQUIRED: Duplicate credit of $${creditedAmount.toFixed(2)} USD occurred on E11000, but automatic worker balance reversal failed.`
+                                            }
+                                        });
+                                    } catch (flagErr) {
+                                        console.error('Failed to flag submission for reconciliation on E11000 reversal failure in stale auto-approve:', flagErr);
+                                    }
+                                }
                             } else {
                                 throw txErr;
                             }
@@ -2966,14 +3065,14 @@ const autoApproveStaleSubmissions = async () => {
                         } catch (linkErr) {
                             console.error('Warning: Failed to persist rewardTransactionId link:', linkErr);
                         }
-                    }
 
-                    Notification.create({
-                        userId: updatedWorker._id,
-                        subject: 'Task Auto-Approved! ⏱️✅',
-                        message: `Your proof for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${timeoutDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
-                        senderType: 'System'
-                    }).catch(notifErr => console.error('Warning: Stale auto-approval notification error:', notifErr));
+                        Notification.create({
+                            userId: updatedWorker._id,
+                            subject: 'Task Auto-Approved! ⏱️✅',
+                            message: `Your proof for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${timeoutDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
+                            senderType: 'System'
+                        }).catch(notifErr => console.error('Warning: Stale auto-approval notification error:', notifErr));
+                    }
                 } else {
                     Notification.create({
                         userId: updatedSub.workerId,
@@ -2983,7 +3082,9 @@ const autoApproveStaleSubmissions = async () => {
                     }).catch(notifErr => console.error('Warning: Stale auto-approval notification error:', notifErr));
                 }
             } catch (err) {
-                if (txCreated && createdTx) {
+                if (dupeReversalFailed) {
+                    console.error('Critical: E11000 duplicate balance reversal failed during stale auto-approval. Flagged for reconciliation.');
+                } else if (txCreated && createdTx) {
                     console.error('Warning: Post-transaction error during stale auto-approval:', err);
                 } else {
                     let reversalSucceeded = true;
@@ -3060,13 +3161,7 @@ const autoApproveStaleSubmissions = async () => {
                         adminNotes: `Auto-approved dispute: creator did not review the dispute within the ${disputeReviewDays}-day limit (reconciled with existing transaction).`
                     }
                 });
-                if (submission.disputeId) {
-                    await Dispute.findByIdAndUpdate(submission.disputeId, {
-                        status: 'Resolved',
-                        verdict: 'ReleaseToWorker',
-                        adminResponse: 'Auto-approved because creator did not review dispute in time.'
-                    });
-                }
+                await reconcileSubmissionDispute(submission, 'Auto-approved because creator did not review dispute in time.');
                 continue;
             }
 
@@ -3080,6 +3175,7 @@ const autoApproveStaleSubmissions = async () => {
             let disputeCreditedAmount = 0;
             let txCreated = false;
             let createdTx = null;
+            let disputeDupeReversalFailed = false;
 
             try {
                 const updatedSub = await UserTaskSubmission.findOneAndUpdate(
@@ -3143,10 +3239,46 @@ const autoApproveStaleSubmissions = async () => {
                         if (txErr.code === 11000 || (txErr.name === 'MongoServerError' && txErr.code === 11000)) {
                             const dupeTx = await Transaction.findOne({ idempotencyKey });
                             if (dupeTx) {
-                                createdTx = dupeTx;
-                                txCreated = true;
-                                await User.findByIdAndUpdate(updatedSub.workerId, { $inc: { taskEarningsBalance: -disputeCreditedAmount } });
-                                disputeWorkerCredited = false;
+                                let dupeReversalSucceeded = false;
+                                try {
+                                    const revUser = await User.findByIdAndUpdate(
+                                        updatedSub.workerId,
+                                        { $inc: { taskEarningsBalance: -disputeCreditedAmount } },
+                                        { new: true }
+                                    );
+                                    if (revUser) {
+                                        dupeReversalSucceeded = true;
+                                    }
+                                } catch (revErr) {
+                                    console.error('Critical: Failed to reverse duplicate worker credit on E11000 in stale dispute auto-approve:', revErr);
+                                    dupeReversalSucceeded = false;
+                                }
+
+                                // Always release the duplicate completion slot claimed by this retry to preserve campaign accounting
+                                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+
+                                if (dupeReversalSucceeded) {
+                                    disputeWorkerCredited = false;
+                                    disputeCreditedAmount = 0;
+                                    createdTx = dupeTx;
+                                    txCreated = true;
+                                } else {
+                                    // Worker balance reversal failed: prevent outer catch double reversal
+                                    disputeDupeReversalFailed = true;
+                                    disputeWorkerCredited = false;
+                                    createdTx = null;
+                                    txCreated = false;
+                                    try {
+                                        await UserTaskSubmission.findByIdAndUpdate(updatedSub._id, {
+                                            $set: {
+                                                reconciliationRequired: true,
+                                                adminNotes: `RECONCILIATION REQUIRED: Duplicate credit of $${disputeCreditedAmount.toFixed(2)} USD occurred on E11000, but automatic worker balance reversal failed.`
+                                            }
+                                        });
+                                    } catch (flagErr) {
+                                        console.error('Failed to flag submission for reconciliation on E11000 reversal failure in stale dispute auto-approve:', flagErr);
+                                    }
+                                }
                             } else {
                                 throw txErr;
                             }
@@ -3162,14 +3294,17 @@ const autoApproveStaleSubmissions = async () => {
                         } catch (linkErr) {
                             console.error('Warning: Failed to persist rewardTransactionId link:', linkErr);
                         }
-                    }
 
-                    Notification.create({
-                        userId: updatedWorker._id,
-                        subject: 'Dispute Auto-Approved! ⏱️⚖️✅',
-                        message: `Your dispute for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${disputeReviewDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
-                        senderType: 'System'
-                    }).catch(notifErr => console.error('Warning: Dispute auto-approval notification error:', notifErr));
+                        Notification.create({
+                            userId: updatedWorker._id,
+                            subject: 'Dispute Auto-Approved! ⏱️⚖️✅',
+                            message: `Your dispute for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${disputeReviewDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
+                            senderType: 'System'
+                        }).catch(notifErr => console.error('Warning: Dispute auto-approval notification error:', notifErr));
+
+                        // Mark Dispute document as resolved/closed ONLY after financial reward succeeds
+                        await reconcileSubmissionDispute(updatedSub, 'Auto-approved because creator did not review dispute in time.');
+                    }
                 } else {
                     Notification.create({
                         userId: updatedSub.workerId,
@@ -3177,18 +3312,13 @@ const autoApproveStaleSubmissions = async () => {
                         message: `Your dispute for campaign "${updatedSub.taskTitle}" was resolved and approved.`,
                         senderType: 'System'
                     }).catch(notifErr => console.error('Warning: Dispute auto-approval notification error:', notifErr));
-                }
 
-                // Mark Dispute document as resolved/closed ONLY after financial reward succeeds
-                if (updatedSub.disputeId) {
-                    await Dispute.findByIdAndUpdate(updatedSub.disputeId, {
-                        status: 'Resolved',
-                        verdict: 'ReleaseToWorker',
-                        adminResponse: 'Auto-approved because creator did not review dispute in time.'
-                    });
+                    await reconcileSubmissionDispute(updatedSub, 'Auto-approved dispute.');
                 }
             } catch (err) {
-                if (txCreated && createdTx) {
+                if (disputeDupeReversalFailed) {
+                    console.error('Critical: E11000 duplicate balance reversal failed during stale dispute auto-approval. Flagged for reconciliation.');
+                } else if (txCreated && createdTx) {
                     console.error('Warning: Post-transaction error during stale dispute auto-approval:', err);
                 } else {
                     let reversalSucceeded = true;
@@ -3859,6 +3989,7 @@ export const submitUserTaskProof = async (req, res) => {
                     let creditedAmount = 0;
                     let txCreated = false;
                     let createdTx = null;
+                    let dupeReversalFailed = false;
 
                     try {
                         submission.status = 'Approved';
@@ -3908,10 +4039,49 @@ export const submitUserTaskProof = async (req, res) => {
                                 if (txErr.code === 11000 || (txErr.name === 'MongoServerError' && txErr.code === 11000)) {
                                     const dupeTx = await Transaction.findOne({ idempotencyKey });
                                     if (dupeTx) {
-                                        createdTx = dupeTx;
-                                        txCreated = true;
-                                        await User.findByIdAndUpdate(worker._id, { $inc: { taskEarningsBalance: -creditedAmount } });
-                                        workerCredited = false;
+                                        let dupeReversalSucceeded = false;
+                                        try {
+                                            const revUser = await User.findByIdAndUpdate(
+                                                worker._id,
+                                                { $inc: { taskEarningsBalance: -creditedAmount } },
+                                                { new: true }
+                                            );
+                                            if (revUser) {
+                                                dupeReversalSucceeded = true;
+                                            }
+                                        } catch (revErr) {
+                                            console.error('Critical: Failed to reverse duplicate worker credit on E11000 in survey auto-approval:', revErr);
+                                            dupeReversalSucceeded = false;
+                                        }
+
+                                        // Always release the duplicate completion slot claimed by this retry to preserve campaign accounting
+                                        await releaseTaskCompletionSlot(task._id, worker._id);
+
+                                        if (dupeReversalSucceeded) {
+                                            workerCredited = false;
+                                            creditedAmount = 0;
+                                            createdTx = dupeTx;
+                                            txCreated = true;
+                                        } else {
+                                            // Worker balance reversal failed: prevent outer catch double reversal
+                                            dupeReversalFailed = true;
+                                            workerCredited = false;
+                                            createdTx = null;
+                                            txCreated = false;
+                                            submission.reconciliationRequired = true;
+                                            submission.adminNotes = `RECONCILIATION REQUIRED: Duplicate credit of $${creditedAmount.toFixed(2)} USD occurred on E11000, but automatic worker balance reversal failed.`;
+                                            try {
+                                                await UserTaskSubmission.findByIdAndUpdate(submission._id, {
+                                                    $set: {
+                                                        reconciliationRequired: true,
+                                                        adminNotes: submission.adminNotes
+                                                    }
+                                                });
+                                            } catch (flagErr) {
+                                                console.error('Failed to flag submission for reconciliation on E11000 reversal failure in survey auto-approval:', flagErr);
+                                            }
+                                            throw new Error(`Duplicate transaction detected on E11000, but automatic worker balance reversal of $${creditedAmount.toFixed(2)} USD failed. Submission flagged for controlled reconciliation.`);
+                                        }
                                     } else {
                                         throw txErr;
                                     }
@@ -3930,7 +4100,9 @@ export const submitUserTaskProof = async (req, res) => {
                             }
                         }
                     } catch (autoApproveErr) {
-                        if (txCreated && createdTx) {
+                        if (dupeReversalFailed) {
+                            console.error('Critical: E11000 duplicate balance reversal failed during survey auto-approval. Flagged for reconciliation.');
+                        } else if (txCreated && createdTx) {
                             console.error('Warning: Error after survey reward transaction created:', autoApproveErr);
                         } else {
                             let reversalSucceeded = true;
@@ -4023,6 +4195,7 @@ export const submitUserTaskProof = async (req, res) => {
                     let screenoutCredited = false;
                     let txCreated = false;
                     let createdTx = null;
+                    let screenoutDupeReversalFailed = false;
 
                     try {
                         submission.status = 'Approved';
@@ -4067,10 +4240,45 @@ export const submitUserTaskProof = async (req, res) => {
                             if (txErr.code === 11000 || (txErr.name === 'MongoServerError' && txErr.code === 11000)) {
                                 const dupeTx = await Transaction.findOne({ idempotencyKey });
                                 if (dupeTx) {
-                                    createdTx = dupeTx;
-                                    txCreated = true;
-                                    await User.findByIdAndUpdate(worker._id, { $inc: { taskEarningsBalance: -screeningRewardAmount } });
-                                    screenoutCredited = false;
+                                    let dupeReversalSucceeded = false;
+                                    try {
+                                        const revUser = await User.findByIdAndUpdate(
+                                            worker._id,
+                                            { $inc: { taskEarningsBalance: -screeningRewardAmount } },
+                                            { new: true }
+                                        );
+                                        if (revUser) {
+                                            dupeReversalSucceeded = true;
+                                        }
+                                    } catch (revErr) {
+                                        console.error('Critical: Failed to reverse duplicate screenout credit on E11000:', revErr);
+                                        dupeReversalSucceeded = false;
+                                    }
+
+                                    if (dupeReversalSucceeded) {
+                                        screenoutCredited = false;
+                                        createdTx = dupeTx;
+                                        txCreated = true;
+                                    } else {
+                                        // Worker balance reversal failed: prevent outer catch double reversal
+                                        screenoutDupeReversalFailed = true;
+                                        screenoutCredited = false;
+                                        createdTx = null;
+                                        txCreated = false;
+                                        submission.reconciliationRequired = true;
+                                        submission.adminNotes = `RECONCILIATION REQUIRED: Duplicate screenout credit of $${screeningRewardAmount.toFixed(2)} USD occurred on E11000, but automatic worker balance reversal failed.`;
+                                        try {
+                                            await UserTaskSubmission.findByIdAndUpdate(claimSub._id, {
+                                                $set: {
+                                                    reconciliationRequired: true,
+                                                    adminNotes: submission.adminNotes
+                                                }
+                                            });
+                                        } catch (flagErr) {
+                                            console.error('Failed to flag screenout submission for reconciliation on E11000 reversal failure:', flagErr);
+                                        }
+                                        throw new Error(`Duplicate transaction detected on E11000, but automatic worker balance reversal of $${screeningRewardAmount.toFixed(2)} USD failed. Submission flagged for controlled reconciliation.`);
+                                    }
                                 } else {
                                     throw txErr;
                                 }
@@ -4089,7 +4297,9 @@ export const submitUserTaskProof = async (req, res) => {
                             }
                         }
                     } catch (screenoutErr) {
-                        if (txCreated && createdTx) {
+                        if (screenoutDupeReversalFailed) {
+                            console.error('Critical: E11000 duplicate balance reversal failed during screenout reward. Flagged for reconciliation.');
+                        } else if (txCreated && createdTx) {
                             console.error('Warning: Error after screenout transaction created:', screenoutErr);
                         } else {
                             let reversalSucceeded = true;
@@ -4288,11 +4498,36 @@ export const updateSubmissionStatus = async (req, res) => {
                         error: 'Historical inconsistency detected: submission is marked approved, but no reward transaction exists in the ledger. Controlled reconciliation required.'
                     });
                 }
+                let needsSave = false;
                 if (existingTx && !submission.rewardTransactionId) {
                     submission.rewardTransactionId = existingTx._id;
+                    needsSave = true;
+                }
+                if (adminNotes !== undefined && submission.adminNotes !== adminNotes) {
+                    submission.adminNotes = adminNotes;
+                    needsSave = true;
+                }
+
+                // Safely reconcile any associated unresolved Dispute(s) without issuing another reward
+                const senderType = req.user && isUserAdmin(req.user) ? 'Admin' : 'System';
+                const disputeReconciled = await reconcileSubmissionDispute(submission, adminNotes, senderType);
+                if (disputeReconciled || (submission.disputeStage && submission.disputeStage !== 'Resolved') || submission.disputeId) {
+                    submission.disputeStage = 'Resolved';
+                    needsSave = true;
+                }
+
+                if (needsSave) {
                     await submission.save();
                 }
-                return res.status(200).json({ success: true, data: submission, task: task || null, message: 'Submission already processed or rewarded.' });
+
+                return res.status(200).json({
+                    success: true,
+                    data: submission,
+                    task: task || null,
+                    message: disputeReconciled 
+                        ? 'Submission already approved and rewarded; associated dispute reconciled and resolved.' 
+                        : 'Submission already processed or rewarded.'
+                });
             }
 
             if (existingTx) {
@@ -4304,19 +4539,22 @@ export const updateSubmissionStatus = async (req, res) => {
                 submission.rewardPaidAt = existingTx.date || existingTx.createdAt || new Date();
                 submission.rewardTransactionId = existingTx._id;
                 if (adminNotes !== undefined) submission.adminNotes = adminNotes;
-                if (oldStatus === 'Disputed') submission.disputeStage = 'Resolved';
+
+                const senderType = req.user && isUserAdmin(req.user) ? 'Admin' : 'System';
+                const disputeReconciled = await reconcileSubmissionDispute(submission, adminNotes, senderType);
+                if (disputeReconciled || (submission.disputeStage && submission.disputeStage !== 'Resolved') || submission.disputeId) {
+                    submission.disputeStage = 'Resolved';
+                }
                 await submission.save();
 
-                if (oldStatus === 'Disputed') {
-                    if (submission.disputeId) {
-                        await Dispute.findByIdAndUpdate(submission.disputeId, {
-                            status: 'Resolved',
-                            verdict: 'ReleaseToWorker',
-                            adminResponse: 'Resolved directly by the campaign creator.'
-                        });
-                    }
-                }
-                return res.status(200).json({ success: true, data: submission, task: task || null, message: 'Submission reconciled with existing reward transaction.' });
+                return res.status(200).json({
+                    success: true,
+                    data: submission,
+                    task: task || null,
+                    message: disputeReconciled
+                        ? 'Submission reconciled with existing reward transaction and associated dispute resolved.'
+                        : 'Submission reconciled with existing reward transaction.'
+                });
             }
 
             if (submission.rewardClaimed && Number(submission.rewardAmount || 0) > 0) {
@@ -4367,7 +4605,23 @@ export const updateSubmissionStatus = async (req, res) => {
                 if (!updatedSub) {
                     await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
                     const currentSub = await UserTaskSubmission.findById(req.params.subId);
-                    return res.status(200).json({ success: true, data: currentSub, task: task || null, message: 'Submission already processed or rewarded.' });
+                    let disputeReconciled = false;
+                    if (currentSub) {
+                        const senderType = req.user && isUserAdmin(req.user) ? 'Admin' : 'System';
+                        disputeReconciled = await reconcileSubmissionDispute(currentSub, adminNotes, senderType);
+                        if (disputeReconciled || (currentSub.disputeStage && currentSub.disputeStage !== 'Resolved')) {
+                            currentSub.disputeStage = 'Resolved';
+                            await currentSub.save();
+                        }
+                    }
+                    return res.status(200).json({
+                        success: true,
+                        data: currentSub || submission,
+                        task: task || null,
+                        message: disputeReconciled
+                            ? 'Submission already approved and rewarded; associated dispute reconciled and resolved.'
+                            : 'Submission already processed or rewarded.'
+                    });
                 }
 
                 targetSubmission = updatedSub;
@@ -4409,10 +4663,50 @@ export const updateSubmissionStatus = async (req, res) => {
                         if (txErr.code === 11000 || (txErr.name === 'MongoServerError' && txErr.code === 11000)) {
                             const dupeTx = await Transaction.findOne({ idempotencyKey });
                             if (dupeTx) {
-                                createdTx = dupeTx;
-                                txCreated = true;
-                                await User.findByIdAndUpdate(targetSubmission.workerId, { $inc: { taskEarningsBalance: -creditedAmount } });
-                                workerCredited = false;
+                                let dupeReversalSucceeded = false;
+                                try {
+                                    const revUser = await User.findByIdAndUpdate(
+                                        targetSubmission.workerId,
+                                        { $inc: { taskEarningsBalance: -creditedAmount } },
+                                        { new: true }
+                                    );
+                                    if (revUser) {
+                                        dupeReversalSucceeded = true;
+                                    }
+                                } catch (revErr) {
+                                    console.error('Critical: Failed to reverse duplicate worker credit on E11000 in manual approval:', revErr);
+                                    dupeReversalSucceeded = false;
+                                }
+
+                                // Always release the duplicate completion slot claimed by this retry to preserve campaign accounting
+                                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+
+                                if (dupeReversalSucceeded) {
+                                    workerCredited = false;
+                                    creditedAmount = 0;
+                                    createdTx = dupeTx;
+                                    txCreated = true;
+                                } else {
+                                    // Worker balance reversal failed: prevent outer catch double reversal
+                                    workerCredited = false;
+                                    createdTx = null;
+                                    txCreated = false;
+                                    try {
+                                        await UserTaskSubmission.findByIdAndUpdate(targetSubmission._id, {
+                                            $set: {
+                                                reconciliationRequired: true,
+                                                adminNotes: `RECONCILIATION REQUIRED: Duplicate credit of $${creditedAmount.toFixed(2)} USD occurred on E11000, but automatic worker balance reversal failed.`
+                                            }
+                                        });
+                                    } catch (flagErr) {
+                                        console.error('Failed to flag submission for reconciliation on E11000 reversal failure in manual approval:', flagErr);
+                                    }
+                                    return res.status(409).json({
+                                        success: false,
+                                        error: `Duplicate transaction detected on E11000, but automatic worker balance reversal of $${creditedAmount.toFixed(2)} USD failed. Submission flagged for controlled reconciliation.`,
+                                        reconciliationRequired: true
+                                    });
+                                }
                             } else {
                                 throw txErr;
                             }
@@ -4431,21 +4725,10 @@ export const updateSubmissionStatus = async (req, res) => {
                     }
                 }
 
-                if (oldStatus === 'Disputed') {
-                    if (targetSubmission.disputeId) {
-                        await Dispute.findByIdAndUpdate(targetSubmission.disputeId, {
-                            status: 'Resolved',
-                            verdict: 'ReleaseToWorker',
-                            adminResponse: 'Resolved directly by the campaign creator.'
-                        });
-                    } else {
-                        await Dispute.updateMany({ submissionId: targetSubmission._id, status: { $ne: 'Resolved' } }, {
-                            status: 'Resolved',
-                            verdict: 'ReleaseToWorker',
-                            adminResponse: 'Resolved directly by the campaign creator.'
-                        });
-                    }
-                }
+                // Safely reconcile any associated unresolved dispute upon successful payout
+                const senderType = req.user && isUserAdmin(req.user) ? 'Admin' : 'System';
+                await reconcileSubmissionDispute(targetSubmission, adminNotes, senderType);
+                await targetSubmission.save();
             } catch (approveErr) {
                 if (txCreated && createdTx) {
                     console.error('Warning: Post-transaction error during manual approval:', approveErr);
