@@ -72,7 +72,7 @@ export const reconcileSubmissionDispute = async (submission, adminNotes, senderT
             }
         }
 
-        if (disputeReconciled || (submission.disputeStage && submission.disputeStage !== 'Resolved') || submission.disputeId) {
+        if (disputeReconciled) {
             submission.disputeStage = 'Resolved';
         }
     } catch (dispErr) {
@@ -4429,7 +4429,6 @@ export const submitUserTaskProof = async (req, res) => {
 export const updateSubmissionStatus = async (req, res) => {
     try {
         const { status, adminNotes, rejectionReason } = req.body;
-        console.log('DEBUG: updateSubmissionStatus start', req.params.subId, status);
         const submission = await UserTaskSubmission.findById(req.params.subId);
         if (!submission) return res.status(404).json({ success: false, error: 'Submission not found' });
 
@@ -4462,9 +4461,7 @@ export const updateSubmissionStatus = async (req, res) => {
             const reason = rejectionReason || adminNotes || 'No reason specified';
             submission.rejectionReason = reason;
             submission.rejectedAt = new Date();
-            console.log('DEBUG: Before Setting.getSettings()');
             const settings = await Setting.getSettings();
-            console.log('DEBUG: After Setting.getSettings()');
             if (oldStatus === 'Disputed' && submission.disputeStage === 'CreatorReview') {
                 submission.disputeStage = 'RejectedByCreator';
                 submission.disputeCreatorNotes = reason;
@@ -4494,7 +4491,6 @@ export const updateSubmissionStatus = async (req, res) => {
                 submissionId: submission._id,
                 type: { $in: ['Task Reward', 'Survey Reward', 'Survey Screenout Reward'] }
             });
-            console.log('DEBUG: existingTx found?', !!existingTx);
 
             if (oldStatus === 'Approved') {
                 if (!existingTx && Number(submission.rewardAmount || 0) > 0) {
@@ -4516,7 +4512,7 @@ export const updateSubmissionStatus = async (req, res) => {
                 // Safely reconcile any associated unresolved Dispute(s) without issuing another reward
                 const senderType = req.user && isUserAdmin(req.user) ? 'Admin' : 'System';
                 const disputeReconciled = await reconcileSubmissionDispute(submission, adminNotes, senderType);
-                if (disputeReconciled || (submission.disputeStage && submission.disputeStage !== 'Resolved') || submission.disputeId) {
+                if (disputeReconciled) {
                     submission.disputeStage = 'Resolved';
                     needsSave = true;
                 }
@@ -4547,7 +4543,7 @@ export const updateSubmissionStatus = async (req, res) => {
 
                 const senderType = req.user && isUserAdmin(req.user) ? 'Admin' : 'System';
                 const disputeReconciled = await reconcileSubmissionDispute(submission, adminNotes, senderType);
-                if (disputeReconciled || (submission.disputeStage && submission.disputeStage !== 'Resolved') || submission.disputeId) {
+                if (disputeReconciled) {
                     submission.disputeStage = 'Resolved';
                 }
                 await submission.save();
@@ -4617,7 +4613,7 @@ export const updateSubmissionStatus = async (req, res) => {
                     if (currentSub) {
                         const senderType = req.user && isUserAdmin(req.user) ? 'Admin' : 'System';
                         disputeReconciled = await reconcileSubmissionDispute(currentSub, adminNotes, senderType);
-                        if (disputeReconciled || (currentSub.disputeStage && currentSub.disputeStage !== 'Resolved')) {
+                        if (disputeReconciled) {
                             currentSub.disputeStage = 'Resolved';
                             await currentSub.save();
                         }

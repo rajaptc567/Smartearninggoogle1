@@ -126,16 +126,47 @@ function attachMongooseStubs(overrides = {}) {
 
     UserTask.findOneAndUpdate = async (query, update) => {
         const taskId = query._id;
+        console.log('DEBUG: UserTask.findOneAndUpdate called', taskId);
         const t = db.tasks.get(String(taskId));
-        if (!t) return null;
+        console.log('DEBUG: UserTask.findOneAndUpdate task from db', t);
+        if (!t) {
+            console.log('DEBUG: UserTask.findOneAndUpdate task not found in db', taskId);
+            return null;
+        }
+
+        // Simple filter check
+        if (query.status && query.status.$ne && t.status === query.status.$ne) {
+            console.log('DEBUG: UserTask.findOneAndUpdate status filter mismatch');
+            return null;
+        }
+        if (query.status && query.status.$in && !query.status.$in.includes(t.status)) {
+            console.log('DEBUG: UserTask.findOneAndUpdate status in mismatch');
+            return null;
+        }
+        if (query.campaignFundingStatus?.$ne && t.campaignFundingStatus === query.campaignFundingStatus.$ne) {
+            console.log('DEBUG: UserTask.findOneAndUpdate funding status mismatch');
+            return null;
+        }
+        if (query.campaignAvailableBalanceUSD?.$gte && t.campaignAvailableBalanceUSD < query.campaignAvailableBalanceUSD.$gte) {
+            console.log('DEBUG: UserTask.findOneAndUpdate balance mismatch');
+            return null;
+        }
+
         if (query.completedUsers?.$ne) {
             const hasUser = t.completedUsers.some(u => String(u) === String(query.completedUsers.$ne));
-            if (hasUser) return null;
+            if (hasUser) {
+                console.log('DEBUG: UserTask.findOneAndUpdate completedUsers mismatch');
+                return null;
+            }
         }
+
         if (query.$expr && query.$expr.$lt) {
             const current = t.currentCompletions || 0;
             const target = t.targetQuantity || 0;
-            if (current >= target) return null;
+            if (current >= target) {
+                console.log('DEBUG: UserTask.findOneAndUpdate completion limit reached', current, target);
+                return null;
+            }
         }
         return UserTask.findByIdAndUpdate(taskId, update);
     };
@@ -225,15 +256,26 @@ function attachMongooseStubs(overrides = {}) {
     Dispute.find = async (query) => {
         const results = [];
         for (const disp of db.disputes.values()) {
-            let matches = false;
-            if (query.$or) {
-                for (const q of query.$or) {
-                    if (q._id && String(disp._id) === String(q._id)) matches = true;
-                    if (q.submissionId && String(disp.submissionId) === String(q.submissionId)) matches = true;
-                    if (q.referenceId && String(disp.referenceId) === String(q.referenceId)) matches = true;
+            let matches = true;
+
+            // Handle $and
+            if (query.$and) {
+                for (const andCond of query.$and) {
+                    if (andCond.$or) {
+                        let orMatch = false;
+                        for (const q of andCond.$or) {
+                            if (q._id && String(disp._id) === String(q._id)) orMatch = true;
+                            else if (q.submissionId && String(disp.submissionId) === String(q.submissionId)) orMatch = true;
+                            else if (q.referenceId && String(disp.referenceId) === String(q.referenceId)) orMatch = true;
+                            else if (q.status?.$ne && disp.status !== q.status.$ne) orMatch = true;
+                            else if (q.verdict?.$ne && disp.verdict !== q.verdict.$ne) orMatch = true;
+                        }
+                        if (!orMatch) matches = false;
+                    }
                 }
             }
-            if (matches && (!query.status?.$ne || disp.status !== query.status.$ne)) {
+
+            if (matches) {
                 results.push({
                     ...disp,
                     save: async function () {
@@ -384,8 +426,16 @@ function attachMongooseStubs(overrides = {}) {
     });
 
     // Seed existing duplicate transaction in ledger
-    // const existingTx = { ... };
-    // db.transactions.set(String(existingTxId), existingTx);
+    const existingTx = {
+        _id: existingTxId,
+        submissionId: subId,
+        userId: workerId,
+        amount: 2.00,
+        type: 'Other',
+        status: 'Approved',
+        idempotencyKey: `task_reward_${subId}`
+    };
+    db.transactions.set(String(existingTxId), existingTx);
 
 
     // Simulate E11000 AND failed user reversal
