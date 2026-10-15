@@ -481,7 +481,7 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
     };
 
     const workerBeforeManual = db.users.get(userIdManual);
-    const preSubmissionHobby = workerBeforeManual.customFields?.hobby;
+    const preSubmissionCustomFields = JSON.parse(JSON.stringify(workerBeforeManual.customFields || {}));
 
     const reqManual = {
         params: { id: taskIdManual },
@@ -505,7 +505,7 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
     assert.strictEqual(resManual.jsonData.data.status, 'Pending', 'Manual review submission must remain Pending');
     
     const workerAfterManual = db.users.get(userIdManual);
-    assert.strictEqual(workerAfterManual.customFields?.hobby, preSubmissionHobby, 'Pending submission must not update profile fields before approval and remain unchanged from pre-submission state');
+    assert.deepStrictEqual(workerAfterManual.customFields || {}, preSubmissionCustomFields, 'Complete customFields state must remain unchanged after Pending submission');
 
     // Restore original create stub
     UserTaskSubmission.create = origSubCreateManual;
