@@ -450,7 +450,8 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
         _id: taskIdManual,
         title: 'Manual Review Survey Task',
         isSurvey: true,
-        status: 'Approved',
+        status: 'Active',
+        userId: 'some_user_id',
         rewardPerTask: 5.0,
         surveyApprovalMode: 'manual',
         targetQuantity: 10,
@@ -466,6 +467,7 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
     const origSubCreateManual = UserTaskSubmission.create;
     UserTaskSubmission.create = async (data) => {
         const sub = {
+            _id: 'sub_manual',
             ...data,
             status: 'Pending',
             save: async function() { db.submissions.set(String(this._id), this); return this; }
@@ -492,10 +494,11 @@ async function testSubmitUserTaskProofControllerZeroRewardAndPending() {
 
     await submitUserTaskProof(reqManual, resManual);
 
-    assert.strictEqual(resManual.statusCode, 201, 'submitUserTaskProof manual review submission should return 201');
+    assert.strictEqual(resManual.statusCode, 201, 'submitUserTaskProof manual review submission should return 201: ' + JSON.stringify(resManual.jsonData));
     assert.strictEqual(resManual.jsonData.data.status, 'Pending', 'Manual review submission must remain Pending');
     
     const workerAfterManual = db.users.get(userId);
+    // The user's profile should NOT be updated.
     assert.strictEqual(workerAfterManual.customFields.hobby, undefined, 'Pending submission must not update profile fields before approval');
 
     // Restore original create stub
