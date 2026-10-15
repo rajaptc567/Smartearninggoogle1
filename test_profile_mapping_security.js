@@ -510,7 +510,7 @@ async function testExplicitRequirementVerification() {
     console.log('Test 8 (Requirement verification) completed successfully.');
 }
 
-// Test 9: Authoritative mapping regression - Client input "Photography" is ignored in favor of server authoritative "Reading"
+// Test 9: Authoritative mapping regression - Client input "Photography" is NOT allowed to override authoritative options ("Reading")
 async function testAuthoritativeMappingRegression() {
     db.clear();
     const userId = 'user_9';
@@ -518,33 +518,54 @@ async function testAuthoritativeMappingRegression() {
     db.users.set(userId, { _id: userId, customFields: {} });
     db.tasks.set(taskId, {
         _id: taskId,
+        title: 'Hobby Survey',
         isSurvey: true,
+        status: 'Approved',
+        rewardPerTask: 0,
         surveyConfig: {
             questions: [
-                { id: 'q1', title: 'Hobby', type: 'text', profileMapping: { enabled: true, fieldKey: 'hobby' } }
+                { 
+                    id: 'q1', 
+                    title: 'Hobby', 
+                    type: 'single_choice', 
+                    options: ['Reading', 'Writing'],
+                    profileMapping: { enabled: true, fieldKey: 'hobby' } 
+                }
             ]
         }
     });
 
-    // Authoritative response is "Reading", client input would have been "Photography"
-    const authoritativeResponses = [{ questionId: 'q1', value: 'Reading' }];
-
-    const submission = {
-        _id: 'sub_9',
-        taskId,
-        workerId: userId,
-        status: 'Approved',
-        surveyResponses: authoritativeResponses
+    // Client attempts to submit invalid "Photography"
+    const req = {
+        params: { id: taskId },
+        user: { _id: userId, role: 'user' },
+        body: {
+            surveyResponses: [{ questionId: 'q1', value: 'Photography' }],
+            consentAgreed: true
+        }
+    };
+    const res = {
+        statusCode: 200,
+        jsonData: null,
+        status(code) { this.statusCode = code; return this; },
+        json(data) { this.jsonData = data; return this; }
     };
 
-    const user = db.users.get(userId);
-    const task = db.tasks.get(taskId);
+    // Stubs
+    const origUserTaskFindById = UserTask.findById;
+    const origUserFindById = User.findById;
+    UserTask.findById = () => ({ lean: () => Promise.resolve(db.tasks.get(taskId)) });
+    User.findById = () => Promise.resolve(db.users.get(userId));
+    
+    // We expect this to FAIL because 'Photography' is not an allowed option
+    await submitUserTaskProof(req, res);
 
-    await applySurveyProfileMappings(user, task, authoritativeResponses, false, submission);
+    // Restore
+    UserTask.findById = origUserTaskFindById;
+    User.findById = origUserFindById;
 
-    const updatedUser = db.users.get(userId);
-    assert.strictEqual(updatedUser.customFields.hobby.value, 'Reading', 'Profile mapping must use authoritative server response "Reading"');
-    console.log('Test 9 (Authoritative mapping regression) passed.');
+    assert.strictEqual(res.statusCode, 400, 'Controller should reject invalid option "Photography"');
+    console.log('Test 9 (Authoritative mapping regression) passed (correctly rejected invalid client input).');
 }
 
 async function runAll() {
