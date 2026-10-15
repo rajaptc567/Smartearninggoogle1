@@ -3417,13 +3417,20 @@ export const getUserTaskSubmissions = async (req, res) => {
     }
 };
 
-const applySurveyProfileMappings = async (user, task, surveyResponses, isScreenout, submission) => {
+export const applySurveyProfileMappings = async (user, task, surveyResponses, isScreenout, submission) => {
     try {
         if (!task || !task.isSurvey || isScreenout) return;
         
-        // Fix 3: Profile mapping must not accept low-quality / invalid profile data
-        if (submission && (submission.attentionCheckPassed === false || (Array.isArray(submission.qualityFlags) && submission.qualityFlags.length > 0) || submission.surveyQualificationStatus === 'Disqualified' || submission.surveyQualificationStatus === 'Screenout')) {
-            console.warn(`[D2 Profile Mapping Skipped] Survey submission for task ${task._id} failed quality checks or qualification.`);
+        // Fix 3 & P1-03: Profile mapping must not accept low-quality / invalid profile data or unapproved submissions
+        if (submission && (
+            submission.status !== 'Approved' ||
+            submission.attentionCheckPassed === false || 
+            (Array.isArray(submission.qualityFlags) && submission.qualityFlags.length > 0) || 
+            submission.surveyQualificationStatus === 'Disqualified' || 
+            submission.surveyQualificationStatus === 'Screenout' ||
+            submission.surveyQualificationStatus === 'Rejected'
+        )) {
+            console.warn(`[D2 Profile Mapping Skipped] Survey submission for task ${task._id} is not approved or failed quality/qualification checks.`);
             return;
         }
 
@@ -3431,11 +3438,14 @@ const applySurveyProfileMappings = async (user, task, surveyResponses, isScreeno
         const questions = Array.isArray(surveyConfig.questions) ? surveyConfig.questions : [];
         if (questions.length === 0) return;
 
-        // Build Response Lookup map
+        // Build Response Lookup map (authoritative: use first accepted response for duplicate question IDs)
         const responseMap = new Map();
         for (const r of surveyResponses) {
             if (r && r.questionId) {
-                responseMap.set(String(r.questionId), r);
+                const qIdStr = String(r.questionId);
+                if (!responseMap.has(qIdStr)) {
+                    responseMap.set(qIdStr, r);
+                }
             }
         }
 
@@ -3987,6 +3997,10 @@ export const submitUserTaskProof = async (req, res) => {
                 submission.approvalType = 'auto';
                 submission.adminNotes = 'Survey auto-approved (reconciled with existing ledger entry).';
                 await submission.save();
+
+                if (isSurveyTask && !isScreenout) {
+                    await applySurveyProfileMappings(worker, task, submission.surveyResponses, isScreenout, submission);
+                }
             } else {
                 const claimedTask = await claimTaskCompletionSlot(task._id, worker._id, allowRecompletion);
                 if (claimedTask) {
@@ -4102,6 +4116,10 @@ export const submitUserTaskProof = async (req, res) => {
                                 } catch (linkErr) {
                                     console.error('Warning: Failed to update rewardTransactionId on submission:', linkErr);
                                 }
+                            }
+
+                            if (isSurveyTask && !isScreenout) {
+                                await applySurveyProfileMappings(worker, task, submission.surveyResponses, isScreenout, submission);
                             }
                         }
                     } catch (autoApproveErr) {
@@ -4412,10 +4430,7 @@ export const submitUserTaskProof = async (req, res) => {
             });
         }
         
-        // STEP D2: Apply Survey Answer to Profile Attribute Mapping (only on successful non-screenout valid answers)
-        if (isSurveyTask && !isScreenout) {
-            await applySurveyProfileMappings(worker, task, surveyResponses, isScreenout, submission);
-        }
+
 
         global.appDataVersion = Date.now();
         res.status(201).json({ success: true, data: submission });
@@ -4525,6 +4540,13 @@ export const updateSubmissionStatus = async (req, res) => {
                     await submission.save();
                 }
 
+                if (task && task.isSurvey) {
+                    const workerForMap = await User.findById(submission.workerId);
+                    if (workerForMap) {
+                        await applySurveyProfileMappings(workerForMap, task, submission.surveyResponses, false, submission);
+                    }
+                }
+
                 return res.status(200).json({
                     success: true,
                     data: submission,
@@ -4551,6 +4573,13 @@ export const updateSubmissionStatus = async (req, res) => {
                     submission.disputeStage = 'Resolved';
                 }
                 await submission.save();
+
+                if (task && task.isSurvey) {
+                    const workerForMap = await User.findById(submission.workerId);
+                    if (workerForMap) {
+                        await applySurveyProfileMappings(workerForMap, task, submission.surveyResponses, false, submission);
+                    }
+                }
 
                 return res.status(200).json({
                     success: true,
@@ -4736,6 +4765,13 @@ export const updateSubmissionStatus = async (req, res) => {
                     targetSubmission.disputeStage = 'Resolved';
                 }
                 await targetSubmission.save();
+
+                if (task && task.isSurvey) {
+                    const workerForMap = await User.findById(targetSubmission.workerId);
+                    if (workerForMap) {
+                        await applySurveyProfileMappings(workerForMap, task, targetSubmission.surveyResponses, false, targetSubmission);
+                    }
+                }
             } catch (approveErr) {
                 if (txCreated && createdTx) {
                     console.error('Warning: Post-transaction error during manual approval:', approveErr);
