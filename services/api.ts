@@ -34,7 +34,7 @@ export function getUploadsBaseUrl() {
 const API_BASE_URL = getApiBaseUrl();
 
 // Helper to get Auth Headers
-const getHeaders = (isMultipart = false) => {
+export const getHeaders = (isMultipart = false) => {
     const headers: any = {};
     if (!isMultipart) {
         headers['Content-Type'] = 'application/json';

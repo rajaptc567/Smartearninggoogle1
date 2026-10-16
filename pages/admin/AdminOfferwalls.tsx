@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
+import { getHeaders } from '../../services/api';
 
 interface OfferwallProvider {
     _id: string;
@@ -72,7 +73,9 @@ export const AdminOfferwalls: React.FC = () => {
 
     const fetchProviders = async () => {
         try {
-            const res = await fetch('/api/v1/postbacks/providers');
+            const res = await fetch('/api/v1/postbacks/providers', {
+                headers: getHeaders()
+            });
             const data = await res.json();
             if (data.success && Array.isArray(data.data)) {
                 setProviders(data.data);
@@ -88,7 +91,9 @@ export const AdminOfferwalls: React.FC = () => {
             if (logProviderFilter) url += `&provider=${logProviderFilter}`;
             if (logStatusFilter) url += `&status=${logStatusFilter}`;
 
-            const res = await fetch(url);
+            const res = await fetch(url, {
+                headers: getHeaders()
+            });
             const data = await res.json();
             if (data.success && Array.isArray(data.data)) {
                 setLogs(data.data);
@@ -121,7 +126,7 @@ export const AdminOfferwalls: React.FC = () => {
         try {
             const res = await fetch(`/api/v1/postbacks/providers/${editingProvider.providerKey}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getHeaders(),
                 body: JSON.stringify(editingProvider)
             });
             const data = await res.json();
@@ -146,7 +151,7 @@ export const AdminOfferwalls: React.FC = () => {
         try {
             const res = await fetch('/api/v1/postbacks/simulate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getHeaders(),
                 body: JSON.stringify({
                     providerKey: simProvider,
                     userId: simUserId || (users[0]?._id || 'demo_user'),
