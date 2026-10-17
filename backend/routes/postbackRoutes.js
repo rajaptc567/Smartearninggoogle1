@@ -4,7 +4,8 @@ import {
     getOfferwallProviders, 
     updateOfferwallProvider, 
     getOfferwallLogs, 
-    simulatePostback 
+    simulatePostback,
+    createToroxSession
 } from '../controllers/postbackController.js';
 
 const router = express.Router();
@@ -17,8 +18,19 @@ const requireAdmin = (req, res, next) => {
     next();
 };
 
+// Authenticated user middleware helper
+const requireAuth = (req, res, next) => {
+    if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    next();
+};
+
 // Public/Member read of enabled providers
 router.get('/providers', getOfferwallProviders);
+
+// Dedicated authenticated endpoint for Torox offerwall session creation
+router.post('/torox/session', requireAuth, createToroxSession);
 
 // Admin management endpoints
 router.put('/providers/:providerKey', requireAdmin, updateOfferwallProvider);

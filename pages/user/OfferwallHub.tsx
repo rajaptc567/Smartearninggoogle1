@@ -29,9 +29,58 @@ export const OfferwallHub: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [iframeLoading, setIframeLoading] = useState(false);
 
+    // Torox server-authenticated session state
+    const [toroxSessionUrl, setToroxSessionUrl] = useState<string | null>(null);
+    const [toroxSessionError, setToroxSessionError] = useState<string | null>(null);
+    const [toroxSessionLoading, setToroxSessionLoading] = useState<boolean>(false);
+
     const exchangeRate = settings?.exchangeRates?.[currentUser?.currency || 'USD'] || 1;
     const taskEarningsUSD = currentUser?.taskEarningsBalance ?? 0;
     const userLocalEarnings = taskEarningsUSD * exchangeRate;
+
+    const fetchToroxSession = async () => {
+        setToroxSessionLoading(true);
+        setToroxSessionError(null);
+        setToroxSessionUrl(null);
+        setIframeLoading(true);
+
+        try {
+            const token = localStorage.getItem('authToken');
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json'
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const res = await fetch('/api/v1/postbacks/torox/session', {
+                method: 'POST',
+                headers
+            });
+            const data = await res.json().catch(() => null);
+
+            if (res.ok && data?.success && data?.wall_url) {
+                setToroxSessionUrl(data.wall_url);
+            } else {
+                const msg = data?.error || data?.message || `Failed to create Torox offerwall session (HTTP ${res.status})`;
+                setToroxSessionError(msg);
+            }
+        } catch (err: any) {
+            setToroxSessionError(err?.message || 'Network error connecting to Torox session service');
+        } finally {
+            setToroxSessionLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedProvider?.providerKey === 'torox') {
+            fetchToroxSession();
+        } else {
+            setToroxSessionUrl(null);
+            setToroxSessionError(null);
+            setToroxSessionLoading(false);
+        }
+    }, [selectedProvider?.providerKey]);
 
     useEffect(() => {
         const fetchProviders = async () => {
@@ -66,6 +115,9 @@ export const OfferwallHub: React.FC = () => {
     });
 
     const getComputedIframeUrl = (provider: OfferwallProvider) => {
+        if (provider.providerKey === 'torox') {
+            return toroxSessionUrl || '';
+        }
         if (!provider.iframeUrlTemplate) return '';
         const uid = currentUser?._id || currentUser?.username || 'test_user';
         const aid = provider.appId || 'demo_app_id';
@@ -249,7 +301,11 @@ export const OfferwallHub: React.FC = () => {
                             </div>
                             <button
                                 onClick={() => {
-                                    setIframeLoading(true);
+                                    if (selectedProvider?.providerKey === 'torox') {
+                                        fetchToroxSession();
+                                    } else {
+                                        setIframeLoading(true);
+                                    }
                                 }}
                                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all"
                             >
@@ -260,7 +316,84 @@ export const OfferwallHub: React.FC = () => {
 
                     {/* Iframe Viewport */}
                     <div className="relative min-h-[650px] bg-slate-950 flex flex-col">
-                        {selectedProvider.iframeUrlTemplate && selectedProvider.appId ? (
+                        {selectedProvider.providerKey === 'torox' ? (
+                            // Dedicated Torox Server-Authenticated Session Viewport
+                            toroxSessionLoading ? (
+                                <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center gap-3 text-slate-400">
+                                    <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                    <span className="text-xs font-bold uppercase tracking-wider">
+                                        Initializing secure Torox session...
+                                    </span>
+                                </div>
+                            ) : toroxSessionError ? (
+                                <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto">
+                                    <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl mb-4 text-amber-400">
+                                        ⚠️
+                                    </div>
+                                    <h3 className="text-lg font-black text-white mb-2">
+                                        Torox Offerwall Session Notice
+                                    </h3>
+                                    <p className="text-slate-300 text-sm leading-relaxed mb-6">
+                                        {toroxSessionError}
+                                    </p>
+                                    <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-left space-y-2 text-xs mb-6">
+                                        <div className="flex items-center justify-between text-slate-400">
+                                            <span>Integration Mode:</span>
+                                            <span className="font-bold text-indigo-400">Server-Authenticated S2S Session</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-slate-400">
+                                            <span>Approval Status:</span>
+                                            <span className="font-bold text-sky-400">{selectedProvider.approvalStatus || 'Pending'}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-slate-400">
+                                            <span>Network State:</span>
+                                            <span className="font-bold text-amber-400">{selectedProvider.status || 'NOT_STARTED'}</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={fetchToroxSession}
+                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all"
+                                    >
+                                        🔄 Retry Connection
+                                    </button>
+                                </div>
+                            ) : toroxSessionUrl ? (
+                                <>
+                                    {iframeLoading && (
+                                        <div className="absolute inset-0 z-20 bg-slate-950 flex flex-col items-center justify-center gap-3 text-slate-400">
+                                            <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                            <span className="text-xs font-bold uppercase tracking-wider">Connecting to {selectedProvider.name}...</span>
+                                        </div>
+                                    )}
+                                    <iframe
+                                        src={toroxSessionUrl}
+                                        title={selectedProvider.name}
+                                        onLoad={() => setIframeLoading(false)}
+                                        className="w-full h-[700px] border-0 rounded-b-3xl"
+                                        allow="camera; microphone; geolocation; autoplay; clipboard-write"
+                                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+                                    />
+                                </>
+                            ) : (
+                                <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto">
+                                    <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-3xl mb-4 text-indigo-400">
+                                        {selectedProvider.icon || '🔥'}
+                                    </div>
+                                    <h3 className="text-lg font-black text-white mb-2">
+                                        {selectedProvider.name} Session Standby
+                                    </h3>
+                                    <p className="text-slate-400 text-sm leading-relaxed mb-6">
+                                        Ready to initiate server-authenticated session.
+                                    </p>
+                                    <button
+                                        onClick={fetchToroxSession}
+                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all"
+                                    >
+                                        Connect to Offerwall
+                                    </button>
+                                </div>
+                            )
+                        ) : selectedProvider.iframeUrlTemplate && selectedProvider.appId ? (
                             <>
                                 {iframeLoading && (
                                     <div className="absolute inset-0 z-20 bg-slate-950 flex flex-col items-center justify-center gap-3 text-slate-400">

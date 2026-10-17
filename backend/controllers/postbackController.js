@@ -76,7 +76,7 @@ const maskSensitiveData = (data) => {
  * Signature verification utility for various provider hashing schemes.
  * Fails closed on all unhandled, misconfigured, or missing credentials.
  */
-const verifySignature = (provider, params, clientIp) => {
+export const verifySignature = (provider, params, clientIp) => {
     // Fail closed: requireSignature: true with signatureType: 'none' must not pass
     if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
         return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
@@ -925,6 +925,112 @@ export const simulatePostback = async (req, res) => {
         });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+/**
+ * Dedicated Authenticated Endpoint for Torox Offerwall Session Creation
+ * Official documentation: https://torox.io/publisher-integration-guide/
+ * POST https://api.wall.torox.io/partner/session?placement_id=<PLACEMENT_ID>&token=<APP_TOKEN>
+ * Request Body: { "player": { "uid": "<AUTHENTICATED_USER_ID>" } }
+ */
+export const createToroxSession = async (req, res) => {
+    try {
+        // 1. Enforce authentication - derive user ID strictly from server-side req.user.id
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+
+        const authenticatedUserId = String(req.user.id).trim();
+        if (!authenticatedUserId) {
+            return res.status(401).json({ success: false, error: 'Invalid authenticated user identity' });
+        }
+
+        // 2. Load Torox provider configuration from MongoDB
+        const provider = await OfferwallProvider.findOne({ providerKey: 'torox' });
+        if (!provider) {
+            return res.status(404).json({ success: false, error: 'Torox provider configuration not found' });
+        }
+
+        // 3. Require Torox to be explicitly enabled, approved, and configured for production use
+        if (!provider.enabled) {
+            return res.status(400).json({ success: false, error: 'Torox offerwall is currently disabled' });
+        }
+
+        const isApproved = provider.approvalStatus === 'Approved';
+        const isProductionStatus = provider.status === 'ACTIVE' || provider.status === 'PRODUCTION_READY';
+        if (!isApproved || !isProductionStatus) {
+            return res.status(400).json({
+                success: false,
+                error: 'Torox integration is pending publisher approval and not active for production use'
+            });
+        }
+
+        // 4. Map placement ID and App Key from existing configuration fields
+        const placementId = provider.appId?.trim();
+        const appToken = (provider.secretKey || provider.postbackKey)?.trim();
+
+        if (!placementId || !appToken) {
+            return res.status(400).json({
+                success: false,
+                error: 'Torox credentials (placement_id or token) are missing or incomplete'
+            });
+        }
+
+        // 5. Contact Torox Partner Session API with a safe timeout
+        const toroxUrl = `https://api.wall.torox.io/partner/session?placement_id=${encodeURIComponent(placementId)}&token=${encodeURIComponent(appToken)}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        let toroxRes;
+        try {
+            toroxRes = await fetch(toroxUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    player: {
+                        uid: authenticatedUserId
+                    }
+                }),
+                signal: controller.signal
+            });
+        } catch (fetchErr) {
+            clearTimeout(timeoutId);
+            if (fetchErr.name === 'AbortError') {
+                return res.status(504).json({ success: false, error: 'Torox session API request timed out' });
+            }
+            console.error('[Torox Session API] Connection failure:', fetchErr.message);
+            return res.status(502).json({ success: false, error: 'Failed to connect to Torox session service' });
+        }
+        clearTimeout(timeoutId);
+
+        let data;
+        try {
+            data = await toroxRes.json();
+        } catch (jsonErr) {
+            return res.status(502).json({ success: false, error: 'Malformed response received from Torox session API' });
+        }
+
+        // 6. Validate that Torox returns ok: true and a valid wall_url
+        if (!toroxRes.ok || !data || data.ok !== true || !data.wall_url || typeof data.wall_url !== 'string') {
+            const safeError = (data && (typeof data.error === 'string' ? data.error : data.message)) || `Torox session error (HTTP ${toroxRes.status})`;
+            return res.status(502).json({
+                success: false,
+                error: safeError
+            });
+        }
+
+        // 7. Return only wall_url to the authenticated frontend; never expose secrets
+        return res.status(200).json({
+            success: true,
+            wall_url: data.wall_url
+        });
+    } catch (err) {
+        console.error('[Torox Session Error]', err.message);
+        return res.status(500).json({ success: false, error: 'Internal server error processing Torox session' });
     }
 };
 
