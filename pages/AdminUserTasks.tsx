@@ -1718,247 +1718,298 @@ const AdminUserTasks: React.FC = () => {
                             </div>
 
                             {/* Survey Questionnaire Review Section */}
-                            {selectedCampaign.isSurvey && selectedCampaign.surveyConfig && (
-                                <div className="bg-amber-50/60 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-4">
-                                    <div className="flex items-center justify-between border-b border-amber-200 dark:border-amber-800/50 pb-2">
-                                        <span className="text-xs font-black uppercase text-amber-700 dark:text-amber-400 tracking-wider">
-                                            📊 Survey Questionnaire Review (v{selectedCampaign.surveyConfig.version || 1})
-                                        </span>
-                                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
-                                            {Array.isArray(selectedCampaign.surveyConfig.questions) ? selectedCampaign.surveyConfig.questions.length : 0} Questions
-                                        </span>
-                                    </div>
+                            {selectedCampaign.isSurvey && selectedCampaign.surveyConfig && (() => {
+                                const cfg = selectedCampaign.surveyConfig || {};
+                                const rawQuestions = Array.isArray(cfg.questions) ? cfg.questions : [];
+                                const validQuestions = rawQuestions.filter((q: any) => q && typeof q === 'object');
+                                const rawSections = Array.isArray(cfg.sections) ? cfg.sections : [];
+                                const validSections = rawSections.filter((s: any) => s && typeof s === 'object');
+                                const consentText = cfg.consentText || cfg.defaultConsentText;
+                                const qualityRules = cfg.qualityRules;
 
-                                    {/* 1. Survey meta stats */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Sections</span>
-                                            <span className="font-bold text-gray-800 dark:text-gray-200">
-                                                {Array.isArray(selectedCampaign.surveyConfig.sections) ? selectedCampaign.surveyConfig.sections.length : 0}
+                                return (
+                                    <div className="bg-amber-50/60 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-4">
+                                        <div className="flex items-center justify-between border-b border-amber-200 dark:border-amber-800/50 pb-2">
+                                            <span className="text-xs font-black uppercase text-amber-700 dark:text-amber-400 tracking-wider">
+                                                📊 Survey Questionnaire Review (v{cfg.version || 1})
+                                            </span>
+                                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                                                {validQuestions.length} Questions
                                             </span>
                                         </div>
-                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Est. Duration</span>
-                                            <span className="font-bold text-gray-800 dark:text-gray-200">
-                                                {selectedCampaign.surveyConfig.estimatedTimeMinutes || selectedCampaign.surveyEstimatedMinutes || 5} mins
-                                            </span>
-                                        </div>
-                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Questions</span>
-                                            <span className="font-bold text-gray-800 dark:text-gray-200">
-                                                {Array.isArray(selectedCampaign.surveyConfig.questions) ? selectedCampaign.surveyConfig.questions.length : 0}
-                                            </span>
-                                        </div>
-                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Approval Mode</span>
-                                            <span className="font-bold text-gray-800 dark:text-gray-200 capitalize">
-                                                {selectedCampaign.surveyConfig.approvalMode || 'Auto'}
-                                            </span>
-                                        </div>
-                                    </div>
 
-                                    {selectedCampaign.surveyConfig.description && (
-                                        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border dark:border-gray-700 text-xs">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Survey Description</span>
-                                            <p className="text-gray-700 dark:text-gray-300 break-words">{selectedCampaign.surveyConfig.description}</p>
-                                        </div>
-                                    )}
-
-                                    {/* Sections List */}
-                                    {Array.isArray(selectedCampaign.surveyConfig.sections) && selectedCampaign.surveyConfig.sections.length > 0 && (
-                                        <div className="space-y-1.5">
-                                            <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">Sections</span>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {selectedCampaign.surveyConfig.sections.map((sec: any, sIdx: number) => (
-                                                    <span key={sec.id || sIdx} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-700 dark:text-gray-300">
-                                                        📁 {sec.title || `Section ${sIdx + 1}`}
-                                                    </span>
-                                                ))}
+                                        {/* 1. Survey meta stats */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                            <div className="bg-white dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400 block">Sections</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                    {validSections.length}
+                                                </span>
+                                            </div>
+                                            <div className="bg-white dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400 block">Est. Duration</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                    {cfg.estimatedTimeMinutes || selectedCampaign.surveyEstimatedMinutes || 5} mins
+                                                </span>
+                                            </div>
+                                            <div className="bg-white dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400 block">Questions</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                    {validQuestions.length}
+                                                </span>
+                                            </div>
+                                            <div className="bg-white dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400 block">Approval Mode</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200 capitalize">
+                                                    {cfg.approvalMode || 'Auto'}
+                                                </span>
                                             </div>
                                         </div>
-                                    )}
 
-                                    {/* 2, 3, 4, 5, 6: Saved Questions in Order */}
-                                    <div className="space-y-3">
-                                        <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 block">Questions & Logic Configuration</span>
-                                        
-                                        {!Array.isArray(selectedCampaign.surveyConfig.questions) || selectedCampaign.surveyConfig.questions.length === 0 ? (
-                                            <div className="p-4 bg-red-50 dark:bg-red-950/35 border border-red-200 dark:border-red-900/50 rounded-xl text-xs text-red-600 dark:text-red-400 font-bold text-center">
-                                                ⚠️ Warning: This campaign is marked as a survey, but has no saved questions in its survey configuration.
+                                        {cfg.description && (
+                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border dark:border-gray-700 text-xs">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Survey Description</span>
+                                                <p className="text-gray-700 dark:text-gray-300 break-words">{String(cfg.description)}</p>
                                             </div>
-                                        ) : (
-                                            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                                                {selectedCampaign.surveyConfig.questions.map((q: any, qIdx: number) => {
-                                                    const options = Array.isArray(q.options) ? q.options : [];
-                                                    const validation = q.validation || {};
-                                                    const showIf = q.showIf;
-                                                    const logicRules = q.logicRules || q.branchingRules;
-                                                    const isAttention = q.isAttentionCheck;
-                                                    const isConsistency = q.consistencyCheck;
+                                        )}
 
-                                                    return (
-                                                        <div key={q.id || qIdx} className="p-3.5 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 space-y-2.5 text-xs">
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div>
-                                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-[10px]">
-                                                                            Q{qIdx + 1}
-                                                                        </span>
-                                                                        <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                                                            {q.type || 'multiple_choice'}
-                                                                        </span>
-                                                                        {q.required !== false ? (
-                                                                            <span className="text-[9px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-900/30">Required</span>
-                                                                        ) : (
-                                                                            <span className="text-[9px] font-bold text-gray-400 bg-gray-50 dark:bg-gray-900 px-1.5 py-0.5 rounded border">Optional</span>
+                                        {/* Sections List */}
+                                        {validSections.length > 0 && (
+                                            <div className="space-y-1.5">
+                                                <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">Sections</span>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {validSections.map((sec: any, sIdx: number) => (
+                                                        <span key={sec.id || sIdx} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-700 dark:text-gray-300">
+                                                            📁 {sec.title ? String(sec.title) : `Section ${sIdx + 1}`}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 2, 3, 4, 5, 6: Saved Questions in Order */}
+                                        <div className="space-y-3">
+                                            <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 block">Questions & Logic Configuration</span>
+                                            
+                                            {validQuestions.length === 0 ? (
+                                                <div className="p-4 bg-red-50 dark:bg-red-950/35 border border-red-200 dark:border-red-900/50 rounded-xl text-xs text-red-600 dark:text-red-400 font-bold text-center">
+                                                    ⚠️ Warning: This campaign is marked as a survey, but has no valid saved questions in its survey configuration.
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                                                    {validQuestions.map((q: any, qIdx: number) => {
+                                                        const options = Array.isArray(q.options) ? q.options : [];
+                                                        const validation = q.validation || {};
+                                                        const showIf = q.showIf;
+                                                        const logicRules = q.logicRules || q.branchingRules;
+                                                        const isAttention = Boolean(q.isAttentionCheck);
+                                                        const isConsistency = Boolean(q.consistencyCheck || q.isCheckQuestion);
+                                                        const failureAction = q.checkFailureAction || q.failureAction;
+
+                                                        const minValue = validation.minValue ?? validation.min ?? q.minValue ?? q.min;
+                                                        const maxValue = validation.maxValue ?? validation.max ?? q.maxValue ?? q.max;
+
+                                                        return (
+                                                            <div key={q.id || qIdx} className="p-3.5 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 space-y-2.5 text-xs">
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <div>
+                                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                                            <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-[10px]">
+                                                                                Q{qIdx + 1}
+                                                                            </span>
+                                                                            <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                                                                {q.type ? String(q.type) : 'multiple_choice'}
+                                                                            </span>
+                                                                            {q.required !== false ? (
+                                                                                <span className="text-[9px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-900/30">Required</span>
+                                                                            ) : (
+                                                                                <span className="text-[9px] font-bold text-gray-400 bg-gray-50 dark:bg-gray-900 px-1.5 py-0.5 rounded border">Optional</span>
+                                                                            )}
+                                                                            {isAttention && (
+                                                                                <span className="text-[9px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded border border-purple-200">Attention Check</span>
+                                                                            )}
+                                                                            {isConsistency && (
+                                                                                <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200">Consistency Check</span>
+                                                                            )}
+                                                                        </div>
+                                                                        <h6 className="font-bold text-gray-900 dark:text-white mt-1 leading-snug">
+                                                                            {q.title ? String(q.title) : `Question ${qIdx + 1}`}
+                                                                        </h6>
+                                                                    </div>
+                                                                </div>
+
+                                                                {q.description && (
+                                                                    <p className="text-gray-600 dark:text-gray-400 italic text-[11px]">{String(q.description)}</p>
+                                                                )}
+
+                                                                {/* Options */}
+                                                                {options.length > 0 && (
+                                                                    <div className="space-y-1 pt-1">
+                                                                        <span className="text-[10px] font-bold uppercase text-gray-400">Options ({options.length}):</span>
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            {options.map((opt: any, optIdx: number) => {
+                                                                                const optText = typeof opt === 'string' ? opt : 
+                                                                                                (opt && typeof opt === 'object') ? (opt.text || opt.label || opt.value || JSON.stringify(opt)) : 
+                                                                                                String(opt);
+                                                                                return (
+                                                                                    <span key={optIdx} className="px-2 py-1 rounded-lg bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-700 dark:text-gray-300 text-[11px]">
+                                                                                        {optIdx + 1}. {optText}
+                                                                                    </span>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Validation Rules */}
+                                                                {(minValue !== undefined || maxValue !== undefined || validation.minLength !== undefined || validation.maxLength !== undefined || validation.minSelections !== undefined || validation.maxSelections !== undefined || q.minSelections !== undefined || q.maxSelections !== undefined) && (
+                                                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-2 rounded-lg border dark:border-gray-700 text-[11px] space-y-0.5">
+                                                                        <span className="font-bold uppercase text-gray-400 text-[9px] block">Validation Rules:</span>
+                                                                        <div className="flex flex-wrap gap-2 text-gray-700 dark:text-gray-300">
+                                                                            {(validation.minSelections !== undefined || q.minSelections !== undefined) && (
+                                                                                <span>Min Select: <strong>{validation.minSelections ?? q.minSelections}</strong></span>
+                                                                            )}
+                                                                            {(validation.maxSelections !== undefined || q.maxSelections !== undefined) && (
+                                                                                <span>Max Select: <strong>{validation.maxSelections ?? q.maxSelections}</strong></span>
+                                                                            )}
+                                                                            {validation.minLength !== undefined && (
+                                                                                <span>Min Length: <strong>{validation.minLength}</strong></span>
+                                                                            )}
+                                                                            {validation.maxLength !== undefined && (
+                                                                                <span>Max Length: <strong>{validation.maxLength}</strong></span>
+                                                                            )}
+                                                                            {minValue !== undefined && (
+                                                                                <span>Min Value: <strong>{minValue}</strong></span>
+                                                                            )}
+                                                                            {maxValue !== undefined && (
+                                                                                <span>Max Value: <strong>{maxValue}</strong></span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Display conditions (showIf) & Branching (logicRules) */}
+                                                                {(showIf || logicRules) && (
+                                                                    <div className="bg-blue-50/50 dark:bg-blue-950/25 p-2 rounded-lg border border-blue-100 dark:border-blue-900/30 text-[11px] space-y-1">
+                                                                        {showIf && (
+                                                                            <div>
+                                                                                <span className="font-bold text-blue-600 dark:text-blue-400 text-[9px] uppercase">Display Condition (Show If):</span>
+                                                                                <pre className="text-gray-700 dark:text-gray-300 font-mono text-[10px] whitespace-pre-wrap bg-white dark:bg-gray-900 p-1.5 rounded border dark:border-gray-700 mt-0.5 max-h-24 overflow-y-auto">
+                                                                                    {typeof showIf === 'object' ? JSON.stringify(showIf, null, 2) : String(showIf)}
+                                                                                </pre>
+                                                                            </div>
                                                                         )}
-                                                                        {isAttention && (
-                                                                            <span className="text-[9px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded border border-purple-200">Attention Check</span>
-                                                                        )}
-                                                                        {isConsistency && (
-                                                                            <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-200">Consistency Check</span>
+                                                                        {logicRules && (
+                                                                            <div>
+                                                                                <span className="font-bold text-blue-600 dark:text-blue-400 text-[9px] uppercase">Branching / Logic Rules:</span>
+                                                                                <pre className="text-gray-700 dark:text-gray-300 font-mono text-[10px] whitespace-pre-wrap bg-white dark:bg-gray-900 p-1.5 rounded border dark:border-gray-700 mt-0.5 max-h-24 overflow-y-auto">
+                                                                                    {typeof logicRules === 'object' ? JSON.stringify(logicRules, null, 2) : String(logicRules)}
+                                                                                </pre>
+                                                                            </div>
                                                                         )}
                                                                     </div>
-                                                                    <h6 className="font-bold text-gray-900 dark:text-white mt-1 leading-snug">
-                                                                        {q.title || `Question ${qIdx + 1}`}
-                                                                    </h6>
-                                                                </div>
+                                                                )}
+
+                                                                {/* Attention & Consistency check details */}
+                                                                {(isAttention || isConsistency || q.expectedAnswer !== undefined || q.sourceQuestionId || failureAction) && (
+                                                                    <div className="bg-purple-50/60 dark:bg-purple-950/30 p-2 rounded-lg border border-purple-200 dark:border-purple-900/40 text-[11px] space-y-1">
+                                                                        <span className="font-bold text-purple-700 dark:text-purple-300 text-[9px] uppercase">Quality Check Configuration:</span>
+                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-gray-700 dark:text-gray-300">
+                                                                            {q.expectedAnswer !== undefined && (
+                                                                                <div>Expected Answer: <strong className="font-mono">{String(q.expectedAnswer)}</strong></div>
+                                                                            )}
+                                                                            {q.sourceQuestionId && (
+                                                                                <div>Source Question ID: <strong className="font-mono">{String(q.sourceQuestionId)}</strong></div>
+                                                                            )}
+                                                                            {failureAction && (
+                                                                                <div>Failure Action: <strong className="font-mono">{String(failureAction)}</strong></div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
 
-                                                            {q.description && (
-                                                                <p className="text-gray-600 dark:text-gray-400 italic text-[11px]">{q.description}</p>
+                                        {/* 7. Survey-wide Global Rules, Quality Rules & Consent */}
+                                        {(cfg.globalLogicRules || cfg.securityRules || qualityRules || consentText || cfg.privacyNotice) && (
+                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border dark:border-gray-700 space-y-2 text-xs">
+                                                <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 block">Global Survey Settings & Anti-Fraud Rules</span>
+                                                
+                                                {consentText && (
+                                                    <div className="text-[11px] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700">
+                                                        <span className="font-bold text-gray-500 block mb-0.5">Consent Text:</span>
+                                                        {String(consentText)}
+                                                    </div>
+                                                )}
+
+                                                {cfg.privacyNotice && (
+                                                    <div className="text-[11px] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700">
+                                                        <span className="font-bold text-gray-500 block mb-0.5">Privacy Notice:</span>
+                                                        {String(cfg.privacyNotice)}
+                                                    </div>
+                                                )}
+
+                                                {qualityRules && (
+                                                    <div className="text-[11px] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700 space-y-1">
+                                                        <span className="font-bold text-gray-500 block mb-0.5">Quality / Anti-Fraud Rules (`qualityRules`):</span>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px] font-medium">
+                                                            {qualityRules.minCompletionTimeSeconds !== undefined && (
+                                                                <div>Min Completion Time: <strong>{qualityRules.minCompletionTimeSeconds}s</strong></div>
                                                             )}
-
-                                                            {/* Options */}
-                                                            {options.length > 0 && (
-                                                                <div className="space-y-1 pt-1">
-                                                                    <span className="text-[10px] font-bold uppercase text-gray-400">Options ({options.length}):</span>
-                                                                    <div className="flex flex-wrap gap-1">
-                                                                        {options.map((opt: any, optIdx: number) => {
-                                                                            const optText = typeof opt === 'string' ? opt : (opt?.text || opt?.label || opt?.value || JSON.stringify(opt));
-                                                                            return (
-                                                                                <span key={optIdx} className="px-2 py-1 rounded-lg bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-700 dark:text-gray-300 text-[11px]">
-                                                                                    {optIdx + 1}. {optText}
-                                                                                </span>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </div>
+                                                            {qualityRules.maxCompletionTimeSeconds !== undefined && (
+                                                                <div>Max Completion Time: <strong>{qualityRules.maxCompletionTimeSeconds}s</strong></div>
                                                             )}
-
-                                                            {/* Validation Rules */}
-                                                            {(validation.min !== undefined || validation.max !== undefined || validation.minLength !== undefined || validation.maxLength !== undefined || validation.minSelections !== undefined || validation.maxSelections !== undefined || q.minSelections !== undefined || q.maxSelections !== undefined) && (
-                                                                <div className="bg-gray-50 dark:bg-gray-900/60 p-2 rounded-lg border dark:border-gray-700 text-[11px] space-y-0.5">
-                                                                    <span className="font-bold uppercase text-gray-400 text-[9px] block">Validation Rules:</span>
-                                                                    <div className="flex flex-wrap gap-2 text-gray-700 dark:text-gray-300">
-                                                                        {(validation.minSelections !== undefined || q.minSelections !== undefined) && (
-                                                                            <span>Min Select: <strong>{validation.minSelections ?? q.minSelections}</strong></span>
-                                                                        )}
-                                                                        {(validation.maxSelections !== undefined || q.maxSelections !== undefined) && (
-                                                                            <span>Max Select: <strong>{validation.maxSelections ?? q.maxSelections}</strong></span>
-                                                                        )}
-                                                                        {validation.minLength !== undefined && (
-                                                                            <span>Min Length: <strong>{validation.minLength}</strong></span>
-                                                                        )}
-                                                                        {validation.maxLength !== undefined && (
-                                                                            <span>Max Length: <strong>{validation.maxLength}</strong></span>
-                                                                        )}
-                                                                        {validation.min !== undefined && (
-                                                                            <span>Min Value: <strong>{validation.min}</strong></span>
-                                                                        )}
-                                                                        {validation.max !== undefined && (
-                                                                            <span>Max Value: <strong>{validation.max}</strong></span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
+                                                            {qualityRules.enforceFastCompletion !== undefined && (
+                                                                <div>Enforce Fast Completion: <strong>{String(qualityRules.enforceFastCompletion)}</strong></div>
                                                             )}
-
-                                                            {/* Display conditions (showIf) & Branching (logicRules) */}
-                                                            {(showIf || logicRules) && (
-                                                                <div className="bg-blue-50/50 dark:bg-blue-950/25 p-2 rounded-lg border border-blue-100 dark:border-blue-900/30 text-[11px] space-y-1">
-                                                                    {showIf && (
-                                                                        <div>
-                                                                            <span className="font-bold text-blue-600 dark:text-blue-400 text-[9px] uppercase">Display Condition (Show If):</span>
-                                                                            <pre className="text-gray-700 dark:text-gray-300 font-mono text-[10px] whitespace-pre-wrap bg-white dark:bg-gray-900 p-1.5 rounded border dark:border-gray-700 mt-0.5 max-h-24 overflow-y-auto">
-                                                                                {typeof showIf === 'object' ? JSON.stringify(showIf, null, 2) : String(showIf)}
-                                                                            </pre>
-                                                                        </div>
-                                                                    )}
-                                                                    {logicRules && (
-                                                                        <div>
-                                                                            <span className="font-bold text-blue-600 dark:text-blue-400 text-[9px] uppercase">Branching / Logic Rules:</span>
-                                                                            <pre className="text-gray-700 dark:text-gray-300 font-mono text-[10px] whitespace-pre-wrap bg-white dark:bg-gray-900 p-1.5 rounded border dark:border-gray-700 mt-0.5 max-h-24 overflow-y-auto">
-                                                                                {typeof logicRules === 'object' ? JSON.stringify(logicRules, null, 2) : String(logicRules)}
-                                                                            </pre>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
+                                                            {qualityRules.enforceContradictoryResponses !== undefined && (
+                                                                <div>Contradictory Check: <strong>{String(qualityRules.enforceContradictoryResponses)}</strong></div>
                                                             )}
-
-                                                            {/* Attention & Consistency check details */}
-                                                            {(isAttention || isConsistency || q.expectedAnswer !== undefined || q.sourceQuestionId) && (
-                                                                <div className="bg-purple-50/60 dark:bg-purple-950/30 p-2 rounded-lg border border-purple-200 dark:border-purple-900/40 text-[11px] space-y-1">
-                                                                    <span className="font-bold text-purple-700 dark:text-purple-300 text-[9px] uppercase">Quality Check Configuration:</span>
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-gray-700 dark:text-gray-300">
-                                                                        {q.expectedAnswer !== undefined && (
-                                                                            <div>Expected Answer: <strong className="font-mono">{String(q.expectedAnswer)}</strong></div>
-                                                                        )}
-                                                                        {q.sourceQuestionId && (
-                                                                            <div>Source Question ID: <strong className="font-mono">{q.sourceQuestionId}</strong></div>
-                                                                        )}
-                                                                        {q.failureAction && (
-                                                                            <div>Failure Action: <strong className="font-mono">{q.failureAction}</strong></div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
+                                                            {qualityRules.enforceGibberish !== undefined && (
+                                                                <div>Gibberish Check: <strong>{String(qualityRules.enforceGibberish)}</strong></div>
+                                                            )}
+                                                            {qualityRules.requireAttentionChecks !== undefined && (
+                                                                <div>Require Attention Checks: <strong>{String(qualityRules.requireAttentionChecks)}</strong></div>
+                                                            )}
+                                                            {qualityRules.maxAttentionCheckFailures !== undefined && (
+                                                                <div>Max Attention Failures: <strong>{qualityRules.maxAttentionCheckFailures}</strong></div>
+                                                            )}
+                                                            {qualityRules.autoRejectOnFailure !== undefined && (
+                                                                <div>Auto-Reject on Failure: <strong>{String(qualityRules.autoRejectOnFailure)}</strong></div>
                                                             )}
                                                         </div>
-                                                    );
-                                                })}
+                                                        <pre className="font-mono text-[9px] whitespace-pre-wrap text-gray-500 dark:text-gray-400 mt-1 max-h-20 overflow-y-auto">
+                                                            {JSON.stringify(qualityRules, null, 2)}
+                                                        </pre>
+                                                    </div>
+                                                )}
+
+                                                {cfg.securityRules && (
+                                                    <div className="text-[11px] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700">
+                                                        <span className="font-bold text-gray-500 block mb-1">Security / Anti-Fraud Rules (`securityRules`):</span>
+                                                        <pre className="font-mono text-[10px] whitespace-pre-wrap text-gray-600 dark:text-gray-400 max-h-24 overflow-y-auto">
+                                                            {JSON.stringify(cfg.securityRules, null, 2)}
+                                                        </pre>
+                                                    </div>
+                                                )}
+
+                                                {cfg.globalLogicRules && (
+                                                    <div className="text-[11px] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700">
+                                                        <span className="font-bold text-gray-500 block mb-1">Global Logic Rules:</span>
+                                                        <pre className="font-mono text-[10px] whitespace-pre-wrap text-gray-600 dark:text-gray-400 max-h-24 overflow-y-auto">
+                                                            {typeof cfg.globalLogicRules === 'object' ? JSON.stringify(cfg.globalLogicRules, null, 2) : String(cfg.globalLogicRules)}
+                                                        </pre>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
-
-                                    {/* 7. Survey-wide Global Rules & Consent */}
-                                    {(selectedCampaign.surveyConfig.globalLogicRules || selectedCampaign.surveyConfig.securityRules || selectedCampaign.surveyConfig.defaultConsentText || selectedCampaign.surveyConfig.privacyNotice) && (
-                                        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border dark:border-gray-700 space-y-2 text-xs">
-                                            <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400 block">Global Survey Settings & Anti-Fraud Rules</span>
-                                            
-                                            {selectedCampaign.surveyConfig.defaultConsentText && (
-                                                <div className="text-[11px] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700">
-                                                    <span className="font-bold text-gray-500 block mb-0.5">Consent Text:</span>
-                                                    {selectedCampaign.surveyConfig.defaultConsentText}
-                                                </div>
-                                            )}
-
-                                            {selectedCampaign.surveyConfig.privacyNotice && (
-                                                <div className="text-[11px] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700">
-                                                    <span className="font-bold text-gray-500 block mb-0.5">Privacy Notice:</span>
-                                                    {selectedCampaign.surveyConfig.privacyNotice}
-                                                </div>
-                                            )}
-
-                                            {selectedCampaign.surveyConfig.securityRules && (
-                                                <div className="text-[11px] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700">
-                                                    <span className="font-bold text-gray-500 block mb-1">Security / Anti-Fraud Rules:</span>
-                                                    <pre className="font-mono text-[10px] whitespace-pre-wrap text-gray-600 dark:text-gray-400 max-h-24 overflow-y-auto">
-                                                        {JSON.stringify(selectedCampaign.surveyConfig.securityRules, null, 2)}
-                                                    </pre>
-                                                </div>
-                                            )}
-
-                                            {selectedCampaign.surveyConfig.globalLogicRules && (
-                                                <div className="text-[11px] text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded-lg border dark:border-gray-700">
-                                                    <span className="font-bold text-gray-500 block mb-1">Global Logic Rules:</span>
-                                                    <pre className="font-mono text-[10px] whitespace-pre-wrap text-gray-600 dark:text-gray-400 max-h-24 overflow-y-auto">
-                                                        {typeof selectedCampaign.surveyConfig.globalLogicRules === 'object' ? JSON.stringify(selectedCampaign.surveyConfig.globalLogicRules, null, 2) : String(selectedCampaign.surveyConfig.globalLogicRules)}
-                                                    </pre>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                );
+                            })()}
 
                             {selectedCampaign.reviewRequested && selectedCampaign.userReviewMessage && (
                                 <div className="bg-indigo-50 dark:bg-indigo-950/40 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 space-y-1.5">
