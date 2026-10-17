@@ -92,12 +92,16 @@ const processReversal = (balance, liability, deductionAmount, err) => {
         deductionToApply = balance;
     }
     
-    // Simulate DB update
+    // Simulate DB update (deduction)
     balance -= deductionToApply;
     
-    if (err && err.code === 11000) return { balance, liability, error: 'Duplicate' };
+    if (err && err.code === 11000) {
+        // Rollback on duplicate reversal
+        balance += deductionToApply;
+        return { balance, liability, error: 'Duplicate' };
+    }
     if (err) {
-        // Rollback
+        // Rollback on persistence failure
         balance += deductionToApply;
         return { balance, liability, error: 'PersistenceFailed' };
     }
@@ -112,9 +116,9 @@ assert.strictEqual(res.balance, 9.5, 'Assertion 3a passed: reversal balance dedu
 res = processReversal(12.5, 0, 3.0, { code: 500 });
 assert.strictEqual(res.balance, 12.5, 'Assertion 3b passed: reversal persistence failure rollback restores balance');
 
-// Simulate duplicate reversal key error 11000 (should NOT rollback)
+// Simulate duplicate reversal key error 11000 (should rollback)
 res = processReversal(12.5, 0, 3.0, { code: 11000 });
-assert.strictEqual(res.balance, 9.5, 'Assertion 3c passed: duplicate reversal error 11000 preserves deduction');
+assert.strictEqual(res.balance, 12.5, 'Assertion 3c passed: duplicate reversal error 11000 rolls back balance');
 console.log('✓ Test 3 Passed: Reversal Functional Simulation (Rollback, Duplicate Idempotency).');
 
 console.log('======================================================');

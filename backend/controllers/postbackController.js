@@ -524,6 +524,18 @@ export const handlePostback = async (req, res) => {
                 if (revTxErr.code === 11000) {
                     const existingTx = await Transaction.findOne({ idempotencyKey });
                     if (existingTx && existingTx.offerwallProvider === providerKey && existingTx.externalTransactionId === normalized.externalTxId) {
+                        // Rollback this request's deduction to prevent double-deduction
+                        try {
+                            await User.findByIdAndUpdate(user._id, {
+                                $inc: {
+                                    taskEarningsBalance: deductionToApply,
+                                    taskWalletBalance: deductionToApply,
+                                    chargebackLiabilityUSD: -liabilityToAdd
+                                }
+                            });
+                        } catch (rollbackErr) {
+                            console.error('[CRITICAL] Failed to rollback user balance after duplicate reversal detection:', rollbackErr.message);
+                        }
                         log.status = 'Duplicate';
                         log.errorMessage = 'Duplicate reversal transaction key verified';
                         try { await log.save(); } catch (_) {}
