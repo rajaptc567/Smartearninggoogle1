@@ -126,7 +126,7 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
             {/* Questions List */}
             <div className="space-y-6">
                 {visibleQuestions.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500 text-xs italic bg-slate-900/30 rounded-2xl border border-slate-900">
+                    <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-xs italic bg-slate-900/30 rounded-2xl border border-slate-900">
                         No visible questions to display. Add questions in the builder tab.
                     </div>
                 ) : (
@@ -313,7 +313,7 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                                                             #{rankIdx + 1}
                                                         </span>
                                                     ) : (
-                                                        <span className="text-[10px] text-slate-500 uppercase font-mono">
+                                                        <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">
                                                             Tap to rank
                                                         </span>
                                                     )}
@@ -331,7 +331,7 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                                         onChange={(e) => setResponses(prev => ({ ...prev, [q.id]: e.target.value }))}
                                         placeholder="Type your answer here..."
                                         maxLength={q.validation?.maxLength || 150}
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
                                     />
                                 )}
 
@@ -344,9 +344,9 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                                             onChange={(e) => setResponses(prev => ({ ...prev, [q.id]: e.target.value }))}
                                             placeholder="Write your feedback in detail..."
                                             maxLength={q.validation?.maxLength || 2000}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 leading-relaxed"
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-500 leading-relaxed"
                                         />
-                                        <div className="text-right text-[10px] text-slate-500 font-mono">
+                                        <div className="text-right text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                                             {(currentAnswer || '').length} / {q.validation?.maxLength || 2000} chars
                                         </div>
                                     </div>
@@ -405,7 +405,7 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                                                         className={`w-6 h-6 transition-colors ${
                                                             isFilled
                                                                 ? 'text-amber-400 fill-amber-400'
-                                                                : 'text-slate-700 hover:text-slate-500'
+                                                                : 'text-slate-700 dark:text-slate-400 hover:text-slate-500'
                                                         }`}
                                                     />
                                                 </button>
@@ -461,10 +461,10 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                                             min={q.validation?.minValue}
                                             max={q.validation?.maxValue}
                                             placeholder="Enter number..."
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 font-mono"
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-600 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono"
                                         />
                                         {(q.validation?.minValue !== undefined || q.validation?.maxValue !== undefined) && (
-                                            <div className="text-[10px] text-slate-500 font-mono">
+                                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                                                 Allowed range: {q.validation.minValue !== undefined ? q.validation.minValue : '-∞'} to {q.validation.maxValue !== undefined ? q.validation.maxValue : '+∞'}
                                             </div>
                                         )}

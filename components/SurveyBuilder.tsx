@@ -162,7 +162,7 @@ const BranchRulesList: React.FC<BranchRulesListProps> = ({
                                 }
 
                                 return (
-                                    <div key={cIdx} className="flex items-center gap-2 flex-wrap text-xs bg-gray-50/80 dark:bg-gray-750 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
+                                    <div key={cIdx} className="flex items-center gap-2 flex-wrap text-xs bg-gray-50/80 dark:bg-gray-700 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
                                         <span className="font-bold text-blue-600 w-12 shrink-0">
                                             {cIdx === 0 ? 'IF' : (rule.matchType === 'ANY' ? 'OR' : 'AND')}
                                         </span>
@@ -413,7 +413,7 @@ const BranchRulesList: React.FC<BranchRulesListProps> = ({
                         </div>
 
                         {/* THEN Action Row */}
-                        <div className="flex items-center gap-2 flex-wrap pt-2 border-t dark:border-gray-750">
+                        <div className="flex items-center gap-2 flex-wrap pt-2 border-t dark:border-gray-600">
                             <span className="font-bold text-blue-600 dark:text-blue-400 w-12 shrink-0">THEN</span>
                             <select
                                 value={rule.action}
@@ -496,7 +496,7 @@ const BranchRulesList: React.FC<BranchRulesListProps> = ({
                         </div>
 
                         {/* ELSE Action Row */}
-                        <div className="flex items-center gap-2 flex-wrap pt-1.5 border-t border-dashed dark:border-gray-750">
+                        <div className="flex items-center gap-2 flex-wrap pt-1.5 border-t border-dashed dark:border-gray-600">
                             <span className="font-bold text-gray-500 dark:text-gray-400 w-12 shrink-0">ELSE</span>
                             <select
                                 value={rule.elseAction || ''}
@@ -1250,7 +1250,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
 
             {/* TAB 1: FLOW MAP VIEW */}
             {activeTab === 'flow' && (
-                <div className="p-6 bg-gray-50 dark:bg-gray-850 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-6">
+                <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-6">
                     <div className="flex justify-between items-center pb-2 border-b dark:border-gray-700">
                         <div>
                             <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
@@ -1354,7 +1354,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
 
             {/* TAB 2: LOGIC VALIDATOR */}
             {activeTab === 'validator' && (
-                <div className="p-5 bg-gray-50 dark:bg-gray-850 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-5">
+                <div className="p-5 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-5">
                     <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3">
                         <div>
                             <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
@@ -1411,7 +1411,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
 
             {/* TAB 3: TEST SIMULATOR */}
             {activeTab === 'simulator' && (
-                <div className="p-6 bg-gray-50 dark:bg-gray-850 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-5">
+                <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-5">
                     <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3">
                         <div>
                             <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
@@ -1501,7 +1501,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                 <span className="font-bold text-blue-600">{currentQ.type}</span>
                                             </div>
 
-                                            <div className="p-3 bg-gray-50 dark:bg-gray-750 rounded-xl space-y-1">
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl space-y-1">
                                                 <h5 className="text-sm font-bold text-gray-900 dark:text-white">
                                                     {pipedTitle}
                                                 </h5>
