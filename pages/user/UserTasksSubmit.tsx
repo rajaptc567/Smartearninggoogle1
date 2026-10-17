@@ -45,6 +45,34 @@ export const getRemainingTimeString = (targetDate?: string | Date) => {
     return `${hoursTotal}h ${mins}m left`;
 };
 
+export const isImageProofValue = (item: any): boolean => {
+    if (!item) return false;
+    const val = typeof item.value === 'string' ? item.value.trim() : '';
+    if (!val) return false;
+
+    const isDataImg = val.startsWith('data:image/') || val.startsWith('data:');
+    const isHttp = /^https?:\/\//i.test(val);
+
+    if (item.type === 'screenshot' || item.type === 'file') {
+        return isDataImg || isHttp;
+    }
+
+    if (isDataImg) return true;
+
+    if (isHttp) {
+        return (
+            /\.(png|jpe?g|webp|gif|bmp|svg)($|\?)/i.test(val) ||
+            val.includes('.png') ||
+            val.includes('.jpg') ||
+            val.includes('.jpeg') ||
+            val.includes('firebase') ||
+            val.includes('cloudinary')
+        );
+    }
+
+    return false;
+};
+
 export const renderDisputeStageBadge = (sub: any) => {
     if (sub.isAutoApproved || sub.autoApproved || sub.approvalType === 'auto' || (sub.adminNotes && sub.adminNotes.toLowerCase().includes('auto-approved'))) {
         return (
@@ -6032,7 +6060,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             {sub.submittedProofs && Array.isArray(sub.submittedProofs) && sub.submittedProofs.length > 0 ? (
                                                                 <div className="flex flex-wrap gap-1">
                                                                     {sub.submittedProofs.map((item: any, idx: number) => {
-                                                                        const isImg = item.type === 'screenshot' || item.type === 'file' || (item.value && (item.value.startsWith('data:') || item.value.startsWith('http')));
+                                                                        const isImg = isImageProofValue(item);
                                                                         return (
                                                                             <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
                                                                                 {isImg ? '📸' : '✍'} {item.label}
@@ -7027,7 +7055,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 {selectedSubmissionForDetails.submittedProofs && Array.isArray(selectedSubmissionForDetails.submittedProofs) && selectedSubmissionForDetails.submittedProofs.length > 0 ? (
                                     <div className="space-y-3">
                                         {selectedSubmissionForDetails.submittedProofs.map((item: any, idx: number) => {
-                                            const isImage = item.type === 'screenshot' || (item.value && (item.value.startsWith('data:') || item.value.startsWith('http')));
+                                            const isImage = isImageProofValue(item);
                                             return (
                                                 <div key={item.id || idx} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border dark:border-gray-700/60">
                                                     <span className="text-[10px] uppercase font-bold text-blue-500 block">{item.label}</span>
@@ -7453,7 +7481,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         {sub.submittedProofs && Array.isArray(sub.submittedProofs) && sub.submittedProofs.length > 0 ? (
                                             <div className="space-y-3">
                                                 {sub.submittedProofs.map((item: any, idx: number) => {
-                                                    const isImage = item.type === 'file' || (typeof item.value === 'string' && (item.value.startsWith('http') && (item.value.includes('.png') || item.value.includes('.jpg') || item.value.includes('.jpeg') || item.value.includes('firebase') || item.value.includes('cloudinary'))));
+                                                    const isImage = isImageProofValue(item);
                                                     return (
                                                         <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-2xl border dark:border-gray-700/40 text-xs">
                                                             <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">{item.label || `Proof #${idx + 1}`}</span>
