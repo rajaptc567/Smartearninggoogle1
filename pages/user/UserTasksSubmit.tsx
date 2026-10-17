@@ -1393,11 +1393,6 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             return { key, displayName };
         });
 
-    // Append "Other" catch-all if not present
-    if (!availableCategories.some(c => c.key === 'other')) {
-        availableCategories.push({ key: 'other', displayName: 'Other' });
-    }
-
     // Auto-fallback if currently selected category was disabled
     useEffect(() => {
         if (!isSurveyGloballyEnabled && (category.toLowerCase().includes('survey') || category === 'Surveys & Feedback')) {
@@ -1410,16 +1405,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     const activePresetKey = Object.keys(presets).find(k => 
         k.toLowerCase() === category.toLowerCase() || 
         (presets[k]?.displayName && presets[k].displayName.toLowerCase() === category.toLowerCase())
-    ) || 'youtube';
+    );
 
     const isSurveyCampaign = isSurveyGloballyEnabled && (activePresetKey === 'survey' || category.toLowerCase().includes('survey'));
     
-    const activeCategoryConfig = presets[activePresetKey];
+    const activeCategoryConfig = activePresetKey ? presets[activePresetKey] : undefined;
     const activeWatchTimeTiers = (activeCategoryConfig?.watchTimeTiers || []).filter((tier: any) => tier.enabled !== false);
 
     // Get subType options dynamically for this category
     const availableSubTypes = Object.keys(activeCategoryConfig || {}).filter(k => {
         if (k === 'enabled' || k === 'displayName' || k === 'watchTimeTiers') return false;
+        if (activeCategoryConfig[k]?.enabled === false) return false;
         return typeof activeCategoryConfig[k] === 'object' && activeCategoryConfig[k] !== null;
     }).map(subKey => {
         const subConf = activeCategoryConfig[subKey];
@@ -1434,21 +1430,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             subKey === 'reelView' ? 'Watch Time' :
             subKey === 'reviews' ? 'Review' :
             subKey === 'simpleSignUp' ? 'Sign-up' :
-            subKey === 'activePlanPurchase' ? 'Other' :
+            subKey === 'activePlanPurchase' ? 'Plan Purchase' :
             subKey.charAt(0).toUpperCase() + subKey.slice(1)
         );
         return { key: subKey, displayName };
     });
 
     // If watchTimeTiers exists, add "Watch Time" option
-    const hasWatchTimeTiers = activeCategoryConfig?.watchTimeTiers && Array.isArray(activeCategoryConfig.watchTimeTiers);
+    const hasWatchTimeTiers = activeCategoryConfig?.watchTimeTiers && Array.isArray(activeCategoryConfig.watchTimeTiers) && activeCategoryConfig.watchTimeTiers.some((tier: any) => tier.enabled !== false);
     if (hasWatchTimeTiers && !availableSubTypes.some(s => s.displayName === 'Watch Time')) {
         availableSubTypes.push({ key: 'watchTimeTiers', displayName: 'Watch Time' });
-    }
-
-    // Append "Other" catch-all subtype if not present
-    if (!availableSubTypes.some(s => s.key === 'other')) {
-        availableSubTypes.push({ key: 'other', displayName: 'Other' });
     }
 
     // Fallback if currently selected category is not in available categories
@@ -1474,10 +1465,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     const prevCategoryRef = useRef<string>(category);
 
     useEffect(() => {
-        if (!availableSubTypes || availableSubTypes.length === 0) return;
-
         const categoryChanged = prevCategoryRef.current !== category;
         prevCategoryRef.current = category;
+
+        if (!availableSubTypes || availableSubTypes.length === 0) {
+            if (subType !== '') {
+                setSubType('');
+            }
+            return;
+        }
 
         const isCurrentSubTypeValid = availableSubTypes.some(
             s => s.displayName.toLowerCase() === subType.toLowerCase() || s.key.toLowerCase() === subType.toLowerCase()
@@ -1485,7 +1481,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
         if (!initialSyncRef.current || categoryChanged || !isCurrentSubTypeValid) {
             initialSyncRef.current = true;
-            const firstValidSub = availableSubTypes[0]?.displayName || 'Other';
+            const firstValidSub = availableSubTypes[0]?.displayName || availableSubTypes[0]?.key || '';
             if (subType !== firstValidSub) {
                 setSubType(firstValidSub);
             }
@@ -1507,7 +1503,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 }
                 const subConf = activeCategoryConfig[k];
                 const subDisp = subConf?.displayName || k;
-                return k.toLowerCase() === subType.toLowerCase() || subDisp.toLowerCase() === subType.toLowerCase() ||
+                return Boolean(subType) && (
+                    k.toLowerCase() === subType.toLowerCase() || subDisp.toLowerCase() === subType.toLowerCase() ||
                     (k === 'subscriber' && subType === 'Subscribe') ||
                     (k === 'likes' && subType === 'Like') ||
                     (k === 'comments' && subType === 'Comment') ||
@@ -1518,7 +1515,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                     (k === 'reelView' && subType === 'Watch Time') ||
                     (k === 'reviews' && subType === 'Review') ||
                     (k === 'simpleSignUp' && subType === 'Sign-up') ||
-                    (k === 'activePlanPurchase' && subType === 'Other');
+                    (k === 'activePlanPurchase' && (subType === 'Other' || subType === 'Plan Purchase'))
+                );
             });
 
             if (subKey === 'watchTimeTiers') {
@@ -1809,7 +1807,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     ) => {
         if (!currentUser) return;
 
-        const pTitle = finalTitleArg || (title.trim() ? title.trim() : `${category} - ${subType}`);
+        const pTitle = finalTitleArg || (title.trim() ? title.trim() : (subType ? `${category} - ${subType}` : category));
         const pReqText = requireTextProofArg !== undefined ? requireTextProofArg : requiredProofsList.some(p => p.type === 'text');
         const pTextInst = textProofInstructionArg !== undefined ? textProofInstructionArg : requiredProofsList.filter(p => p.type === 'text').map(p => p.instruction).join(' | ') || '';
         const pReqUser = requireUsernameArg !== undefined ? requireUsernameArg : requiredProofsList.some(p => p.type === 'username');
@@ -2852,8 +2850,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             const newPresetKey = Object.keys(presets).find(k => 
                                                 k.toLowerCase() === catVal.toLowerCase() || 
                                                 (presets[k]?.displayName && presets[k].displayName.toLowerCase() === catVal.toLowerCase())
-                                            ) || 'youtube';
-                                            const newCategoryConfig = presets[newPresetKey];
+                                            );
+                                            const newCategoryConfig = newPresetKey ? presets[newPresetKey] : undefined;
                                             if (newCategoryConfig) {
                                                 const newSubKeys = Object.keys(newCategoryConfig).filter(k => {
                                                     if (k === 'enabled' || k === 'displayName' || k === 'watchTimeTiers') return false;
@@ -2862,14 +2860,27 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 });
                                                 if (newSubKeys.length > 0) {
                                                     const firstSubPreset = newCategoryConfig[newSubKeys[0]];
-                                                    setSubType(firstSubPreset?.displayName || newSubKeys[0].charAt(0).toUpperCase() + newSubKeys[0].slice(1));
-                                                } else if (newCategoryConfig.watchTimeTiers && newCategoryConfig.watchTimeTiers.some((t: any) => t.enabled !== false)) {
+                                                    setSubType(firstSubPreset?.displayName || (
+                                                        newSubKeys[0] === 'subscriber' ? 'Subscribe' :
+                                                        newSubKeys[0] === 'likes' ? 'Like' :
+                                                        newSubKeys[0] === 'comments' ? 'Comment' :
+                                                        newSubKeys[0] === 'likeFollow' ? 'Follow' :
+                                                        newSubKeys[0] === 'videoLike' ? 'Like' :
+                                                        newSubKeys[0] === 'profileFollow' ? 'Follow' :
+                                                        newSubKeys[0] === 'postLike' ? 'Like' :
+                                                        newSubKeys[0] === 'reelView' ? 'Watch Time' :
+                                                        newSubKeys[0] === 'reviews' ? 'Review' :
+                                                        newSubKeys[0] === 'simpleSignUp' ? 'Sign-up' :
+                                                        newSubKeys[0] === 'activePlanPurchase' ? 'Plan Purchase' :
+                                                        newSubKeys[0].charAt(0).toUpperCase() + newSubKeys[0].slice(1)
+                                                    ));
+                                                } else if (newCategoryConfig.watchTimeTiers && Array.isArray(newCategoryConfig.watchTimeTiers) && newCategoryConfig.watchTimeTiers.some((t: any) => t.enabled !== false)) {
                                                     setSubType('Watch Time');
                                                 } else {
-                                                    setSubType('Other');
+                                                    setSubType('');
                                                 }
                                             } else {
-                                                setSubType('Other');
+                                                setSubType('');
                                             }
                                         }}
                                         className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -2885,11 +2896,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <select 
                                         value={subType} 
                                         onChange={(e) => setSubType(e.target.value)}
-                                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        disabled={availableSubTypes.length === 0}
+                                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {availableSubTypes.map(sub => (
-                                            <option key={sub.key} value={sub.displayName}>{sub.displayName}</option>
-                                        ))}
+                                        {availableSubTypes.length === 0 ? (
+                                            <option value="">No subcategories configured</option>
+                                        ) : (
+                                            availableSubTypes.map(sub => (
+                                                <option key={sub.key} value={sub.displayName}>{sub.displayName}</option>
+                                            ))
+                                        )}
                                     </select>
                                 </div>
                             </div>
