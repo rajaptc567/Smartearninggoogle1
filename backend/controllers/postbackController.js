@@ -17,50 +17,107 @@ const getClientIp = (req) => {
 };
 
 /**
- * Signature verification utility for various provider hashing schemes
+ * Constant-time string comparison to prevent timing attacks
+ */
+const safeTimingCompare = (a, b) => {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const bufA = Buffer.from(a.trim().toLowerCase(), 'utf8');
+    const bufB = Buffer.from(b.trim().toLowerCase(), 'utf8');
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+};
+
+/**
+ * Mask sensitive credentials and secrets from logs and diagnostic output
+ */
+const maskSensitiveData = (data) => {
+    if (!data || typeof data !== 'object') return data;
+    if (Array.isArray(data)) {
+        return data.map(item => maskSensitiveData(item));
+    }
+    const sanitized = {};
+    for (const [key, value] of Object.entries(data)) {
+        const lowerKey = key.toLowerCase().replace(/[-_]/g, '');
+        if (
+            lowerKey.includes('secret') ||
+            lowerKey.includes('password') ||
+            lowerKey.includes('apikey') ||
+            lowerKey === 'token' ||
+            lowerKey === 'auth' ||
+            lowerKey === 'key'
+        ) {
+            sanitized[key] = '***REDACTED***';
+        } else if (value && typeof value === 'object') {
+            sanitized[key] = maskSensitiveData(value);
+        } else {
+            sanitized[key] = value;
+        }
+    }
+    return sanitized;
+};
+
+/**
+ * Signature verification utility for various provider hashing schemes.
+ * Fails closed on all unhandled, misconfigured, or missing credentials.
  */
 const verifySignature = (provider, params, clientIp) => {
-    if (!provider.requireSignature || provider.signatureType === 'none') {
+    // Fail closed: requireSignature: true with signatureType: 'none' must not pass
+    if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
+        return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
+    }
+
+    // Signature not required by configuration
+    if (!provider.requireSignature) {
+        if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
+            const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+            if (!ipMatches) {
+                return { valid: false, error: 'Client IP not in whitelist' };
+            }
+        }
         return { valid: true };
     }
 
     const secret = provider.secretKey || provider.postbackKey || '';
 
-    // If IP whitelist check is requested
-    if (provider.signatureType === 'ip_only' || (provider.ipWhitelist && provider.ipWhitelist.length > 0)) {
-        if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
-            const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
-            if (!ipMatches) {
-                return { valid: false, error: `Client IP ${clientIp} not in whitelist` };
-            }
+    // If IP whitelist check is requested as only verification
+    if (provider.signatureType === 'ip_only') {
+        if (!provider.ipWhitelist || provider.ipWhitelist.length === 0) {
+            return { valid: false, error: 'IP whitelist verification required but no IP whitelist configured' };
         }
-        if (provider.signatureType === 'ip_only') {
-            return { valid: true };
+        const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+        if (!ipMatches) {
+            return { valid: false, error: 'Client IP not in whitelist' };
         }
-    }
-
-    // P4: If signature is required, secret must be configured; fail closed if missing
-    if (!secret && !provider.testMode) {
-        return { valid: false, error: 'Provider secret key is not configured; failing closed' };
-    }
-
-    if (provider.testMode && !secret) {
         return { valid: true };
     }
 
+    // Enforce IP whitelist alongside signature if configured
+    if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
+        const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+        if (!ipMatches) {
+            return { valid: false, error: 'Client IP not in whitelist' };
+        }
+    }
+
+    // Fail closed: secret must be configured when signature is required
+    if (!secret) {
+        return { valid: false, error: 'Provider secret key is not configured; failing closed' };
+    }
+
     // Provider-specific verification algorithms
-    const key = provider.providerKey.toLowerCase();
+    const key = provider.providerKey?.toLowerCase() || '';
 
     try {
         if (key === 'torox') {
-            // Torox md5: md5(user_id + "-" + id + "-" + secret_key)
+            // Torox md5: md5(oid + "-" + user_id + "-" + placement_key)
             const sig = params.sig || params.signature || '';
             const userId = params.user_id || params.uid || '';
-            const txId = params.id || params.trans_id || '';
+            const oid = params.oid || params.offer_id || '';
             if (!sig) return { valid: false, error: 'Torox signature missing' };
-            const expected = crypto.createHash('md5').update(`${userId}-${txId}-${secret}`).digest('hex');
-            if (sig.toLowerCase() !== expected.toLowerCase()) {
-                return { valid: false, expected, received: sig, error: 'Torox signature mismatch' };
+            if (!userId || !oid) return { valid: false, error: 'Torox required parameter missing' };
+            const expected = crypto.createHash('md5').update(`${oid}-${userId}-${secret}`).digest('hex');
+            if (!safeTimingCompare(sig, expected)) {
+                return { valid: false, error: 'Torox signature mismatch' };
             }
             return { valid: true };
         }
@@ -70,10 +127,10 @@ const verifySignature = (provider, params, clientIp) => {
             const transId = params.trans_id || params.transaction_id || '';
             if (!hash) return { valid: false, error: 'CPX signature missing' };
             const expected = crypto.createHash('md5').update(`${transId}-${secret}`).digest('hex');
-            if (hash.toLowerCase() !== expected.toLowerCase()) {
+            if (!safeTimingCompare(hash, expected)) {
                 const altExpected = crypto.createHash('md5').update(`${params.ext_user_id || ''}-${secret}`).digest('hex');
-                if (hash.toLowerCase() !== altExpected.toLowerCase()) {
-                    return { valid: false, expected, received: hash, error: 'CPX signature mismatch' };
+                if (!safeTimingCompare(hash, altExpected)) {
+                    return { valid: false, error: 'CPX signature mismatch' };
                 }
             }
             return { valid: true };
@@ -86,22 +143,21 @@ const verifySignature = (provider, params, clientIp) => {
             const reward = params.reward || '';
             if (!signature) return { valid: false, error: 'Wannads signature missing' };
             const expected = crypto.createHash('md5').update(`${subId}${transId}${reward}${secret}`).digest('hex');
-            if (signature.toLowerCase() !== expected.toLowerCase()) {
-                return { valid: false, expected, received: signature, error: 'Wannads signature mismatch' };
+            if (!safeTimingCompare(signature, expected)) {
+                return { valid: false, error: 'Wannads signature mismatch' };
             }
             return { valid: true };
         }
 
         if (key === 'revlum') {
             const signature = params.signature || params.sig || '';
-            const transId = params.transId || params.transaction_id || '';
+            const transId = params.transId || params.trans_id || params.transaction_id || '';
             const subId = params.subId || params.user_id || '';
             const reward = params.reward || params.payout || '';
             if (!signature) return { valid: false, error: 'Revlum signature missing' };
-            const hmacExpected = crypto.createHmac('sha256', secret).update(`${transId}${subId}${reward}`).digest('hex');
-            const sha256Expected = crypto.createHash('sha256').update(`${transId}${subId}${reward}${secret}`).digest('hex');
-            if (signature.toLowerCase() !== hmacExpected.toLowerCase() && signature.toLowerCase() !== sha256Expected.toLowerCase()) {
-                return { valid: false, expected: hmacExpected, received: signature, error: 'Revlum signature mismatch' };
+            const expected = crypto.createHash('md5').update(`${subId}${transId}${reward}${secret}`).digest('hex');
+            if (!safeTimingCompare(signature, expected)) {
+                return { valid: false, error: 'Revlum signature mismatch' };
             }
             return { valid: true };
         }
@@ -109,13 +165,13 @@ const verifySignature = (provider, params, clientIp) => {
         if (key === 'monlix') {
             const secretKeyReceived = params.secretKey || params.secret || '';
             const signature = params.signature || '';
-            if (secretKeyReceived && secretKeyReceived === secret) {
+            if (secretKeyReceived && safeTimingCompare(secretKeyReceived, secret)) {
                 return { valid: true };
             }
             if (signature) {
                 const expected = crypto.createHash('sha256').update(`${params.userId || ''}${params.transactionId || ''}${secret}`).digest('hex');
-                if (signature.toLowerCase() !== expected.toLowerCase()) {
-                    return { valid: false, expected, received: signature, error: 'Monlix signature mismatch' };
+                if (!safeTimingCompare(signature, expected)) {
+                    return { valid: false, error: 'Monlix signature mismatch' };
                 }
                 return { valid: true };
             }
@@ -123,19 +179,20 @@ const verifySignature = (provider, params, clientIp) => {
         }
 
         if (key === 'lootably') {
-            const signature = params.signature || '';
+            const signature = params.signature || params.sig || params.hash || '';
             const userID = params.userID || params.user_id || '';
             const ip = params.ip || clientIp || '';
             const revenue = params.revenue || params.pointValue || '';
+            const currencyReward = params.currencyReward || params.payout || params.reward || '';
             if (!signature) return { valid: false, error: 'Lootably signature missing' };
-            const expected = crypto.createHash('sha256').update(`${userID}${ip}${revenue}${secret}`).digest('hex');
-            if (signature.toLowerCase() !== expected.toLowerCase()) {
-                return { valid: false, expected, received: signature, error: 'Lootably signature mismatch' };
+            const expected = crypto.createHash('sha256').update(`${userID}${ip}${revenue}${currencyReward}${secret}`).digest('hex');
+            if (!safeTimingCompare(signature, expected)) {
+                return { valid: false, error: 'Lootably signature mismatch' };
             }
             return { valid: true };
         }
 
-        if (key === 'bitlabs') {
+        if (key === 'bitlabs' || key === 'bitlabs_surveys') {
             const hash = params.hash || params.signature || '';
             const val = params.val || params.reward || '';
             const uid = params.uid || params.user_id || '';
@@ -143,20 +200,20 @@ const verifySignature = (provider, params, clientIp) => {
             if (!hash) return { valid: false, error: 'BitLabs signature missing' };
             const sha1Expected = crypto.createHmac('sha1', secret).update(`${val}${uid}${tx}`).digest('hex');
             const sha256Expected = crypto.createHmac('sha256', secret).update(`${val}${uid}${tx}`).digest('hex');
-            if (hash.toLowerCase() !== sha1Expected.toLowerCase() && hash.toLowerCase() !== sha256Expected.toLowerCase()) {
-                return { valid: false, expected: sha256Expected, received: hash, error: 'BitLabs signature mismatch' };
+            if (!safeTimingCompare(hash, sha1Expected) && !safeTimingCompare(hash, sha256Expected)) {
+                return { valid: false, error: 'BitLabs signature mismatch' };
             }
             return { valid: true };
         }
 
-        // Generic HMAC-SHA256, MD5, or SHA256 verification
+        // Generic cryptographic verification logic
         if (provider.signatureType === 'hmac_sha256') {
             const received = params.signature || params.sig || params.hash || '';
             if (!received) return { valid: false, error: 'HMAC-SHA256 signature missing' };
             const payload = params.trans_id || params.txid || params.id || params.transaction_id || '';
             const expected = crypto.createHmac('sha256', secret).update(String(payload)).digest('hex');
-            if (received.toLowerCase() !== expected.toLowerCase()) {
-                return { valid: false, expected, received, error: 'HMAC-SHA256 signature mismatch' };
+            if (!safeTimingCompare(received, expected)) {
+                return { valid: false, error: 'HMAC-SHA256 signature mismatch' };
             }
             return { valid: true };
         } else if (provider.signatureType === 'md5') {
@@ -164,8 +221,8 @@ const verifySignature = (provider, params, clientIp) => {
             if (!received) return { valid: false, error: 'MD5 signature missing' };
             const payload = `${params.user_id || params.uid || params.subId || ''}-${params.id || params.txid || params.trans_id || ''}-${secret}`;
             const expected = crypto.createHash('md5').update(payload).digest('hex');
-            if (received.toLowerCase() !== expected.toLowerCase()) {
-                return { valid: false, expected, received, error: 'MD5 signature mismatch' };
+            if (!safeTimingCompare(received, expected)) {
+                return { valid: false, error: 'MD5 signature mismatch' };
             }
             return { valid: true };
         } else if (provider.signatureType === 'sha256') {
@@ -173,16 +230,28 @@ const verifySignature = (provider, params, clientIp) => {
             if (!received) return { valid: false, error: 'SHA256 signature missing' };
             const payload = `${params.user_id || params.uid || params.subId || ''}-${params.id || params.txid || params.trans_id || ''}-${secret}`;
             const expected = crypto.createHash('sha256').update(payload).digest('hex');
-            if (received.toLowerCase() !== expected.toLowerCase()) {
-                return { valid: false, expected, received, error: 'SHA256 signature mismatch' };
+            if (!safeTimingCompare(received, expected)) {
+                return { valid: false, error: 'SHA256 signature mismatch' };
             }
             return { valid: true };
+        } else if (provider.signatureType === 'sha1') {
+            const received = params.signature || params.sig || params.hash || '';
+            if (!received) return { valid: false, error: 'SHA1 signature missing' };
+            const payload = `${params.user_id || params.uid || params.subId || ''}-${params.id || params.txid || params.trans_id || ''}-${secret}`;
+            const expected = crypto.createHash('sha1').update(payload).digest('hex');
+            if (!safeTimingCompare(received, expected)) {
+                return { valid: false, error: 'SHA1 signature mismatch' };
+            }
+            return { valid: true };
+        } else if (provider.signatureType === 'custom') {
+            return { valid: false, error: 'Custom signature verification not configured or unsupported' };
         }
-    } catch (err) {
-        return { valid: false, error: err.message };
-    }
 
-    return { valid: true };
+        // Fail closed for unsupported signature types - NEVER fall through to { valid: true }
+        return { valid: false, error: `Unsupported signature type: '${provider.signatureType}'` };
+    } catch (err) {
+        return { valid: false, error: 'Signature verification processing error' };
+    }
 };
 
 /**
@@ -195,8 +264,8 @@ const normalizePostbackParams = (providerKey, rawParams) => {
     // Extract User ID / SubID
     let rawUserId = p.user_id || p.userId || p.uid || p.subId || p.subid || p.subid1 || p.sid || p.s1 || p.ext_user_id || p.userID || p.custom_data || p.app_uid || '';
 
-    // Extract Transaction ID
-    let rawTxId = p.id || p.trans_id || p.transId || p.transaction_id || p.transactionId || p.tx_id || p.txid || p.txn_id || p.transactionID || p.event_id || p.eventId || p.rewardId || p.request_uuid || p.oid || '';
+    // Extract Transaction ID (oid is strictly Offer ID, not conversion/transaction ID)
+    let rawTxId = p.id || p.trans_id || p.transId || p.transaction_id || p.transactionId || p.tx_id || p.txid || p.txn_id || p.transactionID || p.event_id || p.eventId || p.rewardId || p.request_uuid || '';
 
     // Extract Reward Amount (USD)
     let rawAmount = p.amount || p.reward || p.payout || p.pointValue || p.amount_usd || p.amount_local || p.rate || p.pts || p.val || p.rewardAmount || p.currency_amount || p.rewards || p.reward_amount || p.points || 0;
@@ -218,14 +287,14 @@ const normalizePostbackParams = (providerKey, rawParams) => {
 
     return {
         userId: String(rawUserId).trim(),
-        externalTxId: String(rawTxId).trim() || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        externalTxId: String(rawTxId).trim(),
         rewardUSD: rewardNum,
         rawReward: Number(rawAmount) || 0,
         rawCurrency: p.currency || 'USD',
         offerId: String(p.offer_id || p.oid || p.offerId || p.campaign_id || '').trim(),
         offerName: String(p.o_name || p.offer_name || p.offerName || p.campaign_name || p.reward_name || `${providerKey} reward`).trim(),
         isReversal,
-        signature: p.sig || p.signature || p.hash || p.secretKey || ''
+        signature: String(p.sig || p.signature || p.hash || '').trim()
     };
 };
 
@@ -263,6 +332,18 @@ export const handlePostback = async (req, res) => {
 
     const normalized = normalizePostbackParams(providerKey, rawParams);
 
+    // Fail closed if external transaction ID is missing - preserves strict idempotency
+    if (!normalized.externalTxId) {
+        return res.status(400).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'MISSING_TRANSACTION_ID');
+    }
+
+    // Mask sensitive credentials from log persistence
+    const sanitizedQueryParams = maskSensitiveData(req.query);
+    const sanitizedRawBody = maskSensitiveData(req.body);
+    const signatureToLog = (normalized.signature && provider.secretKey && normalized.signature === provider.secretKey)
+        ? '***REDACTED***'
+        : normalized.signature;
+
     // Create initial postback log record
     const log = new OfferwallPostbackLog({
         provider: providerKey,
@@ -275,14 +356,14 @@ export const handlePostback = async (req, res) => {
         offerName: normalized.offerName,
         isReversal: normalized.isReversal,
         clientIp,
-        queryParams: req.query,
-        rawBody: req.body,
+        queryParams: sanitizedQueryParams,
+        rawBody: sanitizedRawBody,
         rawHeaders: {
             'user-agent': req.headers['user-agent'],
             'content-type': req.headers['content-type'],
             'x-forwarded-for': req.headers['x-forwarded-for']
         },
-        signature: normalized.signature
+        signature: signatureToLog
     });
 
     try {
@@ -695,19 +776,60 @@ export const simulatePostback = async (req, res) => {
         }
 
         const { providerKey, userId, amount = 1.0, isReversal = false, offerName = 'Test Survey / Offer' } = req.body;
-        
+        const normalizedKey = String(providerKey || '').toLowerCase();
+        const provider = await OfferwallProvider.findOne({ providerKey: normalizedKey });
+        if (!provider) {
+            return res.status(404).json({ success: false, error: `Provider '${providerKey}' not found` });
+        }
+
+        const simTxId = `sim_${Date.now()}`;
+        const queryParams = {
+            user_id: userId,
+            id: simTxId,
+            trans_id: simTxId,
+            amount: amount,
+            status: isReversal ? 2 : 1,
+            o_name: offerName
+        };
+
+        const secret = provider.secretKey || provider.postbackKey || '';
+        if (provider.requireSignature && secret) {
+            const pKey = provider.providerKey.toLowerCase();
+            if (pKey === 'torox') {
+                const simOid = `offer_${Date.now()}`;
+                queryParams.oid = simOid;
+                queryParams.sig = crypto.createHash('md5').update(`${simOid}-${userId}-${secret}`).digest('hex');
+            } else if (pKey === 'cpx_research') {
+                queryParams.hash = crypto.createHash('md5').update(`${simTxId}-${secret}`).digest('hex');
+            } else if (pKey === 'wannads') {
+                queryParams.signature = crypto.createHash('md5').update(`${userId}${simTxId}${amount}${secret}`).digest('hex');
+            } else if (pKey === 'revlum') {
+                queryParams.signature = crypto.createHmac('sha256', secret).update(`${simTxId}${userId}${amount}`).digest('hex');
+            } else if (pKey === 'monlix') {
+                queryParams.signature = crypto.createHash('sha256').update(`${userId}${simTxId}${secret}`).digest('hex');
+            } else if (pKey === 'lootably') {
+                queryParams.signature = crypto.createHash('sha256').update(`${userId}127.0.0.1${amount}${secret}`).digest('hex');
+            } else if (pKey === 'bitlabs' || pKey === 'bitlabs_surveys') {
+                queryParams.signature = crypto.createHmac('sha256', secret).update(`${amount}${userId}${simTxId}`).digest('hex');
+            } else if (provider.signatureType === 'hmac_sha256') {
+                queryParams.signature = crypto.createHmac('sha256', secret).update(String(simTxId)).digest('hex');
+            } else if (provider.signatureType === 'md5') {
+                queryParams.signature = crypto.createHash('md5').update(`${userId}-${simTxId}-${secret}`).digest('hex');
+            } else if (provider.signatureType === 'sha256') {
+                queryParams.signature = crypto.createHash('sha256').update(`${userId}-${simTxId}-${secret}`).digest('hex');
+            } else if (provider.signatureType === 'sha1') {
+                queryParams.signature = crypto.createHash('sha1').update(`${userId}-${simTxId}-${secret}`).digest('hex');
+            }
+        }
+
+        const simIp = (provider.ipWhitelist && provider.ipWhitelist.length > 0) ? provider.ipWhitelist[0] : '127.0.0.1';
+
         const testReq = {
             params: { provider: providerKey },
-            query: {
-                user_id: userId,
-                trans_id: `sim_${Date.now()}`,
-                amount: amount,
-                status: isReversal ? 2 : 1,
-                o_name: offerName
-            },
+            query: queryParams,
             body: {},
             headers: { 'user-agent': 'SmartEXN Postback Simulator' },
-            socket: { remoteAddress: '127.0.0.1' }
+            socket: { remoteAddress: simIp }
         };
 
         const testRes = {
@@ -808,6 +930,7 @@ export const seedVerifiedNetworks = async () => {
             group: 'Group A: Multi-Task / Offerwall',
             enabled: true,
             iframeUrlTemplate: 'https://adscendmedia.com/adwall/publisher/{appId}/profile/default?subid1={userId}',
+            requireSignature: false,
             signatureType: 'none',
             technicalReadinessScore: 100,
             approvalLikelihoodScore: 'High',
@@ -868,6 +991,7 @@ export const seedVerifiedNetworks = async () => {
             group: 'Group A: Multi-Task / Offerwall',
             enabled: true,
             iframeUrlTemplate: 'https://fastlink.cpalead.com/{appId}?subid={userId}',
+            requireSignature: false,
             signatureType: 'none',
             technicalReadinessScore: 100,
             approvalLikelihoodScore: 'High',
@@ -928,6 +1052,7 @@ export const seedVerifiedNetworks = async () => {
             group: 'Group A: Multi-Task / Offerwall',
             enabled: false,
             iframeUrlTemplate: 'https://adbreakmedia.com/wall?key={appId}&uid={userId}',
+            requireSignature: false,
             signatureType: 'none',
             technicalReadinessScore: 90,
             approvalLikelihoodScore: 'Moderate',
@@ -1052,6 +1177,7 @@ export const seedVerifiedNetworks = async () => {
             group: 'Group B: Survey Routers',
             enabled: false,
             iframeUrlTemplate: 'https://rapidreach.io/wall?key={appId}&uid={userId}',
+            requireSignature: false,
             signatureType: 'none',
             technicalReadinessScore: 90,
             approvalLikelihoodScore: 'Moderate',
@@ -1135,6 +1261,7 @@ export const seedVerifiedNetworks = async () => {
             group: 'Group D: Micro-Tasks & Crowdsourcing',
             enabled: false,
             iframeUrlTemplate: 'https://www.mturk.com/worker',
+            requireSignature: false,
             signatureType: 'none',
             technicalReadinessScore: 90,
             approvalLikelihoodScore: 'Requires AWS Requester Account',
@@ -1150,6 +1277,7 @@ export const seedVerifiedNetworks = async () => {
             group: 'Group D: Micro-Tasks & Crowdsourcing',
             enabled: false,
             iframeUrlTemplate: 'https://hivemicro.com',
+            requireSignature: false,
             signatureType: 'none',
             technicalReadinessScore: 90,
             approvalLikelihoodScore: 'Requires Partner Onboarding',
