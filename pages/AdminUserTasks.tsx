@@ -1963,23 +1963,23 @@ const AdminUserTasks: React.FC = () => {
                                                             {qualityRules.maxCompletionTimeSeconds !== undefined && (
                                                                 <div>Max Completion Time: <strong>{qualityRules.maxCompletionTimeSeconds}s</strong></div>
                                                             )}
-                                                            {qualityRules.enforceFastCompletion !== undefined && (
-                                                                <div>Enforce Fast Completion: <strong>{String(qualityRules.enforceFastCompletion)}</strong></div>
+                                                            {(qualityRules.flagFastCompletion ?? qualityRules.enforceFastCompletion) !== undefined && (
+                                                                <div>Flag Fast Completion: <strong>{String((qualityRules.flagFastCompletion ?? qualityRules.enforceFastCompletion))}</strong></div>
                                                             )}
-                                                            {qualityRules.enforceContradictoryResponses !== undefined && (
-                                                                <div>Contradictory Check: <strong>{String(qualityRules.enforceContradictoryResponses)}</strong></div>
+                                                            {(qualityRules.flagContradictoryResponses ?? qualityRules.enforceContradictoryResponses) !== undefined && (
+                                                                <div>Flag Contradictory: <strong>{String((qualityRules.flagContradictoryResponses ?? qualityRules.enforceContradictoryResponses))}</strong></div>
                                                             )}
-                                                            {qualityRules.enforceGibberish !== undefined && (
-                                                                <div>Gibberish Check: <strong>{String(qualityRules.enforceGibberish)}</strong></div>
+                                                            {(qualityRules.flagGibberish ?? qualityRules.enforceGibberish) !== undefined && (
+                                                                <div>Flag Gibberish: <strong>{String((qualityRules.flagGibberish ?? qualityRules.enforceGibberish))}</strong></div>
                                                             )}
-                                                            {qualityRules.requireAttentionChecks !== undefined && (
-                                                                <div>Require Attention Checks: <strong>{String(qualityRules.requireAttentionChecks)}</strong></div>
+                                                            {(qualityRules.attentionCheckRequired ?? qualityRules.requireAttentionChecks) !== undefined && (
+                                                                <div>Attention Check Required: <strong>{String((qualityRules.attentionCheckRequired ?? qualityRules.requireAttentionChecks))}</strong></div>
                                                             )}
-                                                            {qualityRules.maxAttentionCheckFailures !== undefined && (
-                                                                <div>Max Attention Failures: <strong>{qualityRules.maxAttentionCheckFailures}</strong></div>
+                                                            {(qualityRules.maxAttentionCheckFails ?? qualityRules.maxAttentionCheckFailures) !== undefined && (
+                                                                <div>Max Attention Fails: <strong>{(qualityRules.maxAttentionCheckFails ?? qualityRules.maxAttentionCheckFailures)}</strong></div>
                                                             )}
-                                                            {qualityRules.autoRejectOnFailure !== undefined && (
-                                                                <div>Auto-Reject on Failure: <strong>{String(qualityRules.autoRejectOnFailure)}</strong></div>
+                                                            {(qualityRules.autoRejectOnFail ?? qualityRules.autoRejectOnFailure) !== undefined && (
+                                                                <div>Auto-Reject on Fail: <strong>{String((qualityRules.autoRejectOnFail ?? qualityRules.autoRejectOnFailure))}</strong></div>
                                                             )}
                                                         </div>
                                                         <pre className="font-mono text-[9px] whitespace-pre-wrap text-gray-500 dark:text-gray-400 mt-1 max-h-20 overflow-y-auto">
