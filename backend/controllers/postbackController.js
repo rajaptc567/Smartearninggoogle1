@@ -1014,7 +1014,7 @@ export const createToroxSession = async (req, res) => {
             return res.status(502).json({ success: false, error: 'Malformed response received from Torox session API' });
         }
 
-        // 6. Validate that Torox returns ok: true and a valid wall_url
+        // 6. Validate that Torox returns ok: true and a valid wall_url string
         if (!toroxRes.ok || !data || data.ok !== true || !data.wall_url || typeof data.wall_url !== 'string') {
             const safeError = (data && (typeof data.error === 'string' ? data.error : data.message)) || `Torox session error (HTTP ${toroxRes.status})`;
             return res.status(502).json({
@@ -1023,7 +1023,30 @@ export const createToroxSession = async (req, res) => {
             });
         }
 
-        // 7. Return only wall_url to the authenticated frontend; never expose secrets
+        // Strict URL validation: Must parse cleanly, require HTTPS, exact hostname wall.torox.io, and disallow embedded credentials
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(data.wall_url);
+        } catch {
+            return res.status(502).json({
+                success: false,
+                error: 'Malformed wall_url returned by Torox session API'
+            });
+        }
+
+        if (
+            parsedUrl.protocol !== 'https:' ||
+            parsedUrl.hostname.toLowerCase() !== 'wall.torox.io' ||
+            parsedUrl.username ||
+            parsedUrl.password
+        ) {
+            return res.status(502).json({
+                success: false,
+                error: 'Invalid or untrusted wall_url returned by Torox session API'
+            });
+        }
+
+        // 7. Return only validated wall_url to the authenticated frontend; never expose secrets
         return res.status(200).json({
             success: true,
             wall_url: data.wall_url
