@@ -17,7 +17,7 @@ const getClientIp = (req) => {
 };
 
 /**
- * Constant-time string comparison to prevent timing attacks
+ * Constant-time string comparison for normalized hex signatures (case/whitespace insensitive)
  */
 const safeTimingCompare = (a, b) => {
     if (typeof a !== 'string' || typeof b !== 'string') return false;
@@ -28,7 +28,18 @@ const safeTimingCompare = (a, b) => {
 };
 
 /**
- * Mask sensitive credentials and secrets from logs and diagnostic output
+ * Constant-time comparison for raw shared secrets and tokens without case/trim normalization
+ */
+const safeRawSecretCompare = (a, b) => {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const bufA = Buffer.from(a, 'utf8');
+    const bufB = Buffer.from(b, 'utf8');
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+};
+
+/**
+ * Mask sensitive credentials and secrets from logs and diagnostic output case-insensitively
  */
 const maskSensitiveData = (data) => {
     if (!data || typeof data !== 'object') return data;
@@ -44,6 +55,11 @@ const maskSensitiveData = (data) => {
             lowerKey.includes('apikey') ||
             lowerKey === 'token' ||
             lowerKey === 'auth' ||
+            lowerKey === 'accesstoken' ||
+            lowerKey === 'refreshtoken' ||
+            lowerKey === 'authorization' ||
+            lowerKey === 'signature' ||
+            lowerKey === 'sig' ||
             lowerKey === 'key'
         ) {
             sanitized[key] = '***REDACTED***';
@@ -165,7 +181,7 @@ const verifySignature = (provider, params, clientIp) => {
         if (key === 'monlix') {
             const secretKeyReceived = params.secretKey || params.secret || '';
             const signature = params.signature || '';
-            if (secretKeyReceived && safeTimingCompare(secretKeyReceived, secret)) {
+            if (secretKeyReceived && safeRawSecretCompare(secretKeyReceived, secret)) {
                 return { valid: true };
             }
             if (signature) {
@@ -340,9 +356,7 @@ export const handlePostback = async (req, res) => {
     // Mask sensitive credentials from log persistence
     const sanitizedQueryParams = maskSensitiveData(req.query);
     const sanitizedRawBody = maskSensitiveData(req.body);
-    const signatureToLog = (normalized.signature && provider.secretKey && normalized.signature === provider.secretKey)
-        ? '***REDACTED***'
-        : normalized.signature;
+    const signatureToLog = normalized.signature ? '***REDACTED***' : '';
 
     // Create initial postback log record
     const log = new OfferwallPostbackLog({
@@ -481,28 +495,60 @@ export const handlePostback = async (req, res) => {
             const balanceBefore = currentEarnings;
             const balanceAfter = updatedUser ? updatedUser.taskEarningsBalance : 0;
 
-            const tx = await Transaction.create({
-                userId: user._id,
-                userName: user.username,
-                currency: 'USD',
-                type: 'Offerwall Reversal',
-                amount: deductionAmount,
-                amountUSD: deductionAmount,
-                grossAmount: origTx?.grossAmount || grossUSD,
-                userRewardAmount: deductionAmount,
-                platformRevenueAmount: origTx?.platformRevenueAmount || 0,
-                balanceBefore,
-                balanceAfter,
-                idempotencyKey,
-                chargebackStatus,
-                reversalReferenceId: origTx?._id,
-                description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
-                status: 'Approved',
-                sourceWallet: 'TaskEarnings',
-                destinationWallet: 'External',
-                offerwallProvider: providerKey,
-                externalTransactionId: normalized.externalTxId
-            });
+            let tx;
+            try {
+                tx = await Transaction.create({
+                    userId: user._id,
+                    userName: user.username,
+                    currency: 'USD',
+                    type: 'Offerwall Reversal',
+                    amount: deductionAmount,
+                    amountUSD: deductionAmount,
+                    grossAmount: origTx?.grossAmount || grossUSD,
+                    userRewardAmount: deductionAmount,
+                    platformRevenueAmount: origTx?.platformRevenueAmount || 0,
+                    balanceBefore,
+                    balanceAfter,
+                    idempotencyKey,
+                    chargebackStatus,
+                    reversalReferenceId: origTx?._id,
+                    description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
+                    status: 'Approved',
+                    sourceWallet: 'TaskEarnings',
+                    destinationWallet: 'External',
+                    offerwallProvider: providerKey,
+                    externalTransactionId: normalized.externalTxId
+                });
+            } catch (revTxErr) {
+                // If this is a duplicate reversal (11000), verify it is the *same* reversal before acknowledging
+                if (revTxErr.code === 11000) {
+                    const existingTx = await Transaction.findOne({ idempotencyKey });
+                    if (existingTx && existingTx.offerwallProvider === providerKey && existingTx.externalTransactionId === normalized.externalTxId) {
+                        log.status = 'Duplicate';
+                        log.errorMessage = 'Duplicate reversal transaction key verified';
+                        try { await log.save(); } catch (_) {}
+                        return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                    }
+                }
+
+                // Rollback user balance on ordinary transaction persistence failure
+                try {
+                    await User.findByIdAndUpdate(user._id, {
+                        $inc: {
+                            taskEarningsBalance: deductionToApply,
+                            taskWalletBalance: deductionToApply,
+                            chargebackLiabilityUSD: -liabilityToAdd
+                        }
+                    });
+                } catch (rollbackErr) {
+                    console.error('[CRITICAL] Failed to rollback user balance after reversal transaction creation error:', rollbackErr.message);
+                }
+                
+                log.status = 'Error';
+                log.errorMessage = `Reversal transaction creation failed: ${revTxErr.message}`;
+                try { await log.save(); } catch (_) {}
+                throw revTxErr;
+            }
 
             // Update Provider metrics atomically
             await OfferwallProvider.findByIdAndUpdate(provider._id, {
@@ -579,19 +625,26 @@ export const handlePostback = async (req, res) => {
                     externalTransactionId: normalized.externalTxId
                 });
             } catch (txErr) {
-                // Handle duplicate key error 11000 gracefully (P5)
-                if (txErr.code === 11000) {
+                // Rollback user balance on any transaction creation failure to prevent balance inconsistency
+                try {
                     await User.findByIdAndUpdate(user._id, {
                         $inc: {
                             taskEarningsBalance: -userRewardUSD,
                             taskWalletBalance: -userRewardUSD
                         }
                     });
+                } catch (_) {}
+
+                // Handle duplicate key error 11000 gracefully (P5)
+                if (txErr.code === 11000) {
                     log.status = 'Duplicate';
                     log.errorMessage = 'Duplicate transaction key caught by database constraint';
                     try { await log.save(); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
                 }
+                log.status = 'Error';
+                log.errorMessage = `Transaction creation failed: ${txErr.message}`;
+                try { await log.save(); } catch (_) {}
                 throw txErr;
             }
 
@@ -802,13 +855,24 @@ export const simulatePostback = async (req, res) => {
             } else if (pKey === 'cpx_research') {
                 queryParams.hash = crypto.createHash('md5').update(`${simTxId}-${secret}`).digest('hex');
             } else if (pKey === 'wannads') {
+                queryParams.subId = userId;
+                queryParams.transId = simTxId;
+                queryParams.reward = amount;
                 queryParams.signature = crypto.createHash('md5').update(`${userId}${simTxId}${amount}${secret}`).digest('hex');
             } else if (pKey === 'revlum') {
-                queryParams.signature = crypto.createHmac('sha256', secret).update(`${simTxId}${userId}${amount}`).digest('hex');
+                queryParams.subId = userId;
+                queryParams.trans_id = simTxId;
+                queryParams.reward = amount;
+                queryParams.signature = crypto.createHash('md5').update(`${userId}${simTxId}${amount}${secret}`).digest('hex');
             } else if (pKey === 'monlix') {
                 queryParams.signature = crypto.createHash('sha256').update(`${userId}${simTxId}${secret}`).digest('hex');
             } else if (pKey === 'lootably') {
-                queryParams.signature = crypto.createHash('sha256').update(`${userId}127.0.0.1${amount}${secret}`).digest('hex');
+                const simIp = (provider.ipWhitelist && provider.ipWhitelist.length > 0) ? provider.ipWhitelist[0] : '127.0.0.1';
+                queryParams.userID = userId;
+                queryParams.ip = simIp;
+                queryParams.revenue = amount;
+                queryParams.currencyReward = amount;
+                queryParams.signature = crypto.createHash('sha256').update(`${userId}${simIp}${amount}${amount}${secret}`).digest('hex');
             } else if (pKey === 'bitlabs' || pKey === 'bitlabs_surveys') {
                 queryParams.signature = crypto.createHmac('sha256', secret).update(`${amount}${userId}${simTxId}`).digest('hex');
             } else if (provider.signatureType === 'hmac_sha256') {
