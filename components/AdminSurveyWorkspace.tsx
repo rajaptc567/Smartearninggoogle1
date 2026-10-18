@@ -375,7 +375,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
             )}
 
             {/* Main Tabs Navigation */}
-            <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-850 px-4 flex flex-wrap gap-1 overflow-x-auto">
+            <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900 px-4 flex flex-wrap gap-1 overflow-x-auto">
                 {sections.map(s => {
                     const Icon = s.icon;
                     const isActive = activeSection === s.id;
@@ -383,13 +383,13 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                         <button
                             key={s.id}
                             onClick={() => setActiveSection(s.id)}
-                            className={`flex items-center gap-2 py-3 px-3.5 border-b-2 font-medium text-xs whitespace-nowrap transition-colors ${
+                            className={`flex items-center gap-2 py-3 px-3.5 border-b-2 font-medium text-xs whitespace-nowrap transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                                 isActive
-                                    ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 rounded-t-lg'
-                                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                                    ? 'border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-800 rounded-t-lg shadow-sm font-bold'
+                                    : 'border-transparent text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/60 dark:hover:bg-gray-800/60 rounded-t-lg'
                             }`}
                         >
-                            <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'}`} />
+                            <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`} />
                             {s.label}
                         </button>
                     );
@@ -408,7 +408,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     <Layers className="w-5 h-5 text-blue-600" />
                                 </div>
                                 <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{metrics.totalCampaigns}</div>
-                                <div className="text-xs text-gray-500 mt-1">{metrics.activeCount} Active / Approved</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{metrics.activeCount} Active / Approved</div>
                             </div>
 
                             <div className="p-4 bg-emerald-50/60 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl">
@@ -417,7 +417,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                                 </div>
                                 <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{metrics.totalCompletedResponses}</div>
-                                <div className="text-xs text-gray-500 mt-1">{metrics.pendingReviewCount} Pending Review</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{metrics.pendingReviewCount} Pending Review</div>
                             </div>
 
                             <div className="p-4 bg-purple-50/60 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl">
@@ -426,7 +426,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     <DollarSign className="w-5 h-5 text-purple-600" />
                                 </div>
                                 <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(metrics.totalPaidRewards)}</div>
-                                <div className="text-xs text-gray-500 mt-1">Paid directly to workers</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Paid directly to workers</div>
                             </div>
 
                             <div className="p-4 bg-amber-50/60 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-xl">
@@ -437,7 +437,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                 <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                                     {metrics.avgTimeSeconds > 0 ? `${Math.floor(metrics.avgTimeSeconds / 60)}m ${metrics.avgTimeSeconds % 60}s` : 'N/A'}
                                 </div>
-                                <div className="text-xs text-gray-500 mt-1">{metrics.passRate}% Attention Check Pass Rate</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{metrics.passRate}% Attention Check Pass Rate</div>
                             </div>
                         </div>
 
@@ -459,7 +459,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                                     {task.status}
                                                 </Badge>
                                             </div>
-                                            <div className="text-xs text-gray-500 mt-1 flex items-center gap-3">
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-3">
                                                 <span>Sub-type: {task.subType || 'General'}</span>
                                                 <span>•</span>
                                                 <span>Estimated: {task.surveyEstimatedMinutes || 5} mins</span>
@@ -477,7 +477,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     </div>
                                 ))}
                                 {surveyTasks.length === 0 && (
-                                    <div className="p-8 text-center text-gray-500 text-sm">
+                                    <div className="p-8 text-center text-gray-500 dark:text-gray-400 text-sm">
                                         No survey campaigns created yet. Users can start creating surveys from the Work & Earn page.
                                     </div>
                                 )}
@@ -492,7 +492,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                         <div className="flex justify-between items-center">
                             <div>
                                 <h3 className="text-base font-bold text-gray-900 dark:text-white">Pre-Designed Survey Templates</h3>
-                                <p className="text-xs text-gray-500">Templates available for advertisers to pre-populate questions instantly.</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Templates available for advertisers to pre-populate questions instantly.</p>
                             </div>
                             <Button size="sm" variant="primary" onClick={() => {
                                 setTemplateForm({
@@ -524,7 +524,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                                 ~{tmpl.estimatedTimeMinutes || 4} mins
                                             </span>
                                         </div>
-                                        <p className="text-xs text-gray-500 mt-2">{tmpl.description || 'No description'}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{tmpl.description || 'No description'}</p>
                                         
                                         <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
                                             <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
@@ -571,7 +571,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                         <h3 className="font-bold text-gray-900 dark:text-white">
                                             {templateForm.id ? 'Edit Survey Template' : 'New Survey Template'}
                                         </h3>
-                                        <button onClick={() => setIsEditingTemplate(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                        <button onClick={() => setIsEditingTemplate(false)} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">✕</button>
                                     </div>
 
                                     <div className="space-y-3">
@@ -640,7 +640,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
 
                                             <div className="space-y-3 max-h-60 overflow-y-auto">
                                                 {(templateForm.questions || []).map((q: any, qIdx: number) => (
-                                                    <div key={q.id || qIdx} className="p-3 bg-gray-50 dark:bg-gray-750 border rounded-lg text-xs space-y-2">
+                                                    <div key={q.id || qIdx} className="p-3 bg-gray-50 dark:bg-gray-800 border rounded-lg text-xs space-y-2">
                                                         <div className="flex justify-between items-center">
                                                             <span className="font-bold">Q{qIdx + 1}</span>
                                                             <button
@@ -752,7 +752,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
 
                         <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-x-auto">
                             <table className="w-full text-left text-xs">
-                                <thead className="bg-gray-50 dark:bg-gray-750 text-gray-600 dark:text-gray-300 uppercase tracking-wider text-[10px] font-semibold border-b border-gray-200 dark:border-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 uppercase tracking-wider text-[10px] font-semibold border-b border-gray-200 dark:border-gray-700">
                                     <tr>
                                         <th className="py-3 px-4">Title & Sub-type</th>
                                         <th className="py-3 px-4">Creator</th>
@@ -778,7 +778,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                             <tr key={task._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-750/50">
                                                 <td className="py-3 px-4">
                                                     <div className="font-semibold text-gray-900 dark:text-white">{task.title}</div>
-                                                    <div className="text-[11px] text-gray-500">{task.subType || 'General Survey'}</div>
+                                                    <div className="text-[11px] text-gray-500 dark:text-gray-400">{task.subType || 'General Survey'}</div>
                                                 </td>
                                                 <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
                                                     {task.userName || 'User'}
@@ -818,7 +818,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                         ))}
                                     {surveyTasks.length === 0 && (
                                         <tr>
-                                            <td colSpan={7} className="py-8 text-center text-gray-500">
+                                            <td colSpan={7} className="py-8 text-center text-gray-500 dark:text-gray-400">
                                                 No survey campaigns found matching current criteria.
                                             </td>
                                         </tr>
@@ -835,7 +835,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                         <div className="flex justify-between items-center">
                             <div>
                                 <h3 className="text-base font-bold text-gray-900 dark:text-white">Pre-Approved Question Bank</h3>
-                                <p className="text-xs text-gray-500">Curated questions and attention check checks available to advertisers.</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Curated questions and attention check checks available to advertisers.</p>
                             </div>
                             <Button size="sm" variant="primary" onClick={() => {
                                 setQuestionBankForm({
@@ -883,7 +883,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
 
                                     <h4 className="font-semibold text-xs text-gray-900 dark:text-white">{q.title}</h4>
 
-                                    <div className="text-[11px] text-gray-500 flex flex-wrap gap-1 items-center">
+                                    <div className="text-[11px] text-gray-500 dark:text-gray-400 flex flex-wrap gap-1 items-center">
                                         <span className="font-medium text-gray-600 dark:text-gray-400">Type:</span> {q.type}
                                         {q.expectedAnswer && (
                                             <span className="ml-2 text-emerald-600 font-medium">Expected: "{q.expectedAnswer}"</span>
@@ -981,7 +981,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                     <div className="space-y-4">
                         <div>
                             <h3 className="text-base font-bold text-gray-900 dark:text-white">Supported Survey Question Types</h3>
-                            <p className="text-xs text-gray-500">Configure enabled question formats and responsive rendering engines.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Configure enabled question formats and responsive rendering engines.</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1007,7 +1007,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                                 Active
                                             </span>
                                         </div>
-                                        <p className="text-[11px] text-gray-500 mt-1">{qt.desc}</p>
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{qt.desc}</p>
                                     </div>
                                 </div>
                             ))}
@@ -1020,11 +1020,11 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                     <div className="space-y-6">
                         <div>
                             <h3 className="text-base font-bold text-gray-900 dark:text-white">Survey Pricing & Rate Matrix</h3>
-                            <p className="text-xs text-gray-500">Define base platform fees, worker rewards, question-count surcharges, and margins.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Define base platform fees, worker rewards, question-count surcharges, and margins.</p>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800">
                                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Base Advertiser Rate ($)</label>
                                 <input
                                     type="number"
@@ -1039,10 +1039,10 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     }}
                                     className="w-full text-base font-bold border rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                 />
-                                <span className="text-[11px] text-gray-500 mt-1 block">Minimum fee per response charged to campaign creator</span>
+                                <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 block">Minimum fee per response charged to campaign creator</span>
                             </div>
 
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800">
                                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Worker Payout ($)</label>
                                 <input
                                     type="number"
@@ -1057,10 +1057,10 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     }}
                                     className="w-full text-base font-bold border rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                 />
-                                <span className="text-[11px] text-gray-500 mt-1 block">Amount credited to worker upon approval</span>
+                                <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 block">Amount credited to worker upon approval</span>
                             </div>
 
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800">
                                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Platform Margin / Fee ($)</label>
                                 <input
                                     type="number"
@@ -1075,13 +1075,13 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     }}
                                     className="w-full text-base font-bold border rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                 />
-                                <span className="text-[11px] text-gray-500 mt-1 block">Retained platform commission per response</span>
+                                <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 block">Retained platform commission per response</span>
                             </div>
                         </div>
 
                         {/* Question Count Price Adjustments */}
                         <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-                            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
+                            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
                                     Question Count Pricing Tiers (Complexity Fee)
                                 </h4>
@@ -1091,7 +1091,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     <div key={qt.id || idx} className="p-3 flex items-center justify-between text-xs">
                                         <span className="font-semibold text-gray-800 dark:text-gray-200">{qt.range}</span>
                                         <div className="flex items-center gap-3">
-                                            <span className="text-gray-500">Price Adjustment:</span>
+                                            <span className="text-gray-500 dark:text-gray-400">Price Adjustment:</span>
                                             <div className="flex items-center gap-1">
                                                 <span className="font-bold text-gray-900 dark:text-white">+$</span>
                                                 <input
@@ -1122,12 +1122,12 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                     <div className="space-y-4">
                         <div>
                             <h3 className="text-base font-bold text-gray-900 dark:text-white">Survey Duration Tiers & Anti-Speeding Rules</h3>
-                            <p className="text-xs text-gray-500">Time requirements matching the standard Task Configurator duration structure.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Time requirements matching the standard Task Configurator duration structure.</p>
                         </div>
 
                         <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
                             <table className="w-full text-left text-xs">
-                                <thead className="bg-gray-50 dark:bg-gray-750 font-semibold border-b border-gray-200 dark:border-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-800 font-semibold border-b border-gray-200 dark:border-gray-700">
                                     <tr>
                                         <th className="p-3">Duration Tier</th>
                                         <th className="p-3">Min Payout ($)</th>
@@ -1225,11 +1225,11 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                     <div className="space-y-4">
                         <div>
                             <h3 className="text-base font-bold text-gray-900 dark:text-white">Audience Targeting Matrix</h3>
-                            <p className="text-xs text-gray-500">Permit creators to restrict survey participation by country, device, or age.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Permit creators to restrict survey participation by country, device, or age.</p>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 space-y-2">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800 space-y-2">
                                 <span className="font-bold text-xs text-gray-900 dark:text-white">Targeting Options Allowed</span>
                                 <div className="space-y-2 text-xs">
                                     <label className="flex items-center gap-2">
@@ -1257,9 +1257,9 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                 </div>
                             </div>
 
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 space-y-2">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800 space-y-2">
                                 <span className="font-bold text-xs text-gray-900 dark:text-white">Targeting Surcharge</span>
-                                <p className="text-xs text-gray-500">Added to advertiser cost per response when specific audience targeting is configured.</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Added to advertiser cost per response when specific audience targeting is configured.</p>
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-sm">+$</span>
                                     <input
@@ -1286,10 +1286,10 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                     <div className="space-y-4">
                         <div>
                             <h3 className="text-base font-bold text-gray-900 dark:text-white">Screener & Qualification Policies</h3>
-                            <p className="text-xs text-gray-500">Control behavior when workers answer screening questions or fail attention traps.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Control behavior when workers answer screening questions or fail attention traps.</p>
                         </div>
 
-                        <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 space-y-3 text-xs">
+                        <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800 space-y-3 text-xs">
                             <label className="flex items-center gap-2">
                                 <input
                                     type="checkbox"
@@ -1335,7 +1335,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                             }}
                                             className="w-24 border rounded p-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-right"
                                         />
-                                        <span className="text-[11px] text-gray-500">Credited to worker Task Earnings balance on screening disqualification</span>
+                                        <span className="text-[11px] text-gray-500 dark:text-gray-400">Credited to worker Task Earnings balance on screening disqualification</span>
                                     </div>
                                 )}
                             </div>
@@ -1348,14 +1348,14 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                     <div className="space-y-4">
                         <div>
                             <h3 className="text-base font-bold text-gray-900 dark:text-white">Global Survey Settings & Guardrails</h3>
-                            <p className="text-xs text-gray-500">Security flags, terms disclaimer, and fraud prevention settings.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Security flags, terms disclaimer, and fraud prevention settings.</p>
                         </div>
 
                         <div className="space-y-3">
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 flex items-center justify-between">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
                                 <div>
                                     <h4 className="font-semibold text-xs text-gray-900 dark:text-white">Enforce 1 Response Per Worker</h4>
-                                    <p className="text-xs text-gray-500">Prevents a single user from taking the same survey more than once.</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Prevents a single user from taking the same survey more than once.</p>
                                 </div>
                                 <input
                                     type="checkbox"
@@ -1368,10 +1368,10 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                 />
                             </div>
 
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 flex items-center justify-between">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
                                 <div>
                                     <h4 className="font-semibold text-xs text-gray-900 dark:text-white">Enforce Anti-Speeding Validation</h4>
-                                    <p className="text-xs text-gray-500">Rejects submissions made faster than the minimum duration threshold.</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Rejects submissions made faster than the minimum duration threshold.</p>
                                 </div>
                                 <input
                                     type="checkbox"
@@ -1384,10 +1384,10 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                 />
                             </div>
 
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 flex items-center justify-between">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
                                 <div>
                                     <h4 className="font-semibold text-xs text-gray-900 dark:text-white">Allow Creators to Enable Question Rotation</h4>
-                                    <p className="text-xs text-gray-500">Permits creators to randomize or shuffle the display order of questions for respondents.</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Permits creators to randomize or shuffle the display order of questions for respondents.</p>
                                 </div>
                                 <input
                                     type="checkbox"
@@ -1400,10 +1400,10 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                 />
                             </div>
 
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 flex items-center justify-between">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
                                 <div>
                                     <h4 className="font-semibold text-xs text-gray-900 dark:text-white">Allow Option Shuffling</h4>
-                                    <p className="text-xs text-gray-500">Permits creators to randomize the order of answer choices on multiple/single choice questions.</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Permits creators to randomize the order of answer choices on multiple/single choice questions.</p>
                                 </div>
                                 <input
                                     type="checkbox"
@@ -1416,10 +1416,10 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                 />
                             </div>
 
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 flex items-center justify-between">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
                                 <div>
                                     <h4 className="font-semibold text-xs text-gray-900 dark:text-white">Force Global Question Rotation</h4>
-                                    <p className="text-xs text-gray-500">Automatically shuffles question order across all survey campaigns regardless of creator settings.</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Automatically shuffles question order across all survey campaigns regardless of creator settings.</p>
                                 </div>
                                 <input
                                     type="checkbox"
@@ -1440,7 +1440,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                 <span className="px-2.5 py-1 text-xs font-black bg-blue-600 text-white rounded-lg">Max 4</span>
                             </div>
 
-                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 space-y-1.5">
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-800 space-y-1.5">
                                 <label className="block text-xs font-semibold text-gray-900 dark:text-white">
                                     Default Participant Consent Statement
                                 </label>
@@ -1464,7 +1464,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                         <div className="flex justify-between items-center">
                             <div>
                                 <h3 className="text-base font-bold text-gray-900 dark:text-white">Survey Response Moderation</h3>
-                                <p className="text-xs text-gray-500">Audit submitted survey answers, completion speed, and attention check passes.</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Audit submitted survey answers, completion speed, and attention check passes.</p>
                             </div>
                             <Button size="sm" variant="secondary" onClick={exportSubmissionsToCSV}>
                                 <Download className="w-3.5 h-3.5 mr-1" /> Export All Responses CSV
@@ -1473,7 +1473,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
 
                         <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-x-auto">
                             <table className="w-full text-left text-xs">
-                                <thead className="bg-gray-50 dark:bg-gray-750 font-semibold border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 uppercase text-[10px]">
+                                <thead className="bg-gray-50 dark:bg-gray-800 font-semibold border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 uppercase text-[10px]">
                                     <tr>
                                         <th className="p-3">Worker</th>
                                         <th className="p-3">Survey Title</th>
@@ -1516,7 +1516,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     ))}
                                     {surveySubmissions.length === 0 && (
                                         <tr>
-                                            <td colSpan={6} className="p-8 text-center text-gray-500">
+                                            <td colSpan={6} className="p-8 text-center text-gray-500 dark:text-gray-400">
                                                 No survey submissions recorded yet.
                                             </td>
                                         </tr>
@@ -1587,7 +1587,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                             <div>
                                 <h3 className="text-base font-bold text-gray-900 dark:text-white">Survey Campaign Analytics & Results</h3>
-                                <p className="text-xs text-gray-500">Interactive statistical summaries, answer frequency charts, and aggregates.</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Interactive statistical summaries, answer frequency charts, and aggregates.</p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <select
@@ -1606,7 +1606,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                         </div>
 
                         {isLoadingAnalytics && (
-                            <div className="py-12 text-center text-gray-500 text-sm">
+                            <div className="py-12 text-center text-gray-500 dark:text-gray-400 text-sm">
                                 Loading survey results and statistical graphs...
                             </div>
                         )}
@@ -1615,20 +1615,20 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                             <div className="space-y-6">
                                 {/* Top Stats */}
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    <div className="p-3 bg-gray-50 dark:bg-gray-750 border rounded-lg">
-                                        <span className="text-[10px] uppercase font-bold text-gray-500">Total Responses</span>
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-800 border rounded-lg">
+                                        <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Total Responses</span>
                                         <div className="text-xl font-bold mt-0.5">{analyticsData.metrics?.totalSubmissions || 0}</div>
                                     </div>
-                                    <div className="p-3 bg-gray-50 dark:bg-gray-750 border rounded-lg">
-                                        <span className="text-[10px] uppercase font-bold text-gray-500">Approved</span>
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-800 border rounded-lg">
+                                        <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Approved</span>
                                         <div className="text-xl font-bold mt-0.5 text-emerald-600">{analyticsData.metrics?.approvedSubmissions || 0}</div>
                                     </div>
-                                    <div className="p-3 bg-gray-50 dark:bg-gray-750 border rounded-lg">
-                                        <span className="text-[10px] uppercase font-bold text-gray-500">Avg Duration</span>
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-800 border rounded-lg">
+                                        <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Avg Duration</span>
                                         <div className="text-xl font-bold mt-0.5">{analyticsData.metrics?.averageCompletionTimeSeconds || 0}s</div>
                                     </div>
-                                    <div className="p-3 bg-gray-50 dark:bg-gray-750 border rounded-lg">
-                                        <span className="text-[10px] uppercase font-bold text-gray-500">Pass Rate</span>
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-800 border rounded-lg">
+                                        <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Pass Rate</span>
                                         <div className="text-xl font-bold mt-0.5 text-blue-600">
                                             {analyticsData.metrics?.totalSubmissions > 0
                                                 ? Math.round(((analyticsData.metrics?.attentionPassedCount || 0) / analyticsData.metrics?.totalSubmissions) * 100)
@@ -1647,7 +1647,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                                     <span className="text-xs font-bold text-blue-600">Q{q.order}:</span>
                                                     <h5 className="font-semibold text-xs text-gray-900 dark:text-white inline ml-1.5">{q.title}</h5>
                                                 </div>
-                                                <span className="text-[11px] text-gray-500">{q.totalAnswers} answers</span>
+                                                <span className="text-[11px] text-gray-500 dark:text-gray-400">{q.totalAnswers} answers</span>
                                             </div>
 
                                             {/* Choice counts visualization */}
@@ -1659,7 +1659,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                                             <div key={option} className="space-y-1">
                                                                 <div className="flex justify-between text-xs">
                                                                     <span className="font-medium text-gray-700 dark:text-gray-300">{option}</span>
-                                                                    <span className="text-gray-500">{count} ({pct}%)</span>
+                                                                    <span className="text-gray-500 dark:text-gray-400">{count} ({pct}%)</span>
                                                                 </div>
                                                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                                                                     <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${pct}%` }}></div>
@@ -1683,7 +1683,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                         )}
 
                         {!selectedCampaignForAnalytics && !isLoadingAnalytics && (
-                            <div className="py-12 text-center text-gray-500 text-sm">
+                            <div className="py-12 text-center text-gray-500 dark:text-gray-400 text-sm">
                                 Please select a Survey Campaign above to view detailed response analysis.
                             </div>
                         )}
