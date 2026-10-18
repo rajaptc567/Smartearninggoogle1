@@ -6286,3 +6286,191 @@ export const pauseAdminCampaign = async (req, res) => {
         res.status(400).json({ success: false, error: err.message });
     }
 };
+
+/**
+ * Admin-authorized endpoint to retrieve audience progress and submission details for a task/campaign
+ */
+export const getTaskAudienceProgress = async (req, res) => {
+    try {
+        if (!req.user || !isUserAdmin(req.user)) {
+            return res.status(403).json({ success: false, error: 'Administrative authorization required.' });
+        }
+
+        const taskId = req.params.id;
+        const task = await UserTask.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ success: false, error: 'Task campaign not found.' });
+        }
+
+        const settings = await Setting.getSettings();
+        const submissions = await UserTaskSubmission.find({ taskId: task._id }).sort({ createdAt: -1 });
+
+        // Map submissions by workerId
+        const submissionByWorker = new Map();
+        submissions.forEach(sub => {
+            const wId = String(sub.workerId);
+            if (!submissionByWorker.has(wId)) {
+                submissionByWorker.set(wId, sub);
+            }
+        });
+
+        const selectedUserIds = Array.isArray(task.targeting?.selectedUserIds) ? task.targeting.selectedUserIds : [];
+        const isSelectedAudience = selectedUserIds.length > 0;
+
+        let candidateUsers = [];
+        if (isSelectedAudience) {
+            candidateUsers = await User.find({ _id: { $in: selectedUserIds } })
+                .select('_id username email country currency gender dateOfBirth status createdAt')
+                .lean();
+        } else {
+            // For general or dynamic campaigns, load all users (excluding banned/deleted if desired)
+            candidateUsers = await User.find({})
+                .select('_id username email country currency gender dateOfBirth status createdAt')
+                .lean();
+        }
+
+        const eligibilityContext = {
+            submissions: submissions,
+            audienceTargeting: settings?.audienceTargeting
+        };
+
+        const audienceList = [];
+        let notStartedCount = 0;
+        let pendingReviewCount = 0;
+        let approvedCount = 0;
+        let paidCount = 0;
+        let rejectedCount = 0;
+
+        for (const user of candidateUsers) {
+            const uId = String(user._id);
+            const sub = submissionByWorker.get(uId);
+
+            let isCurrentlyEligible = true;
+            if (!isSelectedAudience) {
+                isCurrentlyEligible = isUserEligibleForUserTask(user, task, eligibilityContext);
+                // For dynamic campaigns without selectedUserIds, only include if eligible OR has a submission record
+                if (!isCurrentlyEligible && !sub) {
+                    continue;
+                }
+            } else {
+                isCurrentlyEligible = isUserEligibleForUserTask(user, task, eligibilityContext);
+            }
+
+            let classifiedStatus = 'Not Started';
+            if (sub) {
+                if (sub.status === 'Paid') {
+                    classifiedStatus = 'Paid';
+                    paidCount++;
+                } else if (sub.status === 'Approved') {
+                    classifiedStatus = 'Approved';
+                    approvedCount++;
+                } else if (sub.status === 'Pending') {
+                    classifiedStatus = 'Pending Review';
+                    pendingReviewCount++;
+                } else if (sub.status === 'Rejected') {
+                    classifiedStatus = 'Rejected';
+                    rejectedCount++;
+                } else {
+                    classifiedStatus = sub.status;
+                }
+            } else {
+                notStartedCount++;
+            }
+
+            audienceList.push({
+                userId: uId,
+                username: user.username || 'Unknown',
+                email: user.email || '',
+                country: user.country || 'N/A',
+                currency: user.currency || 'USD',
+                accountStatus: user.status || 'active',
+                isCurrentlyEligible,
+                submissionStatus: classifiedStatus,
+                submittedAt: sub?.createdAt || null,
+                submissionId: sub?._id ? String(sub._id) : null,
+                rewardAmount: sub?.rewardAmount ?? null,
+                surveyQualificationStatus: sub?.surveyQualificationStatus || null,
+                // Rich worker answer & activity fields
+                surveyResponses: sub?.surveyResponses || [],
+                surveyCompletionTimeSeconds: sub?.surveyCompletionTimeSeconds || 0,
+                surveyVersion: sub?.surveyVersion || 1,
+                attentionCheckPassed: sub?.attentionCheckPassed !== false,
+                consentAgreed: sub?.consentAgreed !== false,
+                qualityScore: sub?.qualityScore ?? 100,
+                qualityFlags: sub?.qualityFlags || [],
+                approvalMode: sub?.approvalMode || 'auto',
+                rejectionReason: sub?.rejectionReason || '',
+                rejectedAt: sub?.rejectedAt || null,
+                adminNotes: sub?.adminNotes || '',
+                disputeOpened: Boolean(sub?.disputeOpened),
+                disputeStage: sub?.disputeStage || 'None',
+                paid: Boolean(sub?.paid),
+                rewardPaidAt: sub?.rewardPaidAt || null,
+                rewardTransactionId: sub?.rewardTransactionId ? String(sub.rewardTransactionId) : null,
+                answeredPath: sub?.answeredPath || [],
+                skippedQuestions: sub?.skippedQuestions || []
+            });
+        }
+
+        const totalTargeted = audienceList.length;
+        const totalCompleted = approvedCount + paidCount;
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                summary: {
+                    totalTargeted,
+                    notStartedCount,
+                    pendingReviewCount,
+                    approvedCount,
+                    paidCount,
+                    rejectedCount,
+                    totalCompleted
+                },
+                users: audienceList
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+/**
+ * Admin-authorized safe Archive / Deactivate endpoint for UserTask / Survey campaigns
+ * Protects submissions, worker earnings, payment transactions, and historical data.
+ */
+export const archiveAdminCampaign = async (req, res) => {
+    try {
+        if (!req.user || !isUserAdmin(req.user)) {
+            return res.status(403).json({ success: false, error: 'Administrative authorization required.' });
+        }
+
+        const taskId = req.params.id;
+        const task = await UserTask.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ success: false, error: 'Campaign not found.' });
+        }
+
+        const previousStatus = task.status;
+        task.status = 'Completed';
+        task.history.push({
+            action: 'Archived',
+            previousStatus,
+            newStatus: 'Completed',
+            timestamp: new Date(),
+            performedBy: req.user.username || req.user.id,
+            details: 'Campaign safely archived/deactivated by administrator. Worker earnings, submissions, and history preserved.'
+        });
+        await task.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `Campaign "${task.title}" has been safely archived. All worker submissions, rewards, and audit logs are preserved.`,
+            task
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+

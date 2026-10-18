@@ -24,7 +24,9 @@ import {
     addAdminCampaignFunds,
     resumeAdminCampaign,
     pauseAdminCampaign,
-    getPendingMandatoryRequirements
+    getPendingMandatoryRequirements,
+    getTaskAudienceProgress,
+    archiveAdminCampaign
 } from '../controllers/userTasksController.js';
 
 // Multer for memory storage (Base64)
@@ -77,6 +79,9 @@ router.route('/simulate-reward')
 router.route('/:id/survey-analytics')
     .get(authorize(['user', 'admin']), getSurveyCampaignAnalytics);
 
+router.route('/:id/audience-progress')
+    .get(authorize(['admin', 'super_admin']), getTaskAudienceProgress);
+
 router.route('/:id/add-funds')
     .post(taskActionLimiter, authorize(['admin', 'super_admin']), addAdminCampaignFunds);
 
@@ -85,6 +90,9 @@ router.route('/:id/resume-campaign')
 
 router.route('/:id/pause-campaign')
     .post(taskActionLimiter, authorize(['admin', 'super_admin']), pauseAdminCampaign);
+
+router.route('/:id/archive-campaign')
+    .post(taskActionLimiter, authorize(['admin', 'super_admin']), archiveAdminCampaign);
 
 router.route('/mandatory-requirements')
     .get(authorize(['user', 'admin']), getPendingMandatoryRequirements);

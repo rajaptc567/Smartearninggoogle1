@@ -21,15 +21,20 @@ import {
     addAdminCampaignFunds,
     resumeAdminCampaign,
     pauseAdminCampaign,
-    getUsers
+    getUsers,
+    getTaskAudienceProgress,
+    archiveAdminCampaign,
+    deleteUserTask
 } from '../services/api';
 import {
     FileText,
     Plus,
     Edit3,
     Eye,
+    Info,
     Copy,
     Trash2,
+    Archive,
     ToggleLeft,
     ToggleRight,
     Play,
@@ -135,6 +140,22 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [addFundsAmount, setAddFundsAmount] = useState<number>(50);
     const [isAddingFunds, setIsAddingFunds] = useState<boolean>(false);
     const [historyModalTask, setHistoryModalTask] = useState<UserTask | null>(null);
+
+    // Campaign Details & Audience Progress Modal
+    const [detailsModalTask, setDetailsModalTask] = useState<UserTask | null>(null);
+    const [detailsActiveTab, setDetailsActiveTab] = useState<'overview' | 'questionnaire' | 'requirements' | 'rewards' | 'audience'>('overview');
+    const [audienceProgressData, setAudienceProgressData] = useState<{ summary: any; users: any[] } | null>(null);
+    const [audienceLoading, setAudienceLoading] = useState<boolean>(false);
+    const [audienceError, setAudienceError] = useState<string | null>(null);
+    const [audienceSearch, setAudienceSearch] = useState<string>('');
+    const [audienceStatusFilter, setAudienceStatusFilter] = useState<string>('all');
+    const [audiencePage, setAudiencePage] = useState<number>(1);
+    const AUDIENCE_PAGE_SIZE = 10;
+    const [selectedWorkerRecord, setSelectedWorkerRecord] = useState<any | null>(null);
+    const [showDeleteArchiveModal, setShowDeleteArchiveModal] = useState<boolean>(false);
+    const [isArchivingCampaign, setIsArchivingCampaign] = useState<boolean>(false);
+    const [isDeletingCampaign, setIsDeletingCampaign] = useState<boolean>(false);
+    const [actionFeedbackMessage, setActionFeedbackMessage] = useState<string | null>(null);
 
     // Fetch templates on mount
     const fetchTemplates = async () => {
@@ -941,15 +962,34 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     </Button>
                                                 </div>
 
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() => setHistoryModalTask(task)}
-                                                    title="Analytics & History"
-                                                    className="text-xs font-bold flex items-center gap-1"
-                                                >
-                                                    <History className="w-3 h-3" /> History
-                                                </Button>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setDetailsModalTask(task);
+                                                            setDetailsActiveTab('overview');
+                                                            setAudienceProgressData(null);
+                                                            setAudienceError(null);
+                                                            setAudienceSearch('');
+                                                            setAudienceStatusFilter('all');
+                                                            setAudiencePage(1);
+                                                        }}
+                                                        title="Campaign Details & Audience Progress"
+                                                        className="text-xs font-bold flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                                                    >
+                                                        <Info className="w-3 h-3" /> Details
+                                                    </Button>
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => setHistoryModalTask(task)}
+                                                        title="Analytics & History"
+                                                        className="text-xs font-bold flex items-center gap-1"
+                                                    >
+                                                        <History className="w-3 h-3" /> History
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -2404,6 +2444,1045 @@ export const AdminSurveyTemplates: React.FC = () => {
                                 Close
                             </Button>
                         </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* CAMPAIGN DETAILS & AUDIENCE PROGRESS MODAL */}
+            {detailsModalTask && (
+                <Modal isOpen={true} onClose={() => setDetailsModalTask(null)}>
+                    <div className="p-6 max-w-4xl max-h-[90vh] overflow-y-auto space-y-5">
+                        <div className="flex items-center justify-between border-b dark:border-gray-700 pb-3">
+                            <div className="space-y-0.5">
+                                <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                                    <Info className="w-5 h-5 text-blue-600" />
+                                    Campaign Details: {detailsModalTask.title}
+                                </h3>
+                                <p className="text-xs text-gray-500">
+                                    ID: <span className="font-mono">{detailsModalTask._id}</span> • Created: {new Date(detailsModalTask.createdAt || detailsModalTask.date || Date.now()).toLocaleDateString()}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDeleteArchiveModal(true)}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 dark:border-rose-900/50 transition-all flex items-center gap-1"
+                                    title="Manage Campaign (Archive / Delete)"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span className="hidden sm:inline">Delete / Archive</span>
+                                </button>
+                                <button
+                                    onClick={() => setDetailsModalTask(null)}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Modal Tab Navigation */}
+                        <div className="flex items-center gap-1.5 border-b dark:border-gray-700 pb-2 flex-wrap">
+                            <button
+                                type="button"
+                                onClick={() => setDetailsActiveTab('overview')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    detailsActiveTab === 'overview'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                                }`}
+                            >
+                                Overview
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDetailsActiveTab('questionnaire')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                    detailsActiveTab === 'questionnaire'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                                }`}
+                            >
+                                <FileText className="w-3.5 h-3.5" /> Questionnaire ({detailsModalTask.surveyConfig?.questions?.length || detailsModalTask.surveyQuestionsCount || 0})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDetailsActiveTab('requirements')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    detailsActiveTab === 'requirements'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                                }`}
+                            >
+                                Requirements & Targeting
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDetailsActiveTab('rewards')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    detailsActiveTab === 'rewards'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                                }`}
+                            >
+                                Rewards & Funding
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setDetailsActiveTab('audience');
+                                    if (!audienceProgressData && !audienceLoading && detailsModalTask._id) {
+                                        setAudienceLoading(true);
+                                        setAudienceError(null);
+                                        getTaskAudienceProgress(String(detailsModalTask._id))
+                                            .then(res => {
+                                                setAudienceProgressData(res);
+                                            })
+                                            .catch(err => {
+                                                setAudienceError(err?.message || 'Failed to fetch audience progress');
+                                            })
+                                            .finally(() => {
+                                                setAudienceLoading(false);
+                                            });
+                                    }
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                    detailsActiveTab === 'audience'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                                }`}
+                            >
+                                <Users className="w-3.5 h-3.5" /> Audience Progress
+                            </button>
+                        </div>
+
+                        {/* TAB 1: CAMPAIGN OVERVIEW */}
+                        {detailsActiveTab === 'overview' && (
+                            <div className="space-y-4 text-xs">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800 space-y-1">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Title</span>
+                                        <p className="font-bold text-gray-900 dark:text-white text-sm">{detailsModalTask.title}</p>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800 space-y-1">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Status</span>
+                                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                            detailsModalTask.status === 'Approved' || detailsModalTask.status === 'Active'
+                                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                                : detailsModalTask.status === 'On Hold'
+                                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                        }`}>
+                                            {detailsModalTask.status}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800 space-y-1">
+                                    <span className="text-[10px] uppercase font-bold text-gray-400 block">Description</span>
+                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                                        {detailsModalTask.description || 'Not available'}
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Source Template</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200">
+                                            {detailsModalTask.sourceAdminSurveyTemplateId ? (
+                                                templates.find(t => String(t._id) === String(detailsModalTask.sourceAdminSurveyTemplateId))?.name || String(detailsModalTask.sourceAdminSurveyTemplateId)
+                                            ) : (
+                                                'Not available'
+                                            )}
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Survey Version</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200">
+                                            v{detailsModalTask.surveyVersion || detailsModalTask.surveyConfig?.version || 1}
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Est. Duration</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200">
+                                            {detailsModalTask.surveyEstimatedMinutes || detailsModalTask.surveyConfig?.estimatedTimeMinutes || 5} mins
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Approval Mode</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 capitalize">
+                                            {detailsModalTask.surveyApprovalMode || (detailsModalTask.surveyConfig as any)?.approvalMode || 'Auto'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Response Limit Mode</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200">
+                                            {detailsModalTask.isUnlimitedResponses ? 'Unlimited' : 'Limited'}
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Target Quantity</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200">
+                                            {detailsModalTask.isUnlimitedResponses ? '∞' : (detailsModalTask.targetQuantity || 'Not available')}
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Current Completions</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200">
+                                            {detailsModalTask.currentCompletions || 0}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-gray-50 dark:bg-gray-900/70 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div>
+                                        <h4 className="text-xs font-black uppercase text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                                            <Archive className="w-4 h-4 text-amber-500" /> Campaign LifeCycle & Actions
+                                        </h4>
+                                        <p className="text-[11px] text-gray-500 mt-0.5">
+                                            Safely archive/deactivate this campaign or delete it if no submissions or earnings exist.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDeleteArchiveModal(true)}
+                                        className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition-all flex items-center gap-1.5 shrink-0"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        Delete / Archive Campaign
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 1.5: QUESTIONNAIRE & RULES DETAILS */}
+                        {detailsActiveTab === 'questionnaire' && (
+                            <div className="space-y-4 text-xs">
+                                {(() => {
+                                    const cfg = detailsModalTask.surveyConfig || {};
+                                    const questions = Array.isArray(cfg.questions) ? cfg.questions : [];
+                                    const sections = Array.isArray(cfg.sections) ? cfg.sections : [];
+                                    const consent = cfg.consentText || cfg.defaultConsentText;
+                                    const disclosure = cfg.instructions || cfg.disclosureText;
+
+                                    if (questions.length === 0 && sections.length === 0) {
+                                        return (
+                                            <div className="p-8 text-center text-gray-500 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border dark:border-gray-800">
+                                                <AlertTriangle className="w-8 h-8 mx-auto text-amber-500 mb-2" />
+                                                <p className="font-bold text-gray-800 dark:text-gray-200">No saved questionnaire details found for this campaign.</p>
+                                                <p className="text-[11px] text-gray-400 mt-1">This campaign may be a legacy task or was created without a questionnaire payload.</p>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div className="space-y-4">
+                                            {/* Terms & Consent Disclosures */}
+                                            {(consent || disclosure) && (
+                                                <div className="p-3.5 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl space-y-2">
+                                                    <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400 block">
+                                                        📜 Terms & Conditions / Worker Consent
+                                                    </span>
+                                                    {consent && (
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-gray-500 uppercase block">Consent Statement:</span>
+                                                            <p className="text-gray-700 dark:text-gray-300 italic">{String(consent)}</p>
+                                                        </div>
+                                                    )}
+                                                    {disclosure && (
+                                                        <div className="pt-1">
+                                                            <span className="text-[9px] font-bold text-gray-500 uppercase block">Worker Instructions / Disclosures:</span>
+                                                            <p className="text-gray-700 dark:text-gray-300">{String(disclosure)}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Sections Summary */}
+                                            {sections.length > 0 && (
+                                                <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800 space-y-2">
+                                                    <span className="text-[10px] uppercase font-bold text-gray-400 block">
+                                                        Survey Sections ({sections.length})
+                                                    </span>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        {sections.map((sec: any, idx: number) => (
+                                                            <div key={sec.id || idx} className="p-2.5 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700">
+                                                                <div className="font-bold text-gray-900 dark:text-white">
+                                                                    Section {idx + 1}: {sec.title || 'Untitled Section'}
+                                                                </div>
+                                                                {sec.description && (
+                                                                    <div className="text-[11px] text-gray-500 line-clamp-1">{sec.description}</div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Questions List */}
+                                            <div className="space-y-3">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400 block">
+                                                    Questions ({questions.length})
+                                                </span>
+                                                <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
+                                                    {questions.map((q: any, qIdx: number) => {
+                                                        const options = Array.isArray(q.options) ? q.options : [];
+                                                        const logicRules = q.logicRules || q.branchingRules || [];
+                                                        const validation = q.validation || {};
+
+                                                        return (
+                                                            <div key={q.id || qIdx} className="p-3 bg-gray-50 dark:bg-gray-900/60 rounded-xl border dark:border-gray-800 space-y-2">
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                                        <span className="font-mono font-bold text-blue-600 text-[11px]">Q{qIdx + 1}</span>
+                                                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                                            {q.type || 'text'}
+                                                                        </span>
+                                                                        {q.required !== false ? (
+                                                                            <span className="text-[9px] font-bold text-rose-500 uppercase bg-rose-50 dark:bg-rose-950/40 px-1 py-0.5 rounded">Required</span>
+                                                                        ) : (
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">Optional</span>
+                                                                        )}
+                                                                        {q.isAttentionCheck && (
+                                                                            <span className="text-[9px] font-black text-amber-600 uppercase bg-amber-50 dark:bg-amber-950/40 px-1 py-0.5 rounded">⚠️ Attention Check</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <span className="text-[10px] text-gray-400 font-mono">ID: {q.id}</span>
+                                                                </div>
+
+                                                                <p className="font-bold text-gray-900 dark:text-white text-xs">{q.title}</p>
+                                                                {q.description && (
+                                                                    <p className="text-[11px] text-gray-500">{q.description}</p>
+                                                                )}
+
+                                                                {/* Answer options */}
+                                                                {options.length > 0 && (
+                                                                    <div className="pt-1 space-y-1">
+                                                                        <span className="text-[9px] font-bold uppercase text-gray-400 block">Options:</span>
+                                                                        <div className="flex flex-wrap gap-1.5">
+                                                                            {options.map((opt: any, oIdx: number) => {
+                                                                                const label = typeof opt === 'string' ? opt : opt.text || opt.label || JSON.stringify(opt);
+                                                                                return (
+                                                                                    <span key={oIdx} className="px-2 py-0.5 rounded bg-white dark:bg-gray-800 border dark:border-gray-700 text-[11px] text-gray-700 dark:text-gray-300">
+                                                                                        • {label}
+                                                                                    </span>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Branching & Logic rules */}
+                                                                {logicRules.length > 0 && (
+                                                                    <div className="pt-1 p-2 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-900/30 text-[10px] text-blue-800 dark:text-blue-300 space-y-0.5">
+                                                                        <span className="font-bold uppercase block">Branching Rules:</span>
+                                                                        {logicRules.map((rule: any, rIdx: number) => (
+                                                                            <div key={rIdx}>
+                                                                                If answer {rule.operator || 'equals'} "{rule.value}": {rule.action || 'jump to'} {rule.targetQuestionId || rule.targetSectionId || 'next'}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Validation rules */}
+                                                                {(validation.minLength || validation.maxLength || validation.min || validation.max) && (
+                                                                    <div className="text-[10px] text-gray-500 flex gap-2">
+                                                                        {validation.minLength && <span>Min length: {validation.minLength}</span>}
+                                                                        {validation.maxLength && <span>Max length: {validation.maxLength}</span>}
+                                                                        {validation.min && <span>Min val: {validation.min}</span>}
+                                                                        {validation.max && <span>Max val: {validation.max}</span>}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        {/* TAB 2: REQUIREMENTS AND TARGETING */}
+                        {detailsActiveTab === 'requirements' && (
+                            <div className="space-y-4 text-xs">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Requirement Mode</span>
+                                        <span className="font-bold text-indigo-600 dark:text-indigo-400 uppercase text-xs">
+                                            {detailsModalTask.requirementMode || 'optional'}
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Display Behavior</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 capitalize">
+                                            {detailsModalTask.mandatoryDisplayBehavior || 'popup_only'}
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Re-completion Policy</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 capitalize">
+                                            {detailsModalTask.recompletionPolicy?.policy || 'never'}
+                                            {detailsModalTask.recompletionPolicy?.policy === 'every_x_days' && (
+                                                ` (Every ${detailsModalTask.recompletionPolicy.intervalDays || 30} days)`
+                                            )}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 bg-gray-50 dark:bg-gray-900/60 p-4 rounded-xl border dark:border-gray-800">
+                                    <h4 className="text-xs font-black uppercase text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                        <Users className="w-3.5 h-3.5 text-blue-500" /> Target Audience Filters
+                                    </h4>
+
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700">
+                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Selected Users</span>
+                                            <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                {detailsModalTask.targeting?.selectedUserIds && detailsModalTask.targeting.selectedUserIds.length > 0
+                                                    ? `${detailsModalTask.targeting.selectedUserIds.length} specified user(s)`
+                                                    : 'Not restricted'}
+                                            </span>
+                                        </div>
+                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700">
+                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Account Status</span>
+                                            <span className="font-bold text-gray-800 dark:text-gray-200 capitalize">
+                                                {detailsModalTask.targeting?.accountStatus || 'any'}
+                                            </span>
+                                        </div>
+                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700">
+                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Age Range</span>
+                                            <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                {detailsModalTask.targeting?.minAge || detailsModalTask.targeting?.maxAge
+                                                    ? `${detailsModalTask.targeting.minAge ?? 'Min'} - ${detailsModalTask.targeting.maxAge ?? 'Max'} yrs`
+                                                    : 'Any age'}
+                                            </span>
+                                        </div>
+                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700">
+                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Genders</span>
+                                            <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                {detailsModalTask.targeting?.genders && detailsModalTask.targeting.genders.length > 0
+                                                    ? detailsModalTask.targeting.genders.join(', ')
+                                                    : 'All genders'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700">
+                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Allowed Countries</span>
+                                            <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                {detailsModalTask.targeting?.countries && detailsModalTask.targeting.countries.length > 0
+                                                    ? detailsModalTask.targeting.countries.join(', ')
+                                                    : 'All countries (global)'}
+                                            </span>
+                                        </div>
+                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700">
+                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Allowed Currencies</span>
+                                            <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                {detailsModalTask.targeting?.currencies && detailsModalTask.targeting.currencies.length > 0
+                                                    ? detailsModalTask.targeting.currencies.join(', ')
+                                                    : 'All currencies'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Advanced rules summary */}
+                                    <div className="pt-2 border-t dark:border-gray-750 space-y-1">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Advanced Targeting Rules</span>
+                                        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                                            <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold">
+                                                Completion Rules: {detailsModalTask.targeting?.completionRules?.length || 0}
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold">
+                                                Profile Rules: {detailsModalTask.targeting?.profileRules?.length || 0}
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold">
+                                                Survey Answer Rules: {detailsModalTask.targeting?.surveyAnswerRules?.length || 0}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 3: REWARDS AND FUNDING */}
+                        {detailsActiveTab === 'rewards' && (
+                            <div className="space-y-4 text-xs">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800 text-center">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Reward per Task</span>
+                                        <span className="text-base font-mono font-bold text-emerald-600">
+                                            {detailsModalTask.rewardPerTask === 0 ? 'Free ($0.00)' : `$${(detailsModalTask.rewardPerTask || 0).toFixed(2)} USD`}
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800 text-center">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Available Balance</span>
+                                        <span className="text-base font-mono font-bold text-indigo-600">
+                                            ${(detailsModalTask.campaignAvailableBalanceUSD ?? detailsModalTask.totalBudget ?? 0).toFixed(2)} USD
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800 text-center">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Total Budget</span>
+                                        <span className="text-base font-mono font-bold text-gray-800 dark:text-gray-200">
+                                            ${(detailsModalTask.totalBudget || 0).toFixed(2)} USD
+                                        </span>
+                                    </div>
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800 text-center">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Funding Status</span>
+                                        <span className="text-xs font-bold uppercase text-blue-600">
+                                            {detailsModalTask.campaignFundingStatus || 'funded'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border dark:border-gray-800 space-y-2">
+                                    <span className="text-[10px] uppercase font-bold text-gray-400 block">Funding Source Breakdown</span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700">
+                                            <span className="text-[10px] text-gray-400 block">From Investment</span>
+                                            <span className="font-mono font-bold text-gray-800 dark:text-gray-200">
+                                                ${(detailsModalTask.fundingSourceBreakdown?.fromInvestmentUSD || 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700">
+                                            <span className="text-[10px] text-gray-400 block">From Task Earnings</span>
+                                            <span className="font-mono font-bold text-gray-800 dark:text-gray-200">
+                                                ${(detailsModalTask.fundingSourceBreakdown?.fromTaskEarningsUSD || 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700">
+                                            <span className="text-[10px] text-gray-400 block">From Refunds</span>
+                                            <span className="font-mono font-bold text-gray-800 dark:text-gray-200">
+                                                ${(detailsModalTask.fundingSourceBreakdown?.fromRefundsUSD || 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 4: AUDIENCE PROGRESS */}
+                        {detailsActiveTab === 'audience' && (
+                            <div className="space-y-4 text-xs">
+                                {audienceLoading && (
+                                    <div className="p-8 text-center text-gray-500">
+                                        <Clock className="w-6 h-6 animate-spin mx-auto text-blue-600 mb-2" />
+                                        Loading audience progress and submission statuses...
+                                    </div>
+                                )}
+
+                                {audienceError && (
+                                    <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-red-700 dark:text-red-300">
+                                        {audienceError}
+                                    </div>
+                                )}
+
+                                {!audienceLoading && !audienceError && audienceProgressData && (
+                                    <>
+                                        {/* Summary Cards */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center">
+                                            <div className="bg-blue-50 dark:bg-blue-950/40 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/40">
+                                                <span className="text-[9px] font-bold uppercase text-blue-600 dark:text-blue-400 block">Total Targeted</span>
+                                                <span className="text-base font-black text-blue-700 dark:text-blue-300">
+                                                    {audienceProgressData.summary?.totalTargeted ?? 0}
+                                                </span>
+                                            </div>
+                                            <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border dark:border-gray-800">
+                                                <span className="text-[9px] font-bold uppercase text-gray-400 block">Not Started</span>
+                                                <span className="text-base font-black text-gray-700 dark:text-gray-300">
+                                                    {audienceProgressData.summary?.notStartedCount ?? 0}
+                                                </span>
+                                            </div>
+                                            <div className="bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/40">
+                                                <span className="text-[9px] font-bold uppercase text-amber-600 dark:text-amber-400 block">Pending Review</span>
+                                                <span className="text-base font-black text-amber-700 dark:text-amber-300">
+                                                    {audienceProgressData.summary?.pendingReviewCount ?? 0}
+                                                </span>
+                                            </div>
+                                            <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900/40">
+                                                <span className="text-[9px] font-bold uppercase text-emerald-600 dark:text-emerald-400 block">Approved</span>
+                                                <span className="text-base font-black text-emerald-700 dark:text-emerald-300">
+                                                    {audienceProgressData.summary?.approvedCount ?? 0}
+                                                </span>
+                                            </div>
+                                            <div className="bg-purple-50 dark:bg-purple-950/40 p-2.5 rounded-xl border border-purple-200 dark:border-purple-900/40">
+                                                <span className="text-[9px] font-bold uppercase text-purple-600 dark:text-purple-400 block">Paid</span>
+                                                <span className="text-base font-black text-purple-700 dark:text-purple-300">
+                                                    {audienceProgressData.summary?.paidCount ?? 0}
+                                                </span>
+                                            </div>
+                                            <div className="bg-rose-50 dark:bg-rose-950/40 p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/40">
+                                                <span className="text-[9px] font-bold uppercase text-rose-600 dark:text-rose-400 block">Rejected</span>
+                                                <span className="text-base font-black text-rose-700 dark:text-rose-300">
+                                                    {audienceProgressData.summary?.rejectedCount ?? 0}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Filters & Search */}
+                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-1">
+                                            <div className="relative w-full sm:w-64">
+                                                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                                <input
+                                                    type="text"
+                                                    value={audienceSearch}
+                                                    onChange={e => {
+                                                        setAudienceSearch(e.target.value);
+                                                        setAudiencePage(1);
+                                                    }}
+                                                    placeholder="Search username or email..."
+                                                    className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                />
+                                            </div>
+
+                                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                <select
+                                                    value={audienceStatusFilter}
+                                                    onChange={e => {
+                                                        setAudienceStatusFilter(e.target.value);
+                                                        setAudiencePage(1);
+                                                    }}
+                                                    className="p-1.5 rounded-lg border dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs font-bold text-gray-700 dark:text-gray-300"
+                                                >
+                                                    <option value="all">All Statuses</option>
+                                                    <option value="Not Started">Not Started</option>
+                                                    <option value="Pending Review">Pending Review</option>
+                                                    <option value="Approved">Approved</option>
+                                                    <option value="Paid">Paid</option>
+                                                    <option value="Rejected">Rejected</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Table of Users */}
+                                        {(() => {
+                                            const allUsers = audienceProgressData.users || [];
+                                            const filtered = allUsers.filter(u => {
+                                                if (audienceStatusFilter !== 'all' && u.submissionStatus !== audienceStatusFilter) {
+                                                    return false;
+                                                }
+                                                if (audienceSearch.trim()) {
+                                                    const q = audienceSearch.toLowerCase();
+                                                    const nameMatch = u.username?.toLowerCase().includes(q);
+                                                    const emailMatch = u.email?.toLowerCase().includes(q);
+                                                    const idMatch = u.userId?.toLowerCase().includes(q);
+                                                    return nameMatch || emailMatch || idMatch;
+                                                }
+                                                return true;
+                                            });
+
+                                            const totalPages = Math.ceil(filtered.length / AUDIENCE_PAGE_SIZE) || 1;
+                                            const paginated = filtered.slice((audiencePage - 1) * AUDIENCE_PAGE_SIZE, audiencePage * AUDIENCE_PAGE_SIZE);
+
+                                            return (
+                                                <div className="space-y-2">
+                                                    <div className="overflow-x-auto border dark:border-gray-700 rounded-xl">
+                                                        <table className="w-full text-left border-collapse text-xs">
+                                                            <thead>
+                                                                <tr className="bg-gray-50 dark:bg-gray-900/60 border-b dark:border-gray-700 text-[10px] uppercase font-bold text-gray-500">
+                                                                    <th className="p-2.5">User</th>
+                                                                    <th className="p-2.5">Country / Cur</th>
+                                                                    <th className="p-2.5">Eligibility</th>
+                                                                    <th className="p-2.5">Progress Status</th>
+                                                                    <th className="p-2.5">Submitted At</th>
+                                                                    <th className="p-2.5 text-right">Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y dark:divide-gray-800">
+                                                                {paginated.length === 0 ? (
+                                                                    <tr>
+                                                                        <td colSpan={6} className="p-4 text-center text-gray-400 italic">
+                                                                            No targeted users matching criteria.
+                                                                        </td>
+                                                                    </tr>
+                                                                ) : (
+                                                                    paginated.map((u: any) => (
+                                                                        <tr key={u.userId} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/30">
+                                                                            <td className="p-2.5">
+                                                                                <div className="font-bold text-gray-900 dark:text-white">
+                                                                                    {u.username}
+                                                                                </div>
+                                                                                <div className="text-[10px] text-gray-400 font-mono">
+                                                                                    {u.email || u.userId}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="p-2.5 text-gray-700 dark:text-gray-300">
+                                                                                {u.country} / {u.currency}
+                                                                            </td>
+                                                                            <td className="p-2.5">
+                                                                                {u.isCurrentlyEligible ? (
+                                                                                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                                                                                        Eligible
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="text-[10px] font-bold text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                                                        Ineligible
+                                                                                    </span>
+                                                                                )}
+                                                                            </td>
+                                                                            <td className="p-2.5">
+                                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                                                                    u.submissionStatus === 'Paid'
+                                                                                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                                                                        : u.submissionStatus === 'Approved'
+                                                                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                                                                        : u.submissionStatus === 'Pending Review'
+                                                                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                                                                        : u.submissionStatus === 'Rejected'
+                                                                                        ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                                                                        : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                                                                }`}>
+                                                                                    {u.submissionStatus}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="p-2.5 text-gray-500 font-mono text-[10px]">
+                                                                                {u.submittedAt ? new Date(u.submittedAt).toLocaleString() : '—'}
+                                                                            </td>
+                                                                            <td className="p-2.5 text-right">
+                                                                                {u.submissionId ? (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => setSelectedWorkerRecord(u)}
+                                                                                        className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 font-bold rounded-lg text-[11px] transition-all"
+                                                                                    >
+                                                                                        View Answers
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <span className="text-gray-400 text-[10px] italic">No submission</span>
+                                                                                )}
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))
+                                                                )}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+
+                                                    {/* Pagination Controls */}
+                                                    {totalPages > 1 && (
+                                                        <div className="flex items-center justify-between text-xs pt-1">
+                                                            <span className="text-gray-400 text-[11px]">
+                                                                Page {audiencePage} of {totalPages} ({filtered.length} total users)
+                                                            </span>
+                                                            <div className="flex items-center gap-1">
+                                                                <Button
+                                                                    variant="secondary"
+                                                                    size="sm"
+                                                                    disabled={audiencePage <= 1}
+                                                                    onClick={() => setAudiencePage(p => Math.max(1, p - 1))}
+                                                                    className="px-2 py-1 text-xs"
+                                                                >
+                                                                    Prev
+                                                                </Button>
+                                                                <Button
+                                                                    variant="secondary"
+                                                                    size="sm"
+                                                                    disabled={audiencePage >= totalPages}
+                                                                    onClick={() => setAudiencePage(p => Math.min(totalPages, p + 1))}
+                                                                    className="px-2 py-1 text-xs"
+                                                                >
+                                                                    Next
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
+                            <div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDeleteArchiveModal(true)}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 transition-all flex items-center gap-1.5"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" /> Manage Campaign LifeCycle (Archive / Delete)
+                                </button>
+                            </div>
+                            <Button variant="secondary" size="sm" onClick={() => setDetailsModalTask(null)}>
+                                Close
+                            </Button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* WORKER ANSWERS & ACTIVITY INSPECTION MODAL */}
+            {selectedWorkerRecord && detailsModalTask && (
+                <Modal isOpen={true} onClose={() => setSelectedWorkerRecord(null)}>
+                    <div className="p-6 max-w-2xl max-h-[85vh] overflow-y-auto space-y-4 text-xs">
+                        <div className="flex items-center justify-between border-b dark:border-gray-700 pb-3">
+                            <div>
+                                <h3 className="text-base font-black text-gray-900 dark:text-white uppercase flex items-center gap-2">
+                                    <Users className="w-4 h-4 text-indigo-600" />
+                                    Worker Submission: @{selectedWorkerRecord.username}
+                                </h3>
+                                <p className="text-[11px] text-gray-500 font-mono">
+                                    User ID: {selectedWorkerRecord.userId} • Email: {selectedWorkerRecord.email || 'N/A'}
+                                </p>
+                            </div>
+                            <button onClick={() => setSelectedWorkerRecord(null)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Submission Metadata Cards */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <div className="p-2.5 bg-gray-50 dark:bg-gray-900/60 rounded-xl border dark:border-gray-800">
+                                <span className="text-[9px] font-bold uppercase text-gray-400 block">Status</span>
+                                <span className="font-bold text-gray-900 dark:text-white">{selectedWorkerRecord.submissionStatus}</span>
+                            </div>
+                            <div className="p-2.5 bg-gray-50 dark:bg-gray-900/60 rounded-xl border dark:border-gray-800">
+                                <span className="text-[9px] font-bold uppercase text-gray-400 block">Qualification</span>
+                                <span className="font-bold text-indigo-600">{selectedWorkerRecord.surveyQualificationStatus || 'Completed'}</span>
+                            </div>
+                            <div className="p-2.5 bg-gray-50 dark:bg-gray-900/60 rounded-xl border dark:border-gray-800">
+                                <span className="text-[9px] font-bold uppercase text-gray-400 block">Time Spent</span>
+                                <span className="font-bold text-gray-900 dark:text-white">
+                                    {selectedWorkerRecord.surveyCompletionTimeSeconds > 0 
+                                        ? `${selectedWorkerRecord.surveyCompletionTimeSeconds}s (${Math.round(selectedWorkerRecord.surveyCompletionTimeSeconds / 60)}m)`
+                                        : 'Not recorded'}
+                                </span>
+                            </div>
+                            <div className="p-2.5 bg-gray-50 dark:bg-gray-900/60 rounded-xl border dark:border-gray-800">
+                                <span className="text-[9px] font-bold uppercase text-gray-400 block">Quality Score</span>
+                                <span className="font-bold text-emerald-600">{selectedWorkerRecord.qualityScore ?? 100}%</span>
+                            </div>
+                        </div>
+
+                        {/* Audit & Payment Details */}
+                        <div className="p-3 bg-gray-50 dark:bg-gray-900/60 rounded-xl border dark:border-gray-800 space-y-1.5">
+                            <span className="text-[10px] font-bold uppercase text-gray-400 block">Audit & Financial Records</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                                <div>
+                                    <span className="text-gray-400">Reward Paid: </span>
+                                    <span className="font-bold text-emerald-600">
+                                        {selectedWorkerRecord.paid ? `Yes ($${selectedWorkerRecord.rewardAmount || detailsModalTask.rewardPerTask} USD)` : 'No / Pending'}
+                                    </span>
+                                </div>
+                                {selectedWorkerRecord.rewardPaidAt && (
+                                    <div>
+                                        <span className="text-gray-400">Paid At: </span>
+                                        <span className="font-mono">{new Date(selectedWorkerRecord.rewardPaidAt).toLocaleString()}</span>
+                                    </div>
+                                )}
+                                {selectedWorkerRecord.rewardTransactionId && (
+                                    <div className="col-span-full">
+                                        <span className="text-gray-400">Transaction ID: </span>
+                                        <span className="font-mono">{selectedWorkerRecord.rewardTransactionId}</span>
+                                    </div>
+                                )}
+                                {selectedWorkerRecord.rejectionReason && (
+                                    <div className="col-span-full p-2 bg-rose-50 dark:bg-rose-950/40 rounded border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300">
+                                        <span className="font-bold block">Rejection Reason:</span>
+                                        {selectedWorkerRecord.rejectionReason}
+                                    </div>
+                                )}
+                                {selectedWorkerRecord.adminNotes && (
+                                    <div className="col-span-full p-2 bg-amber-50 dark:bg-amber-950/40 rounded border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300">
+                                        <span className="font-bold block">Admin Review Notes:</span>
+                                        {selectedWorkerRecord.adminNotes}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Actual Answers Mapped to Questions */}
+                        <div className="space-y-2">
+                            <h4 className="text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                                Survey Answers (v{selectedWorkerRecord.surveyVersion || 1})
+                            </h4>
+
+                            {(() => {
+                                const responses = selectedWorkerRecord.surveyResponses || [];
+                                const questions = detailsModalTask.surveyConfig?.questions || [];
+
+                                if (responses.length === 0) {
+                                    return (
+                                        <p className="text-gray-400 italic p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                                            No questionnaire responses recorded for this submission.
+                                        </p>
+                                    );
+                                }
+
+                                return (
+                                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                        {responses.map((resp: any, rIdx: number) => {
+                                            const matchingQ = questions.find((q: any) => q.id === resp.questionId);
+                                            const qTitle = matchingQ?.title || resp.questionTitle || `Question ${resp.questionId}`;
+                                            let displayVal = resp.value;
+                                            if (Array.isArray(resp.value)) {
+                                                displayVal = resp.value.join(', ');
+                                            } else if (typeof resp.value === 'object' && resp.value !== null) {
+                                                displayVal = JSON.stringify(resp.value);
+                                            } else if (resp.value === true) {
+                                                displayVal = 'Yes (Agreed)';
+                                            } else if (resp.value === false) {
+                                                displayVal = 'No';
+                                            }
+
+                                            return (
+                                                <div key={rIdx} className="p-2.5 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 space-y-1">
+                                                    <div className="font-semibold text-gray-800 dark:text-gray-200 flex items-center justify-between">
+                                                        <span>{qTitle}</span>
+                                                        <span className="text-[10px] text-gray-400 font-mono">QID: {resp.questionId}</span>
+                                                    </div>
+                                                    <div className="p-2 bg-gray-50 dark:bg-gray-900 rounded font-mono text-indigo-600 dark:text-indigo-400 font-bold">
+                                                        {displayVal !== undefined && displayVal !== null && displayVal !== '' ? String(displayVal) : '<No answer recorded>'}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                            <Button variant="secondary" size="sm" onClick={() => setSelectedWorkerRecord(null)}>
+                                Close
+                            </Button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* SAFE CAMPAIGN DELETE / ARCHIVE CONFIRMATION MODAL */}
+            {showDeleteArchiveModal && detailsModalTask && (
+                <Modal isOpen={true} onClose={() => setShowDeleteArchiveModal(false)}>
+                    <div className="p-6 max-w-lg space-y-4 text-xs">
+                        <div className="flex items-center justify-between border-b dark:border-gray-700 pb-3">
+                            <h3 className="text-base font-black text-gray-900 dark:text-white uppercase flex items-center gap-2">
+                                <Archive className="w-5 h-5 text-amber-500" />
+                                Manage Campaign: {detailsModalTask.title}
+                            </h3>
+                            <button onClick={() => setShowDeleteArchiveModal(false)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {actionFeedbackMessage && (
+                            <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl text-blue-800 dark:text-blue-300">
+                                {actionFeedbackMessage}
+                            </div>
+                        )}
+
+                        {(() => {
+                            const hasCompletions = (detailsModalTask.currentCompletions || 0) > 0;
+                            const hasAudienceSubmissions = audienceProgressData && (
+                                (audienceProgressData.summary?.approvedCount || 0) > 0 ||
+                                (audienceProgressData.summary?.paidCount || 0) > 0 ||
+                                (audienceProgressData.summary?.pendingReviewCount || 0) > 0 ||
+                                (audienceProgressData.summary?.rejectedCount || 0) > 0
+                            );
+                            const hasHistoricalData = hasCompletions || Boolean(hasAudienceSubmissions);
+
+                            return (
+                                <div className="space-y-4">
+                                    <div className="p-3.5 bg-gray-50 dark:bg-gray-900 rounded-xl border dark:border-gray-800 space-y-2">
+                                        <div className="font-bold text-gray-900 dark:text-white">
+                                            Status: <span className="text-indigo-600">{detailsModalTask.status}</span>
+                                        </div>
+                                        <div className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                                            {hasHistoricalData ? (
+                                                <div className="space-y-2">
+                                                    <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg text-amber-800 dark:text-amber-300 font-semibold">
+                                                        ⚠️ This campaign has recorded submissions ({detailsModalTask.currentCompletions} completions).
+                                                        Permanent deletion is blocked to protect worker earnings, ledger transactions, and audit records.
+                                                    </div>
+                                                    <p>
+                                                        Clicking <strong>Archive / Deactivate</strong> will safely change the status to Completed, preventing any further worker submissions while preserving all submission answers, transactions, and proof history.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <p>
+                                                    This campaign has 0 recorded worker submissions. You can choose to <strong>Archive / Deactivate</strong> it, or permanently remove it if you wish.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end gap-2 pt-2 border-t dark:border-gray-700">
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() => setShowDeleteArchiveModal(false)}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        
+                                        <Button
+                                            variant="primary"
+                                            size="sm"
+                                            disabled={isArchivingCampaign || isDeletingCampaign}
+                                            onClick={async () => {
+                                                try {
+                                                    setIsArchivingCampaign(true);
+                                                    setActionFeedbackMessage(null);
+                                                    const res: any = await archiveAdminCampaign(String(detailsModalTask._id));
+                                                    setActionFeedbackMessage(res?.message || 'Campaign safely archived.');
+                                                    if (res?.task) {
+                                                        dispatch({ type: 'UPDATE_USER_TASK', payload: res.task });
+                                                        setDetailsModalTask(res.task);
+                                                    }
+                                                    setTimeout(() => {
+                                                        setShowDeleteArchiveModal(false);
+                                                        setActionFeedbackMessage(null);
+                                                    }, 1500);
+                                                } catch (err: any) {
+                                                    setActionFeedbackMessage(`Archive failed: ${err.message}`);
+                                                } finally {
+                                                    setIsArchivingCampaign(false);
+                                                }
+                                            }}
+                                            className="bg-amber-600 hover:bg-amber-700 text-white font-bold flex items-center gap-1"
+                                        >
+                                            <Archive className="w-3.5 h-3.5" />
+                                            {isArchivingCampaign ? 'Archiving...' : 'Archive / Deactivate'}
+                                        </Button>
+
+                                        {!hasHistoricalData && (
+                                            <Button
+                                                variant="danger"
+                                                size="sm"
+                                                disabled={isArchivingCampaign || isDeletingCampaign}
+                                                onClick={async () => {
+                                                    if (!window.confirm(`Are you sure you want to permanently delete campaign "${detailsModalTask.title}"? This cannot be undone.`)) {
+                                                        return;
+                                                    }
+                                                    try {
+                                                        setIsDeletingCampaign(true);
+                                                        setActionFeedbackMessage(null);
+                                                        await deleteUserTask(String(detailsModalTask._id));
+                                                        dispatch({ type: 'DELETE_USER_TASK', payload: detailsModalTask._id });
+                                                        setShowDeleteArchiveModal(false);
+                                                        setDetailsModalTask(null);
+                                                    } catch (err: any) {
+                                                        setActionFeedbackMessage(`Deletion failed: ${err.message}`);
+                                                    } finally {
+                                                        setIsDeletingCampaign(false);
+                                                    }
+                                                }}
+                                                className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                                {isDeletingCampaign ? 'Deleting...' : 'Permanent Delete'}
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </Modal>
             )}

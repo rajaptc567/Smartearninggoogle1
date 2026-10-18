@@ -788,6 +788,23 @@ export const getSurveyCampaignAnalytics = async (taskId: string): Promise<any> =
     return result.data;
 };
 
+export const getTaskAudienceProgress = async (taskId: string): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${taskId}/audience-progress`, {
+        headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const archiveAdminCampaign = async (taskId: string): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${taskId}/archive-campaign`, {
+        method: 'POST',
+        headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 export const updateSubmissionStatus = async (subId: string, updates: { status: string; adminNotes?: string; rejectionReason?: string }): Promise<any> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks/submissions/${subId}`, {
         method: 'PUT',
