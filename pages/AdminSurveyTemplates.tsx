@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useData } from '../hooks/useData';
 import { AdminSurveyTemplate, formatCurrency, User } from '../types';
 import Button from '../components/ui/Button';
@@ -158,23 +158,37 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [isDeletingCampaign, setIsDeletingCampaign] = useState<boolean>(false);
     const [actionFeedbackMessage, setActionFeedbackMessage] = useState<string | null>(null);
 
-    // Concurrent-safe audience progress fetcher with task-ID isolation and stale-request protection
+    const audienceProgressDataRef = useRef(audienceProgressData);
+    audienceProgressDataRef.current = audienceProgressData;
+    const audienceErrorRef = useRef(audienceError);
+    audienceErrorRef.current = audienceError;
+    const detailsModalTaskRef = useRef(detailsModalTask);
+    detailsModalTaskRef.current = detailsModalTask;
+    const activeRequestIdRef = useRef(0);
+
+    // Concurrent-safe stable audience progress fetcher with task-ID isolation and request-generation guard
     const fetchAudienceProgress = useCallback(async (taskId: string, force = false) => {
         if (!taskId) return;
+        const currentData = audienceProgressDataRef.current;
+        const currentError = audienceErrorRef.current;
         // Reuse data only when its recorded campaign ID exactly matches the currently selected campaign and is valid
-        if (!force && audienceProgressData && audienceProgressData.taskId === taskId && !audienceError) {
+        if (!force && currentData && currentData.taskId === taskId && !currentError) {
             return;
         }
+        const requestId = ++activeRequestIdRef.current;
         try {
             setAudienceLoading(true);
             setAudienceError(null);
             // Clear or invalidate previous campaign's audience data if switching tasks
-            if (!audienceProgressData || audienceProgressData.taskId !== taskId) {
+            if (!currentData || currentData.taskId !== taskId) {
                 setAudienceProgressData(null);
             }
             const res: any = await getTaskAudienceProgress(taskId);
-            // Stale request guard: ensure the currently selected task modal still matches this taskId
-            if (!detailsModalTask || String(detailsModalTask._id) !== taskId) {
+            if (requestId !== activeRequestIdRef.current) {
+                return;
+            }
+            const activeTask = detailsModalTaskRef.current;
+            if (!activeTask || String(activeTask._id) !== taskId) {
                 return;
             }
             setAudienceProgressData({
@@ -183,19 +197,24 @@ export const AdminSurveyTemplates: React.FC = () => {
                 users: res?.data?.users || res?.users || []
             });
         } catch (err: any) {
-            if (!detailsModalTask || String(detailsModalTask._id) !== taskId) {
+            if (requestId !== activeRequestIdRef.current) {
+                return;
+            }
+            const activeTask = detailsModalTaskRef.current;
+            if (!activeTask || String(activeTask._id) !== taskId) {
                 return;
             }
             setAudienceError(err?.message || 'Failed to fetch audience progress');
-            if (!audienceProgressData || audienceProgressData.taskId !== taskId) {
+            const currentData = audienceProgressDataRef.current;
+            if (!currentData || currentData.taskId !== taskId) {
                 setAudienceProgressData(null);
             }
         } finally {
-            if (detailsModalTask && String(detailsModalTask._id) === taskId) {
+            if (requestId === activeRequestIdRef.current) {
                 setAudienceLoading(false);
             }
         }
-    }, [audienceProgressData, audienceError, detailsModalTask]);
+    }, []);
 
     // When opening or switching to another campaign, clear previous audience data/error and fetch fresh verification
     useEffect(() => {
@@ -208,8 +227,10 @@ export const AdminSurveyTemplates: React.FC = () => {
             setAudiencePage(1);
             fetchAudienceProgress(taskId, true);
         } else {
+            activeRequestIdRef.current++;
             setAudienceProgressData(null);
             setAudienceError(null);
+            setAudienceLoading(false);
         }
     }, [detailsModalTask?._id, fetchAudienceProgress]);
 
@@ -3561,7 +3582,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             {isArchivingCampaign ? 'Archiving...' : 'Archive / Deactivate'}
                                         </Button>
 
-                                        {!isVerifying && !hasVerificationFailed && Boolean(audienceProgressData) && !hasHistoricalData && (
+                                        {!isVerifying && !hasVerificationFailed && hasMatchingData && audienceProgressData?.taskId === currentTaskId && !hasHistoricalData && !audienceError && (
                                             <Button
                                                 variant="danger"
                                                 size="sm"
