@@ -1740,7 +1740,7 @@ export const createUserTask = async (req, res) => {
 export const updateUserTaskStatus = async (req, res) => {
     try {
         const { status, adminNotes, reviewRequested, userReviewMessage } = req.body;
-        const task = await UserTask.findById(req.params.id);
+        let task = await UserTask.findById(req.params.id);
         if (!task) return res.status(404).json({ success: false, error: 'Campaign not found.' });
 
         // Check ownership & authorization
