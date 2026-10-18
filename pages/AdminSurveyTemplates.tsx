@@ -145,7 +145,7 @@ export const AdminSurveyTemplates: React.FC = () => {
     // Campaign Details & Audience Progress Modal
     const [detailsModalTask, setDetailsModalTask] = useState<UserTask | null>(null);
     const [detailsActiveTab, setDetailsActiveTab] = useState<'overview' | 'questionnaire' | 'requirements' | 'rewards' | 'audience'>('overview');
-    const [audienceProgressData, setAudienceProgressData] = useState<{ summary: any; users: any[] } | null>(null);
+    const [audienceProgressData, setAudienceProgressData] = useState<{ taskId: string; summary: any; users: any[] } | null>(null);
     const [audienceLoading, setAudienceLoading] = useState<boolean>(false);
     const [audienceError, setAudienceError] = useState<string | null>(null);
     const [audienceSearch, setAudienceSearch] = useState<string>('');
@@ -158,21 +158,60 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [isDeletingCampaign, setIsDeletingCampaign] = useState<boolean>(false);
     const [actionFeedbackMessage, setActionFeedbackMessage] = useState<string | null>(null);
 
-    // Concurrent-safe audience progress fetcher
+    // Concurrent-safe audience progress fetcher with task-ID isolation and stale-request protection
     const fetchAudienceProgress = useCallback(async (taskId: string, force = false) => {
-        if (audienceLoading) return;
-        if (!force && audienceProgressData) return;
+        if (!taskId) return;
+        // Reuse data only when its recorded campaign ID exactly matches the currently selected campaign and is valid
+        if (!force && audienceProgressData && audienceProgressData.taskId === taskId && !audienceError) {
+            return;
+        }
         try {
             setAudienceLoading(true);
             setAudienceError(null);
-            const res = await getTaskAudienceProgress(taskId);
-            setAudienceProgressData(res);
+            // Clear or invalidate previous campaign's audience data if switching tasks
+            if (!audienceProgressData || audienceProgressData.taskId !== taskId) {
+                setAudienceProgressData(null);
+            }
+            const res: any = await getTaskAudienceProgress(taskId);
+            // Stale request guard: ensure the currently selected task modal still matches this taskId
+            if (!detailsModalTask || String(detailsModalTask._id) !== taskId) {
+                return;
+            }
+            setAudienceProgressData({
+                taskId,
+                summary: res?.data?.summary || res?.summary || {},
+                users: res?.data?.users || res?.users || []
+            });
         } catch (err: any) {
+            if (!detailsModalTask || String(detailsModalTask._id) !== taskId) {
+                return;
+            }
             setAudienceError(err?.message || 'Failed to fetch audience progress');
+            if (!audienceProgressData || audienceProgressData.taskId !== taskId) {
+                setAudienceProgressData(null);
+            }
         } finally {
-            setAudienceLoading(false);
+            if (detailsModalTask && String(detailsModalTask._id) === taskId) {
+                setAudienceLoading(false);
+            }
         }
-    }, [audienceLoading, audienceProgressData]);
+    }, [audienceProgressData, audienceError, detailsModalTask]);
+
+    // When opening or switching to another campaign, clear previous audience data/error and fetch fresh verification
+    useEffect(() => {
+        if (detailsModalTask?._id) {
+            const taskId = String(detailsModalTask._id);
+            setAudienceProgressData(null);
+            setAudienceError(null);
+            setAudienceSearch('');
+            setAudienceStatusFilter('all');
+            setAudiencePage(1);
+            fetchAudienceProgress(taskId, true);
+        } else {
+            setAudienceProgressData(null);
+            setAudienceError(null);
+        }
+    }, [detailsModalTask?._id, fetchAudienceProgress]);
 
     // Fetch templates on mount
     const fetchTemplates = async () => {
@@ -3009,7 +3048,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     </div>
                                 )}
 
-                                {!audienceLoading && !audienceError && audienceProgressData && (
+                                {!audienceLoading && !audienceError && audienceProgressData && audienceProgressData.taskId === String(detailsModalTask?._id) && (
                                     <>
                                         {/* Summary Cards */}
                                         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-center">
@@ -3094,7 +3133,7 @@ export const AdminSurveyTemplates: React.FC = () => {
 
                                         {/* Table of Users */}
                                         {(() => {
-                                            const allUsers = audienceProgressData.users || [];
+                                            const allUsers = audienceProgressData && audienceProgressData.taskId === String(detailsModalTask?._id) ? (audienceProgressData.users || []) : [];
                                             const filtered = allUsers.filter(u => {
                                                 if (audienceStatusFilter !== 'all' && u.submissionStatus !== audienceStatusFilter) {
                                                     return false;
@@ -3414,7 +3453,9 @@ export const AdminSurveyTemplates: React.FC = () => {
 
                         {(() => {
                             const hasCompletions = (detailsModalTask.currentCompletions || 0) > 0;
-                            const hasAudienceSubmissions = audienceProgressData && (
+                            const currentTaskId = String(detailsModalTask._id);
+                            const hasMatchingData = audienceProgressData && audienceProgressData.taskId === currentTaskId;
+                            const hasAudienceSubmissions = hasMatchingData && (
                                 (audienceProgressData.summary?.approvedCount || 0) > 0 ||
                                 (audienceProgressData.summary?.paidCount || 0) > 0 ||
                                 (audienceProgressData.summary?.pendingReviewCount || 0) > 0 ||
@@ -3423,8 +3464,8 @@ export const AdminSurveyTemplates: React.FC = () => {
                                 (Array.isArray(audienceProgressData.users) && audienceProgressData.users.some((u: any) => u.hasSubmitted || (u.status && u.status !== 'not_started')))
                             );
                             const hasHistoricalData = hasCompletions || Boolean(hasAudienceSubmissions);
-                            const hasVerificationFailed = !audienceLoading && Boolean(audienceError) && !audienceProgressData && !hasCompletions;
-                            const isVerifying = audienceLoading || (!audienceProgressData && !hasVerificationFailed && !hasCompletions);
+                            const hasVerificationFailed = !audienceLoading && Boolean(audienceError) && !hasMatchingData && !hasCompletions;
+                            const isVerifying = audienceLoading || (!hasMatchingData && !hasVerificationFailed && !hasCompletions);
 
                             return (
                                 <div className="space-y-4">
