@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData } from '../hooks/useData';
 import { AdminSurveyTemplate, formatCurrency, User } from '../types';
 import Button from '../components/ui/Button';
@@ -157,6 +157,22 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [isArchivingCampaign, setIsArchivingCampaign] = useState<boolean>(false);
     const [isDeletingCampaign, setIsDeletingCampaign] = useState<boolean>(false);
     const [actionFeedbackMessage, setActionFeedbackMessage] = useState<string | null>(null);
+
+    // Concurrent-safe audience progress fetcher
+    const fetchAudienceProgress = useCallback(async (taskId: string, force = false) => {
+        if (audienceLoading) return;
+        if (!force && audienceProgressData) return;
+        try {
+            setAudienceLoading(true);
+            setAudienceError(null);
+            const res = await getTaskAudienceProgress(taskId);
+            setAudienceProgressData(res);
+        } catch (err: any) {
+            setAudienceError(err?.message || 'Failed to fetch audience progress');
+        } finally {
+            setAudienceLoading(false);
+        }
+    }, [audienceLoading, audienceProgressData]);
 
     // Fetch templates on mount
     const fetchTemplates = async () => {
@@ -2532,19 +2548,8 @@ export const AdminSurveyTemplates: React.FC = () => {
                                 type="button"
                                 onClick={() => {
                                     setDetailsActiveTab('audience');
-                                    if (!audienceProgressData && !audienceLoading && detailsModalTask._id) {
-                                        setAudienceLoading(true);
-                                        setAudienceError(null);
-                                        getTaskAudienceProgress(String(detailsModalTask._id))
-                                            .then(res => {
-                                                setAudienceProgressData(res);
-                                            })
-                                            .catch(err => {
-                                                setAudienceError(err?.message || 'Failed to fetch audience progress');
-                                            })
-                                            .finally(() => {
-                                                setAudienceLoading(false);
-                                            });
+                                    if (detailsModalTask?._id) {
+                                        fetchAudienceProgress(String(detailsModalTask._id));
                                     }
                                 }}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -2650,13 +2655,8 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            if (!audienceProgressData && !audienceLoading && detailsModalTask._id) {
-                                                setAudienceLoading(true);
-                                                setAudienceError(null);
-                                                getTaskAudienceProgress(String(detailsModalTask._id))
-                                                    .then(res => setAudienceProgressData(res))
-                                                    .catch(err => setAudienceError(err?.message || 'Failed to fetch audience progress'))
-                                                    .finally(() => setAudienceLoading(false));
+                                            if (detailsModalTask?._id) {
+                                                fetchAudienceProgress(String(detailsModalTask._id));
                                             }
                                             setShowDeleteArchiveModal(true);
                                         }}
@@ -2988,15 +2988,31 @@ export const AdminSurveyTemplates: React.FC = () => {
                                 )}
 
                                 {audienceError && (
-                                    <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-red-700 dark:text-red-300">
-                                        {audienceError}
+                                    <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-red-700 dark:text-red-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                                        <div className="flex items-center gap-2">
+                                            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                                            <span className="font-semibold">{audienceError}</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={audienceLoading}
+                                            onClick={() => {
+                                                if (detailsModalTask?._id) {
+                                                    fetchAudienceProgress(String(detailsModalTask._id), true);
+                                                }
+                                            }}
+                                            className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-xs shrink-0 flex items-center gap-1 transition-all"
+                                        >
+                                            <RefreshCw className={`w-3 h-3 ${audienceLoading ? 'animate-spin' : ''}`} />
+                                            Retry
+                                        </button>
                                     </div>
                                 )}
 
                                 {!audienceLoading && !audienceError && audienceProgressData && (
                                     <>
                                         {/* Summary Cards */}
-                                        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center">
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-center">
                                             <div className="bg-blue-50 dark:bg-blue-950/40 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/40">
                                                 <span className="text-[9px] font-bold uppercase text-blue-600 dark:text-blue-400 block">Total Targeted</span>
                                                 <span className="text-base font-black text-blue-700 dark:text-blue-300">
@@ -3033,6 +3049,12 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     {audienceProgressData.summary?.rejectedCount ?? 0}
                                                 </span>
                                             </div>
+                                            <div className="bg-orange-50 dark:bg-orange-950/40 p-2.5 rounded-xl border border-orange-200 dark:border-orange-900/40">
+                                                <span className="text-[9px] font-bold uppercase text-orange-600 dark:text-orange-400 block">Disputed</span>
+                                                <span className="text-base font-black text-orange-700 dark:text-orange-300">
+                                                    {audienceProgressData.summary?.disputedCount ?? 0}
+                                                </span>
+                                            </div>
                                         </div>
 
                                         {/* Filters & Search */}
@@ -3050,7 +3072,6 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                 />
                                             </div>
-
                                             <div className="flex items-center gap-2 w-full sm:w-auto">
                                                 <select
                                                     value={audienceStatusFilter}
@@ -3066,6 +3087,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                     <option value="Approved">Approved</option>
                                                     <option value="Paid">Paid</option>
                                                     <option value="Rejected">Rejected</option>
+                                                    <option value="Disputed">Disputed</option>
                                                 </select>
                                             </div>
                                         </div>
@@ -3146,6 +3168,8 @@ export const AdminSurveyTemplates: React.FC = () => {
                                                                                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                                                                                         : u.submissionStatus === 'Rejected'
                                                                                         ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                                                                        : u.submissionStatus === 'Disputed'
+                                                                                        ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300'
                                                                                         : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                                                                                 }`}>
                                                                                     {u.submissionStatus}
@@ -3395,10 +3419,12 @@ export const AdminSurveyTemplates: React.FC = () => {
                                 (audienceProgressData.summary?.paidCount || 0) > 0 ||
                                 (audienceProgressData.summary?.pendingReviewCount || 0) > 0 ||
                                 (audienceProgressData.summary?.rejectedCount || 0) > 0 ||
+                                (audienceProgressData.summary?.disputedCount || 0) > 0 ||
                                 (Array.isArray(audienceProgressData.users) && audienceProgressData.users.some((u: any) => u.hasSubmitted || (u.status && u.status !== 'not_started')))
                             );
-                            const isVerifying = audienceLoading || (!audienceProgressData && !hasCompletions);
                             const hasHistoricalData = hasCompletions || Boolean(hasAudienceSubmissions);
+                            const hasVerificationFailed = !audienceLoading && Boolean(audienceError) && !audienceProgressData && !hasCompletions;
+                            const isVerifying = audienceLoading || (!audienceProgressData && !hasVerificationFailed && !hasCompletions);
 
                             return (
                                 <div className="space-y-4">
@@ -3407,7 +3433,32 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             Status: <span className="text-indigo-600">{detailsModalTask.status}</span>
                                         </div>
                                         <div className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                                            {isVerifying ? (
+                                            {hasVerificationFailed ? (
+                                                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-lg text-rose-800 dark:text-rose-300 text-xs space-y-2">
+                                                    <div className="flex items-center gap-2 font-semibold">
+                                                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                                                        <span>Failed to verify campaign history: {audienceError}</span>
+                                                    </div>
+                                                    <p className="text-[11px] text-rose-700 dark:text-rose-400">
+                                                        Permanent deletion remains locked until campaign verification completes successfully to prevent accidental loss of worker data.
+                                                    </p>
+                                                    <div>
+                                                        <button
+                                                            type="button"
+                                                            disabled={audienceLoading}
+                                                            onClick={() => {
+                                                                if (detailsModalTask?._id) {
+                                                                    fetchAudienceProgress(String(detailsModalTask._id), true);
+                                                                }
+                                                            }}
+                                                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 transition-all"
+                                                        >
+                                                            <RefreshCw className={`w-3 h-3 ${audienceLoading ? 'animate-spin' : ''}`} />
+                                                            Retry Verification
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : isVerifying ? (
                                                 <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg text-blue-800 dark:text-blue-300 font-semibold flex items-center gap-2">
                                                     <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
                                                     <span>Verifying campaign submission status and historical audit records...</span>
@@ -3469,7 +3520,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             {isArchivingCampaign ? 'Archiving...' : 'Archive / Deactivate'}
                                         </Button>
 
-                                        {!isVerifying && !hasHistoricalData && (
+                                        {!isVerifying && !hasVerificationFailed && Boolean(audienceProgressData) && !hasHistoricalData && (
                                             <Button
                                                 variant="danger"
                                                 size="sm"

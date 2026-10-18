@@ -6363,6 +6363,7 @@ export const getTaskAudienceProgress = async (req, res) => {
         let approvedCount = 0;
         let paidCount = 0;
         let rejectedCount = 0;
+        let disputedCount = 0;
 
         for (const user of candidateUsers) {
             const uId = String(user._id);
@@ -6393,6 +6394,9 @@ export const getTaskAudienceProgress = async (req, res) => {
                 } else if (sub.status === 'Rejected') {
                     classifiedStatus = 'Rejected';
                     rejectedCount++;
+                } else if (sub.status === 'Disputed') {
+                    classifiedStatus = 'Disputed';
+                    disputedCount++;
                 } else {
                     classifiedStatus = sub.status;
                 }
@@ -6448,6 +6452,7 @@ export const getTaskAudienceProgress = async (req, res) => {
                     approvedCount,
                     paidCount,
                     rejectedCount,
+                    disputedCount,
                     totalCompleted
                 },
                 users: audienceList
