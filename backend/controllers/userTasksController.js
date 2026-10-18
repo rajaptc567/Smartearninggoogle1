@@ -2488,6 +2488,29 @@ export const deleteUserTask = async (req, res) => {
             }
         }
 
+        // Permanent deletion protection: verify whether deletion is safe before performing refunds,
+        // altering submissions, or deleting the campaign record.
+        const hasCompletions = (task.currentCompletions || 0) > 0;
+        const hasSubmissions = await UserTaskSubmission.exists({ taskId: task._id });
+        const hasDisputes = await Dispute.exists({
+            $or: [
+                { taskId: task._id },
+                { campaignId: task._id },
+                { referenceId: String(task._id) }
+            ]
+        });
+        const hasRewardTransactions = await Transaction.exists({
+            campaignId: task._id,
+            type: { $in: ['Task Reward', 'Task Reward Transfer'] }
+        });
+
+        if (hasCompletions || hasSubmissions || hasDisputes || hasRewardTransactions) {
+            return res.status(400).json({
+                success: false,
+                error: 'Permanent deletion is not permitted for campaigns with recorded worker submissions, completions, disputes, or financial reward history. Please archive/deactivate the campaign instead to preserve audit records.'
+            });
+        }
+
         // Dedicated, concurrent-safe handler for Admin Campaign Budget deletion
         if (task.fundingSourceType === 'admin_budget') {
             const refundKey = `admin_budget_refund:deletion:${task._id}`;

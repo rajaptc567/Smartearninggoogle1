@@ -35,6 +35,7 @@ import {
     Copy,
     Trash2,
     Archive,
+    RefreshCw,
     ToggleLeft,
     ToggleRight,
     Play,
@@ -2648,7 +2649,17 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => setShowDeleteArchiveModal(true)}
+                                        onClick={() => {
+                                            if (!audienceProgressData && !audienceLoading && detailsModalTask._id) {
+                                                setAudienceLoading(true);
+                                                setAudienceError(null);
+                                                getTaskAudienceProgress(String(detailsModalTask._id))
+                                                    .then(res => setAudienceProgressData(res))
+                                                    .catch(err => setAudienceError(err?.message || 'Failed to fetch audience progress'))
+                                                    .finally(() => setAudienceLoading(false));
+                                            }
+                                            setShowDeleteArchiveModal(true);
+                                        }}
                                         className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition-all flex items-center gap-1.5 shrink-0"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
@@ -3383,8 +3394,10 @@ export const AdminSurveyTemplates: React.FC = () => {
                                 (audienceProgressData.summary?.approvedCount || 0) > 0 ||
                                 (audienceProgressData.summary?.paidCount || 0) > 0 ||
                                 (audienceProgressData.summary?.pendingReviewCount || 0) > 0 ||
-                                (audienceProgressData.summary?.rejectedCount || 0) > 0
+                                (audienceProgressData.summary?.rejectedCount || 0) > 0 ||
+                                (Array.isArray(audienceProgressData.users) && audienceProgressData.users.some((u: any) => u.hasSubmitted || (u.status && u.status !== 'not_started')))
                             );
+                            const isVerifying = audienceLoading || (!audienceProgressData && !hasCompletions);
                             const hasHistoricalData = hasCompletions || Boolean(hasAudienceSubmissions);
 
                             return (
@@ -3394,10 +3407,15 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             Status: <span className="text-indigo-600">{detailsModalTask.status}</span>
                                         </div>
                                         <div className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                                            {hasHistoricalData ? (
+                                            {isVerifying ? (
+                                                <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg text-blue-800 dark:text-blue-300 font-semibold flex items-center gap-2">
+                                                    <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                                                    <span>Verifying campaign submission status and historical audit records...</span>
+                                                </div>
+                                            ) : hasHistoricalData ? (
                                                 <div className="space-y-2">
                                                     <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg text-amber-800 dark:text-amber-300 font-semibold">
-                                                        ⚠️ This campaign has recorded submissions ({detailsModalTask.currentCompletions} completions).
+                                                        ⚠️ This campaign has recorded submissions ({detailsModalTask.currentCompletions || 0} completions).
                                                         Permanent deletion is blocked to protect worker earnings, ledger transactions, and audit records.
                                                     </div>
                                                     <p>
@@ -3451,7 +3469,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             {isArchivingCampaign ? 'Archiving...' : 'Archive / Deactivate'}
                                         </Button>
 
-                                        {!hasHistoricalData && (
+                                        {!isVerifying && !hasHistoricalData && (
                                             <Button
                                                 variant="danger"
                                                 size="sm"
