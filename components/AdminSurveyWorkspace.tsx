@@ -451,7 +451,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                             </div>
                             <div className="divide-y divide-gray-200 dark:divide-gray-700">
                                 {surveyTasks.slice(0, 5).map(task => (
-                                    <div key={task._id} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-gray-50/60 dark:hover:bg-gray-750">
+                                    <div key={task._id} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-gray-50/60 dark:hover:bg-gray-700">
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <span className="font-semibold text-gray-900 dark:text-white text-sm">{task.title}</span>
@@ -775,7 +775,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                             return true;
                                         })
                                         .map(task => (
-                                            <tr key={task._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-750/50">
+                                            <tr key={task._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/50">
                                                 <td className="py-3 px-4">
                                                     <div className="font-semibold text-gray-900 dark:text-white">{task.title}</div>
                                                     <div className="text-[11px] text-gray-500 dark:text-gray-400">{task.subType || 'General Survey'}</div>
@@ -1485,7 +1485,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                     {surveySubmissions.slice(0, 20).map(sub => (
-                                        <tr key={sub._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-750/50">
+                                        <tr key={sub._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/50">
                                             <td className="p-3 font-semibold">{sub.workerName || 'Worker'}</td>
                                             <td className="p-3 truncate max-w-xs">{sub.taskTitle || 'Survey'}</td>
                                             <td className="p-3">
