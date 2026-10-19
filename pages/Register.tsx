@@ -59,11 +59,11 @@ const Register: React.FC = () => {
         termsEnabled: true,
         termsRequired: true,
         termsText: 'I agree to the SmartExn Terms & Conditions and acknowledge that I have read the Privacy Policy.',
-        termsUrl: '/terms',
+        termsUrl: '/terms-of-use',
         privacyEnabled: true,
         privacyRequired: true,
         privacyText: 'I acknowledge that I have read and agree to the Privacy Policy.',
-        privacyUrl: '/privacy',
+        privacyUrl: '/privacy-policy',
         emailMarketingEnabled: true,
         emailMarketingRequired: false,
         emailMarketingText: 'I would like to receive promotional and marketing emails from SmartExn.',
@@ -642,11 +642,11 @@ const Register: React.FC = () => {
                                                  {consentConfig.termsText.includes('Terms') || consentConfig.termsText.includes('Privacy') ? (
                                                      <span>
                                                          I agree to the{' '}
-                                                         <Link to={consentConfig.termsUrl || '/terms'} target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                                         <Link to={consentConfig.termsUrl || '/terms-of-use'} target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
                                                              Terms &amp; Conditions
                                                          </Link>{' '}
                                                          and acknowledge the{' '}
-                                                         <Link to={consentConfig.privacyUrl || '/privacy'} target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                                         <Link to={consentConfig.privacyUrl || '/privacy-policy'} target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
                                                              Privacy Policy
                                                          </Link>.
                                                      </span>
@@ -657,11 +657,11 @@ const Register: React.FC = () => {
                                          ) : (
                                              <span>
                                                  I agree to the{' '}
-                                                 <Link to="/terms" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                                 <Link to="/terms-of-use" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
                                                      Terms &amp; Conditions
                                                  </Link>{' '}
                                                  and acknowledge the{' '}
-                                                 <Link to="/privacy" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                                 <Link to="/privacy-policy" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
                                                      Privacy Policy
                                                  </Link>.
                                              </span>

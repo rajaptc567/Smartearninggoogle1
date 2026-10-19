@@ -277,12 +277,12 @@ const Settings: React.FC = () => {
             termsEnabled: settings.signUpConsentConfig?.termsEnabled ?? true,
             termsRequired: settings.signUpConsentConfig?.termsRequired ?? true,
             termsText: settings.signUpConsentConfig?.termsText || 'I agree to the SmartExn Terms & Conditions and acknowledge that I have read the Privacy Policy.',
-            termsUrl: settings.signUpConsentConfig?.termsUrl || '/terms',
+            termsUrl: settings.signUpConsentConfig?.termsUrl || '/terms-of-use',
             termsVersion: settings.signUpConsentConfig?.termsVersion || '1.0',
             privacyEnabled: settings.signUpConsentConfig?.privacyEnabled ?? true,
             privacyRequired: settings.signUpConsentConfig?.privacyRequired ?? true,
             privacyText: settings.signUpConsentConfig?.privacyText || 'I acknowledge that I have read and agree to the Privacy Policy.',
-            privacyUrl: settings.signUpConsentConfig?.privacyUrl || '/privacy',
+            privacyUrl: settings.signUpConsentConfig?.privacyUrl || '/privacy-policy',
             privacyVersion: settings.signUpConsentConfig?.privacyVersion || '1.0',
             emailMarketingEnabled: settings.signUpConsentConfig?.emailMarketingEnabled ?? true,
             emailMarketingRequired: settings.signUpConsentConfig?.emailMarketingRequired ?? false,
@@ -5098,7 +5098,7 @@ const Settings: React.FC = () => {
                                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Terms URL</label>
                                     <input
                                         type="text"
-                                        value={localSettings.signUpConsentConfig?.termsUrl || '/terms'}
+                                        value={localSettings.signUpConsentConfig?.termsUrl || '/terms-of-use'}
                                         onChange={(e) => {
                                             setLocalSettings(prev => ({
                                                 ...prev,
@@ -5106,7 +5106,7 @@ const Settings: React.FC = () => {
                                             }));
                                             setIsDirty(true);
                                         }}
-                                        placeholder="/terms"
+                                        placeholder="/terms-of-use"
                                         className="w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>

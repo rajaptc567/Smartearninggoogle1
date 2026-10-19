@@ -238,8 +238,10 @@ const App: React.FC = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/faqs" element={<FaqPage />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/refund-policy" element={<RefundPolicy />} />
             <Route path="/terms-of-use" element={<TermsOfUse />} />
+            <Route path="/terms" element={<TermsOfUse />} />
             <Route path="/secure-admin-login56" element={<AdminLogin />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
