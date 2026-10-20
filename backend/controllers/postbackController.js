@@ -327,10 +327,26 @@ export const handlePostback = async (req, res) => {
     const rawParams = { ...req.query, ...req.body };
     const clientIp = getClientIp(req);
 
+    // Strict simulation isolation: Only internal simulator requests with trusted server-side flags can enable dry-run mode
+    // Query params, body params, or headers can NEVER activate dry-run mode on the public endpoint.
+    const isDryRun = Boolean(req && req.__isSimulatorDryRun === true && req.__simulatedByAdmin === true);
+
     // P3: Unknown Provider Safety - DO NOT auto-create unknown providers!
     const provider = await OfferwallProvider.findOne({ providerKey });
     if (!provider) {
         console.warn(`[SECURITY ALERT] Unknown provider postback attempt: '${providerKey}' from IP ${clientIp}`);
+        if (isDryRun) {
+            req.dryRunResult = {
+                isDryRun: true,
+                mutationsPerformed: false,
+                provider: providerKey,
+                validation: {
+                    status: 'FAILED',
+                    providerFound: false,
+                    error: `UNKNOWN_PROVIDER: Provider '${providerKey}' is not registered or supported.`
+                }
+            };
+        }
         return res.status(404).json({
             success: false,
             error: `UNKNOWN_PROVIDER: Provider '${providerKey}' is not registered or supported.`,
@@ -340,6 +356,18 @@ export const handlePostback = async (req, res) => {
 
     // P14: Provider State Check
     if (!provider.enabled || provider.status === 'DISABLED' || provider.status === 'SUSPENDED') {
+        if (isDryRun) {
+            req.dryRunResult = {
+                isDryRun: true,
+                mutationsPerformed: false,
+                provider: providerKey,
+                validation: {
+                    status: 'FAILED',
+                    providerActive: false,
+                    error: `PROVIDER_INACTIVE: Provider '${providerKey}' is currently disabled or suspended.`
+                }
+            };
+        }
         return res.status(403).json({
             success: false,
             error: `PROVIDER_INACTIVE: Provider '${providerKey}' is currently disabled or suspended.`
@@ -350,6 +378,17 @@ export const handlePostback = async (req, res) => {
 
     // Fail closed if external transaction ID is missing - preserves strict idempotency
     if (!normalized.externalTxId) {
+        if (isDryRun) {
+            req.dryRunResult = {
+                isDryRun: true,
+                mutationsPerformed: false,
+                provider: providerKey,
+                validation: {
+                    status: 'FAILED',
+                    error: 'MISSING_TRANSACTION_ID'
+                }
+            };
+        }
         return res.status(400).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'MISSING_TRANSACTION_ID');
     }
 
@@ -384,10 +423,24 @@ export const handlePostback = async (req, res) => {
         // P4: Strict Signature & IP Validation (Fail-closed)
         const sigCheck = verifySignature(provider, rawParams, clientIp);
         if (!sigCheck.valid) {
-            log.status = 'InvalidSignature';
-            log.signatureStatus = 'Invalid';
-            log.errorMessage = sigCheck.error || 'Signature check failed';
-            try { await log.save(); } catch (_) {}
+            if (isDryRun) {
+                req.dryRunResult = {
+                    isDryRun: true,
+                    mutationsPerformed: false,
+                    provider: providerKey,
+                    action: normalized.isReversal ? 'REVERSAL' : 'CREDIT',
+                    validation: {
+                        status: 'FAILED',
+                        signatureValid: false,
+                        error: sigCheck.error || 'Signature check failed'
+                    }
+                };
+            } else {
+                log.status = 'InvalidSignature';
+                log.signatureStatus = 'Invalid';
+                log.errorMessage = sigCheck.error || 'Signature check failed';
+                try { await log.save(); } catch (_) {}
+            }
             return res.status(400).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'INVALID_SIGNATURE');
         }
         log.signatureStatus = provider.requireSignature ? 'Verified' : 'NotRequired';
@@ -407,6 +460,21 @@ export const handlePostback = async (req, res) => {
         }
 
         if (!user) {
+            if (isDryRun) {
+                req.dryRunResult = {
+                    isDryRun: true,
+                    mutationsPerformed: false,
+                    provider: providerKey,
+                    action: normalized.isReversal ? 'REVERSAL' : 'CREDIT',
+                    validation: {
+                        status: 'FAILED',
+                        signatureValid: true,
+                        userFound: false,
+                        error: `User not found for subId: ${normalized.userId}`
+                    }
+                };
+                return res.status(404).send('USER_NOT_FOUND');
+            }
             log.status = 'UserNotFound';
             log.errorMessage = `User not found for subId: ${normalized.userId}`;
             try { await log.save(); } catch (_) {}
@@ -421,6 +489,21 @@ export const handlePostback = async (req, res) => {
         const idempotencyKey = `${providerKey}_${normalized.externalTxId}_${normalized.isReversal ? 'reversal' : 'credit'}`;
         const existingTx = await Transaction.findOne({ idempotencyKey });
         if (existingTx) {
+            if (isDryRun) {
+                req.dryRunResult = {
+                    isDryRun: true,
+                    mutationsPerformed: false,
+                    provider: providerKey,
+                    action: normalized.isReversal ? 'REVERSAL' : 'CREDIT',
+                    validation: {
+                        status: 'DUPLICATE',
+                        isDuplicate: true,
+                        existingTransactionId: existingTx._id,
+                        message: 'Transaction already credited with this idempotencyKey'
+                    }
+                };
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+            }
             log.status = 'Duplicate';
             log.errorMessage = 'Transaction already credited with this idempotencyKey';
             try { await log.save(); } catch (_) {}
@@ -481,6 +564,56 @@ export const handlePostback = async (req, res) => {
                 chargebackStatus = 'Liability_Owed';
                 liabilityToAdd = Number(Math.abs(newEarnings).toFixed(2));
                 deductionToApply = currentEarnings;
+            }
+
+            // SIMULATOR DRY-RUN: Stop before applying any database mutations
+            if (isDryRun) {
+                req.dryRunResult = {
+                    isDryRun: true,
+                    mutationsPerformed: false,
+                    provider: providerKey,
+                    providerName: provider.name,
+                    testTransactionId: normalized.externalTxId,
+                    action: 'REVERSAL',
+                    validation: {
+                        status: 'PASSED',
+                        providerActive: true,
+                        signatureValid: true,
+                        userFound: true,
+                        isDuplicate: false,
+                        originalTransactionFound: Boolean(origTx),
+                        originalTransactionId: origTx?._id || null
+                    },
+                    user: {
+                        id: user._id,
+                        username: user.username,
+                        currentTaskEarningsUSD: currentEarnings,
+                        projectedTaskEarningsUSD: Number((currentEarnings - deductionToApply).toFixed(2)),
+                        currentLiabilityUSD: user.chargebackLiabilityUSD || 0,
+                        projectedLiabilityUSD: Number(((user.chargebackLiabilityUSD || 0) + liabilityToAdd).toFixed(2))
+                    },
+                    accounting: {
+                        rawReward: normalized.rawReward,
+                        rawCurrency: normalized.rawCurrency || 'USD',
+                        exchangeRateMultiplier: provider.exchangeRateMultiplier || 1.0,
+                        grossUSD,
+                        userRevenueSharePercent: userSharePct,
+                        deductionAmountUSD: deductionAmount,
+                        platformRevenueUSD,
+                        deductionToApplyUSD: deductionToApply,
+                        liabilityToAddUSD: liabilityToAdd,
+                        chargebackStatus
+                    },
+                    riskAnalysis: {
+                        riskStatus,
+                        riskReason: riskReason || 'Passed risk checks'
+                    },
+                    simulatedProviderResponse: {
+                        statusCode: 200,
+                        body: providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK'
+                    }
+                };
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
             }
 
             // Atomic balance deduction and liability tracking
@@ -588,6 +721,51 @@ export const handlePostback = async (req, res) => {
             // ==========================================
             // P6: ATOMIC REWARD CREDITING (taskEarningsBalance)
             // ==========================================
+            // SIMULATOR DRY-RUN: Stop before applying any database mutations
+            if (isDryRun) {
+                const currentEarnings = user.taskEarningsBalance || 0;
+                const projectedEarnings = Number((currentEarnings + userRewardUSD).toFixed(2));
+                req.dryRunResult = {
+                    isDryRun: true,
+                    mutationsPerformed: false,
+                    provider: providerKey,
+                    providerName: provider.name,
+                    testTransactionId: normalized.externalTxId,
+                    action: 'CREDIT',
+                    validation: {
+                        status: 'PASSED',
+                        providerActive: true,
+                        signatureValid: true,
+                        userFound: true,
+                        isDuplicate: false
+                    },
+                    user: {
+                        id: user._id,
+                        username: user.username,
+                        currentTaskEarningsUSD: currentEarnings,
+                        projectedTaskEarningsUSD: projectedEarnings
+                    },
+                    accounting: {
+                        rawReward: normalized.rawReward,
+                        rawCurrency: normalized.rawCurrency || 'USD',
+                        exchangeRateMultiplier: provider.exchangeRateMultiplier || 1.0,
+                        grossUSD,
+                        userRevenueSharePercent: userSharePct,
+                        userRewardUSD,
+                        platformRevenueUSD
+                    },
+                    riskAnalysis: {
+                        riskStatus,
+                        riskReason: riskReason || 'Passed risk checks'
+                    },
+                    simulatedProviderResponse: {
+                        statusCode: 200,
+                        body: providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK'
+                    }
+                };
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+            }
+
             const updatedUser = await User.findOneAndUpdate(
                 {
                     _id: user._id,
@@ -841,13 +1019,18 @@ export const simulatePostback = async (req, res) => {
         }
 
         const { providerKey, userId, amount = 1.0, isReversal = false, offerName = 'Test Survey / Offer' } = req.body;
-        const normalizedKey = String(providerKey || '').toLowerCase();
+        const normalizedKey = String(providerKey || '').trim().toLowerCase();
         const provider = await OfferwallProvider.findOne({ providerKey: normalizedKey });
         if (!provider) {
-            return res.status(404).json({ success: false, error: `Provider '${providerKey}' not found` });
+            return res.status(404).json({
+                success: false,
+                isDryRun: true,
+                mutationsPerformed: false,
+                error: `Provider '${providerKey}' not found`
+            });
         }
 
-        const simTxId = `sim_${Date.now()}`;
+        const simTxId = req.body.externalTxId || req.body.transId || `sim_${Date.now()}`;
         const queryParams = {
             user_id: userId,
             id: simTxId,
@@ -898,14 +1081,27 @@ export const simulatePostback = async (req, res) => {
             }
         }
 
+        // Support explicit testing of invalid signature if requested
+        if (req.body.testInvalidSignature) {
+            queryParams.sig = 'INVALID_SIGNATURE_FOR_TEST';
+            queryParams.signature = 'INVALID_SIGNATURE_FOR_TEST';
+            queryParams.hash = 'INVALID_SIGNATURE_FOR_TEST';
+        }
+
         const simIp = (provider.ipWhitelist && provider.ipWhitelist.length > 0) ? provider.ipWhitelist[0] : '127.0.0.1';
 
         const testReq = {
             params: { provider: providerKey },
             query: queryParams,
             body: {},
-            headers: { 'user-agent': 'SmartEXN Postback Simulator' },
-            socket: { remoteAddress: simIp }
+            headers: {
+                'user-agent': 'SmartEXN Postback Simulator (Dry Run)',
+                'x-forwarded-for': simIp
+            },
+            ip: simIp,
+            socket: { remoteAddress: simIp },
+            __isSimulatorDryRun: true,
+            __simulatedByAdmin: true
         };
 
         const testRes = {
@@ -918,13 +1114,44 @@ export const simulatePostback = async (req, res) => {
 
         await handlePostback(testReq, testRes);
 
-        res.status(200).json({
-            success: true,
-            message: 'Simulation completed',
+        const dryRun = testReq.dryRunResult;
+        if (dryRun) {
+            const isSuccess = dryRun.validation?.status === 'PASSED';
+            return res.status(200).json({
+                success: isSuccess,
+                isDryRun: true,
+                mutationsPerformed: false,
+                message: isSuccess
+                    ? `Simulation dry-run completed successfully for ${provider.name} (${dryRun.action}). No database mutations were performed.`
+                    : `Simulation validation failed: ${dryRun.validation?.error || 'Validation error'}`,
+                provider: providerKey,
+                providerName: provider.name,
+                testTransactionId: simTxId,
+                action: dryRun.action,
+                validation: dryRun.validation,
+                accounting: dryRun.accounting,
+                user: dryRun.user,
+                riskAnalysis: dryRun.riskAnalysis,
+                simulatorResponse: { status: testRes.statusCode, response: testRes.body }
+            });
+        }
+
+        // Fallback if test stopped before reaching dryRunResult
+        return res.status(200).json({
+            success: false,
+            isDryRun: true,
+            mutationsPerformed: false,
+            message: 'Simulation validation failed before execution path.',
+            provider: providerKey,
             simulatorResponse: { status: testRes.statusCode, response: testRes.body }
         });
     } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
+        res.status(400).json({
+            success: false,
+            isDryRun: true,
+            mutationsPerformed: false,
+            error: err.message
+        });
     }
 };
 

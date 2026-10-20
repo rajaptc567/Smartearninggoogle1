@@ -601,7 +601,7 @@ export const AdminOfferwalls: React.FC = () => {
                         </div>
 
                         <div className="mt-4 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-xs text-indigo-300">
-                            💡 <strong>Ledger Isolation Rule:</strong> All simulated credits are deposited to the user&apos;s <code className="text-white font-mono font-bold">taskEarningsBalance</code> and recorded in the <code className="text-white font-mono font-bold">Transaction</code> ledger as <code className="text-white font-mono font-bold">Offerwall Reward</code>, completely isolated from investment plans.
+                            💡 <strong>Dry-Run Simulation Mode:</strong> Simulated postbacks validate credentials, provider status, signatures, and revenue calculations without modifying real user balances, creating transaction records, or altering provider metrics.
                         </div>
                     </div>
                 </div>
