@@ -421,6 +421,7 @@ async function runTests() {
     console.log('Test 8: Unexpected error during dry-run triggers isolated read-only error handler...');
     const userBeforeError = db.users.get(testUser._id);
     const balanceBeforeError = userBeforeError.taskEarningsBalance;
+    const taskWalletBeforeError = userBeforeError.taskWalletBalance;
     const liabilityBeforeError = userBeforeError.chargebackLiabilityUSD;
     const initialTxCount = db.transactions.size;
     const initialLogCount = db.logs.size;
@@ -459,7 +460,7 @@ async function runTests() {
     // 2. Verify ZERO database mutations occurred during error handling
     const userAfterError = db.users.get(testUser._id);
     assert.strictEqual(userAfterError.taskEarningsBalance, balanceBeforeError, 'User taskEarningsBalance must NOT change on error');
-    assert.strictEqual(userAfterError.taskWalletBalance, balanceBeforeError, 'User taskWalletBalance must NOT change on error');
+    assert.strictEqual(userAfterError.taskWalletBalance, taskWalletBeforeError, 'User taskWalletBalance must NOT change on error');
     assert.strictEqual(userAfterError.chargebackLiabilityUSD, liabilityBeforeError, 'Chargeback liability must NOT change on error');
     assert.strictEqual(db.logs.size, initialLogCount, 'Zero logs must be persisted in dry-run error path');
     assert.strictEqual(db.transactions.size, initialTxCount, 'Zero transactions must be recorded on error');
