@@ -397,8 +397,8 @@ export const handlePostback = async (req, res) => {
     const sanitizedRawBody = maskSensitiveData(req.body);
     const signatureToLog = normalized.signature ? '***REDACTED***' : '';
 
-    // Create initial postback log record
-    const log = new OfferwallPostbackLog({
+    // Create initial postback log record (safely scoped)
+    let log = new OfferwallPostbackLog({
         provider: providerKey,
         externalTxId: normalized.externalTxId,
         username: normalized.userId,
@@ -876,9 +876,24 @@ export const handlePostback = async (req, res) => {
             return res.status(200).send('OK');
         }
     } catch (err) {
-        log.status = 'Error';
-        log.errorMessage = err.message;
-        try { await log.save(); } catch (_) {}
+        if (isDryRun) {
+            req.dryRunResult = {
+                isDryRun: true,
+                mutationsPerformed: false,
+                provider: providerKey,
+                validation: {
+                    status: 'FAILED',
+                    error: 'An unexpected internal error occurred during simulation processing'
+                }
+            };
+            return res.status(500).send('SIMULATION_ERROR');
+        }
+
+        if (log) {
+            log.status = 'Error';
+            log.errorMessage = err.message;
+            try { await log.save(); } catch (_) {}
+        }
         return res.status(500).send(`POSTBACK_ERROR: ${err.message}`);
     }
 };
@@ -1150,7 +1165,7 @@ export const simulatePostback = async (req, res) => {
             success: false,
             isDryRun: true,
             mutationsPerformed: false,
-            error: err.message
+            error: 'Simulation request could not be processed'
         });
     }
 };

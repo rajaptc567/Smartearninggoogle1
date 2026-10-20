@@ -48,7 +48,13 @@ const origProviderFindByIdAndUpdate = OfferwallProvider.findByIdAndUpdate;
 const origNotificationCreate = Notification.create;
 const origLogSave = OfferwallPostbackLog.prototype.save;
 
-User.findById = async (id) => db.users.get(String(id)) || null;
+let forceUserLookupError = false;
+User.findById = async (id) => {
+    if (forceUserLookupError) {
+        throw new Error('Simulated unexpected database failure');
+    }
+    return db.users.get(String(id)) || null;
+};
 User.findOne = async (query) => {
     if (query.username) {
         for (const u of db.users.values()) {
@@ -409,8 +415,89 @@ async function runTests() {
     assert.strictEqual(db.transactions.has(simIdempotencyKey), true, 'Real postback successfully recorded after prior simulation');
     console.log('✓ Passed Test 7: Simulation never blocks subsequent genuine postbacks.\n');
 
+    // -------------------------------------------------------------
+    // TEST 8: Error-Path Isolation -> Unexpected error during dry-run is strictly read-only
+    // -------------------------------------------------------------
+    console.log('Test 8: Unexpected error during dry-run triggers isolated read-only error handler...');
+    const userBeforeError = db.users.get(testUser._id);
+    const balanceBeforeError = userBeforeError.taskEarningsBalance;
+    const liabilityBeforeError = userBeforeError.chargebackLiabilityUSD;
+    const initialTxCount = db.transactions.size;
+    const initialLogCount = db.logs.size;
+    const initialNotifCount = db.notifications.size;
+    const initialMetricsCount = db.providerMetricsUpdates.length;
+
+    // Trigger unexpected error after log object is created and signature is verified
+    forceUserLookupError = true;
+    const errorSimReq = {
+        user: adminUser,
+        body: {
+            providerKey: 'torox',
+            userId: testUser._id,
+            amount: 7.5,
+            isReversal: false,
+            offerName: 'Error Path Survey Test'
+        }
+    };
+    const errorSimRes = createMockRes();
+
+    await simulatePostback(errorSimReq, errorSimRes);
+    forceUserLookupError = false; // Reset error trigger
+
+    // 1. Verify simulation failure response
+    assert.strictEqual(errorSimRes.body.success, false, 'Simulator must report success: false on internal error');
+    assert.strictEqual(errorSimRes.body.isDryRun, true, 'isDryRun must remain true in error path');
+    assert.strictEqual(errorSimRes.body.mutationsPerformed, false, 'mutationsPerformed must remain false in error path');
+    assert.strictEqual(errorSimRes.body.validation?.status, 'FAILED', 'Validation status must be FAILED');
+    assert.strictEqual(
+        errorSimRes.body.validation?.error,
+        'An unexpected internal error occurred during simulation processing',
+        'Error message must be sanitized without raw exception details'
+    );
+    assert.strictEqual(errorSimRes.body.simulatorResponse?.status, 500, 'Underlying simulated handler status should be 500');
+
+    // 2. Verify ZERO database mutations occurred during error handling
+    const userAfterError = db.users.get(testUser._id);
+    assert.strictEqual(userAfterError.taskEarningsBalance, balanceBeforeError, 'User taskEarningsBalance must NOT change on error');
+    assert.strictEqual(userAfterError.taskWalletBalance, balanceBeforeError, 'User taskWalletBalance must NOT change on error');
+    assert.strictEqual(userAfterError.chargebackLiabilityUSD, liabilityBeforeError, 'Chargeback liability must NOT change on error');
+    assert.strictEqual(db.logs.size, initialLogCount, 'Zero logs must be persisted in dry-run error path');
+    assert.strictEqual(db.transactions.size, initialTxCount, 'Zero transactions must be recorded on error');
+    assert.strictEqual(db.notifications.size, initialNotifCount, 'Zero notifications must be sent on error');
+    assert.strictEqual(db.providerMetricsUpdates.length, initialMetricsCount, 'Zero provider metrics updated on error');
+
+    // 3. Verify subsequent genuine callback still functions along real-processing path
+    const genuineTxId = 'subsequent_genuine_tx_888';
+    const genuineOid = 'subsequent_genuine_oid_888';
+    const genuineSig = crypto.createHash('md5').update(`${genuineOid}-${testUser._id}-${secret}`).digest('hex');
+    const genuineReq = {
+        params: { provider: 'torox' },
+        query: {
+            user_id: testUser._id,
+            id: genuineTxId,
+            oid: genuineOid,
+            amount: 5.0,
+            sig: genuineSig
+        },
+        body: {},
+        headers: {},
+        socket: { remoteAddress: '127.0.0.1' }
+    };
+    const genuineRes = createMockRes();
+    await handlePostback(genuineReq, genuineRes);
+
+    assert.strictEqual(genuineRes.body, '1', 'Genuine postback completes normally with status 1');
+    const userAfterGenuine = db.users.get(testUser._id);
+    assert.strictEqual(
+        userAfterGenuine.taskEarningsBalance,
+        balanceBeforeError + 4.0,
+        'Genuine postback successfully credited $4.00 after dry-run error test'
+    );
+    assert.strictEqual(db.transactions.size, initialTxCount + 1, 'Genuine transaction created');
+    console.log('✓ Passed Test 8: Dry-run error path is strictly read-only and subsequent genuine postback succeeds.\n');
+
     console.log('======================================================');
-    console.log('All 7 Postback Simulator Dry-Run Tests Passed Successfully!');
+    console.log('All 8 Postback Simulator Dry-Run Tests Passed Successfully!');
     console.log('======================================================');
 }
 
