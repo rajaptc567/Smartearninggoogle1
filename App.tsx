@@ -278,6 +278,7 @@ const App: React.FC = () => {
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="reconciliation" element={<AdminFinancialReconciliation />} />
               <Route path="seo-intelligence" element={<AdminSeoIntelligence />} />
+              <Route path="integrations" element={<AdminOfferwalls />} />
               <Route path="offerwalls" element={<AdminOfferwalls />} />
             </Route>
 

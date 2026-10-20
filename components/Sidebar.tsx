@@ -37,6 +37,7 @@ const BellIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor
 
 const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     const { state } = useData();
+    const location = useLocation();
 
     // Pending count aggregations for real-time admin action badges
     const pendingResetsCount = state.passwordResetRequests?.filter(r => r.status === 'Pending').length || 0;
@@ -86,7 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       { to: '/admin/tasks', label: 'Withdraw Tasks', icon: <TaskIcon />, badge: pendingWithdrawTasksCount, badgeColor: 'bg-teal-600' },
       { to: '/admin/user-tasks', label: 'User Task', icon: <TaskIcon />, badge: pendingUserTasksTotal, badgeColor: 'bg-blue-500' },
       { to: '/admin/survey-templates', label: 'Survey Templates', icon: <TemplateIcon /> },
-      { to: '/admin/offerwalls', label: 'Offerwalls & S2S', icon: <GlobeSearchIcon /> },
+      { to: '/admin/integrations', label: 'Integrations & Offerwalls', icon: <GlobeSearchIcon /> },
       { to: '/admin/task-categories', label: 'Task Configurator', icon: <SettingsIcon /> },
       { to: '/admin/work-and-earn-editor', label: 'Work & Earn Editor', icon: <SettingsIcon /> },
       { to: '/admin/reconciliation', label: 'Reconciliation', icon: <RulesIcon /> },
@@ -127,7 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
                             to={to}
                             end={to === '/admin'}
                             onClick={() => setSidebarOpen(false)}
-                            className={({isActive}) => `${baseLinkClass} ${isActive ? activeLinkClass : inactiveLinkClass} mt-1`}
+                            className={({isActive}) => `${baseLinkClass} ${(isActive || (to === '/admin/integrations' && (location.pathname === '/admin/integrations' || location.pathname === '/admin/offerwalls'))) ? activeLinkClass : inactiveLinkClass} mt-1`}
                         >
                             {icon}
                             <span className="mx-3 font-medium text-sm flex-1 truncate">{label}</span>
