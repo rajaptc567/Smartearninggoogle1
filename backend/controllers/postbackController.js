@@ -612,56 +612,98 @@ export const handlePostback = async (req, res) => {
         log.userId = user._id;
         log.username = user.username;
 
-        // P5: Robust Concurrency & Idempotency Check
-        // Group existing transactions by provider + externalTxId to detect race conditions
-        // even if individual suffix-based idempotency keys were generated differently.
-        const existingTxs = await Transaction.find({ 
-            offerwallProvider: providerKey, 
-            externalTransactionId: normalized.externalTxId 
-        });
-
-        const hasCredit = existingTxs.some(tx => tx.type === 'Offerwall Reward');
-        const hasReversal = existingTxs.some(tx => tx.type === 'Offerwall Reversal');
-
-        if (normalized.isReversal) {
-            if (hasReversal) {
-                // Duplicate Reversal
-                if (isDryRun) {
-                    req.dryRunResult = { isDryRun: true, mutationsPerformed: false, validation: { status: 'DUPLICATE', isDuplicate: true, message: 'Reversal already processed' } };
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
-                }
-                log.status = 'Duplicate';
-                log.errorMessage = 'Reversal already processed';
-                try { await log.save(); } catch (_) {}
-                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
-            }
-        } else {
-            if (hasCredit) {
-                // Duplicate Credit
-                if (isDryRun) {
-                    req.dryRunResult = { isDryRun: true, mutationsPerformed: false, validation: { status: 'DUPLICATE', isDuplicate: true, message: 'Credit already processed' } };
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
-                }
-                log.status = 'Duplicate';
-                log.errorMessage = 'Credit already processed';
-                try { await log.save(); } catch (_) {}
-                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
-            }
-            if (hasReversal) {
-                // Reversal already processed, block this credit
-                if (isDryRun) {
-                    req.dryRunResult = { isDryRun: true, mutationsPerformed: false, validation: { status: 'BLOCKED', isBlocked: true, message: 'Credit blocked: reversal already processed' } };
-                    return res.status(200).send('CREDIT_BLOCKED_REVERSAL_EXISTS');
-                }
-                log.status = 'Blocked';
-                log.errorMessage = 'Credit blocked: reversal already processed for this transaction';
-                try { await log.save(); } catch (_) {}
-                return res.status(200).send('CREDIT_BLOCKED_REVERSAL_EXISTS');
-            }
+        // Isolate genuine test/debug callbacks (TheoremReach only)
+        const isDebugCallback = (providerKey === 'theoremreach') && (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1);
+        if (isDebugCallback) {
+            log.status = 'TestCallback';
+            log.errorMessage = 'TheoremReach test callback with debug indicator received; live user balance mutation and transaction record bypassed.';
+            try { await log.save(); } catch (_) {}
+            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
         }
 
-        // Keep the idempotencyKey for the final insert to maintain unique index integrity
-        const idempotencyKey = `${providerKey}_${normalized.externalTxId}_${normalized.isReversal ? 'reversal' : 'credit'}`;
+        // P5: Robust Concurrency & Atomic Idempotency
+        // Use a unified idempotency key for all postbacks for a specific transaction ID
+        // to enable atomic database-level locking via the unique Transaction index.
+        const unifiedKey = `${providerKey}_${normalized.externalTxId}`;
+
+        if (normalized.isReversal) {
+            // Atomic Reversal: Attempt to update an existing Credit transaction
+            const updatedTx = await Transaction.findOneAndUpdate(
+                { idempotencyKey: unifiedKey, type: 'Offerwall Reward' },
+                { 
+                    $set: { 
+                        type: 'Offerwall Reversal',
+                        chargebackStatus: 'Settled',
+                        description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
+                    }
+                },
+                { new: true }
+            );
+
+            if (updatedTx) {
+                // Success: reversal processed atomically
+                log.status = 'Reversed';
+                await log.save();
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+            }
+            
+            // If not found, it might be a reversal-first marker or a duplicate reversal
+            const existingTx = await Transaction.findOne({ idempotencyKey: unifiedKey });
+            if (existingTx && existingTx.type === 'Offerwall Reversal') {
+                log.status = 'Duplicate';
+                await log.save();
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+            }
+
+            // [Continue to P7: Reversal/Chargeback Safety Logic (Original)]
+        } else {
+            // Credit: Atomic creation
+            // Atomic Balance Increment
+            const updatedUser = await User.findByIdAndUpdate(user._id, {
+                $inc: {
+                    taskEarningsBalance: userRewardUSD,
+                    taskWalletBalance: userRewardUSD
+                }
+            }, { new: true });
+
+            try {
+                await Transaction.create({
+                    idempotencyKey: unifiedKey,
+                    type: 'Offerwall Reward',
+                    userId: user._id,
+                    userName: user.username,
+                    currency: 'USD',
+                    amount: normalized.rewardUSD,
+                    amountUSD: normalized.rewardUSD,
+                    grossAmount: grossUSD,
+                    userRewardAmount: userRewardUSD,
+                    platformRevenueAmount: platformRevenueUSD,
+                    balanceBefore: user.taskEarningsBalance || 0,
+                    balanceAfter: updatedUser.taskEarningsBalance,
+                    status: 'Approved',
+                    sourceWallet: 'External',
+                    destinationWallet: 'TaskEarnings',
+                    offerwallProvider: providerKey,
+                    externalTransactionId: normalized.externalTxId
+                });
+            } catch (err) {
+                if (err.code === 11000) {
+                    // Duplicate key: rollback balance
+                    await User.findByIdAndUpdate(user._id, {
+                        $inc: { taskEarningsBalance: -userRewardUSD, taskWalletBalance: -userRewardUSD }
+                    });
+                    log.status = 'Duplicate';
+                    await log.save();
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+                }
+                throw err;
+            }
+            log.status = 'Credited';
+            await log.save();
+            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+        }
+        
+        // P7: REVERSAL / CHARGEBACK SAFETY LOGIC (Reversal-first path from line 741)
 
         // P8: Gross / User / Platform Split Calculation
         const grossUSD = Number((normalized.rewardUSD * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
@@ -708,14 +750,6 @@ export const handlePostback = async (req, res) => {
         log.riskStatus = riskStatus;
         log.riskReason = riskReason;
 
-        // Isolate genuine test/debug callbacks (TheoremReach only)
-        const isDebugCallback = (providerKey === 'theoremreach') && (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1);
-        if (isDebugCallback) {
-            log.status = 'TestCallback';
-            log.errorMessage = 'TheoremReach test callback with debug indicator received; live user balance mutation and transaction record bypassed.';
-            try { await log.save(); } catch (_) {}
-            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-        }
 
         if (normalized.isReversal) {
             // ==========================================
