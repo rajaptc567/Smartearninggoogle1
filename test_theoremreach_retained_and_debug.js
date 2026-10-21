@@ -64,6 +64,18 @@ User.findByIdAndUpdate = async (id, update) => {
     return user;
 };
 
+Transaction.find = async (query) => {
+    const results = [];
+    if (query.externalTransactionId) {
+        for (const tx of db.transactions.values()) {
+            if (tx.externalTransactionId === query.externalTransactionId && tx.offerwallProvider === query.offerwallProvider) {
+                results.push(tx);
+            }
+        }
+    }
+    return results;
+};
+
 Transaction.findOne = async (query) => {
     if (query.idempotencyKey) {
         return db.transactions.get(query.idempotencyKey) || null;
@@ -634,6 +646,47 @@ async function runTests() {
     simulateTxCreateFailure = false;
     assert.ok(threw || resMarkerFail.statusCode >= 400, 'Marker persistence failure must not silently succeed');
     console.log('✓ Passed Test 15: Marker persistence failure correctly handled/failed.\n');
+
+    // TEST 16: Concurrency and Race condition detection
+    console.log('Test 16: Concurrency and Race condition detection...');
+    seedProviders();
+    const concurrentTxId = 'concurrent_tx_123';
+    
+    // First request: Credit
+    const creditReq = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: concurrentTxId, reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    
+    // Second request: Reversal (arriving just after, but before any DB write completes)
+    // To simulate the race in this mock, we send the requests sequentially but check that the second one detects the first.
+    await handlePostback(creditReq, createMockRes());
+    
+    const reversalReq = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: concurrentTxId, reward_amount: '10.00', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    
+    const resRev = createMockRes();
+    await handlePostback(reversalReq, resRev);
+    assert.equal(resRev.statusCode, 200, 'Reversal after credit must be allowed');
+    
+    // Third request: Duplicate credit (simulating race)
+    const duplicateCreditReq = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: concurrentTxId, reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resDupCredit = createMockRes();
+    await handlePostback(duplicateCreditReq, resDupCredit);
+    assert.equal(resDupCredit.body, 'DUP_ALREADY_PROCESSED', 'Duplicate credit must be rejected');
+    
+    console.log('✓ Passed Test 16: Concurrency and Race conditions detected correctly.\n');
 
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');

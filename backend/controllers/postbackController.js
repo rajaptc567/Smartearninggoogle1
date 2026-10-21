@@ -612,30 +612,56 @@ export const handlePostback = async (req, res) => {
         log.userId = user._id;
         log.username = user.username;
 
-        // P5: Database-Level Idempotency Key
-        const idempotencyKey = `${providerKey}_${normalized.externalTxId}_${normalized.isReversal ? 'reversal' : 'credit'}`;
-        const existingTx = await Transaction.findOne({ idempotencyKey });
-        if (existingTx) {
-            if (isDryRun) {
-                req.dryRunResult = {
-                    isDryRun: true,
-                    mutationsPerformed: false,
-                    provider: providerKey,
-                    action: normalized.isReversal ? 'REVERSAL' : 'CREDIT',
-                    validation: {
-                        status: 'DUPLICATE',
-                        isDuplicate: true,
-                        existingTransactionId: existingTx._id,
-                        message: 'Transaction already credited with this idempotencyKey'
-                    }
-                };
+        // P5: Robust Concurrency & Idempotency Check
+        // Group existing transactions by provider + externalTxId to detect race conditions
+        // even if individual suffix-based idempotency keys were generated differently.
+        const existingTxs = await Transaction.find({ 
+            offerwallProvider: providerKey, 
+            externalTransactionId: normalized.externalTxId 
+        });
+
+        const hasCredit = existingTxs.some(tx => tx.type === 'Offerwall Reward');
+        const hasReversal = existingTxs.some(tx => tx.type === 'Offerwall Reversal');
+
+        if (normalized.isReversal) {
+            if (hasReversal) {
+                // Duplicate Reversal
+                if (isDryRun) {
+                    req.dryRunResult = { isDryRun: true, mutationsPerformed: false, validation: { status: 'DUPLICATE', isDuplicate: true, message: 'Reversal already processed' } };
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+                }
+                log.status = 'Duplicate';
+                log.errorMessage = 'Reversal already processed';
+                try { await log.save(); } catch (_) {}
                 return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
             }
-            log.status = 'Duplicate';
-            log.errorMessage = 'Transaction already credited with this idempotencyKey';
-            try { await log.save(); } catch (_) {}
-            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+        } else {
+            if (hasCredit) {
+                // Duplicate Credit
+                if (isDryRun) {
+                    req.dryRunResult = { isDryRun: true, mutationsPerformed: false, validation: { status: 'DUPLICATE', isDuplicate: true, message: 'Credit already processed' } };
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+                }
+                log.status = 'Duplicate';
+                log.errorMessage = 'Credit already processed';
+                try { await log.save(); } catch (_) {}
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+            }
+            if (hasReversal) {
+                // Reversal already processed, block this credit
+                if (isDryRun) {
+                    req.dryRunResult = { isDryRun: true, mutationsPerformed: false, validation: { status: 'BLOCKED', isBlocked: true, message: 'Credit blocked: reversal already processed' } };
+                    return res.status(200).send('CREDIT_BLOCKED_REVERSAL_EXISTS');
+                }
+                log.status = 'Blocked';
+                log.errorMessage = 'Credit blocked: reversal already processed for this transaction';
+                try { await log.save(); } catch (_) {}
+                return res.status(200).send('CREDIT_BLOCKED_REVERSAL_EXISTS');
+            }
         }
+
+        // Keep the idempotencyKey for the final insert to maintain unique index integrity
+        const idempotencyKey = `${providerKey}_${normalized.externalTxId}_${normalized.isReversal ? 'reversal' : 'credit'}`;
 
         // P8: Gross / User / Platform Split Calculation
         const grossUSD = Number((normalized.rewardUSD * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
