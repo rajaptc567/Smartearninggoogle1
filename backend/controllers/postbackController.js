@@ -621,15 +621,27 @@ export const handlePostback = async (req, res) => {
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
         }
 
+        // P8: Gross / User / Platform Split Calculation
+        const grossUSD = Number((normalized.rewardUSD * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+        let userRewardUSD = grossUSD;
+        let platformRevenueUSD = 0;
+        let userSharePct = 100;
+
+        if (provider.commissionMode === 'smartexn_managed') {
+            userSharePct = (typeof provider.userRevenueSharePercent === 'number' && provider.userRevenueSharePercent >= 0 && provider.userRevenueSharePercent <= 100)
+                ? provider.userRevenueSharePercent
+                : 100;
+            userRewardUSD = Number((grossUSD * (userSharePct / 100)).toFixed(4));
+            platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
+        }
+
         // P5: Robust Concurrency & Atomic Idempotency
-        // Use a unified idempotency key for all postbacks for a specific transaction ID
-        // to enable atomic database-level locking via the unique Transaction index.
         const unifiedKey = `${providerKey}_${normalized.externalTxId}`;
 
         if (normalized.isReversal) {
             // Atomic Reversal: Attempt to update an existing Credit transaction
             const updatedTx = await Transaction.findOneAndUpdate(
-                { idempotencyKey: unifiedKey, type: 'Offerwall Reward' },
+                { idempotencyKey: `${unifiedKey}_credit`, type: 'Offerwall Reward' },
                 { 
                     $set: { 
                         type: 'Offerwall Reversal',
@@ -648,14 +660,43 @@ export const handlePostback = async (req, res) => {
             }
             
             // If not found, it might be a reversal-first marker or a duplicate reversal
-            const existingTx = await Transaction.findOne({ idempotencyKey: unifiedKey });
+            const existingTx = await Transaction.findOne({ idempotencyKey: `${unifiedKey}_reversal` });
             if (existingTx && existingTx.type === 'Offerwall Reversal') {
                 log.status = 'Duplicate';
                 await log.save();
                 return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
             }
-
-            // [Continue to P7: Reversal/Chargeback Safety Logic (Original)]
+            
+            // Otherwise, it's unmatched: handle as marker
+            try {
+                await Transaction.create({
+                    userId: user._id,
+                    userName: user.username,
+                    currency: 'USD',
+                    type: 'Offerwall Reversal',
+                    amount: 0,
+                    amountUSD: 0,
+                    grossAmount: grossUSD,
+                    userRewardAmount: 0,
+                    platformRevenueAmount: 0,
+                    balanceBefore: user.taskEarningsBalance || 0,
+                    balanceAfter: user.taskEarningsBalance || 0,
+                    idempotencyKey: `${unifiedKey}_reversal`,
+                    chargebackStatus: 'Settled',
+                    description: `Unmatched Offerwall Reversal Marker (received before credit): ${provider.name} (${normalized.offerName})`,
+                    status: 'Approved',
+                    sourceWallet: 'TaskEarnings',
+                    destinationWallet: 'External',
+                    offerwallProvider: providerKey,
+                    externalTransactionId: normalized.externalTxId
+                });
+                log.status = 'IgnoredUnmatchedReversalWithMarker';
+                await log.save();
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+            } catch (markerErr) {
+                if (markerErr.code !== 11000) throw markerErr;
+            }
+            // Re-apply original logic block from line 753+ here
         } else {
             // Credit: Atomic creation
             // Atomic Balance Increment
@@ -668,13 +709,13 @@ export const handlePostback = async (req, res) => {
 
             try {
                 await Transaction.create({
-                    idempotencyKey: unifiedKey,
+                    idempotencyKey: `${unifiedKey}_credit`,
                     type: 'Offerwall Reward',
                     userId: user._id,
                     userName: user.username,
                     currency: 'USD',
                     amount: normalized.rewardUSD,
-                    amountUSD: normalized.rewardUSD,
+                    amountUSD: userRewardUSD,
                     grossAmount: grossUSD,
                     userRewardAmount: userRewardUSD,
                     platformRevenueAmount: platformRevenueUSD,
@@ -701,28 +742,6 @@ export const handlePostback = async (req, res) => {
             log.status = 'Credited';
             await log.save();
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-        }
-        
-        // P7: REVERSAL / CHARGEBACK SAFETY LOGIC (Reversal-first path from line 741)
-
-        // P8: Gross / User / Platform Split Calculation
-        const grossUSD = Number((normalized.rewardUSD * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
-        let userRewardUSD = grossUSD;
-        let platformRevenueUSD = 0;
-        let userSharePct = 100;
-
-        if (provider.commissionMode === 'smartexn_managed') {
-            userSharePct = (typeof provider.userRevenueSharePercent === 'number' && provider.userRevenueSharePercent >= 0 && provider.userRevenueSharePercent <= 100)
-                ? provider.userRevenueSharePercent
-                : 100;
-            userRewardUSD = Number((grossUSD * (userSharePct / 100)).toFixed(4));
-            platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
-        } else {
-            // provider_managed (safe default for legacy records & net-payout providers):
-            // Provider calculates user net reward directly. SmartExn does NOT deduct an additional platform retained share.
-            userRewardUSD = grossUSD;
-            platformRevenueUSD = 0;
-            userSharePct = 100;
         }
 
         log.grossAmountUSD = grossUSD;
@@ -913,7 +932,7 @@ export const handlePostback = async (req, res) => {
                     platformRevenueAmount: origTx?.platformRevenueAmount || 0,
                     balanceBefore,
                     balanceAfter,
-                    idempotencyKey,
+                    idempotencyKey: `${unifiedKey}_reversal`,
                     chargebackStatus,
                     reversalReferenceId: origTx?._id,
                     description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
