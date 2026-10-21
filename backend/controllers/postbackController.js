@@ -90,20 +90,25 @@ const maskSensitiveData = (data) => {
  * Fails closed on all unhandled, misconfigured, or missing credentials.
  */
 export const verifySignature = (provider, params, clientIp, req = null) => {
-    // Fail closed: requireSignature: true with signatureType: 'none' must not pass
-    if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
-        return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
-    }
+    const key = provider.providerKey?.toLowerCase() || '';
 
-    // Signature not required by configuration
-    if (!provider.requireSignature) {
-        if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
-            const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
-            if (!ipMatches) {
-                return { valid: false, error: 'Client IP not in whitelist' };
-            }
+    // TheoremReach must always enforce HMAC-SHA1 signature verification and cannot be bypassed
+    if (key !== 'theoremreach') {
+        // Fail closed: requireSignature: true with signatureType: 'none' must not pass
+        if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
+            return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
         }
-        return { valid: true };
+
+        // Signature not required by configuration
+        if (!provider.requireSignature) {
+            if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
+                const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+                if (!ipMatches) {
+                    return { valid: false, error: 'Client IP not in whitelist' };
+                }
+            }
+            return { valid: true };
+        }
     }
 
     const secret = provider.secretKey || provider.postbackKey || '';
@@ -134,7 +139,6 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
     }
 
     // Provider-specific verification algorithms
-    const key = provider.providerKey?.toLowerCase() || '';
 
     try {
         if (key === 'theoremreach' || provider.signatureType === 'hmac_sha1') {
@@ -644,8 +648,41 @@ export const handlePostback = async (req, res) => {
                 type: 'Offerwall Reward'
             });
 
-            // Safety guard: If original credit was never received, an unmatched reversal must not deduct user earnings or create liability.
+            // Safety guard: If original credit was never received, an unmatched reversal must not deduct user earnings or create liability,
+            // but must persist a durable reversal marker so a later credit callback detects it and blocks spendable reward creation.
             if (!origTx) {
+                try {
+                    await Transaction.create({
+                        userId: user._id,
+                        userName: user.username,
+                        currency: 'USD',
+                        type: 'Offerwall Reversal',
+                        amount: 0,
+                        amountUSD: 0,
+                        grossAmount: grossUSD,
+                        userRewardAmount: 0,
+                        platformRevenueAmount: 0,
+                        balanceBefore: user.taskEarningsBalance || 0,
+                        balanceAfter: user.taskEarningsBalance || 0,
+                        idempotencyKey,
+                        chargebackStatus: 'Settled',
+                        description: `Unmatched Offerwall Reversal Marker (received before credit): ${provider.name} (${normalized.offerName})`,
+                        status: 'Approved',
+                        sourceWallet: 'TaskEarnings',
+                        destinationWallet: 'External',
+                        offerwallProvider: providerKey,
+                        externalTransactionId: normalized.externalTxId
+                    });
+                } catch (markerErr) {
+                    if (markerErr.code !== 11000) {
+                        console.error('[CRITICAL] Failed to persist unmatched reversal marker:', markerErr.message);
+                        log.status = 'Error';
+                        log.errorMessage = `Failed to persist unmatched reversal marker: ${markerErr.message}`;
+                        try { await log.save(); } catch (_) {}
+                        throw markerErr;
+                    }
+                }
+
                 if (isDryRun) {
                     req.dryRunResult = {
                         isDryRun: true,
@@ -660,14 +697,15 @@ export const handlePostback = async (req, res) => {
                             signatureValid: true,
                             userFound: true,
                             originalTransactionFound: false,
-                            error: 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely.'
+                            reversalMarkerPersisted: true,
+                            error: 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely and durable marker persisted.'
                         }
                     };
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
                 }
 
-                log.status = 'IgnoredUnmatchedReversal';
-                log.errorMessage = 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely.';
+                log.status = 'IgnoredUnmatchedReversalWithMarker';
+                log.errorMessage = 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely and durable reversal marker persisted.';
                 try { await log.save(); } catch (_) {}
                 return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
             }
@@ -1772,13 +1810,14 @@ export const seedVerifiedNetworks = async () => {
             enabled: true,
             commissionMode: 'provider_managed',
             iframeUrlTemplate: 'https://theoremreach.com/respondent_entry/direct?api_key={appId}&user_id={userId}',
-            signatureType: 'md5',
+            signatureType: 'hmac_sha1',
+            requireSignature: true,
             technicalReadinessScore: 100,
             approvalLikelihoodScore: 'High',
             badge: 'Screenout Rewards',
             icon: '💡',
             description: 'Rewarded survey router that rewards users even when they screen out of surveys.',
-            complianceNotes: 'API key & MD5 webhook authentication.'
+            complianceNotes: 'API key & HMAC-SHA1 signature verification.'
         },
         {
             providerKey: 'yuno',

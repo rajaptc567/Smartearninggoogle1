@@ -71,6 +71,7 @@ Transaction.findOne = async (query) => {
     if (query.externalTransactionId) {
         for (const tx of db.transactions.values()) {
             if (tx.externalTransactionId === query.externalTransactionId && tx.offerwallProvider === query.offerwallProvider) {
+                if (query.type && tx.type !== query.type) continue;
                 return tx;
             }
         }
@@ -162,6 +163,20 @@ const createMockRes = () => {
 async function runTests() {
     const testSecret = 'secret_theorem_key_123';
 
+    const signTheoremReach = (query, secret) => {
+        const parts = [];
+        for (const [k, v] of Object.entries(query)) {
+            if (k === 'hash' || k === 'signature' || k === 'sig') continue;
+            parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+        }
+        const candidate = `/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`;
+        const hmac = crypto.createHmac('sha1', secret).update(candidate).digest('base64');
+        query.hash = hmac.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        return query;
+    };
+
+    const sign = (query) => signTheoremReach(query, testSecret);
+
     // Seed test providers
     const seedProviders = () => {
         db.clear();
@@ -172,8 +187,8 @@ async function runTests() {
             category: 'survey',
             enabled: true,
             secretKey: testSecret,
-            requireSignature: false,
-            signatureType: 'none',
+            requireSignature: true,
+            signatureType: 'hmac_sha1',
             exchangeRateMultiplier: 1.0,
             commissionMode: 'provider_managed', // Default explicit mode
             userRevenueSharePercent: 70,
@@ -213,12 +228,12 @@ async function runTests() {
     seedProviders();
     const req1 = {
         params: { provider: 'theoremreach' },
-        query: {
+        query: sign({
             user_id: '507f1f77bcf86cd799439011',
             tx_id: 'test_tx_debug_001',
             reward_amount: '5.00',
             debug: 'true'
-        },
+        }),
         body: {},
         headers: {}
     };
@@ -238,11 +253,11 @@ async function runTests() {
     seedProviders();
     const req2 = {
         params: { provider: 'theoremreach' },
-        query: {
+        query: sign({
             user_id: '507f1f77bcf86cd799439011',
             tx_id: 'prov_managed_001',
             reward_amount: '10.00'
-        },
+        }),
         body: {},
         headers: {}
     };
@@ -266,11 +281,11 @@ async function runTests() {
     console.log('Test 3: Duplicate tx_id does not credit twice...');
     const req3 = {
         params: { provider: 'theoremreach' },
-        query: {
+        query: sign({
             user_id: '507f1f77bcf86cd799439011',
             tx_id: 'prov_managed_001',
             reward_amount: '10.00'
-        },
+        }),
         body: {},
         headers: {}
     };
@@ -287,12 +302,12 @@ async function runTests() {
     console.log('Test 4: Reversal callback deducts reward and logs reversal...');
     const req4 = {
         params: { provider: 'theoremreach' },
-        query: {
+        query: sign({
             user_id: '507f1f77bcf86cd799439011',
             tx_id: 'prov_managed_001',
             reward_amount: '10.00',
             isReversal: 'true'
-        },
+        }),
         body: {},
         headers: {}
     };
@@ -311,11 +326,11 @@ async function runTests() {
     simulateTxCreateFailure = true;
     const req5 = {
         params: { provider: 'theoremreach' },
-        query: {
+        query: sign({
             user_id: '507f1f77bcf86cd799439011',
             tx_id: 'failed_tx_001',
             reward_amount: '10.00'
-        },
+        }),
         body: {},
         headers: {}
     };
@@ -350,7 +365,7 @@ async function runTests() {
     // Verify callback at 20% retained: gross $1.00 -> user $0.80, platform $0.20
     const testReq20 = {
         params: { provider: 'theoremreach' },
-        query: { user_id: '507f1f77bcf86cd799439011', tx_id: 'rev20_tx', reward_amount: '1.00' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'rev20_tx', reward_amount: '1.00' }),
         body: {},
         headers: {}
     };
@@ -375,7 +390,7 @@ async function runTests() {
     // Verify callback at 30% retained: gross $1.00 -> user $0.70, platform $0.30
     const testReq30 = {
         params: { provider: 'theoremreach' },
-        query: { user_id: '507f1f77bcf86cd799439011', tx_id: 'rev30_tx', reward_amount: '1.00' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'rev30_tx', reward_amount: '1.00' }),
         body: {},
         headers: {}
     };
@@ -400,7 +415,7 @@ async function runTests() {
     // Verify callback at 40% retained: gross $1.00 -> user $0.60, platform $0.40
     const testReq40 = {
         params: { provider: 'theoremreach' },
-        query: { user_id: '507f1f77bcf86cd799439011', tx_id: 'rev40_tx', reward_amount: '1.00' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'rev40_tx', reward_amount: '1.00' }),
         body: {},
         headers: {}
     };
@@ -504,8 +519,38 @@ async function runTests() {
 
     console.log('✓ Passed Test 10: Missing and invalid signatures fail closed with HTTP 400.\n');
 
+    // TEST 11: Out-of-order reversal (reversal arrives first, then credit) blocks spendable reward
+    console.log('Test 11: Out-of-order reversal arriving before credit blocks spendable reward...');
+    seedProviders();
+    const userObj = db.users.get('507f1f77bcf86cd799439011');
+    const startBalance = userObj.taskEarningsBalance || 0;
+
+    const revFirstReq = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'out_of_order_tx_1', reward_amount: '10.00', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    const resRevFirst = createMockRes();
+    await handlePostback(revFirstReq, resRevFirst);
+    assert.equal(resRevFirst.statusCode, 200);
+    assert.equal(userObj.taskEarningsBalance, startBalance, 'Unmatched reversal must not deduct balance or credit anything');
+
+    // Now send the delayed credit for the same tx_id
+    const creditAfterRevReq = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'out_of_order_tx_1', reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resCreditAfterRev = createMockRes();
+    await handlePostback(creditAfterRevReq, resCreditAfterRev);
+    assert.equal(resCreditAfterRev.statusCode, 200);
+    assert.equal(userObj.taskEarningsBalance, startBalance, 'Credit arriving after pre-existing reversal must not make reward spendable (net zero balance change)');
+    console.log('✓ Passed Test 11: Out-of-order reversal successfully blocked subsequent reward credit.\n');
+
     console.log('========================================================================');
-    console.log('All 10 Offerwall Commission Modes & Debug Tests PASSED Successfully!');
+    console.log('All Offerwall Tests Including Out-of-Order Reversals PASSED Successfully!');
     console.log('========================================================================\n');
 }
 
