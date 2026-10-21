@@ -14,6 +14,9 @@ interface OfferwallProvider {
     postbackKey: string;
     iframeUrlTemplate: string;
     exchangeRateMultiplier: number;
+    commissionMode?: 'provider_managed' | 'smartexn_managed';
+    userRevenueSharePercent?: number;
+    platformRevenueSharePercent?: number;
     ipWhitelist: string[];
     requireSignature: boolean;
     signatureType: string;
@@ -323,6 +326,24 @@ export const AdminOfferwalls: React.FC = () => {
                                         <div className="flex items-center justify-between text-slate-400">
                                             <span>Exchange Multiplier:</span>
                                             <span className="font-bold text-emerald-400">{p.exchangeRateMultiplier || 1.0}x</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-slate-400">
+                                            <span>Commission Mode:</span>
+                                            <span className={`font-mono font-bold text-[10px] px-2 py-0.5 rounded-md uppercase border ${
+                                                p.commissionMode === 'smartexn_managed'
+                                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                            }`}>
+                                                {p.commissionMode === 'smartexn_managed' ? 'SmartExn-Managed' : 'Provider-Managed'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-slate-400">
+                                            <span>Revenue Split:</span>
+                                            <span className="font-bold text-amber-400">
+                                                {p.commissionMode === 'smartexn_managed'
+                                                    ? `${p.platformRevenueSharePercent !== undefined ? p.platformRevenueSharePercent : (100 - (p.userRevenueSharePercent ?? 70))}% Retained (Worker: ${p.userRevenueSharePercent ?? 70}%)`
+                                                    : '100% to Worker (Net Payout)'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -667,6 +688,102 @@ export const AdminOfferwalls: React.FC = () => {
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-mono"
                                     />
                                 </div>
+                            </div>
+
+                            {/* Commission Mode Architecture */}
+                            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                                <div>
+                                    <label className="block text-xs font-black uppercase tracking-wider text-white mb-1">
+                                        Commission & Accounting Mode
+                                    </label>
+                                    <p className="text-[11px] text-slate-400">
+                                        Select whether this network reports net rewards directly or gross revenue requiring platform split.
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                                        (editingProvider.commissionMode || 'provider_managed') === 'provider_managed'
+                                            ? 'bg-emerald-950/40 border-emerald-500/50 text-white'
+                                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                                    }`}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <input
+                                                type="radio"
+                                                name="commissionMode"
+                                                value="provider_managed"
+                                                checked={(editingProvider.commissionMode || 'provider_managed') === 'provider_managed'}
+                                                onChange={() => setEditingProvider({
+                                                    ...editingProvider,
+                                                    commissionMode: 'provider_managed'
+                                                })}
+                                                className="accent-emerald-500"
+                                            />
+                                            <span className="text-xs font-black text-emerald-400 uppercase">Provider-Managed</span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">
+                                            Provider calculates net user reward. SmartExn passes 100% of payout to worker with 0% platform deduction (prevents double deductions).
+                                        </p>
+                                    </label>
+
+                                    <label className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                                        editingProvider.commissionMode === 'smartexn_managed'
+                                            ? 'bg-amber-950/40 border-amber-500/50 text-white'
+                                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                                    }`}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <input
+                                                type="radio"
+                                                name="commissionMode"
+                                                value="smartexn_managed"
+                                                checked={editingProvider.commissionMode === 'smartexn_managed'}
+                                                onChange={() => setEditingProvider({
+                                                    ...editingProvider,
+                                                    commissionMode: 'smartexn_managed'
+                                                })}
+                                                className="accent-amber-500"
+                                            />
+                                            <span className="text-xs font-black text-amber-400 uppercase">SmartExn-Managed</span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">
+                                            Provider delivers confirmed gross revenue. SmartExn deducts platform retained share and credits remaining net payout to worker.
+                                        </p>
+                                    </label>
+                                </div>
+
+                                {editingProvider.commissionMode === 'smartexn_managed' ? (
+                                    <div className="pt-2 border-t border-slate-800/80">
+                                        <label className="block text-xs font-bold uppercase text-slate-300 mb-1">
+                                            SmartExn Retained Share (%)
+                                        </label>
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="1"
+                                                value={editingProvider.platformRevenueSharePercent !== undefined ? editingProvider.platformRevenueSharePercent : (100 - (editingProvider.userRevenueSharePercent ?? 70))}
+                                                onChange={(e) => {
+                                                    const retained = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                                                    setEditingProvider({
+                                                        ...editingProvider,
+                                                        platformRevenueSharePercent: retained,
+                                                        userRevenueSharePercent: 100 - retained
+                                                    });
+                                                }}
+                                                className="w-32 bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
+                                            />
+                                            <span className="text-xs text-slate-400">
+                                                Worker receives <strong className="text-emerald-400">{100 - (editingProvider.platformRevenueSharePercent !== undefined ? editingProvider.platformRevenueSharePercent : (100 - (editingProvider.userRevenueSharePercent ?? 70)))}%</strong> of gross payout
+                                            </span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="p-2.5 bg-emerald-950/20 rounded-xl border border-emerald-500/20 text-[11px] text-emerald-300 flex items-center gap-2">
+                                        <span>🛡️</span>
+                                        <span><strong>Zero Double-Deduction Protection Active:</strong> 100% of reported reward is credited to worker. Platform retains 0%.</span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

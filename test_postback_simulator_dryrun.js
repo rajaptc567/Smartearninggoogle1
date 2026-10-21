@@ -173,6 +173,7 @@ async function runTests() {
         enabled: true,
         status: 'ACTIVE',
         approvalStatus: 'Approved',
+        commissionMode: 'smartexn_managed',
         secretKey: 'secret_test_key_123',
         requireSignature: true,
         signatureType: 'md5',

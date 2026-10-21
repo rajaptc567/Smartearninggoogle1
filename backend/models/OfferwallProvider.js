@@ -56,7 +56,7 @@ const OfferwallProviderSchema = new mongoose.Schema({
     },
     signatureType: {
         type: String,
-        enum: ['hmac_sha256', 'md5', 'sha1', 'sha256', 'ip_only', 'none', 'custom'],
+        enum: ['hmac_sha256', 'hmac_sha1', 'md5', 'sha1', 'sha256', 'ip_only', 'none', 'custom'],
         default: 'none'
     },
     testMode: {
@@ -81,6 +81,11 @@ const OfferwallProviderSchema = new mongoose.Schema({
         type: String,
         enum: ['Not Started', 'In Progress', 'Configured', 'Tested', 'Verified'],
         default: 'Not Started'
+    },
+    commissionMode: {
+        type: String,
+        enum: ['provider_managed', 'smartexn_managed'],
+        default: 'provider_managed'
     },
     userRevenueSharePercent: {
         type: Number,

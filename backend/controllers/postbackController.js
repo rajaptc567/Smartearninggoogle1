@@ -39,6 +39,19 @@ const safeRawSecretCompare = (a, b) => {
 };
 
 /**
+ * Constant-time comparison for case-sensitive URL-safe Base64 signatures (TheoremReach)
+ */
+const safeTimingCompareExact = (a, b) => {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const cleanA = a.trim();
+    const cleanB = b.trim();
+    const bufA = Buffer.from(cleanA, 'utf8');
+    const bufB = Buffer.from(cleanB, 'utf8');
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+};
+
+/**
  * Mask sensitive credentials and secrets from logs and diagnostic output case-insensitively
  */
 const maskSensitiveData = (data) => {
@@ -76,7 +89,7 @@ const maskSensitiveData = (data) => {
  * Signature verification utility for various provider hashing schemes.
  * Fails closed on all unhandled, misconfigured, or missing credentials.
  */
-export const verifySignature = (provider, params, clientIp) => {
+export const verifySignature = (provider, params, clientIp, req = null) => {
     // Fail closed: requireSignature: true with signatureType: 'none' must not pass
     if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
         return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
@@ -124,6 +137,62 @@ export const verifySignature = (provider, params, clientIp) => {
     const key = provider.providerKey?.toLowerCase() || '';
 
     try {
+        if (key === 'theoremreach' || provider.signatureType === 'hmac_sha1') {
+            // TheoremReach HMAC-SHA1 over the full called URL excluding '&hash=', URL-safe Base64 (+ -> -, / -> _, trim =)
+            const received = params.hash || params.signature || params.sig || '';
+            if (!received) return { valid: false, error: 'TheoremReach signature hash missing' };
+
+            const candidates = [];
+
+            if (req) {
+                if (typeof req.rawUrl === 'string' && req.rawUrl) {
+                    candidates.push(req.rawUrl.split('&hash=')[0]);
+                }
+                const rawPathAndQuery = req.originalUrl || req.url || '';
+                if (rawPathAndQuery) {
+                    const pathUpToHash = rawPathAndQuery.split('&hash=')[0];
+                    const host = (typeof req.get === 'function' ? req.get('host') : req.headers?.host) || '';
+                    const proto = req.protocol || (req.secure ? 'https' : 'http') || 'https';
+                    if (host) {
+                        candidates.push(`${proto}://${host}${pathUpToHash}`);
+                        candidates.push(`https://${host}${pathUpToHash}`);
+                        candidates.push(`http://${host}${pathUpToHash}`);
+                    }
+                    candidates.push(pathUpToHash);
+                }
+            }
+
+            // Fallback: If raw URL is not accessible, reconstruct from query parameters in order
+            if (candidates.length === 0 && req && req.query) {
+                const parts = [];
+                for (const [k, v] of Object.entries(req.query)) {
+                    if (k === 'hash' || k === 'signature' || k === 'sig') break;
+                    parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+                }
+                candidates.push(`/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
+            }
+
+            // Fallback: If req was not provided (e.g. direct unit test of verifySignature), reconstruct from params in order
+            if (candidates.length === 0 && params && typeof params === 'object') {
+                const parts = [];
+                for (const [k, v] of Object.entries(params)) {
+                    if (k === 'hash' || k === 'signature' || k === 'sig') break;
+                    parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+                }
+                candidates.push(`/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
+            }
+
+            for (const candidate of candidates) {
+                const hmac = crypto.createHmac('sha1', secret).update(candidate).digest('base64');
+                const urlSafeExpected = hmac.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                if (safeTimingCompareExact(received, urlSafeExpected)) {
+                    return { valid: true };
+                }
+            }
+
+            return { valid: false, error: 'TheoremReach HMAC-SHA1 signature mismatch' };
+        }
+
         if (key === 'torox') {
             // Torox md5: md5(oid + "-" + user_id + "-" + placement_key)
             const sig = params.sig || params.signature || '';
@@ -294,6 +363,7 @@ const normalizePostbackParams = (providerKey, rawParams) => {
         p.status === 'chargeback' || p.status === 'reversal' || p.status === 'REV' || 
         p.type === 'reversal' || p.type === 'chargeback' || p.type === 'RECONCILIATION' ||
         p.isReversal === 'true' || p.isReversal === true ||
+        p.reversal === 'true' || p.reversal === true || p.reversal === '1' || p.reversal === 1 ||
         Number(rawAmount) < 0
     ) {
         isReversal = true;
@@ -421,7 +491,7 @@ export const handlePostback = async (req, res) => {
 
     try {
         // P4: Strict Signature & IP Validation (Fail-closed)
-        const sigCheck = verifySignature(provider, rawParams, clientIp);
+        const sigCheck = verifySignature(provider, rawParams, clientIp, req);
         if (!sigCheck.valid) {
             if (isDryRun) {
                 req.dryRunResult = {
@@ -512,11 +582,23 @@ export const handlePostback = async (req, res) => {
 
         // P8: Gross / User / Platform Split Calculation
         const grossUSD = Number((normalized.rewardUSD * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
-        const userSharePct = (typeof provider.userRevenueSharePercent === 'number' && provider.userRevenueSharePercent >= 0 && provider.userRevenueSharePercent <= 100)
-            ? provider.userRevenueSharePercent
-            : 100;
-        const userRewardUSD = Number((grossUSD * (userSharePct / 100)).toFixed(4));
-        const platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
+        let userRewardUSD = grossUSD;
+        let platformRevenueUSD = 0;
+        let userSharePct = 100;
+
+        if (provider.commissionMode === 'smartexn_managed') {
+            userSharePct = (typeof provider.userRevenueSharePercent === 'number' && provider.userRevenueSharePercent >= 0 && provider.userRevenueSharePercent <= 100)
+                ? provider.userRevenueSharePercent
+                : 100;
+            userRewardUSD = Number((grossUSD * (userSharePct / 100)).toFixed(4));
+            platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
+        } else {
+            // provider_managed (safe default for legacy records & net-payout providers):
+            // Provider calculates user net reward directly. SmartExn does NOT deduct an additional platform retained share.
+            userRewardUSD = grossUSD;
+            platformRevenueUSD = 0;
+            userSharePct = 100;
+        }
 
         log.grossAmountUSD = grossUSD;
         log.userRewardUSD = userRewardUSD;
@@ -543,6 +625,15 @@ export const handlePostback = async (req, res) => {
         log.riskStatus = riskStatus;
         log.riskReason = riskReason;
 
+        // Isolate genuine test/debug callbacks (e.g. TheoremReach dashboard test webhook)
+        const isDebugCallback = (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1);
+        if (isDebugCallback) {
+            log.status = 'TestCallback';
+            log.errorMessage = 'TheoremReach test callback with debug indicator received; live user balance mutation and transaction record bypassed.';
+            try { await log.save(); } catch (_) {}
+            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+        }
+
         if (normalized.isReversal) {
             // ==========================================
             // P7: REVERSAL / CHARGEBACK SAFETY LOGIC
@@ -553,7 +644,35 @@ export const handlePostback = async (req, res) => {
                 type: 'Offerwall Reward'
             });
 
-            const deductionAmount = origTx ? (origTx.userRewardAmount || origTx.amountUSD) : userRewardUSD;
+            // Safety guard: If original credit was never received, an unmatched reversal must not deduct user earnings or create liability.
+            if (!origTx) {
+                if (isDryRun) {
+                    req.dryRunResult = {
+                        isDryRun: true,
+                        mutationsPerformed: false,
+                        provider: providerKey,
+                        providerName: provider.name,
+                        testTransactionId: normalized.externalTxId,
+                        action: 'REVERSAL',
+                        validation: {
+                            status: 'SKIPPED_UNMATCHED',
+                            providerActive: true,
+                            signatureValid: true,
+                            userFound: true,
+                            originalTransactionFound: false,
+                            error: 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely.'
+                        }
+                    };
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                }
+
+                log.status = 'IgnoredUnmatchedReversal';
+                log.errorMessage = 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely.';
+                try { await log.save(); } catch (_) {}
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+            }
+
+            const deductionAmount = origTx.userRewardAmount || origTx.amountUSD;
             const currentEarnings = user.taskEarningsBalance || 0;
             const newEarnings = currentEarnings - deductionAmount;
             let chargebackStatus = 'Settled';
@@ -766,6 +885,45 @@ export const handlePostback = async (req, res) => {
                 return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
             }
 
+            // Safety guard: Check if an out-of-order reversal has already been processed for this transaction ID.
+            const priorReversal = await Transaction.findOne({
+                offerwallProvider: providerKey,
+                externalTransactionId: normalized.externalTxId,
+                type: 'Offerwall Reversal'
+            });
+
+            if (priorReversal) {
+                // If a reversal already arrived, record the credit with zero net balance change (already reversed)
+                if (isDryRun) {
+                    req.dryRunResult = {
+                        isDryRun: true,
+                        mutationsPerformed: false,
+                        provider: providerKey,
+                        providerName: provider.name,
+                        testTransactionId: normalized.externalTxId,
+                        action: 'CREDIT',
+                        validation: {
+                            status: 'SKIPPED_ALREADY_REVERSED',
+                            providerActive: true,
+                            signatureValid: true,
+                            userFound: true,
+                            isDuplicate: false,
+                            priorReversalFound: true
+                        },
+                        accounting: {
+                            grossUSD,
+                            userRewardUSD: 0
+                        }
+                    };
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                }
+
+                log.status = 'PreReversed';
+                log.errorMessage = 'Credit received after pre-existing reversal; balance mutation bypassed safely at net zero.';
+                try { await log.save(); } catch (_) {}
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+            }
+
             const updatedUser = await User.findOneAndUpdate(
                 {
                     _id: user._id,
@@ -914,7 +1072,7 @@ export const getOfferwallProviders = async (req, res) => {
         // Public / Worker View: Only enabled, non-disabled, non-suspended providers with SAFE projection
         const providers = await OfferwallProvider.find(
             { enabled: true, status: { $nin: ['DISABLED', 'SUSPENDED', 'NOT_STARTED'] } },
-            'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status enabled userRevenueSharePercent'
+            'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status enabled userRevenueSharePercent platformRevenueSharePercent commissionMode'
         ).sort({ category: 1, name: 1 });
 
         const sanitized = providers.map(p => {
@@ -947,7 +1105,7 @@ export const updateOfferwallProvider = async (req, res) => {
 
         const ALLOWED_FIELDS = [
             'name', 'category', 'group', 'enabled', 'appId', 'secretKey', 'postbackKey',
-            'iframeUrlTemplate', 'exchangeRateMultiplier', 'userRevenueSharePercent',
+            'iframeUrlTemplate', 'exchangeRateMultiplier', 'commissionMode', 'userRevenueSharePercent',
             'platformRevenueSharePercent', 'ipWhitelist', 'requireSignature', 'signatureType',
             'testMode', 'description', 'badge', 'icon', 'status', 'approvalStatus',
             'integrationStatus', 'riskThresholdUSD', 'holdRewards', 'holdThresholdUSD',
@@ -961,12 +1119,31 @@ export const updateOfferwallProvider = async (req, res) => {
             }
         }
 
+        if (sanitizedUpdates.commissionMode !== undefined) {
+            const mode = String(sanitizedUpdates.commissionMode).trim().toLowerCase();
+            if (mode !== 'provider_managed' && mode !== 'smartexn_managed') {
+                return res.status(400).json({ success: false, error: "Invalid commissionMode: must be either 'provider_managed' or 'smartexn_managed'" });
+            }
+            sanitizedUpdates.commissionMode = mode;
+        }
+
         if (sanitizedUpdates.exchangeRateMultiplier !== undefined) {
             sanitizedUpdates.exchangeRateMultiplier = Math.max(0, Number(sanitizedUpdates.exchangeRateMultiplier) || 1.0);
         }
-        if (sanitizedUpdates.userRevenueSharePercent !== undefined) {
-            sanitizedUpdates.userRevenueSharePercent = Math.min(100, Math.max(0, Number(sanitizedUpdates.userRevenueSharePercent) || 0));
-            sanitizedUpdates.platformRevenueSharePercent = 100 - sanitizedUpdates.userRevenueSharePercent;
+        if (sanitizedUpdates.platformRevenueSharePercent !== undefined && sanitizedUpdates.userRevenueSharePercent === undefined) {
+            const parsedRetained = Number(sanitizedUpdates.platformRevenueSharePercent);
+            if (isNaN(parsedRetained) || parsedRetained < 0 || parsedRetained > 100) {
+                return res.status(400).json({ success: false, error: 'Invalid platformRevenueSharePercent: must be a number between 0 and 100' });
+            }
+            sanitizedUpdates.platformRevenueSharePercent = Math.round(parsedRetained * 100) / 100;
+            sanitizedUpdates.userRevenueSharePercent = Number((100 - sanitizedUpdates.platformRevenueSharePercent).toFixed(2));
+        } else if (sanitizedUpdates.userRevenueSharePercent !== undefined) {
+            const parsedUserShare = Number(sanitizedUpdates.userRevenueSharePercent);
+            if (isNaN(parsedUserShare) || parsedUserShare < 0 || parsedUserShare > 100) {
+                return res.status(400).json({ success: false, error: 'Invalid userRevenueSharePercent: must be a number between 0 and 100' });
+            }
+            sanitizedUpdates.userRevenueSharePercent = Math.round(parsedUserShare * 100) / 100;
+            sanitizedUpdates.platformRevenueSharePercent = Number((100 - sanitizedUpdates.userRevenueSharePercent).toFixed(2));
         }
 
         const provider = await OfferwallProvider.findOneAndUpdate(
@@ -1593,6 +1770,7 @@ export const seedVerifiedNetworks = async () => {
             category: 'survey',
             group: 'Group B: Survey Routers',
             enabled: true,
+            commissionMode: 'provider_managed',
             iframeUrlTemplate: 'https://theoremreach.com/respondent_entry/direct?api_key={appId}&user_id={userId}',
             signatureType: 'md5',
             technicalReadinessScore: 100,
