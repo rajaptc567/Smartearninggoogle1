@@ -92,23 +92,76 @@ const maskSensitiveData = (data) => {
 export const verifySignature = (provider, params, clientIp, req = null) => {
     const key = provider.providerKey?.toLowerCase() || '';
 
-    // TheoremReach must always enforce HMAC-SHA1 signature verification and cannot be bypassed
-    if (key !== 'theoremreach') {
-        // Fail closed: requireSignature: true with signatureType: 'none' must not pass
-        if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
-            return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
+    // TheoremReach must always enforce HMAC-SHA1 signature verification and cannot be bypassed by requireSignature=false or ip_only
+    if (key === 'theoremreach') {
+        const secret = provider.secretKey || provider.postbackKey || '';
+        if (!secret) {
+            return { valid: false, error: 'TheoremReach secret key is not configured; failing closed' };
+        }
+        const received = params.hash || params.signature || params.sig || '';
+        if (!received) {
+            return { valid: false, error: 'TheoremReach signature hash missing' };
         }
 
-        // Signature not required by configuration
-        if (!provider.requireSignature) {
-            if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
-                const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
-                if (!ipMatches) {
-                    return { valid: false, error: 'Client IP not in whitelist' };
-                }
+        const candidates = [];
+        if (req) {
+            if (typeof req.rawUrl === 'string' && req.rawUrl) {
+                candidates.push(req.rawUrl.split('&hash=')[0]);
             }
-            return { valid: true };
+            const rawPathAndQuery = req.originalUrl || req.url || '';
+            if (rawPathAndQuery) {
+                const pathUpToHash = rawPathAndQuery.split('&hash=')[0];
+                const host = (typeof req.get === 'function' ? req.get('host') : req.headers?.host) || '';
+                const proto = req.protocol || (req.secure ? 'https' : 'http') || 'https';
+                if (host) {
+                    candidates.push(`${proto}://${host}${pathUpToHash}`);
+                    candidates.push(`https://${host}${pathUpToHash}`);
+                    candidates.push(`http://${host}${pathUpToHash}`);
+                }
+                candidates.push(pathUpToHash);
+            }
         }
+        if (candidates.length === 0 && req && req.query) {
+            const parts = [];
+            for (const [k, v] of Object.entries(req.query)) {
+                if (k === 'hash' || k === 'signature' || k === 'sig') break;
+                parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+            }
+            candidates.push(`/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
+        }
+        if (candidates.length === 0 && params && typeof params === 'object') {
+            const parts = [];
+            for (const [k, v] of Object.entries(params)) {
+                if (k === 'hash' || k === 'signature' || k === 'sig') break;
+                parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+            }
+            candidates.push(`/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
+        }
+
+        for (const candidate of candidates) {
+            const hmac = crypto.createHmac('sha1', secret).update(candidate).digest('base64');
+            const urlSafeExpected = hmac.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            if (safeTimingCompareExact(received, urlSafeExpected)) {
+                return { valid: true };
+            }
+        }
+        return { valid: false, error: 'TheoremReach HMAC-SHA1 signature mismatch' };
+    }
+
+    // Fail closed: requireSignature: true with signatureType: 'none' must not pass
+    if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
+        return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
+    }
+
+    // Signature not required by configuration
+    if (!provider.requireSignature) {
+        if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
+            const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+            if (!ipMatches) {
+                return { valid: false, error: 'Client IP not in whitelist' };
+            }
+        }
+        return { valid: true };
     }
 
     const secret = provider.secretKey || provider.postbackKey || '';
@@ -629,8 +682,8 @@ export const handlePostback = async (req, res) => {
         log.riskStatus = riskStatus;
         log.riskReason = riskReason;
 
-        // Isolate genuine test/debug callbacks (e.g. TheoremReach dashboard test webhook)
-        const isDebugCallback = (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1);
+        // Isolate genuine test/debug callbacks (TheoremReach only)
+        const isDebugCallback = (providerKey === 'theoremreach') && (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1);
         if (isDebugCallback) {
             log.status = 'TestCallback';
             log.errorMessage = 'TheoremReach test callback with debug indicator received; live user balance mutation and transaction record bypassed.';
@@ -651,6 +704,27 @@ export const handlePostback = async (req, res) => {
             // Safety guard: If original credit was never received, an unmatched reversal must not deduct user earnings or create liability,
             // but must persist a durable reversal marker so a later credit callback detects it and blocks spendable reward creation.
             if (!origTx) {
+                if (isDryRun) {
+                    req.dryRunResult = {
+                        isDryRun: true,
+                        mutationsPerformed: false,
+                        provider: providerKey,
+                        providerName: provider.name,
+                        testTransactionId: normalized.externalTxId,
+                        action: 'REVERSAL',
+                        validation: {
+                            status: 'SKIPPED_UNMATCHED',
+                            providerActive: true,
+                            signatureValid: true,
+                            userFound: true,
+                            originalTransactionFound: false,
+                            reversalMarkerPersisted: false,
+                            error: 'Unmatched reversal: original transaction reward not found; dry-run bypassed safely with zero database writes.'
+                        }
+                    };
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                }
+
                 try {
                     await Transaction.create({
                         userId: user._id,
@@ -683,26 +757,6 @@ export const handlePostback = async (req, res) => {
                     }
                 }
 
-                if (isDryRun) {
-                    req.dryRunResult = {
-                        isDryRun: true,
-                        mutationsPerformed: false,
-                        provider: providerKey,
-                        providerName: provider.name,
-                        testTransactionId: normalized.externalTxId,
-                        action: 'REVERSAL',
-                        validation: {
-                            status: 'SKIPPED_UNMATCHED',
-                            providerActive: true,
-                            signatureValid: true,
-                            userFound: true,
-                            originalTransactionFound: false,
-                            reversalMarkerPersisted: true,
-                            error: 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely and durable marker persisted.'
-                        }
-                    };
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-                }
 
                 log.status = 'IgnoredUnmatchedReversalWithMarker';
                 log.errorMessage = 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely and durable reversal marker persisted.';

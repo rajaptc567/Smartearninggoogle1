@@ -549,8 +549,94 @@ async function runTests() {
     assert.equal(userObj.taskEarningsBalance, startBalance, 'Credit arriving after pre-existing reversal must not make reward spendable (net zero balance change)');
     console.log('✓ Passed Test 11: Out-of-order reversal successfully blocked subsequent reward credit.\n');
 
+    // TEST 12: Mandatory TheoremReach signature enforcement (ignores ip_only, requireSignature: false, missing secret/signature)
+    console.log('Test 12: Mandatory TheoremReach signature enforcement tests...');
+    seedProviders();
+    const pTr = db.providers.get('theoremreach');
+    pTr.signatureType = 'ip_only';
+    pTr.requireSignature = false;
+
+    // 12a: Missing signature fails closed even with ip_only or requireSignature: false
+    const reqMissingTrSig = {
+        params: { provider: 'theoremreach' },
+        query: { user_id: '507f1f77bcf86cd799439011', tx_id: 'tr_sig_test_1', reward_amount: '5.00' },
+        body: {},
+        headers: {}
+    };
+    const resMissingTrSig = createMockRes();
+    await handlePostback(reqMissingTrSig, resMissingTrSig);
+    assert.equal(resMissingTrSig.statusCode, 400);
+    assert.equal(resMissingTrSig.body, 'INVALID_SIGNATURE');
+
+    // 12b: Missing secret fails closed
+    pTr.secretKey = '';
+    const reqNoSecret = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'tr_sig_test_2', reward_amount: '5.00' }),
+        body: {},
+        headers: {}
+    };
+    const resNoSecret = createMockRes();
+    await handlePostback(reqNoSecret, resNoSecret);
+    assert.equal(resNoSecret.statusCode, 400);
+    assert.equal(resNoSecret.body, 'INVALID_SIGNATURE');
+    console.log('✓ Passed Test 12: TheoremReach signature enforcement strictly fails closed.\n');
+
+    // TEST 13: Debug flag isolation (TheoremReach honors debug=true; Torox does NOT support debug bypass)
+    console.log('Test 13: Debug flag isolation across providers...');
+    seedProviders();
+    const reqToroxDebug = {
+        params: { provider: 'torox' },
+        query: { user_id: '507f1f77bcf86cd799439011', oid: 'offer_1', reward: '5.00', debug: 'true', sig: 'invalid_sig' },
+        body: {},
+        headers: {}
+    };
+    const resToroxDebug = createMockRes();
+    await handlePostback(reqToroxDebug, resToroxDebug);
+    assert.equal(resToroxDebug.statusCode, 400, 'Torox must not treat debug=true as test bypass; invalid signature must be rejected');
+    console.log('✓ Passed Test 13: Debug flag isolated to TheoremReach only; other providers validate signatures.\n');
+
+    // TEST 14: Unmatched reversal dry-run causes zero database writes
+    console.log('Test 14: Unmatched reversal dry-run causes zero database writes...');
+    seedProviders();
+    const initialTxCount = db.transactions.size;
+    const reqDryRunReversal = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'nonexistent_dryrun_tx', reward_amount: '5.00', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    reqDryRunReversal.__isSimulatorDryRun = true;
+    reqDryRunReversal.__simulatedByAdmin = true;
+    const resDryRunReversal = createMockRes();
+    await handlePostback(reqDryRunReversal, resDryRunReversal);
+    assert.equal(resDryRunReversal.statusCode, 200);
+    assert.equal(db.transactions.size, initialTxCount, 'Dry-run must create zero transaction writes or reversal markers');
+    console.log('✓ Passed Test 14: Unmatched reversal dry-run produced zero database writes.\n');
+
+    // TEST 15: Marker persistence failure handling
+    console.log('Test 15: Marker persistence failure does not falsely report success...');
+    seedProviders();
+    simulateTxCreateFailure = true;
+    const reqMarkerFail = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'fail_marker_tx', reward_amount: '5.00', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    const resMarkerFail = createMockRes();
+    let threw = false;
+    try {
+        await handlePostback(reqMarkerFail, resMarkerFail);
+    } catch (_) {
+        threw = true;
+    }
+    simulateTxCreateFailure = false;
+    assert.ok(threw || resMarkerFail.statusCode >= 400, 'Marker persistence failure must not silently succeed');
+    console.log('✓ Passed Test 15: Marker persistence failure correctly handled/failed.\n');
+
     console.log('========================================================================');
-    console.log('All Offerwall Tests Including Out-of-Order Reversals PASSED Successfully!');
+    console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');
     console.log('========================================================================\n');
 }
 
