@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
-import { handlePostback, updateOfferwallProvider } from './backend/controllers/postbackController.js';
+import { handlePostback, updateOfferwallProvider, acquirePostbackLock, releasePostbackLock, isLockStillOwned } from './backend/controllers/postbackController.js';
 import User from './backend/models/User.js';
 import Transaction from './backend/models/Transaction.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
@@ -43,7 +43,16 @@ User.findOne = async (query) => {
     }
     return null;
 };
+let simulateUserUpdateFailure = false;
+let simulateCompensationFailure = false;
 User.findOneAndUpdate = async (filter, update) => {
+    await new Promise(r => setTimeout(r, 10));
+    if (simulateCompensationFailure && update.$inc && (update.$inc.taskEarningsBalance > 0 || update.$inc.taskWalletBalance > 0)) {
+        throw new Error('Database connection reset during compensation rollback');
+    }
+    if (simulateUserUpdateFailure) {
+        throw new Error('Database connection reset during balance update');
+    }
     const user = await User.findById(filter._id);
     if (!user) return null;
     if (filter.status?.$ne && user.status === filter.status.$ne) return null;
@@ -56,7 +65,6 @@ User.findOneAndUpdate = async (filter, update) => {
     }
     return user;
 };
-let simulateUserUpdateFailure = false;
 User.findByIdAndUpdate = async (id, update) => {
     await new Promise(r => setTimeout(r, 10));
     if (simulateUserUpdateFailure) {
@@ -151,14 +159,38 @@ OfferwallPostbackLock.create = async (doc) => {
 
 OfferwallPostbackLock.findOne = async (query) => {
     const key = `${query.providerKey}_${query.externalTxId}`;
-    return db.locks.get(key) || null;
+    const lock = db.locks.get(key) || null;
+    if (!lock) return null;
+    if (query.ownerToken && lock.ownerToken !== query.ownerToken) return null;
+    return lock;
+};
+
+OfferwallPostbackLock.findOneAndUpdate = async (filter, update, options) => {
+    const key = `${filter.providerKey}_${filter.externalTxId}`;
+    const lock = db.locks.get(key);
+    if (!lock) return null;
+    if (filter.expiresAt?.$lt && !(lock.expiresAt && new Date(lock.expiresAt) < filter.expiresAt.$lt)) {
+        return null;
+    }
+    if (filter.ownerToken && lock.ownerToken !== filter.ownerToken) {
+        return null;
+    }
+    const updated = { ...lock, ...update.$set };
+    db.locks.set(key, updated);
+    return updated;
 };
 
 OfferwallPostbackLock.deleteOne = async (query) => {
-    if (query.providerKey && query.externalTxId) {
-        db.locks.delete(`${query.providerKey}_${query.externalTxId}`);
+    const key = `${query.providerKey}_${query.externalTxId}`;
+    const lock = db.locks.get(key);
+    if (lock) {
+        if (query.ownerToken && lock.ownerToken !== query.ownerToken) {
+            return { deletedCount: 0 };
+        }
+        db.locks.delete(key);
+        return { deletedCount: 1 };
     }
-    return { deletedCount: 1 };
+    return { deletedCount: 0 };
 };
 
 OfferwallProvider.findOne = async (query) => {
@@ -811,6 +843,245 @@ async function runTests() {
     assert.equal(user18.taskEarningsBalance, 100.0, 'User balance must remain untouched');
     assert.equal(db.transactions.has('theoremreach_fail_balance_tx_001_credit'), false, 'Orphaned transaction record must be rolled back');
     console.log('✓ Passed Test 18: Compensating rollback successfully eliminated orphaned ledger record on balance update failure.\n');
+
+    // TEST 19: [MOCKED IN-MEMORY TEST] Stale-lock takeover followed by old owner attempted release
+    console.log('Test 19: Stale-lock takeover followed by old owner attempted release [MOCKED IN-MEMORY TEST]...');
+    const testProviderKey = 'theoremreach';
+    const testTxId = 'stale_takeover_tx_001';
+    
+    // Process A acquires lock with a past expiresAt to simulate an expired/stale lock
+    const pastExpiresAt = new Date(Date.now() - 5000);
+    const ownerTokenA = 'owner_token_process_A_123';
+    await OfferwallPostbackLock.create({
+        providerKey: testProviderKey,
+        externalTxId: testTxId,
+        ownerToken: ownerTokenA,
+        expiresAt: pastExpiresAt
+    });
+
+    // Process B calls acquirePostbackLock -> atomically takes over the stale lock
+    const ownerTokenB = await acquirePostbackLock(testProviderKey, testTxId);
+    assert.ok(ownerTokenB, 'Process B must acquire lock via atomic takeover');
+    assert.notEqual(ownerTokenA, ownerTokenB, 'Process B must have a unique ownerToken');
+
+    const lockAfterTakeover = await OfferwallPostbackLock.findOne({ providerKey: testProviderKey, externalTxId: testTxId });
+    assert.equal(lockAfterTakeover.ownerToken, ownerTokenB, 'Lock must now be owned by Process B');
+
+    // Process A (delayed/slow) attempts to release the lock with its old ownerToken
+    await releasePostbackLock(testProviderKey, testTxId, ownerTokenA);
+
+    // Verify Process A's release had ZERO effect on Process B's lock
+    const lockAfterOldRelease = await OfferwallPostbackLock.findOne({ providerKey: testProviderKey, externalTxId: testTxId });
+    assert.ok(lockAfterOldRelease, 'Lock must still exist in database');
+    assert.equal(lockAfterOldRelease.ownerToken, ownerTokenB, 'Lock must remain owned by Process B');
+
+    // Verify isLockStillOwned returns false for old owner A and true for current owner B
+    const isAValid = await isLockStillOwned(testProviderKey, testTxId, ownerTokenA);
+    const isBValid = await isLockStillOwned(testProviderKey, testTxId, ownerTokenB);
+    assert.equal(isAValid, false, 'Old owner token must be recognized as invalid/lost');
+    assert.equal(isBValid, true, 'Current owner token must be recognized as valid');
+
+    // Process B releases with its valid token
+    await releasePostbackLock(testProviderKey, testTxId, ownerTokenB);
+    const lockAfterNewRelease = await OfferwallPostbackLock.findOne({ providerKey: testProviderKey, externalTxId: testTxId });
+    assert.equal(lockAfterNewRelease, null, 'Lock must be cleanly deleted when released by rightful owner');
+    console.log('✓ Passed Test 19: Stale-lock takeover followed by old owner release handled safely.\n');
+
+    // TEST 20: [MOCKED IN-MEMORY TEST] Concurrent duplicate postbacks and lock ownership safety
+    console.log('Test 20: Concurrent duplicate postbacks and lock ownership safety [MOCKED IN-MEMORY TEST]...');
+    seedProviders();
+    const dupConTxId = 'concurrent_dup_tx_456';
+    const initialUserBal20 = db.users.get('507f1f77bcf86cd799439011').taskEarningsBalance;
+
+    const dupReqA = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: dupConTxId, reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const dupResA = createMockRes();
+    const dupReqB = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: dupConTxId, reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const dupResB = createMockRes();
+
+    await Promise.all([
+        handlePostback(dupReqA, dupResA),
+        handlePostback(dupReqB, dupResB)
+    ]);
+
+    assert.equal(dupResA.statusCode, 200, 'Request A must succeed');
+    assert.equal(dupResB.statusCode, 200, 'Request B must succeed');
+    const user20 = db.users.get('507f1f77bcf86cd799439011');
+    assert.equal(user20.taskEarningsBalance, Number((initialUserBal20 + 10.00).toFixed(2)), 'User must be credited exactly once ($10.00)');
+    
+    // Exactly 1 transaction record exists
+    const matchingTxs20 = Array.from(db.transactions.values()).filter(t => t.externalTransactionId === dupConTxId);
+    assert.equal(matchingTxs20.length, 1, 'Exactly one transaction record must exist for concurrent duplicate requests');
+    
+    // Lock must be fully released
+    const remainingLock20 = await OfferwallPostbackLock.findOne({ providerKey: 'theoremreach', externalTxId: dupConTxId });
+    assert.equal(remainingLock20, null, 'Lock must be fully released after concurrent duplicate requests finish');
+    console.log('✓ Passed Test 20: Concurrent duplicate postbacks safely coordinated without double credit.\n');
+
+    // TEST 21: [MOCKED IN-MEMORY TEST] Blocked and earning-restricted users receiving no credit and leaving no ledger record
+    console.log('Test 21: Blocked and earning-restricted users protection [MOCKED IN-MEMORY TEST]...');
+    seedProviders();
+    const testUser = db.users.get('507f1f77bcf86cd799439011');
+    
+    // 21a: Blocked user
+    testUser.status = 'Blocked';
+    testUser.restrictions = { earning: false };
+    const initialBalBlocked = testUser.taskEarningsBalance;
+
+    const reqBlocked = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'blocked_user_tx_001', reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resBlocked = createMockRes();
+    await handlePostback(reqBlocked, resBlocked);
+    assert.equal(resBlocked.statusCode, 403, 'Blocked user must receive HTTP 403');
+    assert.equal(testUser.taskEarningsBalance, initialBalBlocked, 'Blocked user balance must remain unchanged');
+    assert.equal(db.transactions.has('theoremreach_blocked_user_tx_001_credit'), false, 'No transaction ledger entry for blocked user');
+
+    // 21b: Earning-restricted user
+    testUser.status = 'Active';
+    testUser.restrictions = { earning: true };
+    const reqRestricted = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'restricted_user_tx_001', reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resRestricted = createMockRes();
+    await handlePostback(reqRestricted, resRestricted);
+    assert.equal(resRestricted.statusCode, 403, 'Earning-restricted user must receive HTTP 403');
+    assert.equal(testUser.taskEarningsBalance, initialBalBlocked, 'Restricted user balance must remain unchanged');
+    assert.equal(db.transactions.has('theoremreach_restricted_user_tx_001_credit'), false, 'No transaction ledger entry for restricted user');
+
+    // 21c: User becomes blocked concurrently at balance update point
+    testUser.status = 'Active';
+    testUser.restrictions = { earning: false };
+    const origFindOneAndUpdate = User.findOneAndUpdate;
+    let interceptedOnce = false;
+    User.findOneAndUpdate = async (filter, update, options) => {
+        if (filter['restrictions.earning']?.$ne && !interceptedOnce) {
+            interceptedOnce = true;
+            // Simulate status becoming Blocked right as balance update executes
+            testUser.status = 'Blocked';
+            return null; // conditional update fails because status is now Blocked
+        }
+        return origFindOneAndUpdate(filter, update, options);
+    };
+
+    const reqRaceBlock = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'race_block_tx_001', reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resRaceBlock = createMockRes();
+    await handlePostback(reqRaceBlock, resRaceBlock);
+    User.findOneAndUpdate = origFindOneAndUpdate; // restore
+    testUser.status = 'Active'; // restore
+
+    assert.equal(resRaceBlock.statusCode, 403, 'Concurrent block at balance update point must return HTTP 403');
+    assert.equal(testUser.taskEarningsBalance, initialBalBlocked, 'Balance must remain unchanged after concurrent block');
+    assert.equal(db.transactions.has('theoremreach_race_block_tx_001_credit'), false, 'Pre-created transaction must be cleanly deleted on rejection');
+
+    // 21d: Duplicate credit for a previously credited transaction when user is now blocked
+    // Credit a transaction first
+    const reqCredSuccess = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'prior_credit_tx_001', reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resCredSuccess = createMockRes();
+    await handlePostback(reqCredSuccess, resCredSuccess);
+    assert.equal(resCredSuccess.statusCode, 200);
+
+    // Now block user and send duplicate
+    testUser.status = 'Blocked';
+    const reqDupBlocked = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'prior_credit_tx_001', reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resDupBlocked = createMockRes();
+    await handlePostback(reqDupBlocked, resDupBlocked);
+    testUser.status = 'Active'; // restore
+
+    assert.equal(resDupBlocked.statusCode, 200, 'Duplicate check preserves historical idempotency response');
+    console.log('✓ Passed Test 21: Blocked and earning-restricted users safely protected without orphan records.\n');
+
+    // TEST 22: [MOCKED IN-MEMORY TEST] Reversal transaction failure and compensation failure
+    console.log('Test 22: Reversal transaction failure and compensation failure [MOCKED IN-MEMORY TEST]...');
+    seedProviders();
+    testUser.status = 'Active';
+    testUser.restrictions = { earning: false };
+    testUser.taskEarningsBalance = 100.0;
+    testUser.taskWalletBalance = 100.0;
+    testUser.chargebackLiabilityUSD = 0;
+
+    // Seed original reward transaction
+    const origRevTx = {
+        _id: 'tx_orig_rev_001',
+        userId: testUser._id,
+        userName: testUser.username,
+        type: 'Offerwall Reward',
+        amountUSD: 20.0,
+        userRewardAmount: 20.0,
+        grossAmount: 20.0,
+        offerwallProvider: 'theoremreach',
+        externalTransactionId: 'rev_failure_tx_001',
+        idempotencyKey: 'theoremreach_rev_failure_tx_001_credit'
+    };
+    db.transactions.set(origRevTx.idempotencyKey, origRevTx);
+
+    // 22a: Transaction creation fails, compensation succeeds
+    simulateTxCreateFailure = true;
+    const reqRevFail = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'rev_failure_tx_001', reward_amount: '20.00', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    const resRevFail = createMockRes();
+    await handlePostback(reqRevFail, resRevFail);
+    simulateTxCreateFailure = false;
+
+    assert.equal(resRevFail.statusCode, 500, 'Reversal transaction failure must return HTTP 500');
+    assert.equal(testUser.taskEarningsBalance, 100.0, 'Balance must be safely compensated back to 100.0');
+    assert.equal(testUser.chargebackLiabilityUSD, 0, 'Liability must be compensated back to 0');
+    assert.equal(db.transactions.has('theoremreach_rev_failure_tx_001_reversal'), false, 'Reversal transaction must not exist');
+
+    // 22b: Transaction creation fails AND compensation rollback fails
+    simulateTxCreateFailure = true;
+    simulateCompensationFailure = true; // compensation rollback findOneAndUpdate will fail!
+    const reqRevCritFail = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'rev_failure_tx_001', reward_amount: '20.00', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    const resRevCritFail = createMockRes();
+    await handlePostback(reqRevCritFail, resRevCritFail);
+    simulateTxCreateFailure = false;
+    simulateCompensationFailure = false;
+
+    assert.equal(resRevCritFail.statusCode, 500, 'Critical compensation failure must return HTTP 500');
+    // Verify log recorded CriticalCompensationFailure, NEVER reporting successful recovery
+    const criticalLog = db.logs.get('rev_failure_tx_001');
+    assert.ok(criticalLog, 'Log record must exist for reversal attempt');
+    assert.equal(criticalLog.status, 'CriticalCompensationFailure', 'Log status must record CriticalCompensationFailure when rollback fails');
+    console.log('✓ Passed Test 22: Reversal transaction failure and compensation failure handled and reported correctly.\n');
 
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');

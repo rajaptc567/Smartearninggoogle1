@@ -449,21 +449,44 @@ const isAuthorizedAdmin = (user) => {
 
 /**
  * Atomic coordination: Lock acquisition to prevent race conditions on concurrent postbacks
+ * Uses unique ownerToken, atomic takeover for expired locks, and ownership-guarded release.
  */
-export const acquirePostbackLock = async (providerKey, externalTxId, maxWaitMs = 3000) => {
+export const acquirePostbackLock = async (providerKey, externalTxId, maxWaitMs = 3000, lockTtlMs = 15000) => {
+    const ownerToken = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
     const startTime = Date.now();
     while (Date.now() - startTime < maxWaitMs) {
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + lockTtlMs);
         try {
-            await OfferwallPostbackLock.create({ providerKey, externalTxId });
-            return true;
+            await OfferwallPostbackLock.create({
+                providerKey,
+                externalTxId,
+                ownerToken,
+                expiresAt,
+                createdAt: now
+            });
+            return ownerToken;
         } catch (err) {
             if (err.code === 11000) {
-                // Check if existing lock is stale (>15 seconds) to prevent deadlock
+                // Check if existing lock is stale (expired) and attempt atomic takeover
                 try {
-                    const existing = await OfferwallPostbackLock.findOne({ providerKey, externalTxId });
-                    if (existing && existing.createdAt && (Date.now() - new Date(existing.createdAt).getTime() > 15000)) {
-                        await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId });
-                        continue;
+                    const takenOver = await OfferwallPostbackLock.findOneAndUpdate(
+                        {
+                            providerKey,
+                            externalTxId,
+                            expiresAt: { $lt: new Date() }
+                        },
+                        {
+                            $set: {
+                                ownerToken,
+                                expiresAt,
+                                createdAt: new Date()
+                            }
+                        },
+                        { new: true }
+                    );
+                    if (takenOver && takenOver.ownerToken === ownerToken) {
+                        return ownerToken;
                     }
                 } catch (_) {}
                 // Wait briefly and retry
@@ -476,12 +499,26 @@ export const acquirePostbackLock = async (providerKey, externalTxId, maxWaitMs =
     throw new Error(`Postback lock timeout for provider: ${providerKey}, tx: ${externalTxId}`);
 };
 
-export const releasePostbackLock = async (providerKey, externalTxId) => {
+export const releasePostbackLock = async (providerKey, externalTxId, ownerToken = null) => {
     try {
-        await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId });
+        if (ownerToken) {
+            await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId, ownerToken });
+        } else {
+            await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId });
+        }
     } catch (err) {
         console.error(`[WARN] Failed to release postback lock for ${providerKey}:${externalTxId}:`, err.message);
     }
+};
+
+/**
+ * Verifies that the lock is still held by the owner before irreversible database mutations.
+ * Prevents a slow/delayed callback from executing concurrently if its lock expired and was taken over.
+ */
+export const isLockStillOwned = async (providerKey, externalTxId, ownerToken) => {
+    if (!ownerToken) return true;
+    const currentLock = await OfferwallPostbackLock.findOne({ providerKey, externalTxId, ownerToken });
+    return Boolean(currentLock && (!currentLock.expiresAt || new Date(currentLock.expiresAt) > new Date()));
 };
 
 /**
@@ -704,13 +741,19 @@ export const handlePostback = async (req, res) => {
         log.riskReason = riskReason;
 
         let lockAcquired = false;
+        let lockOwnerToken = null;
         if (!isDryRun && !isDebugCallback) {
-            await acquirePostbackLock(providerKey, normalized.externalTxId);
-            lockAcquired = true;
+            lockOwnerToken = await acquirePostbackLock(providerKey, normalized.externalTxId);
+            lockAcquired = Boolean(lockOwnerToken);
         }
 
         try {
             if (normalized.isReversal) {
+                // Verify lock ownership is still valid before processing
+                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
+                    throw new Error(`Postback lock expired or taken over during processing: ${providerKey}:${normalized.externalTxId}`);
+                }
+
                 // ==========================================
                 // P7: REVERSAL / CHARGEBACK SAFETY LOGIC
                 // ==========================================
@@ -840,13 +883,17 @@ export const handlePostback = async (req, res) => {
                 }
 
                 // Matched Reversal: Atomic balance deduction and liability tracking
-                const updatedUser = await User.findByIdAndUpdate(user._id, {
-                    $inc: {
-                        taskEarningsBalance: -deductionToApply,
-                        taskWalletBalance: -deductionToApply,
-                        chargebackLiabilityUSD: liabilityToAdd
-                    }
-                }, { new: true });
+                const updatedUser = await User.findOneAndUpdate(
+                    { _id: user._id },
+                    {
+                        $inc: {
+                            taskEarningsBalance: -deductionToApply,
+                            taskWalletBalance: -deductionToApply,
+                            chargebackLiabilityUSD: liabilityToAdd
+                        }
+                    },
+                    { new: true }
+                );
 
                 const balanceBefore = currentEarnings;
                 const balanceAfter = updatedUser ? updatedUser.taskEarningsBalance : 0;
@@ -886,17 +933,30 @@ export const handlePostback = async (req, res) => {
                             }));
                         if (existingTx && existingTx.offerwallProvider === providerKey && existingTx.externalTransactionId === normalized.externalTxId) {
                             // Rollback this request's deduction to prevent double-deduction
+                            let rollbackSucceeded = false;
                             try {
-                                await User.findByIdAndUpdate(user._id, {
-                                    $inc: {
-                                        taskEarningsBalance: deductionToApply,
-                                        taskWalletBalance: deductionToApply,
-                                        chargebackLiabilityUSD: -liabilityToAdd
+                                await User.findOneAndUpdate(
+                                    { _id: user._id },
+                                    {
+                                        $inc: {
+                                            taskEarningsBalance: deductionToApply,
+                                            taskWalletBalance: deductionToApply,
+                                            chargebackLiabilityUSD: -liabilityToAdd
+                                        }
                                     }
-                                });
+                                );
+                                rollbackSucceeded = true;
                             } catch (rollbackErr) {
-                                console.error('[CRITICAL] Failed to rollback user balance after duplicate reversal detection:', rollbackErr.message);
+                                console.error('[CRITICAL_REVERSAL_COMPENSATION_FAILURE] Failed to rollback user balance after duplicate reversal detection:', rollbackErr.message);
                             }
+
+                            if (!rollbackSucceeded) {
+                                log.status = 'CriticalCompensationFailure';
+                                log.errorMessage = 'CRITICAL: Duplicate reversal detected but compensating balance restoration failed';
+                                try { await log.save(); } catch (_) {}
+                                throw new Error('CRITICAL_REVERSAL_COMPENSATION_FAILURE: Duplicate reversal detected but balance rollback failed');
+                            }
+
                             log.status = 'Duplicate';
                             log.errorMessage = 'Duplicate reversal transaction key verified';
                             try { await log.save(); } catch (_) {}
@@ -905,20 +965,32 @@ export const handlePostback = async (req, res) => {
                     }
 
                     // Rollback user balance on ordinary transaction persistence failure
+                    let rollbackSucceeded = false;
                     try {
-                        await User.findByIdAndUpdate(user._id, {
-                            $inc: {
-                                taskEarningsBalance: deductionToApply,
-                                taskWalletBalance: deductionToApply,
-                                chargebackLiabilityUSD: -liabilityToAdd
+                        await User.findOneAndUpdate(
+                            { _id: user._id },
+                            {
+                                $inc: {
+                                    taskEarningsBalance: deductionToApply,
+                                    taskWalletBalance: deductionToApply,
+                                    chargebackLiabilityUSD: -liabilityToAdd
+                                }
                             }
-                        });
+                        );
+                        rollbackSucceeded = true;
                     } catch (rollbackErr) {
-                        console.error('[CRITICAL] Failed to rollback user balance after reversal transaction creation error:', rollbackErr.message);
+                        console.error('[CRITICAL_REVERSAL_COMPENSATION_FAILURE] Failed to rollback user balance after reversal transaction creation error:', rollbackErr.message);
                     }
-                    
-                    log.status = 'Error';
-                    log.errorMessage = `Reversal transaction creation failed: ${revTxErr.message}`;
+
+                    if (!rollbackSucceeded) {
+                        log.status = 'CriticalCompensationFailure';
+                        log.errorMessage = `CRITICAL: Reversal transaction creation failed (${revTxErr.message}) and compensation rollback failed`;
+                        try { await log.save(); } catch (_) {}
+                        throw new Error(`CRITICAL_REVERSAL_COMPENSATION_FAILURE: Reversal transaction creation failed (${revTxErr.message}) and balance rollback failed`);
+                    }
+
+                    log.status = 'Compensated';
+                    log.errorMessage = `Reversal transaction creation failed; user balance safely compensated: ${revTxErr.message}`;
                     try { await log.save(); } catch (_) {}
                     throw revTxErr;
                 }
@@ -951,6 +1023,27 @@ export const handlePostback = async (req, res) => {
                 // ==========================================
                 // SIMULATOR DRY-RUN: Stop before applying any database mutations
                 if (isDryRun) {
+                    if (user.status === 'Blocked' || user.restrictions?.earning === true) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            providerName: provider.name,
+                            testTransactionId: normalized.externalTxId,
+                            action: 'CREDIT',
+                            validation: {
+                                status: 'FAILED',
+                                providerActive: true,
+                                signatureValid: true,
+                                userFound: true,
+                                userRestricted: true,
+                                isDuplicate: false,
+                                error: 'USER_RESTRICTED: User account is Blocked or earning-restricted.'
+                            }
+                        };
+                        return res.status(403).send('USER_RESTRICTED');
+                    }
+
                     const currentEarnings = user.taskEarningsBalance || 0;
                     const projectedEarnings = Number((currentEarnings + userRewardUSD).toFixed(2));
                     req.dryRunResult = {
@@ -994,6 +1087,11 @@ export const handlePostback = async (req, res) => {
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
                 }
 
+                // Verify lock ownership is still valid before processing credit
+                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
+                    throw new Error(`Postback lock expired or taken over during processing: ${providerKey}:${normalized.externalTxId}`);
+                }
+
                 // Duplicate credit pre-check (protects historical records without _credit suffix)
                 const existingCredit = (await Transaction.findOne({ idempotencyKey: creditKey }))
                     || (await Transaction.findOne({
@@ -1021,6 +1119,14 @@ export const handlePostback = async (req, res) => {
                     log.errorMessage = 'Credit received after pre-existing reversal; balance mutation bypassed safely at net zero.';
                     try { await log.save(); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                }
+
+                // Restore blocked and earning-restricted user protection (Check 1: pre-check)
+                if (user.status === 'Blocked' || user.restrictions?.earning === true) {
+                    log.status = 'UserRestricted';
+                    log.errorMessage = 'User account is Blocked or earning-restricted; credit rejected.';
+                    try { await log.save(); } catch (_) {}
+                    return res.status(403).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'USER_RESTRICTED');
                 }
 
                 const balanceBefore = user.taskEarningsBalance || 0;
@@ -1060,14 +1166,23 @@ export const handlePostback = async (req, res) => {
                     throw err;
                 }
 
-                // If transaction created, update user balance
+                // If transaction created, update user balance atomically while re-verifying user is NOT blocked or earning-restricted
+                let updatedUser = null;
                 try {
-                    await User.findByIdAndUpdate(user._id, {
-                        $inc: {
-                            taskEarningsBalance: userRewardUSD,
-                            taskWalletBalance: userRewardUSD
-                        }
-                    });
+                    updatedUser = await User.findOneAndUpdate(
+                        {
+                            _id: user._id,
+                            status: { $ne: 'Blocked' },
+                            'restrictions.earning': { $ne: true }
+                        },
+                        {
+                            $inc: {
+                                taskEarningsBalance: userRewardUSD,
+                                taskWalletBalance: userRewardUSD
+                            }
+                        },
+                        { new: true }
+                    );
                 } catch (balanceErr) {
                     // Inconsistency recovery: Transaction exists but balance update failed.
                     // Rollback transaction creation to prevent orphaned ledger entry.
@@ -1077,6 +1192,19 @@ export const handlePostback = async (req, res) => {
                         console.error('[CRITICAL] Failed to delete transaction after balance update failure:', delErr.message);
                     }
                     throw balanceErr;
+                }
+
+                if (!updatedUser) {
+                    // User was blocked or earning-restricted when balance update was attempted
+                    try {
+                        await Transaction.deleteOne({ _id: tx._id });
+                    } catch (delErr) {
+                        console.error('[CRITICAL] Failed to delete transaction after user restriction balance update rejection:', delErr.message);
+                    }
+                    log.status = 'UserRestricted';
+                    log.errorMessage = 'User account is Blocked or earning-restricted at balance update point; credit rejected.';
+                    try { await log.save(); } catch (_) {}
+                    return res.status(403).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'USER_RESTRICTED');
                 }
 
                 // Update Provider metrics atomically
@@ -1117,8 +1245,8 @@ export const handlePostback = async (req, res) => {
                 return res.status(200).send('OK');
             }
         } finally {
-            if (lockAcquired) {
-                await releasePostbackLock(providerKey, normalized.externalTxId);
+            if (lockAcquired && lockOwnerToken) {
+                await releasePostbackLock(providerKey, normalized.externalTxId, lockOwnerToken);
             }
         }
     } catch (err) {
@@ -1137,7 +1265,9 @@ export const handlePostback = async (req, res) => {
 
         console.error('[DEBUG CATCH ERROR]:', err);
         if (log) {
-            log.status = 'Error';
+            if (log.status !== 'CriticalCompensationFailure') {
+                log.status = 'Error';
+            }
             log.errorMessage = err.message;
             try { await log.save(); } catch (_) {}
         }

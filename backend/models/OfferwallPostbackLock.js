@@ -9,6 +9,14 @@ const OfferwallPostbackLockSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+    ownerToken: {
+        type: String,
+        required: true,
+    },
+    expiresAt: {
+        type: Date,
+        required: true,
+    },
     createdAt: {
         type: Date,
         default: Date.now,

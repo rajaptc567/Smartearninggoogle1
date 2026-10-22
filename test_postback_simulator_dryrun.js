@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
-import { handlePostback, simulatePostback } from './backend/controllers/postbackController.js';
+import { handlePostback, simulatePostback, acquirePostbackLock, releasePostbackLock, isLockStillOwned } from './backend/controllers/postbackController.js';
 import User from './backend/models/User.js';
 import Transaction from './backend/models/Transaction.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
@@ -159,14 +159,38 @@ OfferwallPostbackLock.create = async (doc) => {
 
 OfferwallPostbackLock.findOne = async (query) => {
     const key = `${query.providerKey}_${query.externalTxId}`;
-    return db.locks.get(key) || null;
+    const lock = db.locks.get(key) || null;
+    if (!lock) return null;
+    if (query.ownerToken && lock.ownerToken !== query.ownerToken) return null;
+    return lock;
+};
+
+OfferwallPostbackLock.findOneAndUpdate = async (filter, update, options) => {
+    const key = `${filter.providerKey}_${filter.externalTxId}`;
+    const lock = db.locks.get(key);
+    if (!lock) return null;
+    if (filter.expiresAt?.$lt && !(lock.expiresAt && new Date(lock.expiresAt) < filter.expiresAt.$lt)) {
+        return null;
+    }
+    if (filter.ownerToken && lock.ownerToken !== filter.ownerToken) {
+        return null;
+    }
+    const updated = { ...lock, ...update.$set };
+    db.locks.set(key, updated);
+    return updated;
 };
 
 OfferwallPostbackLock.deleteOne = async (query) => {
-    if (query.providerKey && query.externalTxId) {
-        db.locks.delete(`${query.providerKey}_${query.externalTxId}`);
+    const key = `${query.providerKey}_${query.externalTxId}`;
+    const lock = db.locks.get(key);
+    if (lock) {
+        if (query.ownerToken && lock.ownerToken !== query.ownerToken) {
+            return { deletedCount: 0 };
+        }
+        db.locks.delete(key);
+        return { deletedCount: 1 };
     }
-    return { deletedCount: 1 };
+    return { deletedCount: 0 };
 };
 
 function createMockRes() {
@@ -525,8 +549,75 @@ async function runTests() {
     assert.strictEqual(db.transactions.size, initialTxCount + 1, 'Genuine transaction created');
     console.log('✓ Passed Test 8: Dry-run error path is strictly read-only and subsequent genuine postback succeeds.\n');
 
+    // -------------------------------------------------------------
+    // TEST 9: [MOCKED IN-MEMORY TEST] Blocked and earning-restricted users rejected in dry-run with zero mutations
+    // -------------------------------------------------------------
+    console.log('Test 9: Blocked and earning-restricted users rejected in dry-run [MOCKED IN-MEMORY TEST]...');
+    const userToBlock = db.users.get(testUser._id);
+    userToBlock.status = 'Blocked';
+    userToBlock.restrictions = { earning: false };
+    const balBeforeBlockedSim = userToBlock.taskEarningsBalance;
+
+    const blockedSimReq = {
+        user: adminUser,
+        body: {
+            providerKey: 'torox',
+            userId: testUser._id,
+            amount: 5.0,
+            isReversal: false,
+            offerName: 'Blocked User Survey Simulation'
+        }
+    };
+    const blockedSimRes = createMockRes();
+    await simulatePostback(blockedSimReq, blockedSimRes);
+
+    assert.strictEqual(blockedSimRes.body.success, false, 'Simulation must report failure for blocked user');
+    assert.strictEqual(blockedSimRes.body.validation?.userRestricted, true, 'Validation must flag userRestricted');
+    assert.strictEqual(userToBlock.taskEarningsBalance, balBeforeBlockedSim, 'Zero balance mutation on blocked user simulation');
+
+    // Earning-restricted test
+    userToBlock.status = 'Active';
+    userToBlock.restrictions = { earning: true };
+    const restrictedSimRes = createMockRes();
+    await simulatePostback(blockedSimReq, restrictedSimRes);
+    assert.strictEqual(restrictedSimRes.body.success, false, 'Simulation must report failure for earning-restricted user');
+    assert.strictEqual(restrictedSimRes.body.validation?.userRestricted, true, 'Validation must flag userRestricted');
+    userToBlock.status = 'Active';
+    userToBlock.restrictions = { earning: false };
+    console.log('✓ Passed Test 9: Blocked and earning-restricted users rejected in dry-run with zero mutations.\n');
+
+    // -------------------------------------------------------------
+    // TEST 10: [MOCKED IN-MEMORY TEST] Lock ownership token preservation and stale-lock takeover safety
+    // -------------------------------------------------------------
+    console.log('Test 10: Lock ownership token preservation and stale-lock takeover safety [MOCKED IN-MEMORY TEST]...');
+    const simTxId = 'lock_test_tx_777';
+    const oldToken = 'old_expired_owner_token_001';
+    await OfferwallPostbackLock.create({
+        providerKey: 'torox',
+        externalTxId: simTxId,
+        ownerToken: oldToken,
+        expiresAt: new Date(Date.now() - 10000)
+    });
+
+    // New owner acquires stale lock
+    const newToken = await acquirePostbackLock('torox', simTxId);
+    assert.ok(newToken, 'New owner acquired lock via takeover');
+    assert.notStrictEqual(oldToken, newToken, 'New owner token must be distinct');
+
+    // Old owner attempts release
+    await releasePostbackLock('torox', simTxId, oldToken);
+    const lockStillPresent = await OfferwallPostbackLock.findOne({ providerKey: 'torox', externalTxId: simTxId });
+    assert.ok(lockStillPresent, 'Lock must not be deleted by old owner token');
+    assert.strictEqual(lockStillPresent.ownerToken, newToken, 'Lock must remain owned by new owner');
+
+    // Proper release
+    await releasePostbackLock('torox', simTxId, newToken);
+    const lockGone = await OfferwallPostbackLock.findOne({ providerKey: 'torox', externalTxId: simTxId });
+    assert.strictEqual(lockGone, null, 'Lock must be deleted when released by new owner');
+    console.log('✓ Passed Test 10: Lock ownership token preservation and takeover safety verified in simulator suite.\n');
+
     console.log('======================================================');
-    console.log('All 8 Postback Simulator Dry-Run Tests Passed Successfully!');
+    console.log('All 10 Postback Simulator Dry-Run Tests Passed Successfully!');
     console.log('======================================================');
 }
 
