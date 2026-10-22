@@ -6,6 +6,7 @@ import Transaction from './backend/models/Transaction.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
 import OfferwallPostbackLog from './backend/models/OfferwallPostbackLog.js';
 import Notification from './backend/models/Notification.js';
+import OfferwallPostbackLock from './backend/models/OfferwallPostbackLock.js';
 
 console.log('Running SmartExn Postback Simulator Dry-Run Test Suite...\n');
 
@@ -17,6 +18,7 @@ class MockDb {
         this.providers = new Map();
         this.logs = new Map();
         this.notifications = new Map();
+        this.locks = new Map();
         this.providerMetricsUpdates = [];
     }
 
@@ -26,6 +28,7 @@ class MockDb {
         this.providers.clear();
         this.logs.clear();
         this.notifications.clear();
+        this.locks.clear();
         this.providerMetricsUpdates = [];
     }
 }
@@ -140,6 +143,30 @@ OfferwallPostbackLog.prototype.save = async function() {
     const id = `log_${Date.now()}_${Math.random()}`;
     db.logs.set(id, { ...this.toObject(), _id: id });
     return this;
+};
+
+OfferwallPostbackLock.create = async (doc) => {
+    const key = `${doc.providerKey}_${doc.externalTxId}`;
+    if (db.locks.has(key)) {
+        const err = new Error('Duplicate lock key');
+        err.code = 11000;
+        throw err;
+    }
+    const record = { ...doc, createdAt: new Date() };
+    db.locks.set(key, record);
+    return record;
+};
+
+OfferwallPostbackLock.findOne = async (query) => {
+    const key = `${query.providerKey}_${query.externalTxId}`;
+    return db.locks.get(key) || null;
+};
+
+OfferwallPostbackLock.deleteOne = async (query) => {
+    if (query.providerKey && query.externalTxId) {
+        db.locks.delete(`${query.providerKey}_${query.externalTxId}`);
+    }
+    return { deletedCount: 1 };
 };
 
 function createMockRes() {

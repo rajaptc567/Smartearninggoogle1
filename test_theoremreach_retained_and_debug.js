@@ -6,6 +6,7 @@ import Transaction from './backend/models/Transaction.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
 import OfferwallPostbackLog from './backend/models/OfferwallPostbackLog.js';
 import Notification from './backend/models/Notification.js';
+import OfferwallPostbackLock from './backend/models/OfferwallPostbackLock.js';
 
 console.log('Running SmartExn Offerwall Commission Modes & Debug Callback Test Suite...\n');
 
@@ -17,6 +18,7 @@ class MockDb {
         this.providers = new Map();
         this.logs = new Map();
         this.notifications = new Map();
+        this.locks = new Map();
     }
 
     clear() {
@@ -25,6 +27,7 @@ class MockDb {
         this.providers.clear();
         this.logs.clear();
         this.notifications.clear();
+        this.locks.clear();
     }
 }
 
@@ -53,7 +56,12 @@ User.findOneAndUpdate = async (filter, update) => {
     }
     return user;
 };
+let simulateUserUpdateFailure = false;
 User.findByIdAndUpdate = async (id, update) => {
+    await new Promise(r => setTimeout(r, 10));
+    if (simulateUserUpdateFailure) {
+        throw new Error('Database connection reset during balance update');
+    }
     const user = await User.findById(id);
     if (!user) return null;
     if (update.$inc) {
@@ -77,6 +85,13 @@ Transaction.find = async (query) => {
 };
 
 Transaction.findOne = async (query) => {
+    if (query.$or && Array.isArray(query.$or)) {
+        for (const sub of query.$or) {
+            const found = await Transaction.findOne(sub);
+            if (found) return found;
+        }
+        return null;
+    }
     if (query.idempotencyKey) {
         return db.transactions.get(query.idempotencyKey) || null;
     }
@@ -93,6 +108,7 @@ Transaction.findOne = async (query) => {
 
 let simulateTxCreateFailure = false;
 Transaction.create = async (doc) => {
+    await new Promise(r => setTimeout(r, 10));
     if (simulateTxCreateFailure) {
         throw new Error('Database write constraint violation');
     }
@@ -107,6 +123,42 @@ Transaction.create = async (doc) => {
         db.transactions.set(doc.idempotencyKey, tx);
     }
     return tx;
+};
+
+Transaction.deleteOne = async (query) => {
+    if (query._id) {
+        for (const [key, tx] of db.transactions.entries()) {
+            if (tx._id === query._id) {
+                db.transactions.delete(key);
+                return { deletedCount: 1 };
+            }
+        }
+    }
+    return { deletedCount: 0 };
+};
+
+OfferwallPostbackLock.create = async (doc) => {
+    const key = `${doc.providerKey}_${doc.externalTxId}`;
+    if (db.locks.has(key)) {
+        const err = new Error('Duplicate lock');
+        err.code = 11000;
+        throw err;
+    }
+    const record = { ...doc, createdAt: new Date() };
+    db.locks.set(key, record);
+    return record;
+};
+
+OfferwallPostbackLock.findOne = async (query) => {
+    const key = `${query.providerKey}_${query.externalTxId}`;
+    return db.locks.get(key) || null;
+};
+
+OfferwallPostbackLock.deleteOne = async (query) => {
+    if (query.providerKey && query.externalTxId) {
+        db.locks.delete(`${query.providerKey}_${query.externalTxId}`);
+    }
+    return { deletedCount: 1 };
 };
 
 OfferwallProvider.findOne = async (query) => {
@@ -647,22 +699,19 @@ async function runTests() {
     assert.ok(threw || resMarkerFail.statusCode >= 400, 'Marker persistence failure must not silently succeed');
     console.log('✓ Passed Test 15: Marker persistence failure correctly handled/failed.\n');
 
-    // TEST 16: Concurrency and Race condition detection
-    console.log('Test 16: Concurrency and Race condition detection...');
+    // TEST 16: Truly Overlapping Concurrent Credit & Reversal (Promise.all)
+    console.log('Test 16: Truly overlapping concurrent credit & reversal callbacks via Promise.all...');
     seedProviders();
-    const concurrentTxId = 'concurrent_tx_123';
+    const concurrentTxId = 'truly_concurrent_tx_123';
+    const initialBalance16 = db.users.get('507f1f77bcf86cd799439011').taskEarningsBalance;
     
-    // First request: Credit
     const creditReq = {
         params: { provider: 'theoremreach' },
         query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: concurrentTxId, reward_amount: '10.00' }),
         body: {},
         headers: {}
     };
-    
-    // Second request: Reversal (arriving just after, but before any DB write completes)
-    // To simulate the race in this mock, we send the requests sequentially but check that the second one detects the first.
-    await handlePostback(creditReq, createMockRes());
+    const resCredit = createMockRes();
     
     const reversalReq = {
         params: { provider: 'theoremreach' },
@@ -670,23 +719,98 @@ async function runTests() {
         body: {},
         headers: {}
     };
-    
     const resRev = createMockRes();
-    await handlePostback(reversalReq, resRev);
-    assert.equal(resRev.statusCode, 200, 'Reversal after credit must be allowed');
     
-    // Third request: Duplicate credit (simulating race)
-    const duplicateCreditReq = {
+    // Launch credit and reversal truly concurrently
+    await Promise.all([
+        handlePostback(creditReq, resCredit),
+        handlePostback(reversalReq, resRev)
+    ]);
+    
+    assert.equal(resCredit.statusCode, 200, 'Concurrent credit must succeed');
+    assert.equal(resRev.statusCode, 200, 'Concurrent reversal must succeed');
+    
+    const user16 = db.users.get('507f1f77bcf86cd799439011');
+    assert.equal(user16.taskEarningsBalance, initialBalance16, 'Final balance after concurrent credit and reversal must strictly equal original balance ($100.00)');
+    
+    // Concurrently fire two duplicate credit requests for the same transaction
+    const dupReq1 = {
         params: { provider: 'theoremreach' },
         query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: concurrentTxId, reward_amount: '10.00' }),
         body: {},
         headers: {}
     };
-    const resDupCredit = createMockRes();
-    await handlePostback(duplicateCreditReq, resDupCredit);
-    assert.equal(resDupCredit.body, 'DUP_ALREADY_PROCESSED', 'Duplicate credit must be rejected');
+    const dupRes1 = createMockRes();
+    const dupReq2 = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: concurrentTxId, reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const dupRes2 = createMockRes();
     
-    console.log('✓ Passed Test 16: Concurrency and Race conditions detected correctly.\n');
+    await Promise.all([
+        handlePostback(dupReq1, dupRes1),
+        handlePostback(dupReq2, dupRes2)
+    ]);
+    assert.equal(dupRes1.body, 'DUP_ALREADY_PROCESSED', 'First concurrent duplicate credit must be rejected');
+    assert.equal(dupRes2.body, 'DUP_ALREADY_PROCESSED', 'Second concurrent duplicate credit must be rejected');
+    assert.equal(user16.taskEarningsBalance, initialBalance16, 'User balance must remain unmodified after concurrent duplicate credits');
+    console.log('✓ Passed Test 16: Truly overlapping concurrent credit & reversal callbacks safely coordinated with atomic locks.\n');
+
+    // TEST 17: Truly Overlapping Concurrent Reversal-First + Credit Callbacks
+    console.log('Test 17: Truly overlapping concurrent reversal-first race condition...');
+    seedProviders();
+    const concurrentRevFirstTxId = 'concurrent_rev_first_tx_999';
+    const initialBalance17 = db.users.get('507f1f77bcf86cd799439011').taskEarningsBalance;
+    
+    const revFirstReqConcurrent = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: concurrentRevFirstTxId, reward_amount: '15.00', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    const resRevConcurrent = createMockRes();
+    
+    const creditConcurrentReq = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: concurrentRevFirstTxId, reward_amount: '15.00' }),
+        body: {},
+        headers: {}
+    };
+    const resCreditConcurrent = createMockRes();
+    
+    // Launch both simultaneously
+    await Promise.all([
+        handlePostback(revFirstReqConcurrent, resRevConcurrent),
+        handlePostback(creditConcurrentReq, resCreditConcurrent)
+    ]);
+    
+    assert.equal(resRevConcurrent.statusCode, 200);
+    assert.equal(resCreditConcurrent.statusCode, 200);
+    const user17 = db.users.get('507f1f77bcf86cd799439011');
+    assert.equal(user17.taskEarningsBalance, initialBalance17, 'Balance must remain 100.0 regardless of concurrent arrival order');
+    console.log('✓ Passed Test 17: Concurrent reversal-first race condition resolved safely without balance leaks.\n');
+
+    // TEST 18: Compensating Rollback on Balance Update Failure
+    console.log('Test 18: Compensating rollback cleans up transaction on user balance update failure...');
+    seedProviders();
+    simulateUserUpdateFailure = true;
+    const reqFailBalance = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'fail_balance_tx_001', reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resFailBalance = createMockRes();
+    await handlePostback(reqFailBalance, resFailBalance);
+    simulateUserUpdateFailure = false;
+    
+    assert.equal(resFailBalance.statusCode, 500, 'HTTP 500 returned on balance update failure');
+    const user18 = db.users.get('507f1f77bcf86cd799439011');
+    assert.equal(user18.taskEarningsBalance, 100.0, 'User balance must remain untouched');
+    assert.equal(db.transactions.has('theoremreach_fail_balance_tx_001_credit'), false, 'Orphaned transaction record must be rolled back');
+    console.log('✓ Passed Test 18: Compensating rollback successfully eliminated orphaned ledger record on balance update failure.\n');
 
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');

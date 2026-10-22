@@ -4,6 +4,7 @@ import Transaction from '../models/Transaction.js';
 import OfferwallProvider from '../models/OfferwallProvider.js';
 import OfferwallPostbackLog from '../models/OfferwallPostbackLog.js';
 import Notification from '../models/Notification.js';
+import OfferwallPostbackLock from '../models/OfferwallPostbackLock.js';
 
 /**
  * Helper to get clean Client IP address supporting reverse proxies & Cloud Run
@@ -447,6 +448,43 @@ const isAuthorizedAdmin = (user) => {
 };
 
 /**
+ * Atomic coordination: Lock acquisition to prevent race conditions on concurrent postbacks
+ */
+export const acquirePostbackLock = async (providerKey, externalTxId, maxWaitMs = 3000) => {
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitMs) {
+        try {
+            await OfferwallPostbackLock.create({ providerKey, externalTxId });
+            return true;
+        } catch (err) {
+            if (err.code === 11000) {
+                // Check if existing lock is stale (>15 seconds) to prevent deadlock
+                try {
+                    const existing = await OfferwallPostbackLock.findOne({ providerKey, externalTxId });
+                    if (existing && existing.createdAt && (Date.now() - new Date(existing.createdAt).getTime() > 15000)) {
+                        await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId });
+                        continue;
+                    }
+                } catch (_) {}
+                // Wait briefly and retry
+                await new Promise(resolve => setTimeout(resolve, 40));
+            } else {
+                throw err;
+            }
+        }
+    }
+    throw new Error(`Postback lock timeout for provider: ${providerKey}, tx: ${externalTxId}`);
+};
+
+export const releasePostbackLock = async (providerKey, externalTxId) => {
+    try {
+        await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId });
+    } catch (err) {
+        console.error(`[WARN] Failed to release postback lock for ${providerKey}:${externalTxId}:`, err.message);
+    }
+};
+
+/**
  * Handle incoming S2S Postback
  */
 export const handlePostback = async (req, res) => {
@@ -637,7 +675,8 @@ export const handlePostback = async (req, res) => {
 
         // P5: Robust Concurrency & Atomic Idempotency
         const unifiedKey = `${providerKey}_${normalized.externalTxId}`;
-
+        const creditKey = `${unifiedKey}_credit`;
+        const reversalKey = `${unifiedKey}_reversal`;
 
         log.grossAmountUSD = grossUSD;
         log.userRewardUSD = userRewardUSD;
@@ -664,19 +703,52 @@ export const handlePostback = async (req, res) => {
         log.riskStatus = riskStatus;
         log.riskReason = riskReason;
 
-        if (normalized.isReversal) {
-            // ==========================================
-            // P7: REVERSAL / CHARGEBACK SAFETY LOGIC
-            // ==========================================
-            const origTx = await Transaction.findOne({
-                offerwallProvider: providerKey,
-                externalTransactionId: normalized.externalTxId,
-                type: 'Offerwall Reward'
-            });
+        let lockAcquired = false;
+        if (!isDryRun && !isDebugCallback) {
+            await acquirePostbackLock(providerKey, normalized.externalTxId);
+            lockAcquired = true;
+        }
 
-            // Safety guard: If original credit was never received, an unmatched reversal must not deduct user earnings or create liability,
-            // but must persist a durable reversal marker so a later credit callback detects it and blocks spendable reward creation.
-            if (!origTx) {
+        try {
+            if (normalized.isReversal) {
+                // ==========================================
+                // P7: REVERSAL / CHARGEBACK SAFETY LOGIC
+                // ==========================================
+                // Check for duplicate reversal first (both unified and historical keys)
+                const existingReversal = (await Transaction.findOne({ idempotencyKey: reversalKey }))
+                    || (await Transaction.findOne({
+                        offerwallProvider: providerKey,
+                        externalTransactionId: normalized.externalTxId,
+                        type: 'Offerwall Reversal'
+                    }));
+
+                if (existingReversal) {
+                    log.status = 'Duplicate';
+                    log.errorMessage = 'Duplicate reversal callback received; already reversed.';
+                    try { await log.save(); } catch (_) {}
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                }
+
+                const origTx = await Transaction.findOne({
+                    offerwallProvider: providerKey,
+                    externalTransactionId: normalized.externalTxId,
+                    type: 'Offerwall Reward'
+                });
+
+                const deductionAmount = origTx ? (origTx.userRewardAmount || origTx.amountUSD) : userRewardUSD;
+                const currentEarnings = user.taskEarningsBalance || 0;
+                const newEarnings = currentEarnings - deductionAmount;
+                let chargebackStatus = 'Settled';
+                let liabilityToAdd = 0;
+                let deductionToApply = deductionAmount;
+
+                if (newEarnings < 0) {
+                    chargebackStatus = 'Liability_Owed';
+                    liabilityToAdd = Number(Math.abs(newEarnings).toFixed(2));
+                    deductionToApply = currentEarnings;
+                }
+
+                // SIMULATOR DRY-RUN: Stop before applying any database mutations
                 if (isDryRun) {
                     req.dryRunResult = {
                         isDryRun: true,
@@ -686,280 +758,201 @@ export const handlePostback = async (req, res) => {
                         testTransactionId: normalized.externalTxId,
                         action: 'REVERSAL',
                         validation: {
-                            status: 'SKIPPED_UNMATCHED',
+                            status: 'PASSED',
                             providerActive: true,
                             signatureValid: true,
                             userFound: true,
-                            originalTransactionFound: false,
-                            reversalMarkerPersisted: false,
-                            error: 'Unmatched reversal: original transaction reward not found; dry-run bypassed safely with zero database writes.'
+                            isDuplicate: false,
+                            originalTransactionFound: Boolean(origTx),
+                            originalTransactionId: origTx?._id || null
+                        },
+                        user: {
+                            id: user._id,
+                            username: user.username,
+                            currentTaskEarningsUSD: currentEarnings,
+                            projectedTaskEarningsUSD: Number((currentEarnings - deductionToApply).toFixed(2)),
+                            currentLiabilityUSD: user.chargebackLiabilityUSD || 0,
+                            projectedLiabilityUSD: Number(((user.chargebackLiabilityUSD || 0) + liabilityToAdd).toFixed(2))
+                        },
+                        accounting: {
+                            rawReward: normalized.rawReward,
+                            rawCurrency: normalized.rawCurrency || 'USD',
+                            exchangeRateMultiplier: provider.exchangeRateMultiplier || 1.0,
+                            grossUSD,
+                            userRevenueSharePercent: userSharePct,
+                            deductionAmountUSD: deductionAmount,
+                            platformRevenueUSD,
+                            deductionToApplyUSD: deductionToApply,
+                            liabilityToAddUSD: liabilityToAdd,
+                            chargebackStatus
+                        },
+                        riskAnalysis: {
+                            riskStatus,
+                            riskReason: riskReason || 'Passed risk checks'
+                        },
+                        simulatedProviderResponse: {
+                            statusCode: 200,
+                            body: providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK'
                         }
                     };
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
                 }
 
+                // Safety guard: If original credit was never received, an unmatched reversal must not deduct user earnings or create liability,
+                // but must persist a durable reversal marker so a later credit callback detects it and blocks spendable reward creation.
+                if (!origTx) {
+                    try {
+                        await Transaction.create({
+                            userId: user._id,
+                            userName: user.username,
+                            currency: 'USD',
+                            type: 'Offerwall Reversal',
+                            amount: 0,
+                            amountUSD: 0,
+                            grossAmount: grossUSD,
+                            userRewardAmount: 0,
+                            platformRevenueAmount: 0,
+                            balanceBefore: user.taskEarningsBalance || 0,
+                            balanceAfter: user.taskEarningsBalance || 0,
+                            idempotencyKey: reversalKey,
+                            chargebackStatus: 'Settled',
+                            description: `Unmatched Offerwall Reversal Marker (received before credit): ${provider.name} (${normalized.offerName})`,
+                            status: 'Approved',
+                            sourceWallet: 'TaskEarnings',
+                            destinationWallet: 'External',
+                            offerwallProvider: providerKey,
+                            externalTransactionId: normalized.externalTxId
+                        });
+                    } catch (markerErr) {
+                        if (markerErr.code !== 11000) {
+                            console.error('[CRITICAL] Failed to persist unmatched reversal marker:', markerErr.message);
+                            log.status = 'Error';
+                            log.errorMessage = `Failed to persist unmatched reversal marker: ${markerErr.message}`;
+                            try { await log.save(); } catch (_) {}
+                            throw markerErr;
+                        }
+                    }
+
+                    log.status = 'IgnoredUnmatchedReversalWithMarker';
+                    log.errorMessage = 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely and durable reversal marker persisted.';
+                    try { await log.save(); } catch (_) {}
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                }
+
+                // Matched Reversal: Atomic balance deduction and liability tracking
+                const updatedUser = await User.findByIdAndUpdate(user._id, {
+                    $inc: {
+                        taskEarningsBalance: -deductionToApply,
+                        taskWalletBalance: -deductionToApply,
+                        chargebackLiabilityUSD: liabilityToAdd
+                    }
+                }, { new: true });
+
+                const balanceBefore = currentEarnings;
+                const balanceAfter = updatedUser ? updatedUser.taskEarningsBalance : 0;
+
+                let tx;
                 try {
-                    await Transaction.create({
+                    tx = await Transaction.create({
                         userId: user._id,
                         userName: user.username,
                         currency: 'USD',
                         type: 'Offerwall Reversal',
-                        amount: 0,
-                        amountUSD: 0,
-                        grossAmount: grossUSD,
-                        userRewardAmount: 0,
-                        platformRevenueAmount: 0,
-                        balanceBefore: user.taskEarningsBalance || 0,
-                        balanceAfter: user.taskEarningsBalance || 0,
-                        idempotencyKey,
-                        chargebackStatus: 'Settled',
-                        description: `Unmatched Offerwall Reversal Marker (received before credit): ${provider.name} (${normalized.offerName})`,
+                        amount: deductionAmount,
+                        amountUSD: deductionAmount,
+                        grossAmount: origTx?.grossAmount || grossUSD,
+                        userRewardAmount: deductionAmount,
+                        platformRevenueAmount: origTx?.platformRevenueAmount || 0,
+                        balanceBefore,
+                        balanceAfter,
+                        idempotencyKey: reversalKey,
+                        chargebackStatus,
+                        reversalReferenceId: origTx?._id,
+                        description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
                         status: 'Approved',
                         sourceWallet: 'TaskEarnings',
                         destinationWallet: 'External',
                         offerwallProvider: providerKey,
                         externalTransactionId: normalized.externalTxId
                     });
-                } catch (markerErr) {
-                    if (markerErr.code !== 11000) {
-                        console.error('[CRITICAL] Failed to persist unmatched reversal marker:', markerErr.message);
-                        log.status = 'Error';
-                        log.errorMessage = `Failed to persist unmatched reversal marker: ${markerErr.message}`;
-                        try { await log.save(); } catch (_) {}
-                        throw markerErr;
+                } catch (revTxErr) {
+                    // If this is a duplicate reversal (11000), verify it is the same reversal before acknowledging
+                    if (revTxErr.code === 11000) {
+                        const existingTx = (await Transaction.findOne({ idempotencyKey: reversalKey }))
+                            || (await Transaction.findOne({
+                                offerwallProvider: providerKey,
+                                externalTransactionId: normalized.externalTxId,
+                                type: 'Offerwall Reversal'
+                            }));
+                        if (existingTx && existingTx.offerwallProvider === providerKey && existingTx.externalTransactionId === normalized.externalTxId) {
+                            // Rollback this request's deduction to prevent double-deduction
+                            try {
+                                await User.findByIdAndUpdate(user._id, {
+                                    $inc: {
+                                        taskEarningsBalance: deductionToApply,
+                                        taskWalletBalance: deductionToApply,
+                                        chargebackLiabilityUSD: -liabilityToAdd
+                                    }
+                                });
+                            } catch (rollbackErr) {
+                                console.error('[CRITICAL] Failed to rollback user balance after duplicate reversal detection:', rollbackErr.message);
+                            }
+                            log.status = 'Duplicate';
+                            log.errorMessage = 'Duplicate reversal transaction key verified';
+                            try { await log.save(); } catch (_) {}
+                            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                        }
                     }
+
+                    // Rollback user balance on ordinary transaction persistence failure
+                    try {
+                        await User.findByIdAndUpdate(user._id, {
+                            $inc: {
+                                taskEarningsBalance: deductionToApply,
+                                taskWalletBalance: deductionToApply,
+                                chargebackLiabilityUSD: -liabilityToAdd
+                            }
+                        });
+                    } catch (rollbackErr) {
+                        console.error('[CRITICAL] Failed to rollback user balance after reversal transaction creation error:', rollbackErr.message);
+                    }
+                    
+                    log.status = 'Error';
+                    log.errorMessage = `Reversal transaction creation failed: ${revTxErr.message}`;
+                    try { await log.save(); } catch (_) {}
+                    throw revTxErr;
                 }
 
-
-                log.status = 'IgnoredUnmatchedReversalWithMarker';
-                log.errorMessage = 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely and durable reversal marker persisted.';
-                try { await log.save(); } catch (_) {}
-                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-            }
-
-            const deductionAmount = origTx.userRewardAmount || origTx.amountUSD;
-            const currentEarnings = user.taskEarningsBalance || 0;
-            const newEarnings = currentEarnings - deductionAmount;
-            let chargebackStatus = 'Settled';
-            let liabilityToAdd = 0;
-            let deductionToApply = deductionAmount;
-
-            if (newEarnings < 0) {
-                chargebackStatus = 'Liability_Owed';
-                liabilityToAdd = Number(Math.abs(newEarnings).toFixed(2));
-                deductionToApply = currentEarnings;
-            }
-
-            // SIMULATOR DRY-RUN: Stop before applying any database mutations
-            if (isDryRun) {
-                req.dryRunResult = {
-                    isDryRun: true,
-                    mutationsPerformed: false,
-                    provider: providerKey,
-                    providerName: provider.name,
-                    testTransactionId: normalized.externalTxId,
-                    action: 'REVERSAL',
-                    validation: {
-                        status: 'PASSED',
-                        providerActive: true,
-                        signatureValid: true,
-                        userFound: true,
-                        isDuplicate: false,
-                        originalTransactionFound: Boolean(origTx),
-                        originalTransactionId: origTx?._id || null
-                    },
-                    user: {
-                        id: user._id,
-                        username: user.username,
-                        currentTaskEarningsUSD: currentEarnings,
-                        projectedTaskEarningsUSD: Number((currentEarnings - deductionToApply).toFixed(2)),
-                        currentLiabilityUSD: user.chargebackLiabilityUSD || 0,
-                        projectedLiabilityUSD: Number(((user.chargebackLiabilityUSD || 0) + liabilityToAdd).toFixed(2))
-                    },
-                    accounting: {
-                        rawReward: normalized.rawReward,
-                        rawCurrency: normalized.rawCurrency || 'USD',
-                        exchangeRateMultiplier: provider.exchangeRateMultiplier || 1.0,
-                        grossUSD,
-                        userRevenueSharePercent: userSharePct,
-                        deductionAmountUSD: deductionAmount,
-                        platformRevenueUSD,
-                        deductionToApplyUSD: deductionToApply,
-                        liabilityToAddUSD: liabilityToAdd,
-                        chargebackStatus
-                    },
-                    riskAnalysis: {
-                        riskStatus,
-                        riskReason: riskReason || 'Passed risk checks'
-                    },
-                    simulatedProviderResponse: {
-                        statusCode: 200,
-                        body: providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK'
-                    }
-                };
-                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-            }
-
-            // Atomic balance deduction and liability tracking
-            const updatedUser = await User.findByIdAndUpdate(user._id, {
-                $inc: {
-                    taskEarningsBalance: -deductionToApply,
-                    taskWalletBalance: -deductionToApply,
-                    chargebackLiabilityUSD: liabilityToAdd
-                }
-            }, { new: true });
-
-            const balanceBefore = currentEarnings;
-            const balanceAfter = updatedUser ? updatedUser.taskEarningsBalance : 0;
-
-            let tx;
-            try {
-                tx = await Transaction.create({
-                    userId: user._id,
-                    userName: user.username,
-                    currency: 'USD',
-                    type: 'Offerwall Reversal',
-                    amount: deductionAmount,
-                    amountUSD: deductionAmount,
-                    grossAmount: origTx?.grossAmount || grossUSD,
-                    userRewardAmount: deductionAmount,
-                    platformRevenueAmount: origTx?.platformRevenueAmount || 0,
-                    balanceBefore,
-                    balanceAfter,
-                    idempotencyKey: `${unifiedKey}_reversal`,
-                    chargebackStatus,
-                    reversalReferenceId: origTx?._id,
-                    description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
-                    status: 'Approved',
-                    sourceWallet: 'TaskEarnings',
-                    destinationWallet: 'External',
-                    offerwallProvider: providerKey,
-                    externalTransactionId: normalized.externalTxId
+                // Update Provider metrics atomically
+                await OfferwallProvider.findByIdAndUpdate(provider._id, {
+                    $inc: { totalReversalCount: 1 }
                 });
-            } catch (revTxErr) {
-                // If this is a duplicate reversal (11000), verify it is the *same* reversal before acknowledging
-                if (revTxErr.code === 11000) {
-                    const existingTx = await Transaction.findOne({ idempotencyKey });
-                    if (existingTx && existingTx.offerwallProvider === providerKey && existingTx.externalTransactionId === normalized.externalTxId) {
-                        // Rollback this request's deduction to prevent double-deduction
-                        try {
-                            await User.findByIdAndUpdate(user._id, {
-                                $inc: {
-                                    taskEarningsBalance: deductionToApply,
-                                    taskWalletBalance: deductionToApply,
-                                    chargebackLiabilityUSD: -liabilityToAdd
-                                }
-                            });
-                        } catch (rollbackErr) {
-                            console.error('[CRITICAL] Failed to rollback user balance after duplicate reversal detection:', rollbackErr.message);
-                        }
-                        log.status = 'Duplicate';
-                        log.errorMessage = 'Duplicate reversal transaction key verified';
-                        try { await log.save(); } catch (_) {}
-                        return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-                    }
-                }
 
-                // Rollback user balance on ordinary transaction persistence failure
-                try {
-                    await User.findByIdAndUpdate(user._id, {
-                        $inc: {
-                            taskEarningsBalance: deductionToApply,
-                            taskWalletBalance: deductionToApply,
-                            chargebackLiabilityUSD: -liabilityToAdd
-                        }
-                    });
-                } catch (rollbackErr) {
-                    console.error('[CRITICAL] Failed to rollback user balance after reversal transaction creation error:', rollbackErr.message);
-                }
-                
-                log.status = 'Error';
-                log.errorMessage = `Reversal transaction creation failed: ${revTxErr.message}`;
+                log.status = 'Reversed';
+                log.transactionId = tx._id;
+                log.reversalReferenceTxId = origTx?._id;
+                log.reversedAmountUSD = deductionAmount;
+                log.chargebackStatus = chargebackStatus;
+                log.userBalanceBefore = balanceBefore;
+                log.userBalanceAfter = balanceAfter;
                 try { await log.save(); } catch (_) {}
-                throw revTxErr;
-            }
 
-            // Update Provider metrics atomically
-            await OfferwallProvider.findByIdAndUpdate(provider._id, {
-                $inc: { totalReversalCount: 1 }
-            });
+                await Notification.create({
+                    userId: user._id,
+                    subject: `Offerwall Reversal: ${provider.name} ⚠️`,
+                    message: `An offerwall reward of $${deductionAmount} was revoked by the advertiser/provider (${provider.name} - ${normalized.offerName}). Your task earnings balance has been adjusted.`,
+                    senderType: 'System'
+                });
 
-            log.status = 'Reversed';
-            log.transactionId = tx._id;
-            log.reversalReferenceTxId = origTx?._id;
-            log.reversedAmountUSD = deductionAmount;
-            log.chargebackStatus = chargebackStatus;
-            log.userBalanceBefore = balanceBefore;
-            log.userBalanceAfter = balanceAfter;
-            try { await log.save(); } catch (_) {}
-
-            await Notification.create({
-                userId: user._id,
-                subject: `Offerwall Reversal: ${provider.name} ⚠️`,
-                message: `An offerwall reward of $${deductionAmount} was revoked by the advertiser/provider (${provider.name} - ${normalized.offerName}). Your task earnings balance has been adjusted.`,
-                senderType: 'System'
-            });
-
-            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-        } else {
-            // ==========================================
-            // P6: ATOMIC REWARD CREDITING (taskEarningsBalance)
-            // ==========================================
-            // SIMULATOR DRY-RUN: Stop before applying any database mutations
-            if (isDryRun) {
-                const currentEarnings = user.taskEarningsBalance || 0;
-                const projectedEarnings = Number((currentEarnings + userRewardUSD).toFixed(2));
-                req.dryRunResult = {
-                    isDryRun: true,
-                    mutationsPerformed: false,
-                    provider: providerKey,
-                    providerName: provider.name,
-                    testTransactionId: normalized.externalTxId,
-                    action: 'CREDIT',
-                    validation: {
-                        status: 'PASSED',
-                        providerActive: true,
-                        signatureValid: true,
-                        userFound: true,
-                        isDuplicate: false
-                    },
-                    user: {
-                        id: user._id,
-                        username: user.username,
-                        currentTaskEarningsUSD: currentEarnings,
-                        projectedTaskEarningsUSD: projectedEarnings
-                    },
-                    accounting: {
-                        rawReward: normalized.rawReward,
-                        rawCurrency: normalized.rawCurrency || 'USD',
-                        exchangeRateMultiplier: provider.exchangeRateMultiplier || 1.0,
-                        grossUSD,
-                        userRevenueSharePercent: userSharePct,
-                        userRewardUSD,
-                        platformRevenueUSD
-                    },
-                    riskAnalysis: {
-                        riskStatus,
-                        riskReason: riskReason || 'Passed risk checks'
-                    },
-                    simulatedProviderResponse: {
-                        statusCode: 200,
-                        body: providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK'
-                    }
-                };
                 return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-            }
-
-            // Safety guard: Check if an out-of-order reversal has already been processed for this transaction ID.
-            const priorReversal = await Transaction.findOne({
-                offerwallProvider: providerKey,
-                externalTransactionId: normalized.externalTxId,
-                type: 'Offerwall Reversal'
-            });
-
-            if (priorReversal) {
-                // If a reversal already arrived, record the credit with zero net balance change (already reversed)
+            } else {
+                // ==========================================
+                // P6: ATOMIC REWARD CREDITING (taskEarningsBalance)
+                // ==========================================
+                // SIMULATOR DRY-RUN: Stop before applying any database mutations
                 if (isDryRun) {
+                    const currentEarnings = user.taskEarningsBalance || 0;
+                    const projectedEarnings = Number((currentEarnings + userRewardUSD).toFixed(2));
                     req.dryRunResult = {
                         isDryRun: true,
                         mutationsPerformed: false,
@@ -968,122 +961,165 @@ export const handlePostback = async (req, res) => {
                         testTransactionId: normalized.externalTxId,
                         action: 'CREDIT',
                         validation: {
-                            status: 'SKIPPED_ALREADY_REVERSED',
+                            status: 'PASSED',
                             providerActive: true,
                             signatureValid: true,
                             userFound: true,
-                            isDuplicate: false,
-                            priorReversalFound: true
+                            isDuplicate: false
+                        },
+                        user: {
+                            id: user._id,
+                            username: user.username,
+                            currentTaskEarningsUSD: currentEarnings,
+                            projectedTaskEarningsUSD: projectedEarnings
                         },
                         accounting: {
+                            rawReward: normalized.rawReward,
+                            rawCurrency: normalized.rawCurrency || 'USD',
+                            exchangeRateMultiplier: provider.exchangeRateMultiplier || 1.0,
                             grossUSD,
-                            userRewardUSD: 0
+                            userRevenueSharePercent: userSharePct,
+                            userRewardUSD,
+                            platformRevenueUSD
+                        },
+                        riskAnalysis: {
+                            riskStatus,
+                            riskReason: riskReason || 'Passed risk checks'
+                        },
+                        simulatedProviderResponse: {
+                            statusCode: 200,
+                            body: providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK'
                         }
                     };
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
                 }
 
-                log.status = 'PreReversed';
-                log.errorMessage = 'Credit received after pre-existing reversal; balance mutation bypassed safely at net zero.';
-                try { await log.save(); } catch (_) {}
-                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-            }
-
-            // Check for pre-existing reversal marker
-            const reversalMarker = await Transaction.findOne({ idempotencyKey: `${unifiedKey}_reversal` });
-            if (reversalMarker) {
-                 log.status = 'IgnoredDueToPrecedingReversal';
-                 await log.save();
-                 return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-            }
-
-            // Atomic creation: Transaction first to secure idempotency
-            let tx;
-            try {
-                tx = await Transaction.create({
-                    idempotencyKey: `${unifiedKey}_credit`,
-                    type: 'Offerwall Reward',
-                    userId: user._id,
-                    userName: user.username,
-                    currency: 'USD',
-                    amount: normalized.rewardUSD,
-                    amountUSD: userRewardUSD,
-                    grossAmount: grossUSD,
-                    userRewardAmount: userRewardUSD,
-                    platformRevenueAmount: platformRevenueUSD,
-                    balanceBefore: user.taskEarningsBalance || 0,
-                    balanceAfter: (user.taskEarningsBalance || 0) + userRewardUSD,
-                    status: riskStatus === 'REVIEW' ? 'Pending' : 'Approved',
-                    riskStatus,
-                    description: `Completed ${provider.name} Offer/Survey: ${normalized.offerName}`,
-                    sourceWallet: 'External',
-                    destinationWallet: 'TaskEarnings',
-                    offerwallProvider: providerKey,
-                    externalTransactionId: normalized.externalTxId
-                });
-            } catch (err) {
-                if (err.code === 11000) {
+                // Duplicate credit pre-check (protects historical records without _credit suffix)
+                const existingCredit = (await Transaction.findOne({ idempotencyKey: creditKey }))
+                    || (await Transaction.findOne({
+                        offerwallProvider: providerKey,
+                        externalTransactionId: normalized.externalTxId,
+                        type: 'Offerwall Reward'
+                    }));
+                if (existingCredit) {
                     log.status = 'Duplicate';
-                    log.errorMessage = 'Duplicate transaction key caught by database constraint';
+                    log.errorMessage = 'Duplicate credit transaction detected';
                     try { await log.save(); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
                 }
-                throw err;
-            }
 
-            // If transaction created, update user balance
-            try {
-                await User.findByIdAndUpdate(user._id, {
+                // Safety guard: Check if an out-of-order reversal has already been processed for this transaction ID.
+                const priorReversal = (await Transaction.findOne({ idempotencyKey: reversalKey }))
+                    || (await Transaction.findOne({
+                        offerwallProvider: providerKey,
+                        externalTransactionId: normalized.externalTxId,
+                        type: 'Offerwall Reversal'
+                    }));
+
+                if (priorReversal) {
+                    log.status = 'PreReversed';
+                    log.errorMessage = 'Credit received after pre-existing reversal; balance mutation bypassed safely at net zero.';
+                    try { await log.save(); } catch (_) {}
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                }
+
+                const balanceBefore = user.taskEarningsBalance || 0;
+                const balanceAfter = Number((balanceBefore + userRewardUSD).toFixed(4));
+
+                // Atomic creation: Transaction first to secure idempotency
+                let tx;
+                try {
+                    tx = await Transaction.create({
+                        idempotencyKey: creditKey,
+                        type: 'Offerwall Reward',
+                        userId: user._id,
+                        userName: user.username,
+                        currency: 'USD',
+                        amount: normalized.rewardUSD,
+                        amountUSD: userRewardUSD,
+                        grossAmount: grossUSD,
+                        userRewardAmount: userRewardUSD,
+                        platformRevenueAmount: platformRevenueUSD,
+                        balanceBefore,
+                        balanceAfter,
+                        status: riskStatus === 'REVIEW' ? 'Pending' : 'Approved',
+                        riskStatus,
+                        description: `Completed ${provider.name} Offer/Survey: ${normalized.offerName}`,
+                        sourceWallet: 'External',
+                        destinationWallet: 'TaskEarnings',
+                        offerwallProvider: providerKey,
+                        externalTransactionId: normalized.externalTxId
+                    });
+                } catch (err) {
+                    if (err.code === 11000) {
+                        log.status = 'Duplicate';
+                        log.errorMessage = 'Duplicate transaction key caught by database constraint';
+                        try { await log.save(); } catch (_) {}
+                        return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+                    }
+                    throw err;
+                }
+
+                // If transaction created, update user balance
+                try {
+                    await User.findByIdAndUpdate(user._id, {
+                        $inc: {
+                            taskEarningsBalance: userRewardUSD,
+                            taskWalletBalance: userRewardUSD
+                        }
+                    });
+                } catch (balanceErr) {
+                    // Inconsistency recovery: Transaction exists but balance update failed.
+                    // Rollback transaction creation to prevent orphaned ledger entry.
+                    try {
+                        await Transaction.deleteOne({ _id: tx._id });
+                    } catch (delErr) {
+                        console.error('[CRITICAL] Failed to delete transaction after balance update failure:', delErr.message);
+                    }
+                    throw balanceErr;
+                }
+
+                // Update Provider metrics atomically
+                await OfferwallProvider.findByIdAndUpdate(provider._id, {
                     $inc: {
-                        taskEarningsBalance: userRewardUSD,
-                        taskWalletBalance: userRewardUSD
+                        totalGrossPayoutUSD: grossUSD,
+                        totalUserPayoutUSD: userRewardUSD,
+                        totalPlatformRevenueUSD: platformRevenueUSD,
+                        totalPostbackCount: 1
                     }
                 });
-            } catch (balanceErr) {
-                // Inconsistency: Transaction exists but balance not updated.
-                // Try to rollback transaction creation
-                try {
-                    await Transaction.deleteOne({ _id: tx._id });
-                } catch (_) {}
-                throw balanceErr;
-            }
 
-            // Update Provider metrics atomically
-            await OfferwallProvider.findByIdAndUpdate(provider._id, {
-                $inc: {
-                    totalGrossPayoutUSD: grossUSD,
-                    totalUserPayoutUSD: userRewardUSD,
-                    totalPlatformRevenueUSD: platformRevenueUSD,
-                    totalPostbackCount: 1
+                log.status = 'Processed';
+                log.transactionId = tx._id;
+                log.userBalanceBefore = balanceBefore;
+                log.userBalanceAfter = balanceAfter;
+                try { await log.save(); } catch (_) {}
+
+                // Notify Worker in Inbox
+                await Notification.create({
+                    userId: user._id,
+                    subject: `Offerwall Reward Credited! 🎁 (+$${userRewardUSD})`,
+                    message: `You earned $${userRewardUSD} from ${provider.name} (${normalized.offerName}). The reward has been credited directly to your Work & Earn Task Balance!`,
+                    senderType: 'System'
+                });
+
+                // Return provider-expected success body
+                if (providerKey === 'torox' || providerKey === 'cpx_research') {
+                    return res.status(200).send('1');
                 }
-            });
+                if (providerKey === 'wannads' || providerKey === 'notik' || providerKey === 'bitlabs') {
+                    return res.status(200).send('OK');
+                }
+                if (providerKey === 'revlum' || providerKey === 'monlix' || providerKey === 'lootably') {
+                    return res.status(200).json({ success: true, status: 'processed', txId: normalized.externalTxId });
+                }
 
-            log.status = 'Processed';
-            log.transactionId = tx._id;
-            log.userBalanceBefore = balanceBefore;
-            log.userBalanceAfter = balanceAfter;
-            try { await log.save(); } catch (_) {}
-
-            // Notify Worker in Inbox
-            await Notification.create({
-                userId: user._id,
-                subject: `Offerwall Reward Credited! 🎁 (+$${userRewardUSD})`,
-                message: `You earned $${userRewardUSD} from ${provider.name} (${normalized.offerName}). The reward has been credited directly to your Work & Earn Task Balance!`,
-                senderType: 'System'
-            });
-
-            // Return provider-expected success body
-            if (providerKey === 'torox' || providerKey === 'cpx_research') {
-                return res.status(200).send('1');
-            }
-            if (providerKey === 'wannads' || providerKey === 'notik' || providerKey === 'bitlabs') {
                 return res.status(200).send('OK');
             }
-            if (providerKey === 'revlum' || providerKey === 'monlix' || providerKey === 'lootably') {
-                return res.status(200).json({ success: true, status: 'processed', txId: normalized.externalTxId });
+        } finally {
+            if (lockAcquired) {
+                await releasePostbackLock(providerKey, normalized.externalTxId);
             }
-
-            return res.status(200).send('OK');
         }
     } catch (err) {
         if (isDryRun) {
