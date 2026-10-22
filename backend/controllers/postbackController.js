@@ -638,111 +638,6 @@ export const handlePostback = async (req, res) => {
         // P5: Robust Concurrency & Atomic Idempotency
         const unifiedKey = `${providerKey}_${normalized.externalTxId}`;
 
-        if (normalized.isReversal) {
-            // Atomic Reversal: Attempt to update an existing Credit transaction
-            const updatedTx = await Transaction.findOneAndUpdate(
-                { idempotencyKey: `${unifiedKey}_credit`, type: 'Offerwall Reward' },
-                { 
-                    $set: { 
-                        type: 'Offerwall Reversal',
-                        chargebackStatus: 'Settled',
-                        description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
-                    }
-                },
-                { new: true }
-            );
-
-            if (updatedTx) {
-                // Success: reversal processed atomically
-                log.status = 'Reversed';
-                await log.save();
-                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-            }
-            
-            // If not found, it might be a reversal-first marker or a duplicate reversal
-            const existingTx = await Transaction.findOne({ idempotencyKey: `${unifiedKey}_reversal` });
-            if (existingTx && existingTx.type === 'Offerwall Reversal') {
-                log.status = 'Duplicate';
-                await log.save();
-                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
-            }
-            
-            // Otherwise, it's unmatched: handle as marker
-            try {
-                await Transaction.create({
-                    userId: user._id,
-                    userName: user.username,
-                    currency: 'USD',
-                    type: 'Offerwall Reversal',
-                    amount: 0,
-                    amountUSD: 0,
-                    grossAmount: grossUSD,
-                    userRewardAmount: 0,
-                    platformRevenueAmount: 0,
-                    balanceBefore: user.taskEarningsBalance || 0,
-                    balanceAfter: user.taskEarningsBalance || 0,
-                    idempotencyKey: `${unifiedKey}_reversal`,
-                    chargebackStatus: 'Settled',
-                    description: `Unmatched Offerwall Reversal Marker (received before credit): ${provider.name} (${normalized.offerName})`,
-                    status: 'Approved',
-                    sourceWallet: 'TaskEarnings',
-                    destinationWallet: 'External',
-                    offerwallProvider: providerKey,
-                    externalTransactionId: normalized.externalTxId
-                });
-                log.status = 'IgnoredUnmatchedReversalWithMarker';
-                await log.save();
-                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-            } catch (markerErr) {
-                if (markerErr.code !== 11000) throw markerErr;
-            }
-            // Re-apply original logic block from line 753+ here
-        } else {
-            // Credit: Atomic creation
-            // Atomic Balance Increment
-            const updatedUser = await User.findByIdAndUpdate(user._id, {
-                $inc: {
-                    taskEarningsBalance: userRewardUSD,
-                    taskWalletBalance: userRewardUSD
-                }
-            }, { new: true });
-
-            try {
-                await Transaction.create({
-                    idempotencyKey: `${unifiedKey}_credit`,
-                    type: 'Offerwall Reward',
-                    userId: user._id,
-                    userName: user.username,
-                    currency: 'USD',
-                    amount: normalized.rewardUSD,
-                    amountUSD: userRewardUSD,
-                    grossAmount: grossUSD,
-                    userRewardAmount: userRewardUSD,
-                    platformRevenueAmount: platformRevenueUSD,
-                    balanceBefore: user.taskEarningsBalance || 0,
-                    balanceAfter: updatedUser.taskEarningsBalance,
-                    status: 'Approved',
-                    sourceWallet: 'External',
-                    destinationWallet: 'TaskEarnings',
-                    offerwallProvider: providerKey,
-                    externalTransactionId: normalized.externalTxId
-                });
-            } catch (err) {
-                if (err.code === 11000) {
-                    // Duplicate key: rollback balance
-                    await User.findByIdAndUpdate(user._id, {
-                        $inc: { taskEarningsBalance: -userRewardUSD, taskWalletBalance: -userRewardUSD }
-                    });
-                    log.status = 'Duplicate';
-                    await log.save();
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
-                }
-                throw err;
-            }
-            log.status = 'Credited';
-            await log.save();
-            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-        }
 
         log.grossAmountUSD = grossUSD;
         log.userRewardUSD = userRewardUSD;
@@ -768,7 +663,6 @@ export const handlePostback = async (req, res) => {
 
         log.riskStatus = riskStatus;
         log.riskReason = riskReason;
-
 
         if (normalized.isReversal) {
             // ==========================================
@@ -1095,76 +989,63 @@ export const handlePostback = async (req, res) => {
                 return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
             }
 
-            const updatedUser = await User.findOneAndUpdate(
-                {
-                    _id: user._id,
-                    status: { $ne: 'Blocked' },
-                    'restrictions.earning': { $ne: true }
-                },
-                {
-                    $inc: {
-                        taskEarningsBalance: userRewardUSD,
-                        taskWalletBalance: userRewardUSD
-                    }
-                },
-                { new: true }
-            );
-
-            if (!updatedUser) {
-                log.status = 'Rejected';
-                log.errorMessage = 'User account is blocked or earning restricted';
-                try { await log.save(); } catch (_) {}
-                return res.status(403).send('USER_RESTRICTED');
+            // Check for pre-existing reversal marker
+            const reversalMarker = await Transaction.findOne({ idempotencyKey: `${unifiedKey}_reversal` });
+            if (reversalMarker) {
+                 log.status = 'IgnoredDueToPrecedingReversal';
+                 await log.save();
+                 return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
             }
 
-            const balanceBefore = Number((updatedUser.taskEarningsBalance - userRewardUSD).toFixed(2));
-            const balanceAfter = updatedUser.taskEarningsBalance;
-
+            // Atomic creation: Transaction first to secure idempotency
             let tx;
             try {
                 tx = await Transaction.create({
+                    idempotencyKey: `${unifiedKey}_credit`,
+                    type: 'Offerwall Reward',
                     userId: user._id,
                     userName: user.username,
                     currency: 'USD',
-                    type: 'Offerwall Reward',
-                    amount: userRewardUSD,
+                    amount: normalized.rewardUSD,
                     amountUSD: userRewardUSD,
                     grossAmount: grossUSD,
                     userRewardAmount: userRewardUSD,
                     platformRevenueAmount: platformRevenueUSD,
-                    balanceBefore,
-                    balanceAfter,
-                    idempotencyKey,
+                    balanceBefore: user.taskEarningsBalance || 0,
+                    balanceAfter: (user.taskEarningsBalance || 0) + userRewardUSD,
+                    status: riskStatus === 'REVIEW' ? 'Pending' : 'Approved',
                     riskStatus,
                     description: `Completed ${provider.name} Offer/Survey: ${normalized.offerName}`,
-                    status: riskStatus === 'REVIEW' ? 'Pending' : 'Approved',
                     sourceWallet: 'External',
                     destinationWallet: 'TaskEarnings',
                     offerwallProvider: providerKey,
                     externalTransactionId: normalized.externalTxId
                 });
-            } catch (txErr) {
-                // Rollback user balance on any transaction creation failure to prevent balance inconsistency
-                try {
-                    await User.findByIdAndUpdate(user._id, {
-                        $inc: {
-                            taskEarningsBalance: -userRewardUSD,
-                            taskWalletBalance: -userRewardUSD
-                        }
-                    });
-                } catch (_) {}
-
-                // Handle duplicate key error 11000 gracefully (P5)
-                if (txErr.code === 11000) {
+            } catch (err) {
+                if (err.code === 11000) {
                     log.status = 'Duplicate';
                     log.errorMessage = 'Duplicate transaction key caught by database constraint';
                     try { await log.save(); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
                 }
-                log.status = 'Error';
-                log.errorMessage = `Transaction creation failed: ${txErr.message}`;
-                try { await log.save(); } catch (_) {}
-                throw txErr;
+                throw err;
+            }
+
+            // If transaction created, update user balance
+            try {
+                await User.findByIdAndUpdate(user._id, {
+                    $inc: {
+                        taskEarningsBalance: userRewardUSD,
+                        taskWalletBalance: userRewardUSD
+                    }
+                });
+            } catch (balanceErr) {
+                // Inconsistency: Transaction exists but balance not updated.
+                // Try to rollback transaction creation
+                try {
+                    await Transaction.deleteOne({ _id: tx._id });
+                } catch (_) {}
+                throw balanceErr;
             }
 
             // Update Provider metrics atomically
@@ -1218,6 +1099,7 @@ export const handlePostback = async (req, res) => {
             return res.status(500).send('SIMULATION_ERROR');
         }
 
+        console.error('[DEBUG CATCH ERROR]:', err);
         if (log) {
             log.status = 'Error';
             log.errorMessage = err.message;
