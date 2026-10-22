@@ -725,10 +725,11 @@ export const handlePostback = async (req, res) => {
 
         // P8: Gross / User / Platform Split Calculation
         let grossUSD;
+        const absReward = Math.abs(normalized.rawReward);
         if (providerKey === 'theoremreach') {
-            grossUSD = Number((normalized.rawReward / (provider.exchangeRateMultiplier || 70.0)).toFixed(4));
+            grossUSD = Number((absReward / (provider.exchangeRateMultiplier || 70.0)).toFixed(4));
         } else {
-            grossUSD = Number((normalized.rawReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+            grossUSD = Number((absReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
         }
         let userRewardUSD = grossUSD;
         let platformRevenueUSD = 0;
