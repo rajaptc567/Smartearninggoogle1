@@ -409,6 +409,14 @@ const normalizePostbackParams = (providerKey, rawParams) => {
 
     // Extract Reward Amount (USD)
     let rawAmount = p.amount || p.reward || p.payout || p.pointValue || p.amount_usd || p.amount_local || p.rate || p.pts || p.val || p.rewardAmount || p.currency_amount || p.rewards || p.reward_amount || p.points || 0;
+    let rawCurrency = p.currency || 'USD';
+
+    if (key === 'theoremreach') {
+        rawUserId = p.user_id || p.userId || p.uid || p.subId || p.ext_user_id || '';
+        rawTxId = p.transaction_id || p.tx_id || p.trans_id || p.id || '';
+        rawAmount = p.reward || p.currency_reward || p.reward_amount || p.amount || 0;
+        rawCurrency = p.currency || 'USD';
+    }
 
     // Detect Reversal / Chargeback
     let isReversal = false;
@@ -693,6 +701,25 @@ export const handlePostback = async (req, res) => {
             log.errorMessage = 'TheoremReach test callback with debug indicator received; live user balance mutation and transaction record bypassed.';
             try { await log.save(); } catch (_) {}
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+        }
+
+        // TheoremReach Exchange Rate & Conversion Semantics Validation
+        if (providerKey === 'theoremreach') {
+            if (typeof provider.exchangeRateMultiplier !== 'number' || provider.exchangeRateMultiplier <= 0) {
+                if (isDryRun) {
+                    req.dryRunResult = {
+                        isDryRun: true,
+                        mutationsPerformed: false,
+                        provider: providerKey,
+                        validation: { status: 'FAILED', error: 'EXCHANGE_RATE_NOT_CONFIGURED' }
+                    };
+                } else {
+                    log.status = 'Error';
+                    log.errorMessage = 'TheoremReach exchange rate multiplier not configured or invalid; failing closed';
+                    try { await log.save(); } catch (_) {}
+                }
+                return res.status(400).send('EXCHANGE_RATE_NOT_CONFIGURED');
+            }
         }
 
         // P8: Gross / User / Platform Split Calculation

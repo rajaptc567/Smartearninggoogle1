@@ -1213,6 +1213,24 @@ async function runTests() {
     assert.equal(remainingLockB.ownerToken, 'process_B_new_owner_token_999', 'Process B remains rightful lock owner');
     console.log('✓ Passed Test 23: Lock ownership race detected and handled safely without orphan mutations.\n');
 
+    // TEST 24: Unconfigured Exchange Rate Multiplier Fails Closed for TheoremReach
+    console.log('Test 24: Unconfigured Exchange Rate Multiplier Fails Closed for TheoremReach...');
+    seedProviders();
+    const pEx = db.providers.get('theoremreach');
+    pEx.exchangeRateMultiplier = 0; // Invalid / unconfigured
+
+    const reqEx = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'no_ex_rate_tx', reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resEx = createMockRes();
+    await handlePostback(reqEx, resEx);
+    assert.equal(resEx.statusCode, 400, 'Unconfigured exchange rate must fail closed with HTTP 400');
+    assert.equal(resEx.body, 'EXCHANGE_RATE_NOT_CONFIGURED');
+    console.log('✓ Passed Test 24: TheoremReach failed closed when exchange rate multiplier was unconfigured/invalid.\n');
+
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');
     console.log('========================================================================\n');
