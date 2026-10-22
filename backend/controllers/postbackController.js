@@ -437,9 +437,10 @@ const normalizePostbackParams = (providerKey, rawParams) => {
     return {
         userId: String(rawUserId).trim(),
         externalTxId: String(rawTxId).trim(),
-        rewardUSD: rewardNum,
+        // Keep raw reward units separate from USD revenue
         rawReward: Number(rawAmount) || 0,
-        rawCurrency: p.currency || 'USD',
+        rawCurrency: rawCurrency,
+        rewardUSD: 0, // Will be calculated based on provider config
         offerId: String(p.offer_id || p.oid || p.offerId || p.campaign_id || '').trim(),
         offerName: String(p.o_name || p.offer_name || p.offerName || p.campaign_name || p.reward_name || `${providerKey} reward`).trim(),
         isReversal,
@@ -723,7 +724,12 @@ export const handlePostback = async (req, res) => {
         }
 
         // P8: Gross / User / Platform Split Calculation
-        const grossUSD = Number((normalized.rewardUSD * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+        let grossUSD;
+        if (providerKey === 'theoremreach') {
+            grossUSD = Number((normalized.rawReward / (provider.exchangeRateMultiplier || 70.0)).toFixed(4));
+        } else {
+            grossUSD = Number((normalized.rawReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+        }
         let userRewardUSD = grossUSD;
         let platformRevenueUSD = 0;
         let userSharePct = 100;
