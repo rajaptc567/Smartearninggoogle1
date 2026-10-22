@@ -1231,6 +1231,73 @@ async function runTests() {
     assert.equal(resEx.body, 'EXCHANGE_RATE_NOT_CONFIGURED');
     console.log('✓ Passed Test 24: TheoremReach failed closed when exchange rate multiplier was unconfigured/invalid.\n');
 
+    // TEST 25: TheoremReach exchange rate of 70, 700 virtual units = $10.00 gross USD, single commission split, negative reversal, and non-TheoremReach regression check.
+    console.log('Test 25: TheoremReach exchange rate (70), 700 virtual units ($10.00 gross), single commission split, negative reversal, and non-TheoremReach regression check...');
+    seedProviders();
+    const pTr25 = db.providers.get('theoremreach');
+    pTr25.exchangeRateMultiplier = 70.0;
+    pTr25.commissionMode = 'smartexn_managed';
+    pTr25.userRevenueSharePercent = 70;
+
+    const user25 = db.users.get('507f1f77bcf86cd799439011');
+    user25.taskEarningsBalance = 100.0;
+
+    // 25a: Send 700 virtual reward units -> grossUSD = 700 / 70 = 10.00. userRewardUSD = 10.00 * 0.70 = 7.00.
+    const req25 = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'tr_700_units_tx', reward: '700' }),
+        body: {},
+        headers: {}
+    };
+    const res25 = createMockRes();
+    await handlePostback(req25, res25);
+    assert.equal(res25.statusCode, 200);
+    const tx25 = db.transactions.get('theoremreach_tr_700_units_tx_credit');
+    assert.ok(tx25, 'Credit transaction must exist');
+    assert.equal(tx25.grossAmount, 10.0, '700 virtual units with exchange rate 70 must produce $10.00 gross USD');
+    assert.equal(tx25.userRewardAmount, 7.0, '70% user commission on $10.00 gross must be $7.00');
+    assert.equal(tx25.platformRevenueAmount, 3.0, '30% platform commission on $10.00 gross must be $3.00');
+    assert.equal(user25.taskEarningsBalance, 107.0, 'User balance must be credited by $7.00');
+
+    // 25b: Negative reversal amount test (reward: '-700' or reversal: 'true') using original credited transaction
+    const req25Rev = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'tr_700_units_tx', reward: '-700', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    const res25Rev = createMockRes();
+    await handlePostback(req25Rev, res25Rev);
+    assert.equal(res25Rev.statusCode, 200);
+    assert.equal(user25.taskEarningsBalance, 100.0, 'User balance must return to 100.0 after reversal deduction based on original tx');
+    const tx25Rev = db.transactions.get('theoremreach_tr_700_units_tx_reversal');
+    assert.ok(tx25Rev, 'Reversal transaction must exist');
+    assert.equal(tx25Rev.userRewardAmount, 7.0, 'Reversal deduction must match original user reward amount ($7.00)');
+
+    // 25c: Regression check for non-TheoremReach provider (Torox)
+    const toroxProv = db.providers.get('torox');
+    toroxProv.exchangeRateMultiplier = 1.0;
+    toroxProv.commissionMode = 'smartexn_managed';
+    toroxProv.userRevenueSharePercent = 80;
+
+    const toroxSig = crypto.createHash('md5').update(`torox_offer_1-507f1f77bcf86cd799439011-torox_secret`).digest('hex');
+    const reqToroxReg = {
+        params: { provider: 'torox' },
+        query: { id: 'torox_tx_001', oid: 'torox_offer_1', user_id: '507f1f77bcf86cd799439011', amount: '50.00', sig: toroxSig },
+        body: {},
+        headers: {}
+    };
+    const resToroxReg = createMockRes();
+    await handlePostback(reqToroxReg, resToroxReg);
+    assert.equal(resToroxReg.statusCode, 200, 'Torox regression request must succeed');
+    const txToroxReg = db.transactions.get('torox_torox_tx_001_credit');
+    assert.ok(txToroxReg, 'Torox credit transaction must exist');
+    assert.equal(txToroxReg.grossAmount, 50.0, 'Torox gross amount must be $50.00');
+    assert.equal(txToroxReg.userRewardAmount, 40.0, 'Torox 80% user reward on $50.00 must be $40.00');
+    assert.equal(txToroxReg.platformRevenueAmount, 10.0, 'Torox 20% platform revenue on $50.00 must be $10.00');
+
+    console.log('✓ Passed Test 25: TheoremReach exchange rate 70, 700 units = $10.00 gross, single commission split, negative reversal, and non-TheoremReach regression check.\n');
+
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');
     console.log('========================================================================\n');
