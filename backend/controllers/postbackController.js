@@ -506,7 +506,7 @@ export const releasePostbackLock = async (providerKey, externalTxId, ownerToken 
     }
     try {
         const res = await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId, ownerToken });
-        return Boolean(res && (res.deletedCount === 1 || res.acknowledged));
+        return Boolean(res && res.deletedCount === 1);
     } catch (err) {
         console.error(`[WARN] Failed to release postback lock for ${providerKey}:${externalTxId}:`, err.message);
         return false;

@@ -876,7 +876,8 @@ async function runTests() {
     assert.equal(lockAfterTakeover.ownerToken, ownerTokenB, 'Lock must now be owned by Process B');
 
     // Process A (delayed/slow) attempts to release the lock with its old ownerToken
-    await releasePostbackLock(testProviderKey, testTxId, ownerTokenA);
+    const relA = await releasePostbackLock(testProviderKey, testTxId, ownerTokenA);
+    assert.equal(relA, false, 'Release with old owner token must return false');
 
     // Verify Process A's release had ZERO effect on Process B's lock
     const lockAfterOldRelease = await OfferwallPostbackLock.findOne({ providerKey: testProviderKey, externalTxId: testTxId });
@@ -884,7 +885,8 @@ async function runTests() {
     assert.equal(lockAfterOldRelease.ownerToken, ownerTokenB, 'Lock must remain owned by Process B');
 
     // Unverified/parameterless release attempt must NOT delete Process B's lock
-    await releasePostbackLock(testProviderKey, testTxId);
+    const relParam = await releasePostbackLock(testProviderKey, testTxId);
+    assert.equal(relParam, false, 'Parameterless release must return false');
     const lockAfterParamless = await OfferwallPostbackLock.findOne({ providerKey: testProviderKey, externalTxId: testTxId });
     assert.ok(lockAfterParamless, 'Lock must not be deleted by parameterless release');
     assert.equal(lockAfterParamless.ownerToken, ownerTokenB, 'Lock must remain owned by Process B');
@@ -898,7 +900,8 @@ async function runTests() {
     assert.equal(isNullValid, false, 'Null owner token must fail closed');
 
     // Process B releases with its valid token
-    await releasePostbackLock(testProviderKey, testTxId, ownerTokenB);
+    const relB = await releasePostbackLock(testProviderKey, testTxId, ownerTokenB);
+    assert.equal(relB, true, 'Release with valid owner token must return true');
     const lockAfterNewRelease = await OfferwallPostbackLock.findOne({ providerKey: testProviderKey, externalTxId: testTxId });
     assert.equal(lockAfterNewRelease, null, 'Lock must be cleanly deleted when released by rightful owner');
     console.log('✓ Passed Test 19: Stale-lock takeover followed by old owner release handled safely.\n');

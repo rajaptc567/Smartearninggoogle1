@@ -630,13 +630,15 @@ async function runTests() {
     assert.notStrictEqual(oldToken, newToken, 'New owner token must be distinct');
 
     // Old owner attempts release
-    await releasePostbackLock('torox', simTxId, oldToken);
+    const relOld = await releasePostbackLock('torox', simTxId, oldToken);
+    assert.strictEqual(relOld, false, 'Old owner token release must return false');
     const lockStillPresent = await OfferwallPostbackLock.findOne({ providerKey: 'torox', externalTxId: simTxId });
     assert.ok(lockStillPresent, 'Lock must not be deleted by old owner token');
     assert.strictEqual(lockStillPresent.ownerToken, newToken, 'Lock must remain owned by new owner');
 
     // Parameterless release attempt must NOT delete new owner's lock
-    await releasePostbackLock('torox', simTxId);
+    const relParam = await releasePostbackLock('torox', simTxId);
+    assert.strictEqual(relParam, false, 'Parameterless release must return false');
     const lockAfterParamless = await OfferwallPostbackLock.findOne({ providerKey: 'torox', externalTxId: simTxId });
     assert.ok(lockAfterParamless, 'Lock must not be deleted by parameterless release');
     assert.strictEqual(lockAfterParamless.ownerToken, newToken, 'Lock must remain owned by new owner');
@@ -650,7 +652,8 @@ async function runTests() {
     assert.strictEqual(isNullValid, false, 'Null token must return false');
 
     // Proper release
-    await releasePostbackLock('torox', simTxId, newToken);
+    const relNew = await releasePostbackLock('torox', simTxId, newToken);
+    assert.strictEqual(relNew, true, 'New owner token release must return true');
     const lockGone = await OfferwallPostbackLock.findOne({ providerKey: 'torox', externalTxId: simTxId });
     assert.strictEqual(lockGone, null, 'Lock must be deleted when released by new owner');
     console.log('✓ Passed Test 10: Lock ownership token preservation and takeover safety verified in simulator suite.\n');
