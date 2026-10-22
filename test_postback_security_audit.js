@@ -1,5 +1,7 @@
 import assert from 'assert';
 import crypto from 'crypto';
+import { verifySignature } from './backend/controllers/postbackController.js';
+import OfferwallPostbackLog from './backend/models/OfferwallPostbackLog.js';
 
 console.log('Running Focused Postback Security & Simulator Audit Tests...');
 
@@ -120,6 +122,40 @@ assert.strictEqual(res.balance, 12.5, 'Assertion 3b passed: reversal persistence
 res = processReversal(12.5, 0, 3.0, { code: 11000 });
 assert.strictEqual(res.balance, 12.5, 'Assertion 3c passed: duplicate reversal error 11000 rolls back balance');
 console.log('✓ Test 3 Passed: Reversal Functional Simulation (Rollback, Duplicate Idempotency).');
+
+// 4. Test OfferwallPostbackLog new statuses schema validation
+const newStatuses = ['CriticalInconsistency', 'CriticalCompensationFailure', 'Compensated', 'UserRestricted'];
+for (const status of newStatuses) {
+    const logDoc = new OfferwallPostbackLog({
+        provider: 'test_provider',
+        externalTxId: `tx_${status}`,
+        status: status
+    });
+    const validationError = logDoc.validateSync();
+    assert.strictEqual(validationError, undefined, `Status ${status} should pass Mongoose schema validation`);
+}
+console.log('✓ Test 4 Passed: New Postback Log Statuses Validation (CriticalInconsistency, CriticalCompensationFailure, Compensated, UserRestricted).');
+
+// 5. Test CPX Research signature verification (reject ext_user_id-only, accept trans_id)
+const cpxProvider = {
+    providerKey: 'cpx_research',
+    requireSignature: true,
+    signatureType: 'md5',
+    secretKey: 'cpx_secret_123'
+};
+const validTransId = 'trans_999';
+const validHash = crypto.createHash('md5').update(`${validTransId}-cpx_secret_123`).digest('hex');
+const extUserIdHash = crypto.createHash('md5').update(`user_123-cpx_secret_123`).digest('hex');
+
+const resValid = verifySignature(cpxProvider, { trans_id: validTransId, hash: validHash }, '127.0.0.1');
+assert.strictEqual(resValid.valid, true, 'CPX valid trans_id signature accepted');
+
+const resMissing = verifySignature(cpxProvider, { trans_id: validTransId }, '127.0.0.1');
+assert.strictEqual(resMissing.valid, false, 'CPX missing signature rejected');
+
+const resExtUserOnly = verifySignature(cpxProvider, { trans_id: validTransId, ext_user_id: 'user_123', hash: extUserIdHash }, '127.0.0.1');
+assert.strictEqual(resExtUserOnly.valid, false, 'CPX ext_user_id-only signature correctly rejected');
+console.log('✓ Test 5 Passed: CPX Research Signature Fallback Removal & Validation.');
 
 console.log('======================================================');
 console.log('All Postback Security Audit & Simulator Tests Passed!');

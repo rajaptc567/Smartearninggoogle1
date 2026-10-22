@@ -271,10 +271,7 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
             if (!hash) return { valid: false, error: 'CPX signature missing' };
             const expected = crypto.createHash('md5').update(`${transId}-${secret}`).digest('hex');
             if (!safeTimingCompare(hash, expected)) {
-                const altExpected = crypto.createHash('md5').update(`${params.ext_user_id || ''}-${secret}`).digest('hex');
-                if (!safeTimingCompare(hash, altExpected)) {
-                    return { valid: false, error: 'CPX signature mismatch' };
-                }
+                return { valid: false, error: 'CPX signature mismatch' };
             }
             return { valid: true };
         }
