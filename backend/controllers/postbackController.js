@@ -1409,7 +1409,10 @@ export const updateOfferwallProvider = async (req, res) => {
             'platformRevenueSharePercent', 'ipWhitelist', 'requireSignature', 'signatureType',
             'testMode', 'description', 'badge', 'icon', 'status', 'approvalStatus',
             'integrationStatus', 'riskThresholdUSD', 'holdRewards', 'holdThresholdUSD',
-            'complianceNotes', 'customConfig'
+            'complianceNotes', 'customConfig',
+            'defaultRedirectUrl', 'successRedirectUrl', 'partialRedirectUrl', 'disqualifiedRedirectUrl',
+            'quotaFullRedirectUrl', 'securityRedirectUrl', 'eventWebhookUrl', 'rewardCallbackUrl',
+            'includeReversalsInRewardCallback'
         ];
 
         const sanitizedUpdates = {};

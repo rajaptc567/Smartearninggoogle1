@@ -27,6 +27,15 @@ interface OfferwallProvider {
     technicalReadinessScore: number;
     approvalLikelihoodScore: string;
     complianceNotes?: string;
+    defaultRedirectUrl?: string;
+    successRedirectUrl?: string;
+    partialRedirectUrl?: string;
+    disqualifiedRedirectUrl?: string;
+    quotaFullRedirectUrl?: string;
+    securityRedirectUrl?: string;
+    eventWebhookUrl?: string;
+    rewardCallbackUrl?: string;
+    includeReversalsInRewardCallback?: boolean;
 }
 
 interface PostbackLog {
@@ -824,6 +833,98 @@ export const AdminOfferwalls: React.FC = () => {
                                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-mono"
                                 />
                                 <p className="text-[10px] text-slate-500 mt-1">Available placeholders: <code className="text-indigo-400">&#123;appId&#125;</code>, <code className="text-indigo-400">&#123;userId&#125;</code></p>
+                            </div>
+
+                            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                                <h4 className="text-xs font-black uppercase text-indigo-300 tracking-wider">
+                                    🌐 Redirect URLs & Event Handlers (TheoremReach / Network Config)
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                        <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Default Redirect URL</label>
+                                        <input
+                                            type="text"
+                                            value={editingProvider.defaultRedirectUrl || ''}
+                                            onChange={(e) => setEditingProvider({ ...editingProvider, defaultRedirectUrl: e.target.value })}
+                                            placeholder="https://smartearning.com/offerwalls/return"
+                                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Success Redirect URL</label>
+                                        <input
+                                            type="text"
+                                            value={editingProvider.successRedirectUrl || ''}
+                                            onChange={(e) => setEditingProvider({ ...editingProvider, successRedirectUrl: e.target.value })}
+                                            placeholder="https://smartearning.com/offerwalls/success"
+                                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Partial Reward Redirect URL</label>
+                                        <input
+                                            type="text"
+                                            value={editingProvider.partialRedirectUrl || ''}
+                                            onChange={(e) => setEditingProvider({ ...editingProvider, partialRedirectUrl: e.target.value })}
+                                            placeholder="https://smartearning.com/offerwalls/partial"
+                                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Disqualified Redirect URL</label>
+                                        <input
+                                            type="text"
+                                            value={editingProvider.disqualifiedRedirectUrl || ''}
+                                            onChange={(e) => setEditingProvider({ ...editingProvider, disqualifiedRedirectUrl: e.target.value })}
+                                            placeholder="https://smartearning.com/offerwalls/disqualified"
+                                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Quota Full Redirect URL</label>
+                                        <input
+                                            type="text"
+                                            value={editingProvider.quotaFullRedirectUrl || ''}
+                                            onChange={(e) => setEditingProvider({ ...editingProvider, quotaFullRedirectUrl: e.target.value })}
+                                            placeholder="https://smartearning.com/offerwalls/quotafull"
+                                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Security Redirect URL</label>
+                                        <input
+                                            type="text"
+                                            value={editingProvider.securityRedirectUrl || ''}
+                                            onChange={(e) => setEditingProvider({ ...editingProvider, securityRedirectUrl: e.target.value })}
+                                            placeholder="https://smartearning.com/offerwalls/security"
+                                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-800 text-xs">
+                                    <div>
+                                        <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Event Webhook URL</label>
+                                        <input
+                                            type="text"
+                                            value={editingProvider.eventWebhookUrl || ''}
+                                            onChange={(e) => setEditingProvider({ ...editingProvider, eventWebhookUrl: e.target.value })}
+                                            placeholder="https://smartearning.com/api/v1/postbacks/events"
+                                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between p-2 bg-slate-900 rounded-xl border border-slate-800 mt-5">
+                                        <div>
+                                            <span className="text-[11px] font-bold uppercase text-white">Include Reversals In Reward Callback</span>
+                                            <p className="text-[10px] text-slate-400">Process chargeback & reversal webhooks</p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={editingProvider.includeReversalsInRewardCallback ?? true}
+                                            onChange={(e) => setEditingProvider({ ...editingProvider, includeReversalsInRewardCallback: e.target.checked })}
+                                            className="w-4 h-4 rounded accent-indigo-600"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs">

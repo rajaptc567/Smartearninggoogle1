@@ -154,6 +154,42 @@ const OfferwallProviderSchema = new mongoose.Schema({
     complianceNotes: {
         type: String,
         default: ''
+    },
+    defaultRedirectUrl: {
+        type: String,
+        default: ''
+    },
+    successRedirectUrl: {
+        type: String,
+        default: ''
+    },
+    partialRedirectUrl: {
+        type: String,
+        default: ''
+    },
+    disqualifiedRedirectUrl: {
+        type: String,
+        default: ''
+    },
+    quotaFullRedirectUrl: {
+        type: String,
+        default: ''
+    },
+    securityRedirectUrl: {
+        type: String,
+        default: ''
+    },
+    eventWebhookUrl: {
+        type: String,
+        default: ''
+    },
+    rewardCallbackUrl: {
+        type: String,
+        default: ''
+    },
+    includeReversalsInRewardCallback: {
+        type: Boolean,
+        default: true
     }
 }, {
     timestamps: true
