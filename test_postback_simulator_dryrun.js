@@ -71,7 +71,17 @@ User.findOne = async (query) => {
     }
     return null;
 };
+let simulateCompensationFailure = false;
+let simulateCompensationNull = false;
+let simulateTxDeleteFailure = false;
+
 User.findOneAndUpdate = async (filter, update, options) => {
+    if (simulateCompensationFailure && update.$inc && (update.$inc.taskEarningsBalance > 0 || update.$inc.taskWalletBalance > 0)) {
+        throw new Error('Database connection reset during compensation rollback');
+    }
+    if (simulateCompensationNull && update.$inc && (update.$inc.taskEarningsBalance > 0 || update.$inc.taskWalletBalance > 0)) {
+        return null;
+    }
     const user = await User.findById(filter._id);
     if (!user) return null;
     if (filter.status?.$ne && user.status === filter.status.$ne) return null;
@@ -119,6 +129,21 @@ Transaction.create = async (doc) => {
     const created = { ...doc, _id: `tx_${Date.now()}_${Math.random()}` };
     db.transactions.set(doc.idempotencyKey, created);
     return created;
+};
+
+Transaction.deleteOne = async (query) => {
+    if (simulateTxDeleteFailure) {
+        return { deletedCount: 0, acknowledged: true };
+    }
+    if (query._id) {
+        for (const [key, tx] of db.transactions.entries()) {
+            if (tx._id === query._id) {
+                db.transactions.delete(key);
+                return { deletedCount: 1, acknowledged: true };
+            }
+        }
+    }
+    return { deletedCount: 0, acknowledged: true };
 };
 
 OfferwallProvider.findOne = async (query) => {
@@ -610,14 +635,261 @@ async function runTests() {
     assert.ok(lockStillPresent, 'Lock must not be deleted by old owner token');
     assert.strictEqual(lockStillPresent.ownerToken, newToken, 'Lock must remain owned by new owner');
 
+    // Parameterless release attempt must NOT delete new owner's lock
+    await releasePostbackLock('torox', simTxId);
+    const lockAfterParamless = await OfferwallPostbackLock.findOne({ providerKey: 'torox', externalTxId: simTxId });
+    assert.ok(lockAfterParamless, 'Lock must not be deleted by parameterless release');
+    assert.strictEqual(lockAfterParamless.ownerToken, newToken, 'Lock must remain owned by new owner');
+
+    // isLockStillOwned checks
+    const isOldValid = await isLockStillOwned('torox', simTxId, oldToken);
+    const isNewValid = await isLockStillOwned('torox', simTxId, newToken);
+    const isNullValid = await isLockStillOwned('torox', simTxId, null);
+    assert.strictEqual(isOldValid, false, 'Old owner token must return false');
+    assert.strictEqual(isNewValid, true, 'New owner token must return true');
+    assert.strictEqual(isNullValid, false, 'Null token must return false');
+
     // Proper release
     await releasePostbackLock('torox', simTxId, newToken);
     const lockGone = await OfferwallPostbackLock.findOne({ providerKey: 'torox', externalTxId: simTxId });
     assert.strictEqual(lockGone, null, 'Lock must be deleted when released by new owner');
     console.log('✓ Passed Test 10: Lock ownership token preservation and takeover safety verified in simulator suite.\n');
 
+    // -------------------------------------------------------------
+    // TEST 11: [MOCKED IN-MEMORY TEST] Restricted-user transaction deletion failure records CriticalInconsistency
+    // -------------------------------------------------------------
+    console.log('Test 11: Restricted-user transaction deletion failure records CriticalInconsistency [MOCKED IN-MEMORY TEST]...');
+    const delFailUser = db.users.get(testUser._id);
+    delFailUser.status = 'Active';
+    delFailUser.restrictions = { earning: false };
+    const balBeforeDelFail = delFailUser.taskEarningsBalance;
+
+    simulateTxDeleteFailure = true;
+    let intercepted11 = false;
+    const origFindOneAndUpdate11 = User.findOneAndUpdate;
+    User.findOneAndUpdate = async (filter, update, options) => {
+        if (filter['restrictions.earning']?.$ne && !intercepted11) {
+            intercepted11 = true;
+            delFailUser.status = 'Blocked';
+            return null; // rejected at balance update point
+        }
+        return origFindOneAndUpdate11(filter, update, options);
+    };
+
+    const delFailTxId = 'torox_del_fail_tx_111';
+    const delFailOid = 'torox_del_fail_oid_111';
+    const delFailSig = crypto.createHash('md5').update(`${delFailOid}-${testUser._id}-${secret}`).digest('hex');
+    const delFailReq = {
+        params: { provider: 'torox' },
+        query: {
+            user_id: testUser._id,
+            id: delFailTxId,
+            oid: delFailOid,
+            amount: 5.0,
+            sig: delFailSig
+        },
+        body: {},
+        headers: {},
+        socket: { remoteAddress: '127.0.0.1' }
+    };
+    const delFailRes = createMockRes();
+    await handlePostback(delFailReq, delFailRes);
+    User.findOneAndUpdate = origFindOneAndUpdate11;
+    simulateTxDeleteFailure = false;
+    delFailUser.status = 'Active';
+
+    assert.strictEqual(delFailRes.statusCode, 500, 'Deletion failure for restricted user must return HTTP 500');
+    assert.ok(delFailRes.body.includes('CRITICAL_INCONSISTENCY'), 'Body must indicate CRITICAL_INCONSISTENCY');
+    assert.strictEqual(delFailUser.taskEarningsBalance, balBeforeDelFail, 'User balance must not be credited');
+
+    let foundDelFailLog = null;
+    for (const log of db.logs.values()) {
+        if (log.externalTxId === delFailTxId) {
+            foundDelFailLog = log;
+            break;
+        }
+    }
+    assert.ok(foundDelFailLog, 'Log record must exist for rejected postback');
+    assert.strictEqual(foundDelFailLog.status, 'CriticalInconsistency', 'Log status must record CriticalInconsistency when transaction deletion fails');
+    console.log('✓ Passed Test 11: Restricted-user transaction deletion failure cleanly records CriticalInconsistency.\n');
+
+    // -------------------------------------------------------------
+    // TEST 12: [MOCKED IN-MEMORY TEST] Reversal compensation failure verification (null return and thrown error)
+    // -------------------------------------------------------------
+    console.log('Test 12: Reversal compensation failure verification [MOCKED IN-MEMORY TEST]...');
+    const revUser = db.users.get(testUser._id);
+    revUser.status = 'Active';
+    revUser.restrictions = { earning: false };
+    revUser.taskEarningsBalance = 100.0;
+    revUser.taskWalletBalance = 100.0;
+    revUser.chargebackLiabilityUSD = 0;
+
+    // 12a: Compensation throws error
+    const revFailTxId = 'torox_rev_fail_12a';
+    const origRevTx = {
+        _id: 'tx_orig_rev_torox_12a',
+        userId: revUser._id,
+        userName: revUser.username,
+        type: 'Offerwall Reward',
+        amountUSD: 10.0,
+        userRewardAmount: 10.0,
+        grossAmount: 10.0,
+        offerwallProvider: 'torox',
+        externalTransactionId: revFailTxId,
+        idempotencyKey: `torox_${revFailTxId}_credit`
+    };
+    db.transactions.set(origRevTx.idempotencyKey, origRevTx);
+
+    // Simulate transaction creation failure on reversal
+    const origTxCreate12 = Transaction.create;
+    Transaction.create = async (doc) => {
+        if (doc.type === 'Offerwall Reversal') {
+            throw new Error('Database write constraint violation on reversal');
+        }
+        return origTxCreate12(doc);
+    };
+
+    simulateCompensationFailure = true;
+    const revOid = 'torox_rev_oid_12a';
+    const revSig = crypto.createHash('md5').update(`${revOid}-${testUser._id}-${secret}`).digest('hex');
+    const revReq = {
+        params: { provider: 'torox' },
+        query: {
+            user_id: testUser._id,
+            id: revFailTxId,
+            oid: revOid,
+            amount: -10.0,
+            status: '2',
+            sig: revSig
+        },
+        body: {},
+        headers: {},
+        socket: { remoteAddress: '127.0.0.1' }
+    };
+    const revRes = createMockRes();
+    await handlePostback(revReq, revRes);
+    simulateCompensationFailure = false;
+
+    assert.strictEqual(revRes.statusCode, 500, 'Reversal compensation failure must return HTTP 500');
+    let log12a = null;
+    for (const log of db.logs.values()) {
+        if (log.externalTxId === revFailTxId) {
+            log12a = log;
+            break;
+        }
+    }
+    assert.ok(log12a, 'Log must exist');
+    assert.strictEqual(log12a.status, 'CriticalCompensationFailure', 'Status must be CriticalCompensationFailure on thrown compensation error');
+
+    // 12b: Compensation returns null without throwing
+    const revNullTxId = 'torox_rev_null_12b';
+    const origRevTxNull = {
+        _id: 'tx_orig_rev_torox_12b',
+        userId: revUser._id,
+        userName: revUser.username,
+        type: 'Offerwall Reward',
+        amountUSD: 10.0,
+        userRewardAmount: 10.0,
+        grossAmount: 10.0,
+        offerwallProvider: 'torox',
+        externalTransactionId: revNullTxId,
+        idempotencyKey: `torox_${revNullTxId}_credit`
+    };
+    db.transactions.set(origRevTxNull.idempotencyKey, origRevTxNull);
+
+    simulateCompensationNull = true;
+    const revNullOid = 'torox_rev_oid_12b';
+    const revNullSig = crypto.createHash('md5').update(`${revNullOid}-${testUser._id}-${secret}`).digest('hex');
+    const revNullReq = {
+        params: { provider: 'torox' },
+        query: {
+            user_id: testUser._id,
+            id: revNullTxId,
+            oid: revNullOid,
+            amount: -10.0,
+            status: '2',
+            sig: revNullSig
+        },
+        body: {},
+        headers: {},
+        socket: { remoteAddress: '127.0.0.1' }
+    };
+    const revNullRes = createMockRes();
+    await handlePostback(revNullReq, revNullRes);
+    simulateCompensationNull = false;
+    Transaction.create = origTxCreate12; // restore
+
+    assert.strictEqual(revNullRes.statusCode, 500, 'Reversal compensation null must return HTTP 500');
+    let log12b = null;
+    for (const log of db.logs.values()) {
+        if (log.externalTxId === revNullTxId) {
+            log12b = log;
+            break;
+        }
+    }
+    assert.ok(log12b, 'Log must exist');
+    assert.strictEqual(log12b.status, 'CriticalCompensationFailure', 'Status must be CriticalCompensationFailure when compensation returns null');
+    console.log('✓ Passed Test 12: Reversal compensation failures (thrown error and null return) verified.\n');
+
+    // -------------------------------------------------------------
+    // TEST 13: [MOCKED IN-MEMORY TEST] Lock ownership race: slow callback aborts on lost lock ownership before balance mutation
+    // -------------------------------------------------------------
+    console.log('Test 13: Lock ownership race test [MOCKED IN-MEMORY TEST]...');
+    const raceUser = db.users.get(testUser._id);
+    raceUser.status = 'Active';
+    raceUser.restrictions = { earning: false };
+    const raceBalBefore13 = raceUser.taskEarningsBalance;
+    const raceTxId13 = 'torox_race_tx_13';
+    const raceOid13 = 'torox_race_oid_13';
+    const raceSig13 = crypto.createHash('md5').update(`${raceOid13}-${testUser._id}-${secret}`).digest('hex');
+
+    // Hook Transaction.create to simulate lock expiry and takeover before balance update
+    const origTxCreate13 = Transaction.create;
+    let takeoverSimulated13 = false;
+    Transaction.create = async (doc) => {
+        if (doc.externalTransactionId === raceTxId13 && !takeoverSimulated13) {
+            takeoverSimulated13 = true;
+            // Another process takes over the lock
+            const lockKey = `torox_${raceTxId13}`;
+            db.locks.set(lockKey, {
+                providerKey: 'torox',
+                externalTxId: raceTxId13,
+                ownerToken: 'competing_torox_owner_token_888',
+                expiresAt: new Date(Date.now() + 15000),
+                createdAt: new Date()
+            });
+        }
+        return origTxCreate13(doc);
+    };
+
+    const raceReq13 = {
+        params: { provider: 'torox' },
+        query: {
+            user_id: testUser._id,
+            id: raceTxId13,
+            oid: raceOid13,
+            amount: 10.0,
+            sig: raceSig13
+        },
+        body: {},
+        headers: {},
+        socket: { remoteAddress: '127.0.0.1' }
+    };
+    const raceRes13 = createMockRes();
+    await handlePostback(raceReq13, raceRes13);
+    Transaction.create = origTxCreate13; // restore
+
+    assert.strictEqual(raceRes13.statusCode, 500, 'Process losing lock ownership must fail with 500');
+    assert.strictEqual(raceUser.taskEarningsBalance, raceBalBefore13, 'Balance must not change when lock ownership lost');
+    assert.strictEqual(db.transactions.has(`torox_${raceTxId13}_credit`), false, 'Pre-created transaction must be cleaned up');
+
+    const lockAfterRace13 = await OfferwallPostbackLock.findOne({ providerKey: 'torox', externalTxId: raceTxId13 });
+    assert.ok(lockAfterRace13, 'Competing lock must remain intact');
+    assert.strictEqual(lockAfterRace13.ownerToken, 'competing_torox_owner_token_888', 'Competing owner token preserved');
+    console.log('✓ Passed Test 13: Lock ownership race detected and handled safely without balance mutation.\n');
+
     console.log('======================================================');
-    console.log('All 10 Postback Simulator Dry-Run Tests Passed Successfully!');
+    console.log('All 13 Postback Simulator Dry-Run Tests Passed Successfully!');
     console.log('======================================================');
 }
 

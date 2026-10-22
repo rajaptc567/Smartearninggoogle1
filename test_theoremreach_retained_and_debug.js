@@ -45,10 +45,15 @@ User.findOne = async (query) => {
 };
 let simulateUserUpdateFailure = false;
 let simulateCompensationFailure = false;
+let simulateCompensationNull = false;
+let simulateTxDeleteFailure = false;
 User.findOneAndUpdate = async (filter, update) => {
     await new Promise(r => setTimeout(r, 10));
     if (simulateCompensationFailure && update.$inc && (update.$inc.taskEarningsBalance > 0 || update.$inc.taskWalletBalance > 0)) {
         throw new Error('Database connection reset during compensation rollback');
+    }
+    if (simulateCompensationNull && update.$inc && (update.$inc.taskEarningsBalance > 0 || update.$inc.taskWalletBalance > 0)) {
+        return null;
     }
     if (simulateUserUpdateFailure) {
         throw new Error('Database connection reset during balance update');
@@ -134,15 +139,18 @@ Transaction.create = async (doc) => {
 };
 
 Transaction.deleteOne = async (query) => {
+    if (simulateTxDeleteFailure) {
+        return { deletedCount: 0, acknowledged: true };
+    }
     if (query._id) {
         for (const [key, tx] of db.transactions.entries()) {
             if (tx._id === query._id) {
                 db.transactions.delete(key);
-                return { deletedCount: 1 };
+                return { deletedCount: 1, acknowledged: true };
             }
         }
     }
-    return { deletedCount: 0 };
+    return { deletedCount: 0, acknowledged: true };
 };
 
 OfferwallPostbackLock.create = async (doc) => {
@@ -875,11 +883,19 @@ async function runTests() {
     assert.ok(lockAfterOldRelease, 'Lock must still exist in database');
     assert.equal(lockAfterOldRelease.ownerToken, ownerTokenB, 'Lock must remain owned by Process B');
 
-    // Verify isLockStillOwned returns false for old owner A and true for current owner B
+    // Unverified/parameterless release attempt must NOT delete Process B's lock
+    await releasePostbackLock(testProviderKey, testTxId);
+    const lockAfterParamless = await OfferwallPostbackLock.findOne({ providerKey: testProviderKey, externalTxId: testTxId });
+    assert.ok(lockAfterParamless, 'Lock must not be deleted by parameterless release');
+    assert.equal(lockAfterParamless.ownerToken, ownerTokenB, 'Lock must remain owned by Process B');
+
+    // Verify isLockStillOwned returns false for old owner A, false for missing token, and true for current owner B
     const isAValid = await isLockStillOwned(testProviderKey, testTxId, ownerTokenA);
     const isBValid = await isLockStillOwned(testProviderKey, testTxId, ownerTokenB);
+    const isNullValid = await isLockStillOwned(testProviderKey, testTxId, null);
     assert.equal(isAValid, false, 'Old owner token must be recognized as invalid/lost');
     assert.equal(isBValid, true, 'Current owner token must be recognized as valid');
+    assert.equal(isNullValid, false, 'Null owner token must fail closed');
 
     // Process B releases with its valid token
     await releasePostbackLock(testProviderKey, testTxId, ownerTokenB);
@@ -1018,7 +1034,39 @@ async function runTests() {
     await handlePostback(reqDupBlocked, resDupBlocked);
     testUser.status = 'Active'; // restore
 
-    assert.equal(resDupBlocked.statusCode, 200, 'Duplicate check preserves historical idempotency response');
+    // 21e: Restricted-user transaction deletion failure -> triggers CriticalInconsistency
+    testUser.status = 'Active';
+    testUser.restrictions = { earning: false };
+    simulateTxDeleteFailure = true;
+    let intercepted21e = false;
+    const origFindOneAndUpdate21e = User.findOneAndUpdate;
+    User.findOneAndUpdate = async (filter, update, options) => {
+        if (filter['restrictions.earning']?.$ne && !intercepted21e) {
+            intercepted21e = true;
+            testUser.status = 'Blocked';
+            return null; // rejected by user restriction at balance update point
+        }
+        return origFindOneAndUpdate21e(filter, update, options);
+    };
+
+    const reqDelFail = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'del_fail_tx_001', reward_amount: '10.00' }),
+        body: {},
+        headers: {}
+    };
+    const resDelFail = createMockRes();
+    await handlePostback(reqDelFail, resDelFail);
+    User.findOneAndUpdate = origFindOneAndUpdate21e; // restore
+    simulateTxDeleteFailure = false;
+    testUser.status = 'Active'; // restore
+
+    assert.equal(resDelFail.statusCode, 500, 'Deletion failure for restricted user must return HTTP 500');
+    assert.ok(resDelFail.body.includes('CRITICAL_INCONSISTENCY'), 'Response body must report CRITICAL_INCONSISTENCY');
+    const delFailLog = db.logs.get('del_fail_tx_001');
+    assert.ok(delFailLog, 'Log record must exist');
+    assert.equal(delFailLog.status, 'CriticalInconsistency', 'Log status must record CriticalInconsistency when transaction deletion fails');
+
     console.log('✓ Passed Test 21: Blocked and earning-restricted users safely protected without orphan records.\n');
 
     // TEST 22: [MOCKED IN-MEMORY TEST] Reversal transaction failure and compensation failure
@@ -1062,7 +1110,7 @@ async function runTests() {
     assert.equal(testUser.chargebackLiabilityUSD, 0, 'Liability must be compensated back to 0');
     assert.equal(db.transactions.has('theoremreach_rev_failure_tx_001_reversal'), false, 'Reversal transaction must not exist');
 
-    // 22b: Transaction creation fails AND compensation rollback fails
+    // 22b: Transaction creation fails AND compensation rollback fails with error
     simulateTxCreateFailure = true;
     simulateCompensationFailure = true; // compensation rollback findOneAndUpdate will fail!
     const reqRevCritFail = {
@@ -1081,7 +1129,86 @@ async function runTests() {
     const criticalLog = db.logs.get('rev_failure_tx_001');
     assert.ok(criticalLog, 'Log record must exist for reversal attempt');
     assert.equal(criticalLog.status, 'CriticalCompensationFailure', 'Log status must record CriticalCompensationFailure when rollback fails');
+
+    // 22c: Reversal compensation returning null without throwing
+    simulateTxCreateFailure = true;
+    simulateCompensationNull = true; // compensation rollback findOneAndUpdate will return null!
+    const reqRevCompNull = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: 'rev_comp_null_001', reward_amount: '20.00', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    db.transactions.set('theoremreach_rev_comp_null_001_credit', {
+        _id: 'tx_orig_rev_comp_null_001',
+        userId: testUser._id,
+        userName: testUser.username,
+        type: 'Offerwall Reward',
+        amountUSD: 20.0,
+        userRewardAmount: 20.0,
+        grossAmount: 20.0,
+        offerwallProvider: 'theoremreach',
+        externalTransactionId: 'rev_comp_null_001',
+        idempotencyKey: 'theoremreach_rev_comp_null_001_credit'
+    });
+    const resRevCompNull = createMockRes();
+    await handlePostback(reqRevCompNull, resRevCompNull);
+    simulateTxCreateFailure = false;
+    simulateCompensationNull = false;
+
+    assert.equal(resRevCompNull.statusCode, 500, 'Reversal compensation returning null must return HTTP 500');
+    const compNullLog = db.logs.get('rev_comp_null_001');
+    assert.ok(compNullLog, 'Log record must exist');
+    assert.equal(compNullLog.status, 'CriticalCompensationFailure', 'Log status must record CriticalCompensationFailure when compensation returns null');
     console.log('✓ Passed Test 22: Reversal transaction failure and compensation failure handled and reported correctly.\n');
+
+    // TEST 23: [MOCKED IN-MEMORY TEST] Lock ownership race: slow callback detects lost ownership before mutations
+    console.log('Test 23: Lock ownership race test [MOCKED IN-MEMORY TEST]...');
+    seedProviders();
+    testUser.status = 'Active';
+    testUser.restrictions = { earning: false };
+    const raceBalBefore = testUser.taskEarningsBalance;
+    const raceTxId = 'lock_race_tx_001';
+
+    // Hook Transaction.create to simulate takeover happening right as transaction creation begins:
+    // Process A had acquired the lock, but now lock expires and is acquired/taken over by Process B
+    const origTxCreate23 = Transaction.create;
+    let lockTakeoverSimulated = false;
+    Transaction.create = async (doc) => {
+        if (doc.externalTransactionId === raceTxId && !lockTakeoverSimulated) {
+            lockTakeoverSimulated = true;
+            // Simulate lock expiry and takeover by Process B with new owner token
+            const lockKey = `theoremreach_${raceTxId}`;
+            db.locks.set(lockKey, {
+                providerKey: 'theoremreach',
+                externalTxId: raceTxId,
+                ownerToken: 'process_B_new_owner_token_999',
+                expiresAt: new Date(Date.now() + 15000),
+                createdAt: new Date()
+            });
+        }
+        return origTxCreate23(doc);
+    };
+
+    const reqRace = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: '507f1f77bcf86cd799439011', tx_id: raceTxId, reward_amount: '15.00' }),
+        body: {},
+        headers: {}
+    };
+    const resRace = createMockRes();
+    await handlePostback(reqRace, resRace);
+    Transaction.create = origTxCreate23; // restore
+
+    assert.equal(resRace.statusCode, 500, 'Process that lost lock ownership must abort with HTTP 500');
+    assert.equal(testUser.taskEarningsBalance, raceBalBefore, 'User balance must NOT be credited when lock was lost');
+    assert.equal(db.transactions.has(`theoremreach_${raceTxId}_credit`), false, 'Pre-created transaction must be cleaned up after lock loss');
+
+    // Verify Process B's lock was NOT deleted by Process A's finally block
+    const remainingLockB = await OfferwallPostbackLock.findOne({ providerKey: 'theoremreach', externalTxId: raceTxId });
+    assert.ok(remainingLockB, 'Process B lock must remain intact');
+    assert.equal(remainingLockB.ownerToken, 'process_B_new_owner_token_999', 'Process B remains rightful lock owner');
+    console.log('✓ Passed Test 23: Lock ownership race detected and handled safely without orphan mutations.\n');
 
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');

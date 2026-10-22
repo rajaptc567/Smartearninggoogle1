@@ -500,14 +500,16 @@ export const acquirePostbackLock = async (providerKey, externalTxId, maxWaitMs =
 };
 
 export const releasePostbackLock = async (providerKey, externalTxId, ownerToken = null) => {
+    if (!ownerToken) {
+        console.warn(`[WARN] releasePostbackLock invoked without ownerToken for ${providerKey}:${externalTxId}; release skipped to prevent deleting another owner's lock.`);
+        return false;
+    }
     try {
-        if (ownerToken) {
-            await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId, ownerToken });
-        } else {
-            await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId });
-        }
+        const res = await OfferwallPostbackLock.deleteOne({ providerKey, externalTxId, ownerToken });
+        return Boolean(res && (res.deletedCount === 1 || res.acknowledged));
     } catch (err) {
         console.error(`[WARN] Failed to release postback lock for ${providerKey}:${externalTxId}:`, err.message);
+        return false;
     }
 };
 
@@ -516,7 +518,7 @@ export const releasePostbackLock = async (providerKey, externalTxId, ownerToken 
  * Prevents a slow/delayed callback from executing concurrently if its lock expired and was taken over.
  */
 export const isLockStillOwned = async (providerKey, externalTxId, ownerToken) => {
-    if (!ownerToken) return true;
+    if (!ownerToken) return false;
     const currentLock = await OfferwallPostbackLock.findOne({ providerKey, externalTxId, ownerToken });
     return Boolean(currentLock && (!currentLock.expiresAt || new Date(currentLock.expiresAt) > new Date()));
 };
@@ -882,6 +884,11 @@ export const handlePostback = async (req, res) => {
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
                 }
 
+                // Re-verify lock ownership immediately before reversal balance deduction
+                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
+                    throw new Error(`Postback lock expired or taken over before reversal balance deduction: ${providerKey}:${normalized.externalTxId}`);
+                }
+
                 // Matched Reversal: Atomic balance deduction and liability tracking
                 const updatedUser = await User.findOneAndUpdate(
                     { _id: user._id },
@@ -935,7 +942,7 @@ export const handlePostback = async (req, res) => {
                             // Rollback this request's deduction to prevent double-deduction
                             let rollbackSucceeded = false;
                             try {
-                                await User.findOneAndUpdate(
+                                const compUser = await User.findOneAndUpdate(
                                     { _id: user._id },
                                     {
                                         $inc: {
@@ -943,9 +950,10 @@ export const handlePostback = async (req, res) => {
                                             taskWalletBalance: deductionToApply,
                                             chargebackLiabilityUSD: -liabilityToAdd
                                         }
-                                    }
+                                    },
+                                    { new: true }
                                 );
-                                rollbackSucceeded = true;
+                                rollbackSucceeded = Boolean(compUser && (compUser._id ? String(compUser._id) === String(user._id) : true));
                             } catch (rollbackErr) {
                                 console.error('[CRITICAL_REVERSAL_COMPENSATION_FAILURE] Failed to rollback user balance after duplicate reversal detection:', rollbackErr.message);
                             }
@@ -967,7 +975,7 @@ export const handlePostback = async (req, res) => {
                     // Rollback user balance on ordinary transaction persistence failure
                     let rollbackSucceeded = false;
                     try {
-                        await User.findOneAndUpdate(
+                        const compUser = await User.findOneAndUpdate(
                             { _id: user._id },
                             {
                                 $inc: {
@@ -975,9 +983,10 @@ export const handlePostback = async (req, res) => {
                                     taskWalletBalance: deductionToApply,
                                     chargebackLiabilityUSD: -liabilityToAdd
                                 }
-                            }
+                            },
+                            { new: true }
                         );
-                        rollbackSucceeded = true;
+                        rollbackSucceeded = Boolean(compUser && (compUser._id ? String(compUser._id) === String(user._id) : true));
                     } catch (rollbackErr) {
                         console.error('[CRITICAL_REVERSAL_COMPENSATION_FAILURE] Failed to rollback user balance after reversal transaction creation error:', rollbackErr.message);
                     }
@@ -1132,6 +1141,11 @@ export const handlePostback = async (req, res) => {
                 const balanceBefore = user.taskEarningsBalance || 0;
                 const balanceAfter = Number((balanceBefore + userRewardUSD).toFixed(4));
 
+                // Re-verify lock ownership immediately before transaction creation
+                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
+                    throw new Error(`Postback lock expired or taken over before transaction creation: ${providerKey}:${normalized.externalTxId}`);
+                }
+
                 // Atomic creation: Transaction first to secure idempotency
                 let tx;
                 try {
@@ -1166,6 +1180,24 @@ export const handlePostback = async (req, res) => {
                     throw err;
                 }
 
+                // Re-verify lock ownership immediately before conditional balance update
+                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
+                    let cleanupSuccessful = false;
+                    try {
+                        const delRes = await Transaction.deleteOne({ _id: tx._id });
+                        cleanupSuccessful = Boolean(delRes && delRes.deletedCount === 1);
+                    } catch (delErr) {
+                        console.error('[CRITICAL_INCONSISTENCY] Failed to delete transaction after lock loss before balance update:', delErr.message);
+                    }
+                    if (!cleanupSuccessful) {
+                        log.status = 'CriticalInconsistency';
+                        log.errorMessage = `CRITICAL_INCONSISTENCY: Lock lost before balance update and transaction cleanup failed for tx ${tx._id}`;
+                        try { await log.save(); } catch (_) {}
+                        throw new Error(`CRITICAL_INCONSISTENCY: Lock lost before balance update and transaction cleanup failed for tx ${tx._id}`);
+                    }
+                    throw new Error(`Postback lock expired or taken over before balance update: ${providerKey}:${normalized.externalTxId}`);
+                }
+
                 // If transaction created, update user balance atomically while re-verifying user is NOT blocked or earning-restricted
                 let updatedUser = null;
                 try {
@@ -1186,20 +1218,38 @@ export const handlePostback = async (req, res) => {
                 } catch (balanceErr) {
                     // Inconsistency recovery: Transaction exists but balance update failed.
                     // Rollback transaction creation to prevent orphaned ledger entry.
+                    let cleanupSuccessful = false;
                     try {
-                        await Transaction.deleteOne({ _id: tx._id });
+                        const delRes = await Transaction.deleteOne({ _id: tx._id });
+                        cleanupSuccessful = Boolean(delRes && delRes.deletedCount === 1);
                     } catch (delErr) {
-                        console.error('[CRITICAL] Failed to delete transaction after balance update failure:', delErr.message);
+                        console.error('[CRITICAL_INCONSISTENCY] Failed to delete transaction after balance update failure:', delErr.message);
+                    }
+                    if (!cleanupSuccessful) {
+                        console.error('[CRITICAL_INCONSISTENCY] Orphaned transaction remained after balance update failure! txId:', tx._id);
+                        log.status = 'CriticalInconsistency';
+                        log.errorMessage = `CRITICAL_INCONSISTENCY: Balance update failed (${balanceErr.message}) and transaction cleanup failed for tx ${tx._id}`;
+                        try { await log.save(); } catch (_) {}
+                        throw new Error(`CRITICAL_INCONSISTENCY: Balance update failed (${balanceErr.message}) and transaction cleanup failed for tx ${tx._id}`);
                     }
                     throw balanceErr;
                 }
 
                 if (!updatedUser) {
                     // User was blocked or earning-restricted when balance update was attempted
+                    let cleanupSuccessful = false;
                     try {
-                        await Transaction.deleteOne({ _id: tx._id });
+                        const delRes = await Transaction.deleteOne({ _id: tx._id });
+                        cleanupSuccessful = Boolean(delRes && delRes.deletedCount === 1);
                     } catch (delErr) {
-                        console.error('[CRITICAL] Failed to delete transaction after user restriction balance update rejection:', delErr.message);
+                        console.error('[CRITICAL_INCONSISTENCY] Failed to delete transaction after user restriction balance update rejection:', delErr.message);
+                    }
+                    if (!cleanupSuccessful) {
+                        console.error('[CRITICAL_INCONSISTENCY] Orphaned transaction remained after restricted user rejection! txId:', tx._id);
+                        log.status = 'CriticalInconsistency';
+                        log.errorMessage = `CRITICAL_INCONSISTENCY: User account is Blocked or earning-restricted at balance update point, but transaction cleanup failed to delete tx ${tx._id}`;
+                        try { await log.save(); } catch (_) {}
+                        return res.status(500).send('POSTBACK_ERROR: CRITICAL_INCONSISTENCY: Transaction deletion failed for restricted user');
                     }
                     log.status = 'UserRestricted';
                     log.errorMessage = 'User account is Blocked or earning-restricted at balance update point; credit rejected.';
@@ -1265,7 +1315,7 @@ export const handlePostback = async (req, res) => {
 
         console.error('[DEBUG CATCH ERROR]:', err);
         if (log) {
-            if (log.status !== 'CriticalCompensationFailure') {
+            if (log.status !== 'CriticalCompensationFailure' && log.status !== 'CriticalInconsistency') {
                 log.status = 'Error';
             }
             log.errorMessage = err.message;
