@@ -205,9 +205,9 @@ export const OfferwallHub: React.FC = () => {
                             </h4>
                             <p className="text-xs opacity-90 mt-0.5">
                                 {redirectStatus === 'success'
-                                    ? 'Thank you for your valuable opinion! Your reward is being verified by the provider and credited directly to your Task Earnings balance.'
+                                    ? 'Thank you for your participation! Once the provider confirms completion via server postback, your reward will be credited directly to your Task Wallet.'
                                     : redirectStatus === 'partial'
-                                    ? 'You completed an initial section of the research study. Partial participation credit is registered.'
+                                    ? 'You completed a preliminary section of the study. If the provider awards partial participation credit, it will reflect in your wallet upon server postback confirmation.'
                                     : redirectStatus === 'disqualified'
                                     ? 'You did not match the specific demographic criteria required by the study researcher. Check out other available surveys!'
                                     : redirectStatus === 'quotafull'

@@ -218,34 +218,46 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
             const received = params.hash || params.signature || params.sig || '';
             if (!received) return { valid: false, error: 'TheoremReach signature hash missing' };
 
+            const configuredRewardUrl = provider.rewardCallbackUrl || 'https://smartexn.com/api/v1/postbacks/theoremreach';
+            let canonicalOrigin = 'https://smartexn.com';
+            let canonicalHost = 'smartexn.com';
+            try {
+                const parsedUrl = new URL(configuredRewardUrl);
+                canonicalOrigin = parsedUrl.origin;
+                canonicalHost = parsedUrl.hostname;
+            } catch (_) {}
+
             const candidates = [];
 
             if (req) {
                 if (typeof req.rawUrl === 'string' && req.rawUrl) {
-                    candidates.push(req.rawUrl.split('&hash=')[0]);
+                    const rawPart = req.rawUrl.split('&hash=')[0];
+                    try {
+                        const parsed = new URL(rawPart);
+                        if (parsed.protocol === 'https:' && (parsed.origin === canonicalOrigin || parsed.hostname === canonicalHost || parsed.hostname === 'smartexn.com')) {
+                            candidates.push(rawPart);
+                        }
+                    } catch (_) {}
                 }
                 const rawPathAndQuery = req.originalUrl || req.url || '';
-                if (rawPathAndQuery) {
+                if (rawPathAndQuery && rawPathAndQuery.startsWith('/')) {
                     const pathUpToHash = rawPathAndQuery.split('&hash=')[0];
-                    const host = (typeof req.get === 'function' ? req.get('host') : req.headers?.host) || '';
-                    const proto = req.protocol || (req.secure ? 'https' : 'http') || 'https';
-                    if (host) {
-                        candidates.push(`${proto}://${host}${pathUpToHash}`);
-                        candidates.push(`https://${host}${pathUpToHash}`);
-                        candidates.push(`http://${host}${pathUpToHash}`);
+                    // Canonical full URL with configured origin - strictly full HTTPS URL, NEVER path-only
+                    const canonicalUrl = `${canonicalOrigin}${pathUpToHash}`;
+                    if (!candidates.includes(canonicalUrl)) {
+                        candidates.push(canonicalUrl);
                     }
-                    candidates.push(pathUpToHash);
                 }
             }
 
-            // Fallback: If raw URL is not accessible, reconstruct from query parameters in order
+            // Fallback: If raw URL is not accessible, reconstruct full canonical URL from query parameters in order
             if (candidates.length === 0 && req && req.query) {
                 const parts = [];
                 for (const [k, v] of Object.entries(req.query)) {
                     if (k === 'hash' || k === 'signature' || k === 'sig') break;
                     parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
                 }
-                candidates.push(`/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
+                candidates.push(`${canonicalOrigin}/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
             }
 
             // Fallback: If req was not provided (e.g. direct unit test of verifySignature), reconstruct from params in order
@@ -255,7 +267,7 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
                     if (k === 'hash' || k === 'signature' || k === 'sig') break;
                     parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
                 }
-                candidates.push(`/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
+                candidates.push(`${canonicalOrigin}/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
             }
 
             for (const candidate of candidates) {

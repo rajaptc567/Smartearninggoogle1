@@ -92,6 +92,7 @@ export interface User {
     termsVersion?: string;
     privacyPolicyVersion?: string;
     marketingConsentVersion?: string;
+    customFields?: Record<string, any>;
 }
 
 export interface PageStyling {
