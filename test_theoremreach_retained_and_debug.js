@@ -1298,6 +1298,94 @@ async function runTests() {
 
     console.log('✓ Passed Test 25: TheoremReach exchange rate 70, 700 units = $10.00 gross, single commission split, negative reversal, and non-TheoremReach regression check.\n');
 
+    // Test 26: TheoremReach 9 Settings Persistence, Admin Allowlist & Reversal Invariance
+    console.log('Test 26: TheoremReach 9 Settings Persistence, Admin Allowlist & Reversal Invariance...');
+
+    // 26a: Non-admin request rejected with 403
+    const reqNonAdmin = {
+        params: { providerKey: 'theoremreach' },
+        body: { defaultRedirectUrl: 'https://example.com' },
+        user: { role: 'member' }
+    };
+    const resNonAdmin = createMockRes();
+    await updateOfferwallProvider(reqNonAdmin, resNonAdmin);
+    assert.equal(resNonAdmin.statusCode, 403, 'Non-admin request must be rejected with 403');
+
+    // 26b: Admin request updates all 9 TheoremReach dashboard configuration & reference fields
+    const reqAdmin = {
+        params: { providerKey: 'theoremreach' },
+        body: {
+            defaultRedirectUrl: 'https://smartearning.com/member/offerwalls',
+            successRedirectUrl: 'https://smartearning.com/member/offerwalls?status=success',
+            partialRedirectUrl: 'https://smartearning.com/member/offerwalls?status=partial',
+            disqualifiedRedirectUrl: 'https://smartearning.com/member/offerwalls?status=disqualified',
+            quotaFullRedirectUrl: 'https://smartearning.com/member/offerwalls?status=quotafull',
+            securityRedirectUrl: 'https://smartearning.com/member/offerwalls?status=security',
+            eventWebhookUrl: 'https://reporting.smartearning.com/events/theoremreach',
+            rewardCallbackUrl: 'https://smartearning.com/api/v1/postbacks/theoremreach',
+            includeReversalsInRewardCallback: false,
+            unauthorizedInjectedField: 'malicious_payload'
+        },
+        user: { role: 'admin' }
+    };
+    const resAdmin = createMockRes();
+    await updateOfferwallProvider(reqAdmin, resAdmin);
+    assert.equal(resAdmin.statusCode, 200, 'Admin update must succeed with 200');
+    assert.ok(resAdmin.jsonData.success, 'Response success must be true');
+
+    const updatedTr = db.providers.get('theoremreach');
+    assert.equal(updatedTr.defaultRedirectUrl, 'https://smartearning.com/member/offerwalls');
+    assert.equal(updatedTr.successRedirectUrl, 'https://smartearning.com/member/offerwalls?status=success');
+    assert.equal(updatedTr.partialRedirectUrl, 'https://smartearning.com/member/offerwalls?status=partial');
+    assert.equal(updatedTr.disqualifiedRedirectUrl, 'https://smartearning.com/member/offerwalls?status=disqualified');
+    assert.equal(updatedTr.quotaFullRedirectUrl, 'https://smartearning.com/member/offerwalls?status=quotafull');
+    assert.equal(updatedTr.securityRedirectUrl, 'https://smartearning.com/member/offerwalls?status=security');
+    assert.equal(updatedTr.eventWebhookUrl, 'https://reporting.smartearning.com/events/theoremreach');
+    assert.equal(updatedTr.rewardCallbackUrl, 'https://smartearning.com/api/v1/postbacks/theoremreach');
+    assert.equal(updatedTr.includeReversalsInRewardCallback, false);
+    assert.equal(updatedTr.unauthorizedInjectedField, undefined, 'Unauthorized field must be stripped by allowlist');
+
+    // 26c: Invariant test: When includeReversalsInRewardCallback is false, any received reversal postback
+    // is STILL processed safely and atomically without balance leaks or silent corruption
+    const user26 = {
+        _id: '507f1f77bcf86cd799439026',
+        username: 'user_test_26',
+        taskEarningsBalance: 150.0,
+        taskWalletBalance: 150.0,
+        role: 'user',
+        status: 'active'
+    };
+    db.users.set(user26._id, user26);
+
+    // Initial credit
+    const req26Credit = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: user26._id, tx_id: 'tr_test26_tx', reward: '140' }), // 140 units = $2.00 gross -> $1.40 user reward (70%)
+        body: {},
+        headers: {}
+    };
+    const res26Credit = createMockRes();
+    await handlePostback(req26Credit, res26Credit);
+    assert.equal(res26Credit.statusCode, 200);
+    assert.equal(user26.taskEarningsBalance, 151.4, 'User balance credited to $151.40');
+
+    // Reversal arrives
+    const req26Rev = {
+        params: { provider: 'theoremreach' },
+        query: sign({ user_id: user26._id, tx_id: 'tr_test26_tx', reward: '-140', reversal: 'true' }),
+        body: {},
+        headers: {}
+    };
+    const res26Rev = createMockRes();
+    await handlePostback(req26Rev, res26Rev);
+    assert.equal(res26Rev.statusCode, 200, 'Reversal must be processed successfully');
+    assert.equal(user26.taskEarningsBalance, 150.0, 'User balance must return cleanly to $150.00 without balance leaks');
+    const tx26Rev = db.transactions.get('theoremreach_tr_test26_tx_reversal');
+    assert.ok(tx26Rev, 'Reversal transaction ledger entry must be created');
+    assert.equal(tx26Rev.userRewardAmount, 1.4, 'Reversal amount must match original credit');
+
+    console.log('✓ Passed Test 26: TheoremReach 9 Settings Persistence, Admin Allowlist & Reversal Invariance verified.\n');
+
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');
     console.log('========================================================================\n');
