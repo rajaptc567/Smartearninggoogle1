@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
-import { handlePostback, updateOfferwallProvider, acquirePostbackLock, releasePostbackLock, isLockStillOwned } from './backend/controllers/postbackController.js';
+import { handlePostback, handleTheoremReachEventWebhook, updateOfferwallProvider, acquirePostbackLock, releasePostbackLock, isLockStillOwned } from './backend/controllers/postbackController.js';
 import User from './backend/models/User.js';
 import Transaction from './backend/models/Transaction.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
 import OfferwallPostbackLog from './backend/models/OfferwallPostbackLog.js';
 import Notification from './backend/models/Notification.js';
 import OfferwallPostbackLock from './backend/models/OfferwallPostbackLock.js';
+import TheoremReachWebhookEvent from './backend/models/TheoremReachWebhookEvent.js';
 
 console.log('Running SmartExn Offerwall Commission Modes & Debug Callback Test Suite...\n');
 
@@ -19,6 +20,7 @@ class MockDb {
         this.logs = new Map();
         this.notifications = new Map();
         this.locks = new Map();
+        this.webhookEvents = new Map();
     }
 
     clear() {
@@ -28,6 +30,7 @@ class MockDb {
         this.logs.clear();
         this.notifications.clear();
         this.locks.clear();
+        this.webhookEvents.clear();
     }
 }
 
@@ -36,9 +39,17 @@ const db = new MockDb();
 // Override Mongoose model methods
 User.findById = async (id) => db.users.get(String(id)) || null;
 User.findOne = async (query) => {
+    if (query._id) {
+        return db.users.get(String(query._id)) || null;
+    }
     if (query.username) {
         for (const u of db.users.values()) {
             if (u.username === query.username) return u;
+        }
+    }
+    if (query.email) {
+        for (const u of db.users.values()) {
+            if (u.email === query.email) return u;
         }
     }
     return null;
@@ -68,6 +79,21 @@ User.findOneAndUpdate = async (filter, update) => {
             user[k] = Number(((user[k] || 0) + v).toFixed(4));
         }
     }
+    if (update.$set) {
+        for (const [k, v] of Object.entries(update.$set)) {
+            if (k.includes('.')) {
+                const parts = k.split('.');
+                let curr = user;
+                for (let i = 0; i < parts.length - 1; i++) {
+                    curr[parts[i]] = curr[parts[i]] || {};
+                    curr = curr[parts[i]];
+                }
+                curr[parts[parts.length - 1]] = v;
+            } else {
+                user[k] = v;
+            }
+        }
+    }
     return user;
 };
 User.findByIdAndUpdate = async (id, update) => {
@@ -82,7 +108,39 @@ User.findByIdAndUpdate = async (id, update) => {
             user[k] = Number(((user[k] || 0) + v).toFixed(4));
         }
     }
+    if (update.$set) {
+        for (const [k, v] of Object.entries(update.$set)) {
+            if (k.includes('.')) {
+                const parts = k.split('.');
+                let curr = user;
+                for (let i = 0; i < parts.length - 1; i++) {
+                    curr[parts[i]] = curr[parts[i]] || {};
+                    curr = curr[parts[i]];
+                }
+                curr[parts[parts.length - 1]] = v;
+            } else {
+                user[k] = v;
+            }
+        }
+    }
     return user;
+};
+
+TheoremReachWebhookEvent.findOne = async (query) => {
+    if (query.encSalt) {
+        return db.webhookEvents.get(query.encSalt) || null;
+    }
+    return null;
+};
+TheoremReachWebhookEvent.create = async (doc) => {
+    if (db.webhookEvents.has(doc.encSalt)) {
+        const err = new Error('Duplicate key: encSalt');
+        err.code = 11000;
+        throw err;
+    }
+    const evt = { ...doc, _id: `evt_${Date.now()}` };
+    db.webhookEvents.set(doc.encSalt, evt);
+    return evt;
 };
 
 Transaction.find = async (query) => {
@@ -216,14 +274,17 @@ OfferwallProvider.findOneAndUpdate = async (filter, update) => {
 OfferwallProvider.findByIdAndUpdate = async (id, update) => {
     for (const [key, p] of db.providers.entries()) {
         if (p._id === id) {
-            const updated = { ...p };
             if (update.$inc) {
                 for (const [k, v] of Object.entries(update.$inc)) {
-                    updated[k] = (updated[k] || 0) + v;
+                    p[k] = (p[k] || 0) + v;
                 }
             }
-            db.providers.set(key, updated);
-            return updated;
+            if (update.$set) {
+                for (const [k, v] of Object.entries(update.$set)) {
+                    p[k] = v;
+                }
+            }
+            return p;
         }
     }
     return null;
@@ -258,6 +319,7 @@ const createMockRes = () => {
         },
         json(data) {
             this.jsonData = data;
+            this.body = data;
             return this;
         }
     };
@@ -1385,6 +1447,560 @@ async function runTests() {
     assert.equal(tx26Rev.userRewardAmount, 1.4, 'Reversal amount must match original credit');
 
     console.log('✓ Passed Test 26: TheoremReach 9 Settings Persistence, Admin Allowlist & Reversal Invariance verified.\n');
+
+    // =========================================================================
+    // THEOREMREACH INBOUND EVENT WEBHOOK TEST SUITE (Tests 27 - 38)
+    // =========================================================================
+
+    const webhookSecret = 'tr_webhook_secret_key_999';
+    const trAppId = 'tr_app_pub_789';
+
+    // Helper to sign TheoremReach webhook URL
+    const signWebhookUrl = (urlWithoutHash, secret = webhookSecret) => {
+        const hmac = crypto.createHmac('sha1', secret).update(urlWithoutHash).digest('base64');
+        return hmac.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    };
+
+    // Configure TheoremReach provider for webhook tests
+    const trProviderForWebhook = {
+        _id: 'provider_tr_webhook_01',
+        providerKey: 'theoremreach',
+        name: 'TheoremReach',
+        enabled: true,
+        status: 'ACTIVE',
+        secretKey: webhookSecret,
+        postbackKey: webhookSecret,
+        appId: trAppId,
+        exchangeRateMultiplier: 70.0,
+        eventWebhookUrl: 'https://smartexn.com/api/v1/postbacks/theoremreach/events',
+        rewardCallbackUrl: 'https://smartexn.com/api/v1/postbacks/theoremreach',
+        totalReversalCount: 0
+    };
+    db.providers.set('theoremreach', trProviderForWebhook);
+
+    // -------------------------------------------------------------------------
+    // Test 27: Valid inbound TheoremReach Event Webhook with HMAC-SHA1 signature
+    // -------------------------------------------------------------------------
+    console.log('Test 27: Valid inbound TheoremReach Event Webhook with HMAC-SHA1 signature...');
+    const user27 = {
+        _id: '507f1f77bcf86cd799439027',
+        username: 'user_test_27',
+        taskEarningsBalance: 50.0,
+        taskWalletBalance: 50.0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user27._id, user27);
+
+    const salt27 = 'evt_test27_salt_001';
+    const url27WithoutHash = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt27}`;
+    const hash27 = signWebhookUrl(url27WithoutHash);
+
+    const req27 = {
+        method: 'POST',
+        rawUrl: `${url27WithoutHash}&hash=${hash27}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt27}&hash=${hash27}`,
+        query: { enc_salt: salt27, hash: hash27 },
+        body: {
+            data: {
+                api_key: trAppId,
+                user_id: user27._id,
+                at: new Date().toISOString(),
+                event_type: 'ping'
+            }
+        },
+        headers: { host: 'smartexn.com' }
+    };
+    const res27 = createMockRes();
+    await handleTheoremReachEventWebhook(req27, res27);
+    assert.equal(res27.statusCode, 200, 'Valid webhook must respond HTTP 200');
+    assert.equal(res27.body.success, true);
+    assert.equal(res27.body.event_id, salt27);
+    const persistedEvt27 = db.webhookEvents.get(salt27);
+    assert.ok(persistedEvt27, 'TheoremReachWebhookEvent must be persisted in database');
+    assert.equal(persistedEvt27.encSalt, salt27);
+    console.log('✓ Passed Test 27: Valid inbound TheoremReach Event Webhook verified with URL-safe HMAC-SHA1.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 28: Missing or malformed signature / enc_salt fails closed with HTTP 400
+    // -------------------------------------------------------------------------
+    console.log('Test 28: Missing enc_salt or hash fails closed with HTTP 400...');
+    const req28MissingSalt = {
+        method: 'POST',
+        query: { hash: hash27 },
+        body: { data: { api_key: trAppId } }
+    };
+    const res28MissingSalt = createMockRes();
+    await handleTheoremReachEventWebhook(req28MissingSalt, res28MissingSalt);
+    assert.equal(res28MissingSalt.statusCode, 400, 'Missing enc_salt must fail closed with HTTP 400');
+
+    const req28MissingHash = {
+        method: 'POST',
+        query: { enc_salt: 'evt_no_hash' },
+        body: { data: { api_key: trAppId } }
+    };
+    const res28MissingHash = createMockRes();
+    await handleTheoremReachEventWebhook(req28MissingHash, res28MissingHash);
+    assert.equal(res28MissingHash.statusCode, 400, 'Missing hash must fail closed with HTTP 400');
+    console.log('✓ Passed Test 28: Missing enc_salt or signature hash strictly rejected with HTTP 400.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 29: Invalid / tampered HMAC-SHA1 signature fails closed with HTTP 400
+    // -------------------------------------------------------------------------
+    console.log('Test 29: Tampered or invalid HMAC-SHA1 signature fails closed with HTTP 400...');
+    const salt29 = 'evt_test29_tampered';
+    const req29Tampered = {
+        method: 'POST',
+        rawUrl: `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt29}&hash=invalid_tampered_hash_123`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt29}&hash=invalid_tampered_hash_123`,
+        query: { enc_salt: salt29, hash: 'invalid_tampered_hash_123' },
+        body: { data: { api_key: trAppId, event_type: 'reversal' } }
+    };
+    const res29Tampered = createMockRes();
+    await handleTheoremReachEventWebhook(req29Tampered, res29Tampered);
+    assert.equal(res29Tampered.statusCode, 400, 'Tampered hash must fail closed with HTTP 400');
+    console.log('✓ Passed Test 29: Tampered signature hash fails closed with constant-time protection.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 30: Missing or mismatched api_key in payload data fails closed with HTTP 400
+    // -------------------------------------------------------------------------
+    console.log('Test 30: Missing or mismatched api_key in payload data fails closed with HTTP 400...');
+    const salt30 = 'evt_test30_apikey';
+    const url30 = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt30}`;
+    const hash30 = signWebhookUrl(url30);
+
+    const req30WrongKey = {
+        method: 'POST',
+        rawUrl: `${url30}&hash=${hash30}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt30}&hash=${hash30}`,
+        query: { enc_salt: salt30, hash: hash30 },
+        body: { data: { api_key: 'wrong_key_999' } }
+    };
+    const res30WrongKey = createMockRes();
+    await handleTheoremReachEventWebhook(req30WrongKey, res30WrongKey);
+    assert.equal(res30WrongKey.statusCode, 400, 'Mismatched api_key must fail closed with HTTP 400');
+
+    const req30MissingKey = {
+        method: 'POST',
+        rawUrl: `${url30}&hash=${hash30}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt30}&hash=${hash30}`,
+        query: { enc_salt: salt30, hash: hash30 },
+        body: { data: {} }
+    };
+    const res30MissingKey = createMockRes();
+    await handleTheoremReachEventWebhook(req30MissingKey, res30MissingKey);
+    assert.equal(res30MissingKey.statusCode, 400, 'Missing api_key must fail closed with HTTP 400');
+    console.log('✓ Passed Test 30: Missing or mismatched api_key in payload strictly rejected with HTTP 400.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 31: Idempotent deduplication on enc_salt
+    // -------------------------------------------------------------------------
+    console.log('Test 31: Idempotent deduplication on enc_salt...');
+    const salt31 = 'evt_test31_dedup_unique';
+    const url31 = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt31}`;
+    const hash31 = signWebhookUrl(url31);
+
+    const req31First = {
+        method: 'POST',
+        rawUrl: `${url31}&hash=${hash31}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt31}&hash=${hash31}`,
+        query: { enc_salt: salt31, hash: hash31 },
+        body: { data: { api_key: trAppId, event_type: 'ping' } }
+    };
+    const res31First = createMockRes();
+    await handleTheoremReachEventWebhook(req31First, res31First);
+    assert.equal(res31First.statusCode, 200);
+    assert.equal(res31First.body.processed, true);
+
+    // Second duplicate delivery with same enc_salt
+    const res31Second = createMockRes();
+    await handleTheoremReachEventWebhook(req31First, res31Second);
+    assert.equal(res31Second.statusCode, 200, 'Duplicate delivery must succeed idempotently with HTTP 200');
+    assert.equal(res31Second.body.duplicate, true, 'Duplicate flag must be confirmed');
+    console.log('✓ Passed Test 31: Idempotent deduplication on enc_salt verified with safe duplicate handling.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 32: Reversal event with matched original credit and sufficient user balance
+    // -------------------------------------------------------------------------
+    console.log('Test 32: Reversal event with matched original credit and sufficient user balance...');
+    const user32 = {
+        _id: '507f1f77bcf86cd799439032',
+        username: 'user_test_32',
+        taskEarningsBalance: 25.0,
+        taskWalletBalance: 25.0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user32._id, user32);
+
+    const tx32CredId = 'tr_tx_matched_32';
+    const origCreditTx32 = {
+        _id: 'tx_orig_credit_32',
+        userId: user32._id,
+        userName: user32.username,
+        offerwallProvider: 'theoremreach',
+        externalTransactionId: tx32CredId,
+        type: 'Offerwall Reward',
+        amount: 5.0,
+        amountUSD: 5.0,
+        grossAmount: 7.14,
+        userRewardAmount: 5.0,
+        platformRevenueAmount: 2.14,
+        idempotencyKey: `theoremreach_${tx32CredId}_credit`,
+        status: 'Approved'
+    };
+    db.transactions.set(origCreditTx32.idempotencyKey, origCreditTx32);
+
+    const salt32 = 'evt_test32_rev_matched';
+    const url32 = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt32}`;
+    const hash32 = signWebhookUrl(url32);
+
+    const prevReversalCount = trProviderForWebhook.totalReversalCount || 0;
+
+    const req32 = {
+        method: 'POST',
+        rawUrl: `${url32}&hash=${hash32}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt32}&hash=${hash32}`,
+        query: { enc_salt: salt32, hash: hash32 },
+        body: {
+            data: {
+                api_key: trAppId,
+                user_id: user32._id,
+                at: new Date().toISOString(),
+                event_type: 'reversal',
+                external_transaction_id: tx32CredId
+            }
+        }
+    };
+    const res32 = createMockRes();
+    await handleTheoremReachEventWebhook(req32, res32);
+    assert.equal(res32.statusCode, 200, 'Matched reversal must succeed with HTTP 200');
+    assert.equal(user32.taskEarningsBalance, 20.0, 'User earnings balance must be deducted by $5.00 ($25 -> $20)');
+    assert.equal(user32.taskWalletBalance, 20.0, 'User wallet balance must be deducted by $5.00 ($25 -> $20)');
+
+    const revTx32 = db.transactions.get(`theoremreach_${tx32CredId}_reversal`);
+    assert.ok(revTx32, 'Reversal transaction record must be created');
+    assert.equal(revTx32.type, 'Offerwall Reversal');
+    assert.equal(revTx32.amount, 5.0);
+    assert.equal(revTx32.chargebackStatus, 'Settled');
+    assert.equal(revTx32.reversalReferenceId, origCreditTx32._id);
+    assert.equal(trProviderForWebhook.totalReversalCount, prevReversalCount + 1, 'Provider totalReversalCount incremented');
+    console.log('✓ Passed Test 32: Reversal event with matched credit deducted balance and logged ledger reversal.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 33: Reversal event with insufficient user balance (chargeback liability owed)
+    // -------------------------------------------------------------------------
+    console.log('Test 33: Reversal event with insufficient balance records liability...');
+    const user33 = {
+        _id: '507f1f77bcf86cd799439033',
+        username: 'user_test_33',
+        taskEarningsBalance: 2.0, // Only $2.00 remaining
+        taskWalletBalance: 2.0,
+        chargebackLiabilityUSD: 0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user33._id, user33);
+
+    const tx33CredId = 'tr_tx_matched_33';
+    const origCreditTx33 = {
+        _id: 'tx_orig_credit_33',
+        userId: user33._id,
+        userName: user33.username,
+        offerwallProvider: 'theoremreach',
+        externalTransactionId: tx33CredId,
+        type: 'Offerwall Reward',
+        amount: 5.0, // $5.00 original credit
+        amountUSD: 5.0,
+        userRewardAmount: 5.0,
+        idempotencyKey: `theoremreach_${tx33CredId}_credit`,
+        status: 'Approved'
+    };
+    db.transactions.set(origCreditTx33.idempotencyKey, origCreditTx33);
+
+    const salt33 = 'evt_test33_rev_insufficient';
+    const url33 = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt33}`;
+    const hash33 = signWebhookUrl(url33);
+
+    const req33 = {
+        method: 'POST',
+        rawUrl: `${url33}&hash=${hash33}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt33}&hash=${hash33}`,
+        query: { enc_salt: salt33, hash: hash33 },
+        body: {
+            data: {
+                api_key: trAppId,
+                user_id: user33._id,
+                event_type: 'reversal',
+                external_transaction_id: tx33CredId
+            }
+        }
+    };
+    const res33 = createMockRes();
+    await handleTheoremReachEventWebhook(req33, res33);
+    assert.equal(res33.statusCode, 200);
+    assert.equal(user33.taskEarningsBalance, 0.0, 'Available balance deducted to zero');
+    assert.equal(user33.chargebackLiabilityUSD, 3.0, 'Liability recorded for remaining $3.00 owed');
+
+    const revTx33 = db.transactions.get(`theoremreach_${tx33CredId}_reversal`);
+    assert.ok(revTx33);
+    assert.equal(revTx33.chargebackStatus, 'Liability_Owed');
+    console.log('✓ Passed Test 33: Insufficient user balance recorded chargeback liability without negative earnings.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 34: Out-of-order reversal event (reversal arrives before original credit)
+    // -------------------------------------------------------------------------
+    console.log('Test 34: Out-of-order reversal event persists durable unmatched marker...');
+    const user34 = {
+        _id: '507f1f77bcf86cd799439034',
+        username: 'user_test_34',
+        taskEarningsBalance: 30.0,
+        taskWalletBalance: 30.0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user34._id, user34);
+
+    const tx34OutId = 'tr_tx_out_of_order_34';
+    const salt34 = 'evt_test34_out_of_order';
+    const url34 = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt34}`;
+    const hash34 = signWebhookUrl(url34);
+
+    const req34 = {
+        method: 'POST',
+        rawUrl: `${url34}&hash=${hash34}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt34}&hash=${hash34}`,
+        query: { enc_salt: salt34, hash: hash34 },
+        body: {
+            data: {
+                api_key: trAppId,
+                user_id: user34._id,
+                event_type: 'reversal',
+                external_transaction_id: tx34OutId
+            }
+        }
+    };
+    const res34 = createMockRes();
+    await handleTheoremReachEventWebhook(req34, res34);
+    assert.equal(res34.statusCode, 200, 'Unmatched reversal must return HTTP 200');
+    assert.equal(user34.taskEarningsBalance, 30.0, 'User balance must remain unchanged without original credit');
+
+    const markerTx34 = db.transactions.get(`theoremreach_${tx34OutId}_reversal`);
+    assert.ok(markerTx34, 'Durable unmatched reversal marker must be persisted in transactions');
+    assert.equal(markerTx34.amount, 0, 'Marker must record zero amount');
+    console.log('✓ Passed Test 34: Out-of-order reversal safely persisted durable marker with zero balance mutation.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 35: Subsequent credit arriving after out-of-order reversal marker
+    // -------------------------------------------------------------------------
+    console.log('Test 35: Subsequent credit arriving after out-of-order reversal is nullified...');
+    // S2S reward callback arrives for tx34OutId
+    const req35Credit = {
+        params: { provider: 'theoremreach' },
+        query: signTheoremReach({ user_id: user34._id, tx_id: tx34OutId, reward: '70' }, webhookSecret), // 70 units = $1.00 gross
+        body: {},
+        headers: {}
+    };
+    const res35Credit = createMockRes();
+    await handlePostback(req35Credit, res35Credit);
+    assert.equal(res35Credit.statusCode, 200);
+    assert.equal(user34.taskEarningsBalance, 30.0, 'Subsequent credit must NOT increase balance after reversal marker');
+
+    const creditTx35 = db.transactions.get(`theoremreach_${tx34OutId}_credit`);
+    assert.equal(creditTx35, undefined, 'No credit transaction should be created for pre-reversed task');
+    console.log('✓ Passed Test 35: Subsequent credit arriving after reversal marker was safely blocked at net zero.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 36: Multiple transactions in reversed_transactions array
+    // -------------------------------------------------------------------------
+    console.log('Test 36: Multiple transactions in reversed_transactions array...');
+    const user36 = {
+        _id: '507f1f77bcf86cd799439036',
+        username: 'user_test_36',
+        taskEarningsBalance: 50.0,
+        taskWalletBalance: 50.0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user36._id, user36);
+
+    const tx36A = 'tr_multi_tx_36a';
+    const tx36B = 'tr_multi_tx_36b';
+
+    db.transactions.set(`theoremreach_${tx36A}_credit`, {
+        _id: 'tx_cred_36a',
+        userId: user36._id,
+        userName: user36.username,
+        offerwallProvider: 'theoremreach',
+        externalTransactionId: tx36A,
+        type: 'Offerwall Reward',
+        amount: 3.0,
+        userRewardAmount: 3.0,
+        idempotencyKey: `theoremreach_${tx36A}_credit`,
+        status: 'Approved'
+    });
+
+    db.transactions.set(`theoremreach_${tx36B}_credit`, {
+        _id: 'tx_cred_36b',
+        userId: user36._id,
+        userName: user36.username,
+        offerwallProvider: 'theoremreach',
+        externalTransactionId: tx36B,
+        type: 'Offerwall Reward',
+        amount: 4.0,
+        userRewardAmount: 4.0,
+        idempotencyKey: `theoremreach_${tx36B}_credit`,
+        status: 'Approved'
+    });
+
+    const salt36 = 'evt_test36_multi_rev';
+    const url36 = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt36}`;
+    const hash36 = signWebhookUrl(url36);
+
+    const req36 = {
+        method: 'POST',
+        rawUrl: `${url36}&hash=${hash36}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt36}&hash=${hash36}`,
+        query: { enc_salt: salt36, hash: hash36 },
+        body: {
+            data: {
+                api_key: trAppId,
+                user_id: user36._id,
+                event_type: 'reversal',
+                reversed_transactions: [tx36A, tx36B]
+            }
+        }
+    };
+    const res36 = createMockRes();
+    await handleTheoremReachEventWebhook(req36, res36);
+    assert.equal(res36.statusCode, 200);
+    assert.equal(user36.taskEarningsBalance, 43.0, 'Both credits deducted ($50 - $3 - $4 = $43)');
+    assert.ok(db.transactions.get(`theoremreach_${tx36A}_reversal`), 'Reversal A created');
+    assert.ok(db.transactions.get(`theoremreach_${tx36B}_reversal`), 'Reversal B created');
+    console.log('✓ Passed Test 36: Multiple reversed_transactions in array processed cleanly.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 37: Ban event handling (event_type: 'ban')
+    // -------------------------------------------------------------------------
+    console.log('Test 37: Ban event handling updates user status safely...');
+    const user37 = {
+        _id: '507f1f77bcf86cd799439037',
+        username: 'user_test_37',
+        taskEarningsBalance: 10.0,
+        taskWalletBalance: 10.0,
+        role: 'user',
+        status: 'Active',
+        restrictions: { earning: false, withdrawal: false },
+        customFields: {}
+    };
+    db.users.set(user37._id, user37);
+
+    const salt37 = 'evt_test37_ban';
+    const url37 = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt37}`;
+    const hash37 = signWebhookUrl(url37);
+
+    const req37 = {
+        method: 'POST',
+        rawUrl: `${url37}&hash=${hash37}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt37}&hash=${hash37}`,
+        query: { enc_salt: salt37, hash: hash37 },
+        body: {
+            data: {
+                api_key: trAppId,
+                user_id: user37._id,
+                event_type: 'ban',
+                reason: 'Fraudulent survey responses detected'
+            }
+        }
+    };
+    const res37 = createMockRes();
+    await handleTheoremReachEventWebhook(req37, res37);
+    assert.equal(res37.statusCode, 200, 'Ban event must return HTTP 200');
+    assert.equal(user37.status, 'Blocked', 'User status set to Blocked');
+    assert.equal(user37.restrictions.earning, true, 'User earning restriction must be active');
+    assert.equal(user37.restrictions.withdrawal, true, 'User withdrawal restriction must be active');
+    assert.equal(user37.customFields.theoremreachBanned, true, 'Custom field theoremreachBanned set');
+    console.log('✓ Passed Test 37: User ban event safely applied without breaking user schema.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 38: Unhandled event type & retryable failure handling with rollback
+    // -------------------------------------------------------------------------
+    console.log('Test 38: Unhandled event type and retryable failure handling with rollback...');
+    // Part A: Unhandled event type safely records and returns 200
+    const salt38A = 'evt_test38a_unhandled';
+    const url38A = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt38A}`;
+    const hash38A = signWebhookUrl(url38A);
+
+    const req38A = {
+        method: 'POST',
+        rawUrl: `${url38A}&hash=${hash38A}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt38A}&hash=${hash38A}`,
+        query: { enc_salt: salt38A, hash: hash38A },
+        body: {
+            data: {
+                api_key: trAppId,
+                event_type: 'survey_inventory_update',
+                inventory_count: 50
+            }
+        }
+    };
+    const res38A = createMockRes();
+    await handleTheoremReachEventWebhook(req38A, res38A);
+    assert.equal(res38A.statusCode, 200, 'Unhandled event type must succeed safely with HTTP 200');
+    assert.ok(db.webhookEvents.get(salt38A), 'Unhandled event is recorded in webhook events');
+
+    // Part B: Database write constraint failure during transaction creation compensates balance and returns HTTP 500 (retryable)
+    const user38B = {
+        _id: '507f1f77bcf86cd799439038',
+        username: 'user_test_38b',
+        taskEarningsBalance: 40.0,
+        taskWalletBalance: 40.0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user38B._id, user38B);
+
+    const tx38BId = 'tr_tx_matched_38b';
+    db.transactions.set(`theoremreach_${tx38BId}_credit`, {
+        _id: 'tx_cred_38b',
+        userId: user38B._id,
+        userName: user38B.username,
+        offerwallProvider: 'theoremreach',
+        externalTransactionId: tx38BId,
+        type: 'Offerwall Reward',
+        amount: 10.0,
+        userRewardAmount: 10.0,
+        idempotencyKey: `theoremreach_${tx38BId}_credit`,
+        status: 'Approved'
+    });
+
+    const salt38B = 'evt_test38b_failure';
+    const url38B = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt38B}`;
+    const hash38B = signWebhookUrl(url38B);
+
+    simulateTxCreateFailure = true; // Trigger database write error on Transaction.create
+    const req38B = {
+        method: 'POST',
+        rawUrl: `${url38B}&hash=${hash38B}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt38B}&hash=${hash38B}`,
+        query: { enc_salt: salt38B, hash: hash38B },
+        body: {
+            data: {
+                api_key: trAppId,
+                user_id: user38B._id,
+                event_type: 'reversal',
+                external_transaction_id: tx38BId
+            }
+        }
+    };
+    const res38B = createMockRes();
+    await handleTheoremReachEventWebhook(req38B, res38B);
+    simulateTxCreateFailure = false; // Reset
+
+    assert.equal(res38B.statusCode, 500, 'Transaction failure must return HTTP 500 for retryable failure');
+    assert.equal(res38B.body.retryable, true, 'Retryable flag must be true');
+    assert.equal(user38B.taskEarningsBalance, 40.0, 'User balance must be compensated back to $40.00 without balance leak');
+    console.log('✓ Passed Test 38: Unhandled event handled safely and transaction error compensated with retryable HTTP 500.\n');
 
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');

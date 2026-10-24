@@ -1,6 +1,7 @@
 import express from 'express';
 import { 
     handlePostback, 
+    handleTheoremReachEventWebhook,
     getOfferwallProviders, 
     updateOfferwallProvider, 
     getOfferwallLogs, 
@@ -36,6 +37,11 @@ router.post('/torox/session', requireAuth, createToroxSession);
 router.put('/providers/:providerKey', requireAdmin, updateOfferwallProvider);
 router.get('/logs', requireAdmin, getOfferwallLogs);
 router.post('/simulate', requireAdmin, simulatePostback);
+
+// Dedicated Inbound TheoremReach Event Webhook Endpoints
+router.post('/theoremreach/events', handleTheoremReachEventWebhook);
+router.all('/theoremreach/events', handleTheoremReachEventWebhook);
+router.post('/events', handleTheoremReachEventWebhook);
 
 // Generic & Network-Specific Postback Webhook Endpoints (supports both GET and POST)
 router.all('/:provider', handlePostback);

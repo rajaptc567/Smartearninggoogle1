@@ -942,17 +942,17 @@ export const AdminOfferwalls: React.FC = () => {
 
                                         <div>
                                             <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
-                                                Event Webhook URL (External / Reporting)
+                                                Event Webhook URL (Inbound Event Receiver)
                                             </label>
                                             <input
                                                 type="text"
-                                                value={editingProvider.eventWebhookUrl || ''}
+                                                value={editingProvider.eventWebhookUrl || 'https://smartexn.com/api/v1/postbacks/theoremreach/events'}
                                                 onChange={(e) => setEditingProvider({ ...editingProvider, eventWebhookUrl: e.target.value })}
-                                                placeholder="Optional external reporting endpoint"
+                                                placeholder="https://smartexn.com/api/v1/postbacks/theoremreach/events"
                                                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
                                             />
                                             <p className="text-[10px] text-slate-500 mt-1">
-                                                Optional secondary webhook destination for TheoremReach reporting/auditing. Real-time rewards/reversals are handled directly by the S2S Postback URL.
+                                                Inbound TheoremReach Event Webhook endpoint receiving async event notifications (reversal, ban) with enc_salt deduplication and HMAC-SHA1 signature verification.
                                             </p>
                                         </div>
                                     </div>
