@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useData } from '../../hooks/useData';
 
 interface OfferwallProvider {
@@ -33,6 +34,11 @@ export const OfferwallHub: React.FC = () => {
     const [toroxSessionUrl, setToroxSessionUrl] = useState<string | null>(null);
     const [toroxSessionError, setToroxSessionError] = useState<string | null>(null);
     const [toroxSessionLoading, setToroxSessionLoading] = useState<boolean>(false);
+
+    const location = useLocation();
+    const searchParams = new URLSearchParams(location.search);
+    const redirectStatus = searchParams.get('status')?.toLowerCase() || null;
+    const [statusBannerDismissed, setStatusBannerDismissed] = useState(false);
 
     const exchangeRate = settings?.exchangeRates?.[currentUser?.currency || 'USD'] || 1;
     const taskEarningsUSD = currentUser?.taskEarningsBalance ?? 0;
@@ -163,6 +169,64 @@ export const OfferwallHub: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Outcome Status Banner (Triggered by Provider Outcome Redirects e.g. TheoremReach) */}
+            {redirectStatus && !statusBannerDismissed && (
+                <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all ${
+                    redirectStatus === 'success'
+                        ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
+                        : redirectStatus === 'partial'
+                        ? 'bg-sky-950/60 border-sky-500/50 text-sky-200'
+                        : redirectStatus === 'disqualified'
+                        ? 'bg-amber-950/60 border-amber-500/50 text-amber-200'
+                        : redirectStatus === 'quotafull'
+                        ? 'bg-indigo-950/60 border-indigo-500/50 text-indigo-200'
+                        : redirectStatus === 'security'
+                        ? 'bg-rose-950/60 border-rose-500/50 text-rose-200'
+                        : 'bg-slate-900 border-slate-800 text-slate-300'
+                }`}>
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl">
+                            {redirectStatus === 'success' ? '🎉' : redirectStatus === 'partial' ? '🎁' : redirectStatus === 'disqualified' ? 'ℹ️' : redirectStatus === 'quotafull' ? '⏳' : redirectStatus === 'security' ? '🛡️' : '🔔'}
+                        </span>
+                        <div>
+                            <h4 className="text-sm font-black uppercase tracking-wider">
+                                {redirectStatus === 'success'
+                                    ? 'Survey Completed Successfully!'
+                                    : redirectStatus === 'partial'
+                                    ? 'Partial Survey Reward Earned'
+                                    : redirectStatus === 'disqualified'
+                                    ? 'Survey Disqualification Notice'
+                                    : redirectStatus === 'quotafull'
+                                    ? 'Survey Quota Full'
+                                    : redirectStatus === 'security'
+                                    ? 'Survey Session Security Notice'
+                                    : 'Survey Redirect Update'}
+                            </h4>
+                            <p className="text-xs opacity-90 mt-0.5">
+                                {redirectStatus === 'success'
+                                    ? 'Thank you for your valuable opinion! Your reward is being verified by the provider and credited directly to your Task Earnings balance.'
+                                    : redirectStatus === 'partial'
+                                    ? 'You completed an initial section of the research study. Partial participation credit is registered.'
+                                    : redirectStatus === 'disqualified'
+                                    ? 'You did not match the specific demographic criteria required by the study researcher. Check out other available surveys!'
+                                    : redirectStatus === 'quotafull'
+                                    ? 'The required participant quota for this research survey has already been met. Please try another study.'
+                                    : redirectStatus === 'security'
+                                    ? 'Session verification check failed. Please ensure proxy, VPN, or ad-blocking software is disabled before participating.'
+                                    : 'You have been redirected back to the offerwall hub.'}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setStatusBannerDismissed(true)}
+                        className="p-2 text-slate-400 hover:text-white rounded-xl text-xs font-bold transition-colors"
+                        aria-label="Dismiss message"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
 
             {/* Category Filter Tabs */}
             <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-900/90 border border-slate-800 rounded-2xl">
@@ -393,6 +457,47 @@ export const OfferwallHub: React.FC = () => {
                                     </button>
                                 </div>
                             )
+                        ) : selectedProvider.providerKey === 'theoremreach' && currentUser?.customFields?.theoremreachBanned ? (
+                            <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto">
+                                <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl mb-4 text-amber-400">
+                                    🛡️
+                                </div>
+                                <h3 className="text-lg font-black text-white mb-2">
+                                    TheoremReach Access Restricted
+                                </h3>
+                                <p className="text-slate-300 text-sm leading-relaxed mb-6">
+                                    {currentUser?.customFields?.theoremreachBanReason
+                                        ? `Notice from survey partner: ${currentUser.customFields.theoremreachBanReason}. Access to TheoremReach surveys has been restricted.`
+                                        : 'Access to TheoremReach surveys is currently restricted for this account by the survey provider.'}
+                                </p>
+                                <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-left space-y-2 text-xs mb-6">
+                                    <div className="flex items-center justify-between text-slate-400">
+                                        <span>Provider Status:</span>
+                                        <span className="font-bold text-amber-400">Restricted (Provider Only)</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-slate-400">
+                                        <span>SmartExn Account:</span>
+                                        <span className="font-bold text-emerald-400">Active</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-slate-400">
+                                        <span>Other Offerwalls & Tasks:</span>
+                                        <span className="font-bold text-emerald-400">Available</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-slate-400">
+                                        <span>Withdrawals & Wallet:</span>
+                                        <span className="font-bold text-emerald-400">Unrestricted</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        const nextProv = providers.find(p => p.providerKey !== 'theoremreach' && p.enabled);
+                                        if (nextProv) setSelectedProvider(nextProv);
+                                    }}
+                                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all"
+                                >
+                                    Browse Other Offerwalls & Surveys
+                                </button>
+                            </div>
                         ) : selectedProvider.iframeUrlTemplate && selectedProvider.appId ? (
                             <>
                                 {iframeLoading && (

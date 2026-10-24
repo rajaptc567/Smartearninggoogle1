@@ -343,7 +343,7 @@ async function runTests() {
             if (k === 'hash' || k === 'signature' || k === 'sig') continue;
             parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
         }
-        const candidate = `/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`;
+        const candidate = `https://smartexn.com/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`;
         const hmac = crypto.createHmac('sha1', secret).update(candidate).digest('base64');
         query.hash = hmac.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         return query;
@@ -2167,6 +2167,178 @@ async function runTests() {
     assert.equal(tx41.userRewardAmount, 7.0, 'User reward $7.00 correctly calculated');
     assert.equal(tx41.platformRevenueAmount, 3.0, 'Platform revenue $3.00 correctly retained');
     console.log('✓ Passed Test 41: Standard TheoremReach S2S reward callback regression confirmed 100% intact.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 42: Path-only signature is strictly REJECTED (Reward Callback & Webhook)
+    // -------------------------------------------------------------------------
+    console.log('Test 42: Path-only signatures strictly rejected with HTTP 400...');
+    const user42 = {
+        _id: '507f1f77bcf86cd799439042',
+        username: 'user_test_42',
+        taskEarningsBalance: 0,
+        taskWalletBalance: 0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user42._id, user42);
+
+    // Compute signature over PATH ONLY (e.g. /api/v1/postbacks/theoremreach?...)
+    const pathOnlyQueryString = `user_id=${user42._id}&tx_id=tr_path_only_tx_42&reward=700`;
+    const pathOnlyString = `/api/v1/postbacks/theoremreach?${pathOnlyQueryString}`;
+    const pathOnlyHash = crypto.createHmac('sha1', testSecret).update(pathOnlyString).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    const req42PathOnly = {
+        params: { provider: 'theoremreach' },
+        originalUrl: `/api/v1/postbacks/theoremreach?${pathOnlyQueryString}&hash=${pathOnlyHash}`,
+        query: { user_id: user42._id, tx_id: 'tr_path_only_tx_42', reward: '700', hash: pathOnlyHash },
+        body: {},
+        headers: { host: 'smartexn.com' }
+    };
+    const res42PathOnly = createMockRes();
+    await handlePostback(req42PathOnly, res42PathOnly);
+    assert.equal(res42PathOnly.statusCode, 400, 'Path-only signature must fail closed with HTTP 400');
+    assert.equal(res42PathOnly.body, 'INVALID_SIGNATURE', 'Response must be INVALID_SIGNATURE');
+    assert.equal(user42.taskEarningsBalance, 0, 'User balance must NOT be credited for path-only signature');
+
+    // Webhook path-only check
+    const salt42Webhook = 'evt_path_only_salt_42';
+    const webhookPathOnly = `/api/v1/postbacks/theoremreach/events?enc_salt=${salt42Webhook}`;
+    const webhookPathOnlyHash = crypto.createHmac('sha1', webhookSecret).update(webhookPathOnly).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const req42WebhookPathOnly = {
+        method: 'POST',
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt42Webhook}&hash=${webhookPathOnlyHash}`,
+        query: { enc_salt: salt42Webhook, hash: webhookPathOnlyHash },
+        body: { data: { api_key: trAppId, event_type: 'ping' } },
+        headers: { host: 'smartexn.com' }
+    };
+    const res42WebhookPathOnly = createMockRes();
+    await handleTheoremReachEventWebhook(req42WebhookPathOnly, res42WebhookPathOnly);
+    assert.equal(res42WebhookPathOnly.statusCode, 400, 'Webhook path-only signature must fail closed with HTTP 400');
+    console.log('✓ Passed Test 42: Path-only signatures strictly rejected for both Reward Callback and Event Webhook.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 43: Arbitrary spoofed Host header / candidate rejection
+    // -------------------------------------------------------------------------
+    console.log('Test 43: Arbitrary spoofed Host header strictly rejected...');
+    const spoofedHost = 'attacker-domain.evil.com';
+    const spoofedUrl = `https://${spoofedHost}/api/v1/postbacks/theoremreach?user_id=${user42._id}&tx_id=tr_spoofed_43&reward=700`;
+    const spoofedHash = crypto.createHmac('sha1', testSecret).update(spoofedUrl).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    const req43Spoofed = {
+        params: { provider: 'theoremreach' },
+        rawUrl: `${spoofedUrl}&hash=${spoofedHash}`,
+        originalUrl: `/api/v1/postbacks/theoremreach?user_id=${user42._id}&tx_id=tr_spoofed_43&reward=700&hash=${spoofedHash}`,
+        query: { user_id: user42._id, tx_id: 'tr_spoofed_43', reward: '700', hash: spoofedHash },
+        body: {},
+        headers: { host: spoofedHost }
+    };
+    const res43Spoofed = createMockRes();
+    await handlePostback(req43Spoofed, res43Spoofed);
+    assert.equal(res43Spoofed.statusCode, 400, 'Spoofed host signature must fail closed with HTTP 400');
+    assert.equal(res43Spoofed.body, 'INVALID_SIGNATURE');
+    console.log('✓ Passed Test 43: Arbitrary Host header spoofing rejected; canonical configured origin enforced.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 44: TheoremReach Dashboard Test Server Callback isolation
+    // -------------------------------------------------------------------------
+    console.log('Test 44: Test Server Callback with debug=true or unmapped user safely isolated...');
+    const user44 = {
+        _id: '507f1f77bcf86cd799439044',
+        username: 'user_test_44',
+        taskEarningsBalance: 100.0,
+        taskWalletBalance: 100.0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user44._id, user44);
+
+    // 44a: Test Server Callback sending debug=true with valid signature
+    const req44Debug = {
+        params: { provider: 'theoremreach' },
+        query: signTheoremReach({ user_id: user44._id, tx_id: 'tr_dashboard_test_01', reward: '700', debug: 'true' }, testSecret),
+        body: {},
+        headers: {}
+    };
+    const res44Debug = createMockRes();
+    await handlePostback(req44Debug, res44Debug);
+    assert.equal(res44Debug.statusCode, 200, 'Test callback with debug=true must return HTTP 200');
+    assert.equal(res44Debug.body, 'OK');
+    assert.equal(user44.taskEarningsBalance, 100.0, 'User balance must NOT be credited during test callback');
+    assert.equal(db.transactions.has('theoremreach_tr_dashboard_test_01_credit'), false, 'No transaction created for debug test');
+
+    // 44b: Test Server Callback sending unmapped/sample user (e.g. test_user) with valid signature
+    const req44Unmapped = {
+        params: { provider: 'theoremreach' },
+        query: signTheoremReach({ user_id: 'non_existent_dashboard_test_user_999', tx_id: 'tr_dashboard_test_02', reward: '700' }, testSecret),
+        body: {},
+        headers: {}
+    };
+    const res44Unmapped = createMockRes();
+    await handlePostback(req44Unmapped, res44Unmapped);
+    assert.equal(res44Unmapped.statusCode, 200, 'Unmapped test user callback must acknowledge with HTTP 200');
+    assert.equal(res44Unmapped.body, 'USER_NOT_FOUND_LOGGED');
+    assert.equal(db.transactions.has('theoremreach_tr_dashboard_test_02_credit'), false, 'No transaction created for unmapped user test');
+    console.log('✓ Passed Test 44: TheoremReach dashboard Test Server Callback safely handled with zero balance mutations.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 45: Provider-scoped ban invariance & platform permissions
+    // -------------------------------------------------------------------------
+    console.log('Test 45: Provider-scoped ban preserves SmartExn account, earnings, and other offerwalls...');
+    db.providers.set('theoremreach', trProviderForWebhook);
+    const user45 = {
+        _id: '507f1f77bcf86cd799439045',
+        username: 'user_test_45',
+        taskEarningsBalance: 50.0,
+        taskWalletBalance: 50.0,
+        role: 'user',
+        status: 'Active',
+        restrictions: { earning: false, withdrawal: false },
+        customFields: {}
+    };
+    db.users.set(user45._id, user45);
+
+    // Inbound ban event arrives
+    const salt45Ban = 'evt_test45_ban_audit';
+    const url45Ban = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt45Ban}`;
+    const hash45Ban = signWebhookUrl(url45Ban, webhookSecret);
+    const req45Ban = {
+        method: 'POST',
+        rawUrl: `${url45Ban}&hash=${hash45Ban}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt45Ban}&hash=${hash45Ban}`,
+        query: { enc_salt: salt45Ban, hash: hash45Ban },
+        body: {
+            data: {
+                api_key: trAppId,
+                user_id: user45._id,
+                event_type: 'ban',
+                reason: 'Respondent demographic inconsistency'
+            }
+        }
+    };
+    const res45Ban = createMockRes();
+    await handleTheoremReachEventWebhook(req45Ban, res45Ban);
+    assert.equal(res45Ban.statusCode, 200);
+
+    // Verify user is ONLY restricted on TheoremReach, and completely active elsewhere
+    assert.equal(user45.customFields.theoremreachBanned, true, 'customFields.theoremreachBanned must be true');
+    assert.equal(user45.customFields.theoremreachBanReason, 'Respondent demographic inconsistency');
+    assert.equal(user45.status, 'Active', 'SmartExn account status must remain Active');
+    assert.equal(user45.restrictions.earning, false, 'Global earning must remain enabled');
+    assert.equal(user45.restrictions.withdrawal, false, 'Global withdrawal must remain enabled');
+
+    // Other provider (Torox) postback still credits successfully for this user
+    const toroxSig45 = crypto.createHash('md5').update(`torox_offer_45-${user45._id}-torox_secret`).digest('hex');
+    const req45Torox = {
+        params: { provider: 'torox' },
+        query: { id: 'torox_tx_user45_01', oid: 'torox_offer_45', user_id: user45._id, amount: '10.00', sig: toroxSig45 },
+        body: {},
+        headers: {}
+    };
+    const res45Torox = createMockRes();
+    await handlePostback(req45Torox, res45Torox);
+    assert.equal(res45Torox.statusCode, 200);
+    assert.equal(user45.taskEarningsBalance, 58.0, 'Other provider (Torox) successfully credited user ($50 + $8 net = $58)');
+    console.log('✓ Passed Test 45: Provider ban strictly scoped without collateral impact on SmartExn features.\n');
 
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');

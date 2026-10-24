@@ -105,39 +105,56 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
             return { valid: false, error: 'TheoremReach signature hash missing' };
         }
 
+        const configuredCallbackUrl = provider.rewardCallbackUrl || 'https://smartexn.com/api/v1/postbacks/theoremreach';
+        let canonicalOrigin = 'https://smartexn.com';
+        let canonicalHost = 'smartexn.com';
+        try {
+            const parsedUrl = new URL(configuredCallbackUrl);
+            canonicalOrigin = parsedUrl.origin;
+            canonicalHost = parsedUrl.hostname;
+        } catch (_) {}
+
+        const allowedOrigins = new Set(['https://smartexn.com']);
+        if (canonicalOrigin) allowedOrigins.add(canonicalOrigin);
+
         const candidates = [];
         if (req) {
             if (typeof req.rawUrl === 'string' && req.rawUrl) {
-                candidates.push(req.rawUrl.split('&hash=')[0]);
+                const rawPart = req.rawUrl.split('&hash=')[0];
+                try {
+                    const parsed = new URL(rawPart);
+                    if (parsed.protocol === 'https:' && (allowedOrigins.has(parsed.origin) || parsed.hostname === 'smartexn.com' || parsed.hostname === canonicalHost)) {
+                        candidates.push(rawPart);
+                    }
+                } catch (_) {}
             }
             const rawPathAndQuery = req.originalUrl || req.url || '';
-            if (rawPathAndQuery) {
+            if (rawPathAndQuery && rawPathAndQuery.startsWith('/')) {
                 const pathUpToHash = rawPathAndQuery.split('&hash=')[0];
-                const host = (typeof req.get === 'function' ? req.get('host') : req.headers?.host) || '';
-                const proto = req.protocol || (req.secure ? 'https' : 'http') || 'https';
-                if (host) {
-                    candidates.push(`${proto}://${host}${pathUpToHash}`);
-                    candidates.push(`https://${host}${pathUpToHash}`);
-                    candidates.push(`http://${host}${pathUpToHash}`);
+                // Canonical full URL with configured origins - NEVER path-only
+                for (const origin of allowedOrigins) {
+                    const canonicalUrl = `${origin}${pathUpToHash}`;
+                    if (!candidates.includes(canonicalUrl)) {
+                        candidates.push(canonicalUrl);
+                    }
                 }
-                candidates.push(pathUpToHash);
             }
         }
-        if (candidates.length === 0 && req && req.query) {
+
+        // Fallback for direct unit tests where req.originalUrl is not supplied: reconstruct query preserving exact parameter order
+        if (candidates.length === 0 && (req?.query || (params && typeof params === 'object'))) {
+            const querySource = req?.query || params;
             const parts = [];
-            for (const [k, v] of Object.entries(req.query)) {
+            for (const [k, v] of Object.entries(querySource)) {
                 if (k === 'hash' || k === 'signature' || k === 'sig') break;
                 parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
             }
-            candidates.push(`/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
-        }
-        if (candidates.length === 0 && params && typeof params === 'object') {
-            const parts = [];
-            for (const [k, v] of Object.entries(params)) {
-                if (k === 'hash' || k === 'signature' || k === 'sig') break;
-                parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+            for (const origin of allowedOrigins) {
+                const reconstructed = `${origin}/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`;
+                if (!candidates.includes(reconstructed)) {
+                    candidates.push(reconstructed);
+                }
             }
-            candidates.push(`/api/v1/postbacks/theoremreach${parts.length > 0 ? '?' + parts.join('&') : ''}`);
         }
 
         for (const candidate of candidates) {
@@ -2307,29 +2324,34 @@ export const handleTheoremReachEventWebhook = async (req, res) => {
         return res.status(400).json({ success: false, error: 'TheoremReach secret key is not configured; failing closed' });
     }
 
-    // 3. Verify HMAC-SHA1 signature over exact callback URL up to but excluding '&hash='
+    // 3. Verify HMAC-SHA1 signature over exact canonical callback URL up to but excluding '&hash='
+    const configuredWebhookUrl = provider.eventWebhookUrl || 'https://smartexn.com/api/v1/postbacks/theoremreach/events';
+    let canonicalEventOrigin = 'https://smartexn.com';
+    let canonicalEventHost = 'smartexn.com';
+    try {
+        const parsedUrl = new URL(configuredWebhookUrl);
+        canonicalEventOrigin = parsedUrl.origin;
+        canonicalEventHost = parsedUrl.hostname;
+    } catch (_) {}
+
     const candidates = [];
     if (typeof req.rawUrl === 'string' && req.rawUrl) {
-        candidates.push(req.rawUrl.split('&hash=')[0]);
+        const rawPart = req.rawUrl.split('&hash=')[0];
+        try {
+            const parsed = new URL(rawPart);
+            // Require HTTPS and ensure origin matches configured or trusted production domain
+            if (parsed.protocol === 'https:' && (parsed.origin === canonicalEventOrigin || parsed.hostname === canonicalEventHost || parsed.hostname === 'smartexn.com')) {
+                candidates.push(rawPart);
+            }
+        } catch (_) {}
     }
+
     const rawPathAndQuery = (req.originalUrl || req.url || '').split('&hash=')[0];
-    if (rawPathAndQuery) {
-        const proto = (typeof req.get === 'function' ? req.get('x-forwarded-proto') : null) || req.protocol || 'https';
-        const host = (typeof req.get === 'function' ? (req.get('x-forwarded-host') || req.get('host')) : req.headers?.host) || '';
-        if (host) {
-            candidates.push(`${proto}://${host}${rawPathAndQuery}`);
-        }
-        if (provider.eventWebhookUrl) {
-            try {
-                const parsed = new URL(provider.eventWebhookUrl);
-                const candidateWithEventUrlOrigin = `${parsed.origin}${rawPathAndQuery}`;
-                if (!candidates.includes(candidateWithEventUrlOrigin)) {
-                    candidates.push(candidateWithEventUrlOrigin);
-                }
-            } catch (_) {}
-        }
-        if (!candidates.includes(rawPathAndQuery)) {
-            candidates.push(rawPathAndQuery);
+    if (rawPathAndQuery && rawPathAndQuery.startsWith('/')) {
+        // Canonical full URL with configured origin - NEVER path-only
+        const canonicalUrl = `${canonicalEventOrigin}${rawPathAndQuery}`;
+        if (!candidates.includes(canonicalUrl)) {
+            candidates.push(canonicalUrl);
         }
     }
 
