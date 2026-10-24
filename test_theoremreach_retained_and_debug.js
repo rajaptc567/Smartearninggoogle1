@@ -292,10 +292,18 @@ OfferwallProvider.findByIdAndUpdate = async (id, update) => {
 
 OfferwallPostbackLog.countDocuments = async () => 0;
 
+OfferwallPostbackLog.create = async (doc) => {
+    const id = doc.externalTxId || `log_${Date.now()}`;
+    const log = { ...doc, _id: id };
+    db.logs.set(id, log);
+    return log;
+};
+
 OfferwallPostbackLog.prototype.save = async function() {
     db.logs.set(this.externalTxId || `log_${Date.now()}`, this);
     return this;
 };
+
 
 Notification.create = async (doc) => {
     const id = `notif_${Date.now()}`;
@@ -1590,7 +1598,26 @@ async function runTests() {
     const res30MissingKey = createMockRes();
     await handleTheoremReachEventWebhook(req30MissingKey, res30MissingKey);
     assert.equal(res30MissingKey.statusCode, 400, 'Missing api_key must fail closed with HTTP 400');
-    console.log('✓ Passed Test 30: Missing or mismatched api_key in payload strictly rejected with HTTP 400.\n');
+
+    // Missing appId in provider configuration
+    const savedAppId = trProviderForWebhook.appId;
+    trProviderForWebhook.appId = '';
+    const res30NoAppId = createMockRes();
+    await handleTheoremReachEventWebhook(req30WrongKey, res30NoAppId);
+    assert.equal(res30NoAppId.statusCode, 400, 'Missing appId in provider config must fail closed with HTTP 400');
+    trProviderForWebhook.appId = savedAppId;
+
+    // Missing secretKey in provider configuration
+    const savedSecret = trProviderForWebhook.secretKey;
+    trProviderForWebhook.secretKey = '';
+    trProviderForWebhook.postbackKey = '';
+    const res30NoSecret = createMockRes();
+    await handleTheoremReachEventWebhook(req30WrongKey, res30NoSecret);
+    assert.equal(res30NoSecret.statusCode, 400, 'Missing secretKey in provider config must fail closed with HTTP 400');
+    trProviderForWebhook.secretKey = savedSecret;
+    trProviderForWebhook.postbackKey = savedSecret;
+
+    console.log('✓ Passed Test 30: Missing or mismatched api_key, missing appId, and missing secretKey strictly rejected with HTTP 400.\n');
 
     // -------------------------------------------------------------------------
     // Test 31: Idempotent deduplication on enc_salt
@@ -1916,11 +1943,11 @@ async function runTests() {
     const res37 = createMockRes();
     await handleTheoremReachEventWebhook(req37, res37);
     assert.equal(res37.statusCode, 200, 'Ban event must return HTTP 200');
-    assert.equal(user37.status, 'Blocked', 'User status set to Blocked');
-    assert.equal(user37.restrictions.earning, true, 'User earning restriction must be active');
-    assert.equal(user37.restrictions.withdrawal, true, 'User withdrawal restriction must be active');
+    assert.equal(user37.status, 'Active', 'User global platform status must remain Active');
+    assert.equal(user37.restrictions.earning, false, 'User global earning restriction must remain false');
+    assert.equal(user37.restrictions.withdrawal, false, 'User global withdrawal restriction must remain false');
     assert.equal(user37.customFields.theoremreachBanned, true, 'Custom field theoremreachBanned set');
-    console.log('✓ Passed Test 37: User ban event safely applied without breaking user schema.\n');
+    console.log('✓ Passed Test 37: User ban event safely restricted to provider without blocking SmartExn account.\n');
 
     // -------------------------------------------------------------------------
     // Test 38: Unhandled event type & retryable failure handling with rollback
@@ -2002,12 +2029,154 @@ async function runTests() {
     assert.equal(user38B.taskEarningsBalance, 40.0, 'User balance must be compensated back to $40.00 without balance leak');
     console.log('✓ Passed Test 38: Unhandled event handled safely and transaction error compensated with retryable HTTP 500.\n');
 
+    // -------------------------------------------------------------------------
+    // Test 39: Concurrent duplicate reversal / lock contention fails closed
+    // -------------------------------------------------------------------------
+    console.log('Test 39: Reversal lock contention fails closed without balance deduction...');
+    const user39 = {
+        _id: '507f1f77bcf86cd799439039',
+        username: 'user_test_39',
+        taskEarningsBalance: 100.0,
+        taskWalletBalance: 100.0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user39._id, user39);
+
+    const tx39Id = 'tr_lock_contend_tx39';
+    db.transactions.set(`theoremreach_${tx39Id}_credit`, {
+        _id: 'tx_cred_39',
+        userId: user39._id,
+        userName: user39.username,
+        offerwallProvider: 'theoremreach',
+        externalTransactionId: tx39Id,
+        type: 'Offerwall Reward',
+        amount: 10.0,
+        userRewardAmount: 10.0,
+        idempotencyKey: `theoremreach_${tx39Id}_credit`,
+        status: 'Approved'
+    });
+
+    // Acquire external lock on this transaction to simulate active concurrent operation
+    const simulatedExternalLock = await acquirePostbackLock('theoremreach', tx39Id);
+    assert.ok(simulatedExternalLock, 'Simulated external process holds lock');
+
+    const salt39 = 'evt_test39_contention';
+    const url39 = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt39}`;
+    const hash39 = signWebhookUrl(url39);
+
+    const req39 = {
+        method: 'POST',
+        rawUrl: `${url39}&hash=${hash39}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt39}&hash=${hash39}`,
+        query: { enc_salt: salt39, hash: hash39 },
+        body: {
+            data: {
+                api_key: trAppId,
+                user_id: user39._id,
+                event_type: 'reversal',
+                external_transaction_id: tx39Id
+            }
+        }
+    };
+    const res39Contended = createMockRes();
+    await handleTheoremReachEventWebhook(req39, res39Contended);
+    assert.equal(res39Contended.statusCode, 500, 'Webhook must fail with retryable 500 when transaction lock is contended');
+    assert.equal(user39.taskEarningsBalance, 100.0, 'User balance must NOT be deducted when lock contention occurs');
+    assert.equal(db.transactions.get(`theoremreach_${tx39Id}_reversal`), undefined, 'Reversal record must NOT be created during contention');
+
+    // Release external lock and retry
+    await releasePostbackLock('theoremreach', tx39Id, simulatedExternalLock);
+    const res39Retried = createMockRes();
+    await handleTheoremReachEventWebhook(req39, res39Retried);
+    assert.equal(res39Retried.statusCode, 200, 'Webhook must succeed once lock contention resolves');
+    assert.equal(user39.taskEarningsBalance, 90.0, 'User balance must be deducted after successful lock acquisition ($100 -> $90)');
+    assert.ok(db.transactions.get(`theoremreach_${tx39Id}_reversal`), 'Reversal transaction successfully recorded');
+    console.log('✓ Passed Test 39: Reversal lock contention fails closed without deduction, retry succeeds.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 40: Exact raw URL query parameter ordering & encoding verification
+    // -------------------------------------------------------------------------
+    console.log('Test 40: Exact raw URL preserving query parameter ordering and encoding...');
+    const salt40 = 'evt_exact_40';
+    const rawUrl40WithoutHash = `https://smartexn.com/api/v1/postbacks/theoremreach/events?enc_salt=${salt40}&custom_tag=market%20research&version=2`;
+    const hash40 = signWebhookUrl(rawUrl40WithoutHash);
+
+    const req40 = {
+        method: 'POST',
+        rawUrl: `${rawUrl40WithoutHash}&hash=${hash40}`,
+        originalUrl: `/api/v1/postbacks/theoremreach/events?enc_salt=${salt40}&custom_tag=market%20research&version=2&hash=${hash40}`,
+        query: { enc_salt: salt40, custom_tag: 'market research', version: '2', hash: hash40 },
+        body: {
+            data: {
+                api_key: trAppId,
+                event_type: 'ping'
+            }
+        },
+        headers: { host: 'smartexn.com' }
+    };
+    const res40 = createMockRes();
+    await handleTheoremReachEventWebhook(req40, res40);
+    assert.equal(res40.statusCode, 200, 'Exact raw URL preserving ordering & encoding must verify successfully');
+    console.log('✓ Passed Test 40: Exact raw URL verification verified without altering query parameter ordering or encoding.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 41: Normal reward callback regression test (S2S endpoint)
+    // -------------------------------------------------------------------------
+    console.log('Test 41: Normal TheoremReach S2S reward callback regression check...');
+    // Restore provider secret for standard S2S postback controller tests
+    const standardProvider = {
+        _id: 'provider_theoremreach_std',
+        providerKey: 'theoremreach',
+        name: 'TheoremReach',
+        enabled: true,
+        status: 'ACTIVE',
+        secretKey: testSecret,
+        postbackKey: testSecret,
+        exchangeRateMultiplier: 70.0,
+        commissionMode: 'smartexn_managed',
+        userRevenueSharePercent: 70,
+        platformRevenueSharePercent: 30
+    };
+    db.providers.set('theoremreach', standardProvider);
+
+    const user41 = {
+        _id: '507f1f77bcf86cd799439041',
+        username: 'user_test_41',
+        taskEarningsBalance: 0,
+        taskWalletBalance: 0,
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(user41._id, user41);
+
+    // 700 coins / 70 multiplier = $10.00 gross -> $7.00 user reward (70% share)
+    const req41S2S = {
+        params: { provider: 'theoremreach' },
+        query: signTheoremReach({ user_id: user41._id, tx_id: 'tr_tx_std_regression_41', reward: '700' }, testSecret),
+        body: {},
+        headers: {}
+    };
+    const res41S2S = createMockRes();
+    await handlePostback(req41S2S, res41S2S);
+    assert.equal(res41S2S.statusCode, 200, 'Standard S2S reward callback must return HTTP 200');
+    assert.equal(user41.taskEarningsBalance, 7.0, 'User earnings balance credited with $7.00 (70% of $10 gross)');
+    const tx41 = db.transactions.get('theoremreach_tr_tx_std_regression_41_credit');
+    assert.ok(tx41, 'Credit transaction created');
+    assert.equal(tx41.grossAmount, 10.0, 'Gross amount $10.00 correctly calculated');
+    assert.equal(tx41.userRewardAmount, 7.0, 'User reward $7.00 correctly calculated');
+    assert.equal(tx41.platformRevenueAmount, 3.0, 'Platform revenue $3.00 correctly retained');
+    console.log('✓ Passed Test 41: Standard TheoremReach S2S reward callback regression confirmed 100% intact.\n');
+
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');
     console.log('========================================================================\n');
 }
 
-runTests().catch(err => {
+runTests().then(() => {
+    process.exit(0);
+}).catch(err => {
     console.error('Test suite failed:', err);
     process.exit(1);
 });
+

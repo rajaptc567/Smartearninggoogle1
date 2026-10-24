@@ -2297,49 +2297,40 @@ export const handleTheoremReachEventWebhook = async (req, res) => {
         return res.status(403).json({ success: false, error: 'TheoremReach provider is currently disabled or suspended' });
     }
 
-    const secret = provider.secretKey || provider.postbackKey || '';
+    const appId = provider.appId ? String(provider.appId).trim() : '';
+    if (!appId) {
+        return res.status(400).json({ success: false, error: 'TheoremReach appId is not configured; failing closed' });
+    }
+
+    const secret = (provider.secretKey || provider.postbackKey || '').trim();
     if (!secret) {
         return res.status(400).json({ success: false, error: 'TheoremReach secret key is not configured; failing closed' });
     }
 
-    // 3. Verify HMAC-SHA1 signature over full URL up to '&hash='
+    // 3. Verify HMAC-SHA1 signature over exact callback URL up to but excluding '&hash='
     const candidates = [];
     if (typeof req.rawUrl === 'string' && req.rawUrl) {
         candidates.push(req.rawUrl.split('&hash=')[0]);
     }
-    const rawPathAndQuery = req.originalUrl || req.url || '';
+    const rawPathAndQuery = (req.originalUrl || req.url || '').split('&hash=')[0];
     if (rawPathAndQuery) {
-        const pathUpToHash = rawPathAndQuery.split('&hash=')[0];
+        const proto = (typeof req.get === 'function' ? req.get('x-forwarded-proto') : null) || req.protocol || 'https';
+        const host = (typeof req.get === 'function' ? (req.get('x-forwarded-host') || req.get('host')) : req.headers?.host) || '';
+        if (host) {
+            candidates.push(`${proto}://${host}${rawPathAndQuery}`);
+        }
         if (provider.eventWebhookUrl) {
             try {
                 const parsed = new URL(provider.eventWebhookUrl);
-                candidates.push(`${parsed.origin}${pathUpToHash}`);
+                const candidateWithEventUrlOrigin = `${parsed.origin}${rawPathAndQuery}`;
+                if (!candidates.includes(candidateWithEventUrlOrigin)) {
+                    candidates.push(candidateWithEventUrlOrigin);
+                }
             } catch (_) {}
         }
-        candidates.push(`https://smartexn.com${pathUpToHash}`);
-        candidates.push(`http://smartexn.com${pathUpToHash}`);
-
-        const host = (typeof req.get === 'function' ? req.get('host') : req.headers?.host) || '';
-        const proto = (typeof req.get === 'function' ? req.get('x-forwarded-proto') : null) || req.protocol || (req.secure ? 'https' : 'http') || 'https';
-        if (host) {
-            candidates.push(`${proto}://${host}${pathUpToHash}`);
-            candidates.push(`https://${host}${pathUpToHash}`);
-            candidates.push(`http://${host}${pathUpToHash}`);
+        if (!candidates.includes(rawPathAndQuery)) {
+            candidates.push(rawPathAndQuery);
         }
-        candidates.push(pathUpToHash);
-    }
-
-    // Fallback: reconstruct query string if req.query exists
-    if (req.query && typeof req.query === 'object') {
-        const parts = [];
-        for (const [k, v] of Object.entries(req.query)) {
-            if (k === 'hash' || k === 'signature' || k === 'sig') break;
-            parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
-        }
-        const qs = parts.length > 0 ? `?${parts.join('&')}` : '';
-        candidates.push(`https://smartexn.com/api/v1/postbacks/theoremreach/events${qs}`);
-        candidates.push(`http://smartexn.com/api/v1/postbacks/theoremreach/events${qs}`);
-        candidates.push(`/api/v1/postbacks/theoremreach/events${qs}`);
     }
 
     let isSigValid = false;
@@ -2356,12 +2347,10 @@ export const handleTheoremReachEventWebhook = async (req, res) => {
         return res.status(400).json({ success: false, error: 'TheoremReach webhook HMAC-SHA1 signature mismatch' });
     }
 
-    // 4. Validate API key from payload data
+    // 4. Validate API key from payload data (must strictly match configured appId)
     const data = req.body?.data || req.body || {};
-    if (provider.appId && provider.appId.trim()) {
-        if (!data.api_key || String(data.api_key).trim() !== provider.appId.trim()) {
-            return res.status(400).json({ success: false, error: 'Missing or mismatched api_key in payload data' });
-        }
+    if (!data.api_key || String(data.api_key).trim() !== appId) {
+        return res.status(400).json({ success: false, error: 'Missing or mismatched api_key in payload data' });
     }
 
     // 5. Idempotent deduplication on enc_salt
@@ -2439,152 +2428,194 @@ export const handleTheoremReachEventWebhook = async (req, res) => {
                     continue;
                 }
 
-                // Check for original credit
-                const origTx = await Transaction.findOne({
-                    offerwallProvider: 'theoremreach',
-                    externalTransactionId: txId,
-                    type: 'Offerwall Reward'
-                });
+                // Acquire lock for this specific transaction. If lock cannot be acquired, do not process.
+                const txLock = await acquirePostbackLock('theoremreach', txId);
+                if (!txLock) {
+                    const postLockCheck = (await Transaction.findOne({ idempotencyKey: reversalKey }))
+                        || (await Transaction.findOne({
+                            offerwallProvider: 'theoremreach',
+                            externalTransactionId: txId,
+                            type: 'Offerwall Reversal'
+                        }));
+                    if (postLockCheck && postLockCheck.amount > 0) {
+                        continue;
+                    }
+                    throw new Error(`LOCK_CONTENTION: Lock for transaction ${txId} is held by a concurrent request`);
+                }
 
-                if (!origTx) {
-                    // Out-of-order reversal: persist durable unmatched reversal marker
+                try {
+                    const lockedReversed = (await Transaction.findOne({ idempotencyKey: reversalKey }))
+                        || (await Transaction.findOne({
+                            offerwallProvider: 'theoremreach',
+                            externalTransactionId: txId,
+                            type: 'Offerwall Reversal'
+                        }));
+                    if (lockedReversed && lockedReversed.amount > 0) {
+                        continue;
+                    }
+
+                    // Check for original credit
+                    const origTx = await Transaction.findOne({
+                        offerwallProvider: 'theoremreach',
+                        externalTransactionId: txId,
+                        type: 'Offerwall Reward'
+                    });
+
+                    if (!origTx) {
+                        // Out-of-order reversal: persist durable unmatched reversal marker
+                        const existingMarker = (await Transaction.findOne({ idempotencyKey: reversalKey }))
+                            || (await Transaction.findOne({
+                                offerwallProvider: 'theoremreach',
+                                externalTransactionId: txId,
+                                type: 'Offerwall Reversal'
+                            }));
+                        if (!existingMarker) {
+                            try {
+                                await Transaction.create({
+                                    userId: targetUser ? targetUser._id : undefined,
+                                    userName: targetUser ? targetUser.username : (data.user_id || 'Unknown'),
+                                    currency: 'USD',
+                                    type: 'Offerwall Reversal',
+                                    amount: 0,
+                                    amountUSD: 0,
+                                    grossAmount: 0,
+                                    userRewardAmount: 0,
+                                    platformRevenueAmount: 0,
+                                    balanceBefore: targetUser ? (targetUser.taskEarningsBalance || 0) : 0,
+                                    balanceAfter: targetUser ? (targetUser.taskEarningsBalance || 0) : 0,
+                                    idempotencyKey: reversalKey,
+                                    chargebackStatus: 'Settled',
+                                    description: 'Unmatched Offerwall Reversal Marker (TheoremReach Webhook received before credit)',
+                                    status: 'Approved',
+                                    sourceWallet: 'TaskEarnings',
+                                    destinationWallet: 'External',
+                                    offerwallProvider: 'theoremreach',
+                                    externalTransactionId: txId
+                                });
+                            } catch (markerErr) {
+                                if (markerErr.code !== 11000) throw markerErr;
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Matched reversal: resolve user from original transaction if needed
+                    let user = targetUser;
+                    if (!user && origTx.userId) {
+                        user = await User.findById(origTx.userId);
+                    }
+                    if (!user) {
+                        continue;
+                    }
+
+                    const deductionAmount = origTx.userRewardAmount || origTx.amountUSD || origTx.amount || 0;
+                    const currentEarnings = Math.max(0, user.taskEarningsBalance || 0);
+                    const deductionToApply = Math.min(currentEarnings, deductionAmount);
+                    const liabilityToAdd = Number((deductionAmount - deductionToApply).toFixed(4));
+                    const chargebackStatus = liabilityToAdd > 0 ? 'Liability_Owed' : 'Settled';
+
+                    // Atomically update user balance
+                    const updatedUser = await User.findOneAndUpdate(
+                        { _id: user._id },
+                        {
+                            $inc: {
+                                taskEarningsBalance: -deductionToApply,
+                                taskWalletBalance: -deductionToApply,
+                                chargebackLiabilityUSD: liabilityToAdd
+                            }
+                        },
+                        { new: true }
+                    );
+
+                    // Create Reversal Transaction with atomic compensating rollback
+                    let revTx;
                     try {
-                        await Transaction.create({
-                            userId: targetUser ? targetUser._id : undefined,
-                            userName: targetUser ? targetUser.username : (data.user_id || 'Unknown'),
+                        revTx = await Transaction.create({
+                            userId: user._id,
+                            userName: user.username,
                             currency: 'USD',
                             type: 'Offerwall Reversal',
-                            amount: 0,
-                            amountUSD: 0,
-                            grossAmount: 0,
-                            userRewardAmount: 0,
-                            platformRevenueAmount: 0,
-                            balanceBefore: targetUser ? (targetUser.taskEarningsBalance || 0) : 0,
-                            balanceAfter: targetUser ? (targetUser.taskEarningsBalance || 0) : 0,
+                            amount: deductionAmount,
+                            amountUSD: deductionAmount,
+                            grossAmount: origTx.grossAmount || 0,
+                            userRewardAmount: deductionAmount,
+                            platformRevenueAmount: origTx.platformRevenueAmount || 0,
+                            balanceBefore: currentEarnings,
+                            balanceAfter: updatedUser ? updatedUser.taskEarningsBalance : 0,
                             idempotencyKey: reversalKey,
-                            chargebackStatus: 'Settled',
-                            description: 'Unmatched Offerwall Reversal Marker (TheoremReach Webhook received before credit)',
+                            chargebackStatus,
+                            reversalReferenceId: origTx._id,
+                            description: 'Offerwall Chargeback/Reversal: TheoremReach (Webhook Event)',
                             status: 'Approved',
                             sourceWallet: 'TaskEarnings',
                             destinationWallet: 'External',
                             offerwallProvider: 'theoremreach',
                             externalTransactionId: txId
                         });
-                    } catch (markerErr) {
-                        if (markerErr.code !== 11000) throw markerErr;
-                    }
-                    continue;
-                }
-
-                // Matched reversal: resolve user from original transaction if needed
-                let user = targetUser;
-                if (!user && origTx.userId) {
-                    user = await User.findById(origTx.userId);
-                }
-                if (!user) {
-                    continue;
-                }
-
-                const txLock = await acquirePostbackLock('theoremreach', txId);
-
-                const deductionAmount = origTx.userRewardAmount || origTx.amountUSD || origTx.amount || 0;
-                const currentEarnings = Math.max(0, user.taskEarningsBalance || 0);
-                const deductionToApply = Math.min(currentEarnings, deductionAmount);
-                const liabilityToAdd = Number((deductionAmount - deductionToApply).toFixed(4));
-                const chargebackStatus = liabilityToAdd > 0 ? 'Liability_Owed' : 'Settled';
-
-                // Atomically update user balance
-                const updatedUser = await User.findOneAndUpdate(
-                    { _id: user._id },
-                    {
-                        $inc: {
-                            taskEarningsBalance: -deductionToApply,
-                            taskWalletBalance: -deductionToApply,
-                            chargebackLiabilityUSD: liabilityToAdd
-                        }
-                    },
-                    { new: true }
-                );
-
-                // Create Reversal Transaction with atomic compensating rollback
-                let revTx;
-                try {
-                    revTx = await Transaction.create({
-                        userId: user._id,
-                        userName: user.username,
-                        currency: 'USD',
-                        type: 'Offerwall Reversal',
-                        amount: deductionAmount,
-                        amountUSD: deductionAmount,
-                        grossAmount: origTx.grossAmount || 0,
-                        userRewardAmount: deductionAmount,
-                        platformRevenueAmount: origTx.platformRevenueAmount || 0,
-                        balanceBefore: currentEarnings,
-                        balanceAfter: updatedUser ? updatedUser.taskEarningsBalance : 0,
-                        idempotencyKey: reversalKey,
-                        chargebackStatus,
-                        reversalReferenceId: origTx._id,
-                        description: 'Offerwall Chargeback/Reversal: TheoremReach (Webhook Event)',
-                        status: 'Approved',
-                        sourceWallet: 'TaskEarnings',
-                        destinationWallet: 'External',
-                        offerwallProvider: 'theoremreach',
-                        externalTransactionId: txId
-                    });
-                } catch (txErr) {
-                    // Compensate user balance on transaction failure
-                    try {
-                        await User.findOneAndUpdate(
-                            { _id: user._id },
-                            {
-                                $inc: {
-                                    taskEarningsBalance: deductionToApply,
-                                    taskWalletBalance: deductionToApply,
-                                    chargebackLiabilityUSD: -liabilityToAdd
+                    } catch (txErr) {
+                        if (txErr.code === 11000) {
+                            await User.findOneAndUpdate(
+                                { _id: user._id },
+                                {
+                                    $inc: {
+                                        taskEarningsBalance: deductionToApply,
+                                        taskWalletBalance: deductionToApply,
+                                        chargebackLiabilityUSD: -liabilityToAdd
+                                    }
                                 }
-                            },
-                            { new: true }
-                        );
-                    } catch (_) {}
+                            );
+                            continue;
+                        }
+                        // Compensate user balance on transaction failure
+                        try {
+                            await User.findOneAndUpdate(
+                                { _id: user._id },
+                                {
+                                    $inc: {
+                                        taskEarningsBalance: deductionToApply,
+                                        taskWalletBalance: deductionToApply,
+                                        chargebackLiabilityUSD: -liabilityToAdd
+                                    }
+                                }
+                            );
+                        } catch (_) {}
 
-                    if (txLock) await releasePostbackLock('theoremreach', txId, txLock);
-                    throw txErr;
-                }
+                        throw txErr;
+                    }
 
-                if (txLock) await releasePostbackLock('theoremreach', txId, txLock);
-
-                // Increment provider totalReversalCount
-                await OfferwallProvider.findByIdAndUpdate(provider._id, {
-                    $inc: { totalReversalCount: 1 }
-                });
-
-                // User notification
-                try {
-                    await Notification.create({
-                        userId: user._id,
-                        subject: 'TheoremReach Survey Reward Revoked ⚠️',
-                        message: `A survey reward of $${deductionAmount} was reversed by TheoremReach. Your task earnings balance has been adjusted.`,
-                        senderType: 'System'
+                    // Increment provider totalReversalCount
+                    await OfferwallProvider.findByIdAndUpdate(provider._id, {
+                        $inc: { totalReversalCount: 1 }
                     });
-                } catch (_) {}
+
+                    // User notification
+                    try {
+                        await Notification.create({
+                            userId: user._id,
+                            subject: 'TheoremReach Survey Reward Revoked ⚠️',
+                            message: `A survey reward of $${deductionAmount} was reversed by TheoremReach. Your task earnings balance has been adjusted.`,
+                            senderType: 'System'
+                        });
+                    } catch (_) {}
+                } finally {
+                    await releasePostbackLock('theoremreach', txId, txLock);
+                }
             }
         } else if (eventType === 'ban') {
             if (targetUser) {
+                // Provider-specific ban: do NOT block entire SmartExn account or disable withdrawals
                 await User.findByIdAndUpdate(targetUser._id, {
                     $set: {
-                        status: 'Blocked',
-                        'restrictions.earning': true,
-                        'restrictions.withdrawal': true,
                         'customFields.theoremreachBanned': true,
                         'customFields.theoremreachBannedAt': new Date(),
-                        'customFields.theoremreachBanReason': data.reason || 'TheoremReach security ban'
+                        'customFields.theoremreachBanReason': data.reason || 'TheoremReach compliance ban'
                     }
                 });
                 try {
                     await Notification.create({
                         userId: targetUser._id,
-                        subject: 'Account Security Notice: Offerwall Provider Ban ⚠️',
-                        message: 'Your account has been restricted following a security compliance notification from TheoremReach.',
+                        subject: 'TheoremReach Provider Notice',
+                        message: `Your TheoremReach offerwall access has been restricted (${data.reason || 'compliance flag'}). Your SmartExn account and other earning features remain active.`,
                         senderType: 'System'
                     });
                 } catch (_) {}
