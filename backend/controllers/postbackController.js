@@ -726,15 +726,6 @@ export const handlePostback = async (req, res) => {
         log.userId = user._id;
         log.username = user.username;
 
-        // Isolate genuine test/debug callbacks (TheoremReach only)
-        const isDebugCallback = (providerKey === 'theoremreach') && (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1);
-        if (isDebugCallback) {
-            log.status = 'TestCallback';
-            log.errorMessage = 'TheoremReach test callback with debug indicator received; live user balance mutation and transaction record bypassed.';
-            try { await log.save(); } catch (_) {}
-            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
-        }
-
         // TheoremReach Exchange Rate & Conversion Semantics Validation
         if (providerKey === 'theoremreach') {
             if (typeof provider.exchangeRateMultiplier !== 'number' || provider.exchangeRateMultiplier <= 0) {
@@ -774,14 +765,25 @@ export const handlePostback = async (req, res) => {
             platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
         }
 
+        normalized.rewardUSD = userRewardUSD;
+        log.rewardUSD = userRewardUSD;
+        log.grossAmountUSD = grossUSD;
+        log.userRewardUSD = userRewardUSD;
+        log.platformRevenueUSD = platformRevenueUSD;
+
+        // Isolate genuine test/debug callbacks (TheoremReach only)
+        const isDebugCallback = (providerKey === 'theoremreach') && (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1);
+        if (isDebugCallback) {
+            log.status = 'TestCallback';
+            log.errorMessage = 'TheoremReach test callback with debug indicator received; live user balance mutation and transaction record bypassed.';
+            try { await log.save(); } catch (_) {}
+            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+        }
+
         // P5: Robust Concurrency & Atomic Idempotency
         const unifiedKey = `${providerKey}_${normalized.externalTxId}`;
         const creditKey = `${unifiedKey}_credit`;
         const reversalKey = `${unifiedKey}_reversal`;
-
-        log.grossAmountUSD = grossUSD;
-        log.userRewardUSD = userRewardUSD;
-        log.platformRevenueUSD = platformRevenueUSD;
 
         // P16: Fraud & Risk Controls
         let riskStatus = 'NORMAL';
@@ -1075,6 +1077,7 @@ export const handlePostback = async (req, res) => {
                 log.transactionId = tx._id;
                 log.reversalReferenceTxId = origTx?._id;
                 log.reversedAmountUSD = deductionAmount;
+                log.rewardUSD = deductionAmount;
                 log.chargebackStatus = chargebackStatus;
                 log.userBalanceBefore = balanceBefore;
                 log.userBalanceAfter = balanceAfter;
@@ -1217,7 +1220,7 @@ export const handlePostback = async (req, res) => {
                         userId: user._id,
                         userName: user.username,
                         currency: 'USD',
-                        amount: normalized.rewardUSD,
+                        amount: userRewardUSD,
                         amountUSD: userRewardUSD,
                         grossAmount: grossUSD,
                         userRewardAmount: userRewardUSD,

@@ -2590,6 +2590,267 @@ async function runTests() {
     assert.equal(savedTr51.dangerousMongoOperator, undefined, 'Dangerous operator must be stripped by allowlist');
     console.log('✓ Passed Test 51: Provider allowlist and secret-key protections remain intact.\n');
 
+    // -------------------------------------------------------------------------
+    // Test 52: SmartExn-managed mode: gross $10.00, user 70%, net $7.00, platform $3.00
+    // Transaction amount fields: amount, amountUSD, userRewardAmount reflect net user reward
+    // -------------------------------------------------------------------------
+    console.log('Test 52: SmartExn-managed mode transaction & log amount fields alignment...');
+    const user52 = {
+        _id: '507f1f77bcf86cd799439052',
+        username: 'user_test_52',
+        taskEarningsBalance: 50.0,
+        taskWalletBalance: 50.0,
+        role: 'user',
+        status: 'Active',
+        restrictions: { earning: false, withdrawal: false },
+        customFields: {}
+    };
+    db.users.set(user52._id, user52);
+
+    const trProvider52 = {
+        _id: 'provider_tr_52',
+        providerKey: 'theoremreach',
+        name: 'TheoremReach',
+        enabled: true,
+        status: 'ACTIVE',
+        secretKey: 'tr_secure_secret_52',
+        postbackKey: 'tr_secure_secret_52',
+        appId: '25772',
+        exchangeRateMultiplier: 70.0,
+        commissionMode: 'smartexn_managed',
+        userRevenueSharePercent: 70,
+        platformRevenueSharePercent: 30,
+        requireSignature: true,
+        signatureType: 'hmac_sha1',
+        rewardCallbackUrl: 'https://smartexn.com/api/v1/postbacks/theoremreach'
+    };
+    db.providers.set('theoremreach', trProvider52);
+
+    const signedQuery52 = signTheoremReach({ user_id: user52._id, tx_id: 'tr_tx_amount_52', reward: '700' }, 'tr_secure_secret_52');
+    const req52 = {
+        params: { provider: 'theoremreach' },
+        query: signedQuery52,
+        body: {},
+        headers: {}
+    };
+    const res52 = createMockRes();
+    await handlePostback(req52, res52);
+    assert.equal(res52.statusCode, 200, 'Credit callback must succeed with HTTP 200');
+
+    // Verify transaction fields
+    const tx52 = db.transactions.get('theoremreach_tr_tx_amount_52_credit');
+    assert.ok(tx52, 'Credit transaction must exist');
+    assert.equal(tx52.grossAmount, 10.0, 'grossAmount must be $10.00 (700 units / 70)');
+    assert.equal(tx52.userRewardAmount, 7.0, 'userRewardAmount must be $7.00 (70% of $10.00)');
+    assert.equal(tx52.amountUSD, 7.0, 'amountUSD must be $7.00');
+    assert.equal(tx52.amount, 7.0, 'Transaction.amount must be $7.00 (net user reward, not 0)');
+    assert.equal(tx52.platformRevenueAmount, 3.0, 'platformRevenueAmount must be $3.00 (30% of $10.00)');
+    assert.equal(user52.taskEarningsBalance, 57.0, 'User balance must increment by $7.00');
+
+    // Verify OfferwallPostbackLog fields
+    const log52 = db.logs.get('tr_tx_amount_52');
+    assert.ok(log52, 'Postback log must exist');
+    assert.equal(log52.rawReward, 700, 'rawReward must be 700');
+    assert.equal(log52.grossAmountUSD, 10.0, 'grossAmountUSD must be $10.00');
+    assert.equal(log52.userRewardUSD, 7.0, 'userRewardUSD must be $7.00');
+    assert.equal(log52.rewardUSD, 7.0, 'log.rewardUSD must be $7.00 (not 0)');
+    assert.equal(log52.platformRevenueUSD, 3.0, 'platformRevenueUSD must be $3.00');
+    console.log('✓ Passed Test 52: SmartExn-managed mode transaction and log amount fields aligned.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 53: Debug callback calculates useful amounts without mutations
+    // -------------------------------------------------------------------------
+    console.log('Test 53: Debug callback amount calculation and isolation...');
+    const user53 = {
+        _id: '507f1f77bcf86cd799439053',
+        username: 'user_test_53',
+        taskEarningsBalance: 100.0,
+        taskWalletBalance: 100.0,
+        role: 'user',
+        status: 'Active',
+        restrictions: { earning: false, withdrawal: false },
+        customFields: {}
+    };
+    db.users.set(user53._id, user53);
+
+    const signedQuery53Debug = signTheoremReach({ user_id: user53._id, tx_id: 'tr_tx_debug_53', reward: '700', debug: 'true' }, 'tr_secure_secret_52');
+    const req53Debug = {
+        params: { provider: 'theoremreach' },
+        query: signedQuery53Debug,
+        body: {},
+        headers: {}
+    };
+    const res53Debug = createMockRes();
+    await handlePostback(req53Debug, res53Debug);
+    assert.equal(res53Debug.statusCode, 200, 'Debug callback must return HTTP 200');
+    assert.equal(res53Debug.body, 'OK');
+
+    // Zero financial mutations
+    assert.equal(user53.taskEarningsBalance, 100.0, 'User taskEarningsBalance must remain 100.0 (zero mutation)');
+    assert.equal(user53.taskWalletBalance, 100.0, 'User taskWalletBalance must remain 100.0 (zero mutation)');
+    assert.equal(db.transactions.has('theoremreach_tr_tx_debug_53_credit'), false, 'Zero transactions created for debug callback');
+
+    // Useful log amount fields populated
+    const log53 = db.logs.get('tr_tx_debug_53');
+    assert.ok(log53, 'Debug postback log must exist');
+    assert.equal(log53.status, 'TestCallback', 'Log status must be TestCallback');
+    assert.equal(log53.rawReward, 700);
+    assert.equal(log53.grossAmountUSD, 10.0, 'Debug log grossAmountUSD must be $10.00');
+    assert.equal(log53.userRewardUSD, 7.0, 'Debug log userRewardUSD must be $7.00');
+    assert.equal(log53.rewardUSD, 7.0, 'Debug log rewardUSD must be $7.00 (not 0.00)');
+    assert.equal(log53.platformRevenueUSD, 3.0, 'Debug log platformRevenueUSD must be $3.00');
+    console.log('✓ Passed Test 53: Debug callback calculated amounts populated with zero financial mutations.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 54: Provider-managed mode: 100% credited with zero extra deduction
+    // -------------------------------------------------------------------------
+    console.log('Test 54: Provider-managed mode 100% credit with zero deduction...');
+    const user54 = {
+        _id: '507f1f77bcf86cd799439054',
+        username: 'user_test_54',
+        taskEarningsBalance: 20.0,
+        taskWalletBalance: 20.0,
+        role: 'user',
+        status: 'Active',
+        restrictions: { earning: false, withdrawal: false },
+        customFields: {}
+    };
+    db.users.set(user54._id, user54);
+
+    const trProvider54 = {
+        ...trProvider52,
+        commissionMode: 'provider_managed',
+        userRevenueSharePercent: 70,
+        platformRevenueSharePercent: 30
+    };
+    db.providers.set('theoremreach', trProvider54);
+
+    const signedQuery54 = signTheoremReach({ user_id: user54._id, tx_id: 'tr_tx_prov_54', reward: '700' }, 'tr_secure_secret_52');
+    const req54 = {
+        params: { provider: 'theoremreach' },
+        query: signedQuery54,
+        body: {},
+        headers: {}
+    };
+    const res54 = createMockRes();
+    await handlePostback(req54, res54);
+    assert.equal(res54.statusCode, 200);
+
+    const tx54 = db.transactions.get('theoremreach_tr_tx_prov_54_credit');
+    assert.ok(tx54);
+    assert.equal(tx54.grossAmount, 10.0);
+    assert.equal(tx54.userRewardAmount, 10.0, '100% of gross payout credited in provider_managed mode');
+    assert.equal(tx54.amountUSD, 10.0);
+    assert.equal(tx54.amount, 10.0, 'Transaction.amount must be $10.00');
+    assert.equal(tx54.platformRevenueAmount, 0.0, '0% platform deduction in provider_managed mode');
+    assert.equal(user54.taskEarningsBalance, 30.0);
+
+    const log54 = db.logs.get('tr_tx_prov_54');
+    assert.ok(log54);
+    assert.equal(log54.grossAmountUSD, 10.0);
+    assert.equal(log54.userRewardUSD, 10.0);
+    assert.equal(log54.rewardUSD, 10.0);
+    assert.equal(log54.platformRevenueUSD, 0.0);
+    console.log('✓ Passed Test 54: Provider-managed mode 100% credit with zero extra deduction verified.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 55: Duplicate transaction and Reversal amount accounting
+    // -------------------------------------------------------------------------
+    console.log('Test 55: Duplicate credit rejection and reversal amount accounting...');
+    // Duplicate submission
+    const res54Dupe = createMockRes();
+    await handlePostback(req54, res54Dupe);
+    assert.equal(res54Dupe.statusCode, 200);
+    assert.equal(user54.taskEarningsBalance, 30.0, 'User balance must NOT be credited a second time');
+
+    // Reversal of tx 52 (which credited $7.00)
+    db.providers.set('theoremreach', trProvider52); // restore smartexn_managed
+    const signedQuery55Rev = signTheoremReach({ user_id: user52._id, tx_id: 'tr_tx_amount_52', reward: '-700', reversal: 'true' }, 'tr_secure_secret_52');
+    const req55Rev = {
+        params: { provider: 'theoremreach' },
+        query: signedQuery55Rev,
+        body: {},
+        headers: {}
+    };
+    const res55Rev = createMockRes();
+    await handlePostback(req55Rev, res55Rev);
+    assert.equal(res55Rev.statusCode, 200);
+    assert.equal(user52.taskEarningsBalance, 50.0, 'User balance must return to 50.0 after reversal');
+
+    const revTx55 = db.transactions.get('theoremreach_tr_tx_amount_52_reversal');
+    assert.ok(revTx55, 'Reversal transaction must exist');
+    assert.equal(revTx55.amount, 7.0, 'Reversal Transaction.amount must equal credited amount ($7.00)');
+    assert.equal(revTx55.amountUSD, 7.0);
+    assert.equal(revTx55.userRewardAmount, 7.0);
+
+    const revLog55 = db.logs.get('tr_tx_amount_52');
+    assert.ok(revLog55);
+    assert.equal(revLog55.status, 'Reversed');
+    assert.equal(revLog55.reversedAmountUSD, 7.0);
+    assert.equal(revLog55.rewardUSD, 7.0);
+    console.log('✓ Passed Test 55: Duplicate credit and reversal amount accounting verified.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 56: Non-TheoremReach provider regression check (Torox)
+    // -------------------------------------------------------------------------
+    console.log('Test 56: Non-TheoremReach provider regression check (Torox)...');
+    const user56 = {
+        _id: '507f1f77bcf86cd799439056',
+        username: 'user_test_56',
+        taskEarningsBalance: 0.0,
+        taskWalletBalance: 0.0,
+        role: 'user',
+        status: 'Active',
+        restrictions: { earning: false, withdrawal: false },
+        customFields: {}
+    };
+    db.users.set(user56._id, user56);
+
+    const toroxProv56 = {
+        _id: 'prov_torox_56',
+        providerKey: 'torox',
+        name: 'Torox',
+        enabled: true,
+        status: 'ACTIVE',
+        secretKey: 'torox_secret_56',
+        postbackKey: 'torox_secret_56',
+        exchangeRateMultiplier: 1.0,
+        commissionMode: 'smartexn_managed',
+        userRevenueSharePercent: 80,
+        platformRevenueSharePercent: 20,
+        requireSignature: true,
+        signatureType: 'md5'
+    };
+    db.providers.set('torox', toroxProv56);
+
+    const toroxSig56 = crypto.createHash('md5').update(`torox_offer_56-${user56._id}-torox_secret_56`).digest('hex');
+    const reqTorox56 = {
+        params: { provider: 'torox' },
+        query: { id: 'torox_tx_56', oid: 'torox_offer_56', user_id: user56._id, amount: '50.00', sig: toroxSig56 },
+        body: {},
+        headers: {}
+    };
+    const resTorox56 = createMockRes();
+    await handlePostback(reqTorox56, resTorox56);
+    assert.equal(resTorox56.statusCode, 200);
+
+    const txTorox56 = db.transactions.get('torox_torox_tx_56_credit');
+    assert.ok(txTorox56);
+    assert.equal(txTorox56.grossAmount, 50.0);
+    assert.equal(txTorox56.userRewardAmount, 40.0);
+    assert.equal(txTorox56.amountUSD, 40.0);
+    assert.equal(txTorox56.amount, 40.0, 'Torox Transaction.amount must be $40.00 (not 0)');
+    assert.equal(txTorox56.platformRevenueAmount, 10.0);
+    assert.equal(user56.taskEarningsBalance, 40.0);
+
+    const logTorox56 = db.logs.get('torox_tx_56');
+    assert.ok(logTorox56);
+    assert.equal(logTorox56.grossAmountUSD, 50.0);
+    assert.equal(logTorox56.userRewardUSD, 40.0);
+    assert.equal(logTorox56.rewardUSD, 40.0, 'Torox log.rewardUSD must be $40.00 (not 0)');
+    assert.equal(logTorox56.platformRevenueUSD, 10.0);
+    console.log('✓ Passed Test 56: Non-TheoremReach provider regression check (Torox) passed.\n');
+
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');
     console.log('========================================================================\n');

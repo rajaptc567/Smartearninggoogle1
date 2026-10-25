@@ -55,6 +55,10 @@ interface PostbackLog {
     errorMessage?: string;
     transactionId?: string;
     receivedAt: string;
+    grossAmountUSD?: number;
+    userRewardUSD?: number;
+    platformRevenueUSD?: number;
+    reversedAmountUSD?: number;
 }
 
 export const AdminOfferwalls: React.FC = () => {
@@ -494,7 +498,11 @@ export const AdminOfferwalls: React.FC = () => {
                                             {l.username || 'Unknown'}
                                         </td>
                                         <td className={`py-3 px-3 font-bold ${l.isReversal ? 'text-rose-400' : 'text-emerald-400'}`}>
-                                            {l.isReversal ? '-' : '+'}${l.rewardUSD?.toFixed(2)} USD
+                                            {l.isReversal ? '-' : '+'}${((l.userRewardUSD !== undefined && l.userRewardUSD !== null && l.userRewardUSD > 0)
+                                                ? l.userRewardUSD
+                                                : (l.reversedAmountUSD !== undefined && l.reversedAmountUSD !== null && l.reversedAmountUSD > 0)
+                                                ? l.reversedAmountUSD
+                                                : (l.rewardUSD || 0)).toFixed(2)} USD
                                         </td>
                                         <td className="py-3 px-3">
                                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
