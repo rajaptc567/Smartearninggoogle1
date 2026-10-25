@@ -478,9 +478,10 @@ const normalizePostbackParams = (providerKey, rawParams) => {
     };
 };
 
-const isAuthorizedAdmin = (user) => {
+export const isAuthorizedAdmin = (user) => {
     if (!user) return false;
-    return user.role === 'admin' || user.role === 'super_admin';
+    const role = String(user.role || '').trim().toLowerCase();
+    return role === 'admin' || role === 'super_admin';
 };
 
 /**

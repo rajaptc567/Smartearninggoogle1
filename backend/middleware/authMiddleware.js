@@ -10,11 +10,10 @@ import jwt from 'jsonwebtoken';
 export const authMiddleware = (req, res, next) => {
     let token;
 
-    if (
-        req.headers.authorization &&
-        req.headers.authorization.startsWith('Bearer')
-    ) {
-        token = req.headers.authorization.split(' ')[1];
+    const authHeader = req.headers.authorization || req.headers['x-auth-token'];
+    if (authHeader && typeof authHeader === 'string') {
+        const match = authHeader.match(/^Bearer\s+(.+)$/i);
+        token = match ? match[1].trim() : authHeader.trim();
     }
 
     if (!token) {
@@ -28,8 +27,8 @@ export const authMiddleware = (req, res, next) => {
         // Attach identity to request
         // Fail-safe: if role is missing in token, default to 'user'
         req.user = {
-            id: decoded.id,
-            role: decoded.role || 'user',
+            id: decoded.id || decoded._id || decoded.userId,
+            role: decoded.role ? String(decoded.role).trim().toLowerCase() : 'user',
             email: decoded.email
         };
         

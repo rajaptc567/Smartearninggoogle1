@@ -817,6 +817,7 @@ export const AdminOfferwalls: React.FC = () => {
                                         <option value="none">None / Open</option>
                                         <option value="md5">MD5 Hash</option>
                                         <option value="sha256">SHA256 Hash</option>
+                                        <option value="hmac_sha1">HMAC-SHA1</option>
                                         <option value="hmac_sha256">HMAC-SHA256</option>
                                         <option value="ip_only">IP Whitelist Only</option>
                                     </select>

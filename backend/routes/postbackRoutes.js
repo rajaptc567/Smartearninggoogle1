@@ -1,4 +1,5 @@
 import express from 'express';
+import User from '../models/User.js';
 import { 
     handlePostback, 
     handleTheoremReachEventWebhook,
@@ -6,17 +7,30 @@ import {
     updateOfferwallProvider, 
     getOfferwallLogs, 
     simulatePostback,
-    createToroxSession
+    createToroxSession,
+    isAuthorizedAdmin
 } from '../controllers/postbackController.js';
 
 const router = express.Router();
 
 // Admin auth middleware helper
-const requireAdmin = (req, res, next) => {
-    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'super_admin')) {
-        return res.status(403).json({ success: false, error: 'Admin authorization required' });
+const requireAdmin = async (req, res, next) => {
+    if (isAuthorizedAdmin(req.user)) {
+        return next();
     }
-    next();
+
+    // Database fallback: if authenticated user has stale/missing role in JWT token, verify against User model
+    if (req.user?.id) {
+        try {
+            const dbUser = await User.findById(req.user.id).select('role status');
+            if (dbUser && dbUser.status !== 'Blocked' && isAuthorizedAdmin(dbUser)) {
+                req.user.role = dbUser.role;
+                return next();
+            }
+        } catch (_) {}
+    }
+
+    return res.status(403).json({ success: false, error: 'Admin authorization required' });
 };
 
 // Authenticated user middleware helper

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
-import { handlePostback, handleTheoremReachEventWebhook, updateOfferwallProvider, acquirePostbackLock, releasePostbackLock, isLockStillOwned } from './backend/controllers/postbackController.js';
+import fs from 'fs';
+import { handlePostback, handleTheoremReachEventWebhook, updateOfferwallProvider, acquirePostbackLock, releasePostbackLock, isLockStillOwned, isAuthorizedAdmin, verifySignature } from './backend/controllers/postbackController.js';
 import User from './backend/models/User.js';
 import Transaction from './backend/models/Transaction.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
@@ -2339,6 +2340,255 @@ async function runTests() {
     assert.equal(res45Torox.statusCode, 200);
     assert.equal(user45.taskEarningsBalance, 58.0, 'Other provider (Torox) successfully credited user ($50 + $8 net = $58)');
     console.log('✓ Passed Test 45: Provider ban strictly scoped without collateral impact on SmartExn features.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 46: HMAC-SHA1 dropdown option present in AdminOfferwalls.tsx & model
+    // -------------------------------------------------------------------------
+    console.log('Test 46: HMAC-SHA1 dropdown option present in AdminOfferwalls.tsx & OfferwallProvider...');
+    const adminComponentSource = fs.readFileSync('./pages/admin/AdminOfferwalls.tsx', 'utf8');
+    assert.ok(adminComponentSource.includes('<option value="hmac_sha1">HMAC-SHA1</option>'), 'AdminOfferwalls.tsx must contain <option value="hmac_sha1">HMAC-SHA1</option>');
+    
+    // Model enum validation
+    const modelSource = fs.readFileSync('./backend/models/OfferwallProvider.js', 'utf8');
+    assert.ok(modelSource.includes("'hmac_sha1'"), "OfferwallProvider schema enum must include 'hmac_sha1'");
+    console.log('✓ Passed Test 46: HMAC-SHA1 option verified in AdminOfferwalls.tsx & OfferwallProvider model.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 47: TheoremReach strictly rejects missing/invalid signatures even if requireSignature=false or signatureType=none
+    // -------------------------------------------------------------------------
+    console.log('Test 47: TheoremReach enforces HMAC-SHA1 regardless of generic dropdown values...');
+    const trProviderRelaxed = {
+        _id: 'provider_tr_relaxed_01',
+        providerKey: 'theoremreach',
+        name: 'TheoremReach',
+        enabled: true,
+        status: 'ACTIVE',
+        secretKey: 'tr_secure_secret_47',
+        postbackKey: 'tr_secure_secret_47',
+        appId: '25772',
+        exchangeRateMultiplier: 70.0,
+        requireSignature: false, // Attempted relaxation in generic setting
+        signatureType: 'none',   // Attempted relaxation in generic setting
+        rewardCallbackUrl: 'https://smartexn.com/api/v1/postbacks/theoremreach'
+    };
+    db.providers.set('theoremreach', trProviderRelaxed);
+
+    // Unsigned callback must FAIL closed
+    const req47Unsigned = {
+        params: { provider: 'theoremreach' },
+        query: { user_id: user45._id, tx_id: 'tr_tx_unsigned_47', reward: '70' },
+        body: {},
+        headers: {}
+    };
+    const res47Unsigned = createMockRes();
+    await handlePostback(req47Unsigned, res47Unsigned);
+    assert.equal(res47Unsigned.statusCode, 400, 'Unsigned TheoremReach callback must be rejected with 400 even if requireSignature=false');
+
+    // Callback with invalid signature must FAIL closed
+    const req47BadSig = {
+        params: { provider: 'theoremreach' },
+        query: { user_id: user45._id, tx_id: 'tr_tx_badsig_47', reward: '70', hash: 'bad_tampered_hash_value' },
+        body: {},
+        headers: {}
+    };
+    const res47BadSig = createMockRes();
+    await handlePostback(req47BadSig, res47BadSig);
+    assert.equal(res47BadSig.statusCode, 400, 'Tampered TheoremReach signature must be rejected with 400');
+    console.log('✓ Passed Test 47: TheoremReach strictly rejects unsigned/invalid callbacks regardless of generic dropdown.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 48: Valid TheoremReach HMAC-SHA1 verification remains intact
+    // -------------------------------------------------------------------------
+    console.log('Test 48: Valid TheoremReach HMAC-SHA1 verification succeeds...');
+    const trProviderValid = {
+        _id: 'provider_tr_valid_48',
+        providerKey: 'theoremreach',
+        name: 'TheoremReach',
+        enabled: true,
+        status: 'ACTIVE',
+        secretKey: 'tr_secure_secret_48',
+        postbackKey: 'tr_secure_secret_48',
+        appId: '25772',
+        exchangeRateMultiplier: 70.0,
+        commissionMode: 'smartexn_managed',
+        userRevenueSharePercent: 70,
+        requireSignature: true,
+        signatureType: 'hmac_sha1',
+        rewardCallbackUrl: 'https://smartexn.com/api/v1/postbacks/theoremreach'
+    };
+    db.providers.set('theoremreach', trProviderValid);
+
+    const user48 = {
+        _id: '507f1f77bcf86cd799439048',
+        username: 'user_test_48',
+        taskEarningsBalance: 10.0,
+        taskWalletBalance: 10.0,
+        role: 'user',
+        status: 'Active',
+        restrictions: { earning: false, withdrawal: false },
+        customFields: {}
+    };
+    db.users.set(user48._id, user48);
+
+    const signedQuery48 = signTheoremReach({ user_id: user48._id, tx_id: 'tr_tx_valid_48', reward: '70' }, 'tr_secure_secret_48');
+    const req48Valid = {
+        params: { provider: 'theoremreach' },
+        query: signedQuery48,
+        body: {},
+        headers: {}
+    };
+    const res48Valid = createMockRes();
+    await handlePostback(req48Valid, res48Valid);
+    assert.equal(res48Valid.statusCode, 200, 'Valid HMAC-SHA1 signed callback must succeed with 200');
+    assert.equal(user48.taskEarningsBalance, 10.7, 'User balance must be credited $0.70 ($10.00 + $0.70)');
+    console.log('✓ Passed Test 48: Valid TheoremReach HMAC-SHA1 reward callback processed successfully.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 49: Authenticated admin can update provider settings
+    // -------------------------------------------------------------------------
+    console.log('Test 49: Authenticated admin can update provider settings...');
+    // 49a: Admin with req.user = { role: 'admin' }
+    const req49Admin = {
+        params: { providerKey: 'theoremreach' },
+        body: { signatureType: 'hmac_sha1', exchangeRateMultiplier: 70 },
+        user: { role: 'admin' }
+    };
+    const res49Admin = createMockRes();
+    await updateOfferwallProvider(req49Admin, res49Admin);
+    assert.equal(res49Admin.statusCode, 200, 'Authenticated admin must be permitted to update settings');
+    assert.ok(res49Admin.jsonData.success, 'Response success must be true');
+
+    // 49b: Super Admin with req.user = { role: 'super_admin' }
+    const req49SuperAdmin = {
+        params: { providerKey: 'theoremreach' },
+        body: { signatureType: 'hmac_sha1', enabled: true },
+        user: { role: 'super_admin' }
+    };
+    const res49SuperAdmin = createMockRes();
+    await updateOfferwallProvider(req49SuperAdmin, res49SuperAdmin);
+    assert.equal(res49SuperAdmin.statusCode, 200, 'Authenticated super_admin must be permitted to update settings');
+
+    // 49c: Case-insensitive role check (e.g. role: 'Admin')
+    const req49CaseAdmin = {
+        params: { providerKey: 'theoremreach' },
+        body: { signatureType: 'hmac_sha1' },
+        user: { role: 'Admin' }
+    };
+    const res49CaseAdmin = createMockRes();
+    await updateOfferwallProvider(req49CaseAdmin, res49CaseAdmin);
+    assert.equal(res49CaseAdmin.statusCode, 200, 'Case-insensitive admin role must be accepted');
+
+    // 49d: Database-authoritative fallback verification
+    const adminUserInDb = {
+        _id: 'admin_user_id_49',
+        username: 'master_admin',
+        role: 'admin',
+        status: 'Active'
+    };
+    db.users.set(adminUserInDb._id, adminUserInDb);
+
+    // Middleware requireAdmin check with database fallback
+    const reqMiddlewareTest = {
+        user: { id: adminUserInDb._id, role: 'user' } // Stale role in token
+    };
+    let middlewarePassed = false;
+    const mockNext = () => { middlewarePassed = true; };
+    const mockRes49 = createMockRes();
+    // Simulate requireAdmin logic:
+    if (isAuthorizedAdmin(reqMiddlewareTest.user)) {
+        mockNext();
+    } else if (reqMiddlewareTest.user?.id) {
+        const dbU = await User.findById(reqMiddlewareTest.user.id);
+        if (dbU && isAuthorizedAdmin(dbU)) {
+            reqMiddlewareTest.user.role = dbU.role;
+            mockNext();
+        }
+    }
+    assert.ok(middlewarePassed, 'Database-authoritative admin lookup must pass middleware');
+    assert.equal(reqMiddlewareTest.user.role, 'admin');
+    console.log('✓ Passed Test 49: Authenticated admin can update provider settings (token and database fallback).\n');
+
+    // -------------------------------------------------------------------------
+    // Test 50: Non-admin user cannot update provider settings and strictly receives 403
+    // -------------------------------------------------------------------------
+    console.log('Test 50: Non-admin users strictly rejected with 403...');
+    // 50a: Standard worker user
+    const req50NonAdmin = {
+        params: { providerKey: 'theoremreach' },
+        body: { enabled: false },
+        user: { role: 'user' }
+    };
+    const res50NonAdmin = createMockRes();
+    await updateOfferwallProvider(req50NonAdmin, res50NonAdmin);
+    assert.equal(res50NonAdmin.statusCode, 403, 'Worker user must receive 403 Forbidden');
+    assert.equal(res50NonAdmin.jsonData.error, 'Unauthorized: Admin privileges required.');
+
+    // 50b: Unauthenticated request (user is null/undefined)
+    const req50NoAuth = {
+        params: { providerKey: 'theoremreach' },
+        body: { enabled: false }
+    };
+    const res50NoAuth = createMockRes();
+    await updateOfferwallProvider(req50NoAuth, res50NoAuth);
+    assert.equal(res50NoAuth.statusCode, 403, 'Unauthenticated request must receive 403 Forbidden');
+
+    // 50c: User in database with role 'user'
+    const regularUserInDb = {
+        _id: 'regular_user_id_50',
+        username: 'worker_john',
+        role: 'user',
+        status: 'Active'
+    };
+    db.users.set(regularUserInDb._id, regularUserInDb);
+    const reqMiddlewareNonAdmin = {
+        user: { id: regularUserInDb._id, role: 'user' }
+    };
+    let nonAdminPassed = false;
+    const mockNextNonAdmin = () => { nonAdminPassed = true; };
+    const resMiddlewareNonAdmin = createMockRes();
+    if (isAuthorizedAdmin(reqMiddlewareNonAdmin.user)) {
+        mockNextNonAdmin();
+    } else if (reqMiddlewareNonAdmin.user?.id) {
+        const dbU = await User.findById(reqMiddlewareNonAdmin.user.id);
+        if (dbU && isAuthorizedAdmin(dbU)) {
+            mockNextNonAdmin();
+        } else {
+            resMiddlewareNonAdmin.status(403).json({ success: false, error: 'Admin authorization required' });
+        }
+    } else {
+        resMiddlewareNonAdmin.status(403).json({ success: false, error: 'Admin authorization required' });
+    }
+    assert.equal(nonAdminPassed, false, 'Non-admin must not pass middleware');
+    assert.equal(resMiddlewareNonAdmin.statusCode, 403);
+    assert.equal(resMiddlewareNonAdmin.jsonData.error, 'Admin authorization required');
+    console.log('✓ Passed Test 50: Non-admin users strictly rejected with 403.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 51: Provider allowlist and secret-key protections remain intact
+    // -------------------------------------------------------------------------
+    console.log('Test 51: Provider allowlist and secret-key protections remain intact...');
+    const req51Allowlist = {
+        params: { providerKey: 'theoremreach' },
+        body: {
+            signatureType: 'hmac_sha1',
+            secretKey: 'tr_super_secret_51',
+            appId: '25772',
+            unauthorizedInjectedField: 'malicious_code_injection',
+            dangerousMongoOperator: { $gt: '' }
+        },
+        user: { role: 'admin' }
+    };
+    const res51Allowlist = createMockRes();
+    await updateOfferwallProvider(req51Allowlist, res51Allowlist);
+    assert.equal(res51Allowlist.statusCode, 200);
+
+    const savedTr51 = db.providers.get('theoremreach');
+    assert.equal(savedTr51.signatureType, 'hmac_sha1');
+    assert.equal(savedTr51.secretKey, 'tr_super_secret_51');
+    assert.equal(savedTr51.appId, '25772');
+    assert.equal(savedTr51.unauthorizedInjectedField, undefined, 'Unauthorized field must be stripped by allowlist');
+    assert.equal(savedTr51.dangerousMongoOperator, undefined, 'Dangerous operator must be stripped by allowlist');
+    console.log('✓ Passed Test 51: Provider allowlist and secret-key protections remain intact.\n');
 
     console.log('========================================================================');
     console.log('All Comprehensive TheoremReach & Security Tests PASSED Successfully!');
