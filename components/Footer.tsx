@@ -69,7 +69,7 @@ export const Footer: React.FC<FooterProps> = ({ className = '', isMemberArea = t
             </li>
             <li>
               <Link 
-                to={isMemberArea ? "/member/hub-legal?tab=cookie" : "/privacy-policy"} 
+                to={isMemberArea ? "/member/hub-legal?tab=cookie" : "/privacy-policy?tab=cookie"} 
                 className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition"
               >
                 Cookie Policy

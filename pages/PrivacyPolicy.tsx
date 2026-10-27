@@ -18,7 +18,15 @@ import {
     defaultDmcaPolicyTitle, defaultDmcaPolicyUpdated, defaultDmcaPolicyContent
 } from '../data/legalDefaults';
 
-type GlobalPolicyTab = 'privacy' | 'terms' | 'cookie' | 'contact' | 'about' | 'antifraud' | 'withdrawal' | 'refund' | 'disclaimer' | 'dmca';
+export type GlobalPolicyTab = 'privacy' | 'terms' | 'cookie' | 'contact' | 'about' | 'antifraud' | 'withdrawal' | 'refund' | 'disclaimer' | 'dmca';
+
+export const VALID_POLICY_TABS: readonly GlobalPolicyTab[] = [
+    'privacy', 'terms', 'cookie', 'contact', 'about', 'antifraud', 'withdrawal', 'refund', 'disclaimer', 'dmca'
+] as const;
+
+export const isValidPolicyTab = (val: unknown): val is GlobalPolicyTab => {
+    return typeof val === 'string' && (VALID_POLICY_TABS as readonly string[]).includes(val.toLowerCase());
+};
 
 interface PrivacyPolicyProps {
     defaultTab?: GlobalPolicyTab;
@@ -31,13 +39,23 @@ const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ defaultTab }) => {
     const { settings } = state;
     const [searchParams, setSearchParams] = useSearchParams();
     
-    // Determine tab based on pathname if direct route
+    // Determine tab giving priority to valid ?tab= parameter, then path default, then defaultTab prop
     const derivedTab = useMemo<GlobalPolicyTab>(() => {
+        const queryTab = searchParams.get('tab');
+        if (isValidPolicyTab(queryTab)) {
+            return queryTab.toLowerCase() as GlobalPolicyTab;
+        }
+
         const path = location.pathname.toLowerCase();
-        if (path.includes('terms-of-use')) return 'terms';
+        if (path.includes('terms-of-use') || path.includes('/terms')) return 'terms';
         if (path.includes('refund-policy')) return 'refund';
-        if (path.includes('privacy-policy')) return 'privacy';
-        return (searchParams.get('tab') as GlobalPolicyTab) || defaultTab || 'privacy';
+        if (path.includes('privacy-policy') || path.includes('/privacy')) return 'privacy';
+
+        if (isValidPolicyTab(defaultTab)) {
+            return defaultTab;
+        }
+
+        return 'privacy';
     }, [location.pathname, searchParams, defaultTab]);
 
     const [activeTab, setActiveTab] = useState<GlobalPolicyTab>(derivedTab);
@@ -45,6 +63,36 @@ const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ defaultTab }) => {
     useEffect(() => {
         setActiveTab(derivedTab);
     }, [derivedTab]);
+
+    const [analyticsConsentState, setAnalyticsConsentState] = useState<'granted' | 'denied' | 'unset'>(() => {
+        try {
+            const val = localStorage.getItem('smartexn_cookie_consent');
+            if (val === 'granted' || val === 'denied') return val;
+        } catch {}
+        return 'unset';
+    });
+
+    useEffect(() => {
+        const onConsentChange = (event: Event) => {
+            const customEvent = event as CustomEvent<{ choice: 'granted' | 'denied' }>;
+            if (customEvent.detail?.choice) {
+                setAnalyticsConsentState(customEvent.detail.choice);
+            }
+        };
+        window.addEventListener('smartexn_consent_change', onConsentChange);
+        return () => window.removeEventListener('smartexn_consent_change', onConsentChange);
+    }, []);
+
+    const handleUpdateConsent = (choice: 'granted' | 'denied') => {
+        if (typeof window.setSmartExnAnalyticsConsent === 'function') {
+            window.setSmartExnAnalyticsConsent(choice);
+        } else {
+            try {
+                localStorage.setItem('smartexn_cookie_consent', choice);
+            } catch {}
+        }
+        setAnalyticsConsentState(choice);
+    };
 
     const handleTabChange = (tab: GlobalPolicyTab) => {
         setActiveTab(tab);
@@ -301,6 +349,47 @@ const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ defaultTab }) => {
                                     {activePolicy.updated}
                                 </p>
                             </div>
+
+                            {activeTab === 'cookie' && (
+                                <div className="mb-6 p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-800/50 text-xs">
+                                    <h3 className="font-bold text-gray-900 dark:text-white text-sm mb-1.5 flex items-center gap-2">
+                                        <span>🍪</span> Current Cookie &amp; Analytics Preference
+                                    </h3>
+                                    <p className="text-gray-600 dark:text-gray-300 mb-3">
+                                        Essential session cookies are always active to maintain your secure login. You can grant or withdraw consent for optional Google Analytics measurement at any time.
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                            Status:{' '}
+                                            <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[10px] ${
+                                                analyticsConsentState === 'granted'
+                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                                                    : analyticsConsentState === 'denied'
+                                                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300'
+                                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
+                                            }`}>
+                                                {analyticsConsentState === 'granted' ? 'Analytics Allowed' : analyticsConsentState === 'denied' ? 'Analytics Blocked' : 'Not Set (Blocked by default)'}
+                                            </span>
+                                        </span>
+                                        <div className="flex items-center gap-2 ml-auto">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleUpdateConsent('denied')}
+                                                className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition cursor-pointer"
+                                            >
+                                                Block Analytics
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleUpdateConsent('granted')}
+                                                className="px-3 py-1.5 rounded-lg bg-sky-600 text-white hover:bg-sky-500 font-semibold shadow-sm transition cursor-pointer"
+                                            >
+                                                Allow Analytics
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm md:text-base whitespace-pre-line font-normal space-y-4">
                                 {activePolicy.content}

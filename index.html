@@ -82,33 +82,52 @@
     <link rel="stylesheet" href="/index.css" media="print" onload="this.media='all'" />
     <noscript><link rel="stylesheet" href="/index.css" /></noscript>
 
-    <!-- Google tag (gtag.js) - Google Analytics 4 (Deferred for Zero Render / Main-Thread Blocking) -->
+    <!-- Google tag (gtag.js) - Google Analytics 4 with Google Consent Mode v2 -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
+
+      // 1. Google Consent Mode v2 default setup: analytics and ad storage DENIED by default
+      gtag('consent', 'default', {
+        'analytics_storage': 'denied',
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied'
+      });
+
       gtag('js', new Date());
       gtag('config', 'G-42724E1TLB', {
         send_page_view: false
       });
 
-      (function() {
-        var gaLoaded = false;
-        function loadAnalytics() {
-          if (gaLoaded) return;
-          gaLoaded = true;
-          var s = document.createElement('script');
-          s.async = true;
-          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-42724E1TLB';
-          document.head.appendChild(s);
-        }
+      // 2. Helper to load the external gtag script safely without duplication
+      window.__gaScriptLoaded = false;
+      function __loadGAScript() {
+        if (window.__gaScriptLoaded) return;
+        window.__gaScriptLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-42724E1TLB';
+        document.head.appendChild(s);
+      }
 
+      // 3. User consent evaluation based strictly on genuine stored user choice
+      var storedConsent = null;
+      try {
+        storedConsent = localStorage.getItem('smartexn_cookie_consent');
+      } catch (e) {}
+
+      if (storedConsent === 'granted') {
+        gtag('consent', 'update', {
+          'analytics_storage': 'granted'
+        });
         if (typeof window !== 'undefined') {
           var triggerEvents = ['scroll', 'keydown', 'pointerdown', 'touchstart', 'click'];
           var onInteraction = function() {
             triggerEvents.forEach(function(evt) {
               window.removeEventListener(evt, onInteraction, { passive: true });
             });
-            loadAnalytics();
+            __loadGAScript();
           };
           triggerEvents.forEach(function(evt) {
             window.addEventListener(evt, onInteraction, { once: true, passive: true });
@@ -116,13 +135,37 @@
 
           window.addEventListener('load', function() {
             if ('requestIdleCallback' in window) {
-              window.requestIdleCallback(loadAnalytics, { timeout: 6000 });
+              window.requestIdleCallback(__loadGAScript, { timeout: 6000 });
             } else {
-              setTimeout(loadAnalytics, 5000);
+              setTimeout(__loadGAScript, 5000);
             }
           });
         }
-      })();
+      }
+
+      // 4. Global function exposed to the consent UI and settings
+      window.setSmartExnAnalyticsConsent = function(choice) {
+        if (choice === 'granted') {
+          try {
+            localStorage.setItem('smartexn_cookie_consent', 'granted');
+          } catch (e) {}
+          gtag('consent', 'update', {
+            'analytics_storage': 'granted'
+          });
+          __loadGAScript();
+        } else if (choice === 'denied') {
+          try {
+            localStorage.setItem('smartexn_cookie_consent', 'denied');
+          } catch (e) {}
+          gtag('consent', 'update', {
+            'analytics_storage': 'denied',
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied'
+          });
+        }
+        window.dispatchEvent(new CustomEvent('smartexn_consent_change', { detail: { choice: choice } }));
+      };
     </script>
 </head>
   <body class="bg-gray-100 dark:bg-gray-900">

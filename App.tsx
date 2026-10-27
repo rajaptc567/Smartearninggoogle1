@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-ro
 import { useData } from './hooks/useData';
 import { FullPageLoader } from './components/ui/LoadingCircle';
 import { UserPopupModal } from './components/UserPopupModal';
+import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { SeoAnalyticsTracker } from './components/SeoAnalyticsTracker';
 import { ModulePageGuard } from './components/ModulePageGuard';
 
@@ -319,6 +320,7 @@ const App: React.FC = () => {
         </Suspense>
         <WhatsAppFloatingButton />
         <UserPopupModal />
+        <CookieConsentBanner />
       </BrowserRouter>
     </>
   );

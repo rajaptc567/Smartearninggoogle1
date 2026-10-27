@@ -1,29 +1,54 @@
 export const defaultPrivacyPolicyTitle = "Privacy Policy";
-export const defaultPrivacyPolicyUpdated = "Last updated: August 16, 2026";
+export const defaultPrivacyPolicyUpdated = "Last updated: October 27, 2026";
 export const defaultPrivacyPolicyContent = `1. Overview of Data Collection
-At SmartExn (accessible from smartexn.com), safeguarding the privacy of our task workers, campaign creators, and visitors is our fundamental priority. This Privacy Policy details the types of information we collect, how it is securely processed, and your data protection rights. We implement industry-standard encryption, SSL pipelines, and strict access controls to ensure your account and operational information remain safe.
+At SmartExn (accessible from smartexn.com), safeguarding the privacy of our task workers, campaign creators, and visitors is our fundamental priority. This Privacy Policy details the types of information we collect, how it is securely processed, how third-party integrations operate, and your data protection rights. We implement industry-standard encryption, SSL pipelines, and strict access controls to ensure your account and operational information remain safe.
 
 2. Information We Collect
 When you register an account, participate in micro-tasks, launch advertising campaigns, or submit transactions on SmartExn, we collect:
 - Account Credentials: Name, email address, secure hashed credentials, and optional phone/contact identifiers.
 - Task Verification Proofs: Screenshots, task responses, social identifiers, and survey submission confirmations necessary to verify campaign execution.
 - Transactional & Wallet Details: Deposit transaction IDs, withdrawal payout addresses (including local mobile wallets or cryptocurrency wallet addresses), and internal ledger records.
-- Technical & Device Data: IP addresses, browser types, and session timestamps used solely for anti-fraud detection and session security.
+- Technical & Device Data: IP addresses, browser types, and session timestamps used solely for anti-fraud detection, account security, and service delivery.
 
-3. How We Use Your Information
+3. Internal SmartExn Tasks vs. External Survey & Offerwall Providers
+SmartExn provides access to both native tasks hosted on our infrastructure and third-party survey networks:
+
+A. Internal SmartExn Tasks & Micro-Surveys:
+Tasks and surveys created directly by advertisers or administrators on SmartExn are hosted entirely on our secure servers. Any responses, uploaded screenshots, or proof details you submit remain within SmartExn's secure database and are only accessible by the relevant campaign creator and authorized administrators for verification and dispute resolution. They are never transmitted to external survey brokers or advertising networks.
+
+B. External Third-Party Survey & Offerwall Networks:
+To provide a broad catalog of market research and reward opportunities, SmartExn integrates third-party offerwall networks, including TheoremReach and Torox.
+- Identifier Sharing: When you open an external offerwall or survey, SmartExn transmits an opaque account identifier (your internal user ID) to the provider. This identifier is used exclusively to initiate your survey session, track completion status, and route earned rewards back to your SmartExn wallet.
+- Direct Provider Collection: When interacting with an external survey, you enter the provider's embedded frame or hosted environment. Third-party providers may directly collect demographic profile responses, survey answers, device identifiers, and IP addresses according to their own published privacy notices and terms.
+- Browser & Iframe Permissions: External survey iframes may include standard browser permission declarations (such as microphone, camera, geolocation, or clipboard access) to support specific provider survey formats or device verifications when prompted. SmartExn itself does not capture, record, access, or store any camera video, microphone audio, or geographic coordinates from your device.
+- Server-to-Server (S2S) Postbacks: External providers communicate survey outcomes back to SmartExn via secure server-to-server callbacks (such as /api/v1/postbacks/theoremreach and event webhooks). These callbacks contain transaction IDs, normalized reward credits, and quality control indicators (such as user ban or reversal notices) to maintain platform integrity and update your wallet ledger.
+
+4. Analytics & Google Consent Mode
+SmartExn utilizes Google Analytics 4 (Measurement ID: G-42724E1TLB) to understand aggregated site traffic, navigation flows, and technical performance. In adherence to privacy standards, analytics measurement is configured with Google Consent Mode v2 and defaults to a strictly denied state. No analytics storage or tracking cookies are activated on your device until you grant explicit consent via our on-site cookie consent controls.
+
+5. How We Use Your Information
 The information we collect is strictly utilized to operate and improve the crowdsourced task platform:
 - Service Delivery: To host micro-tasks, process task proof reviews, distribute rewards to worker wallets, and fulfill campaign escrow orders.
 - Escrow & Dispute Resolution: To audit submitted proof in case of disputes between task earners and campaign creators.
-- Anti-Fraud & Quality Assurance: To prevent duplicate account creation, detect automated bot scripting, and ensure legitimate campaign completion.
+- Anti-Fraud & Quality Assurance: To prevent duplicate account creation, detect automated bot scripting, enforce single-account rules, and ensure legitimate campaign completion.
 - Communications: To send transaction receipts, dispute notices, and critical security notifications.
 
-4. Data Protection & Confidentiality
+6. Data Protection & Confidentiality
 SmartExn does not sell, rent, or trade your personal information to third-party marketers. Operational data is encrypted in transit and at rest. Access to worker proofs and verification details is strictly restricted to the relevant campaign creator and authorized system administrators.
 
-5. Cookies & Session Management
-SmartExn utilizes essential cookies and session tokens to preserve authentication states and prevent Cross-Site Request Forgery (CSRF). You may configure your browser to decline cookies, but certain core features of the platform may not function as intended.
+7. Cookies & Session Management
+SmartExn utilizes essential cookies and session tokens to preserve authentication states and prevent Cross-Site Request Forgery (CSRF). You can manage optional analytics cookies via our Cookie Policy controls or your browser preferences.
 
-6. Support Contacts
+8. User Rights & Data Protection (GDPR, CCPA & Global Rights)
+Depending on your jurisdiction, you may have rights under the General Data Protection Regulation (GDPR), the California Consumer Privacy Act (CCPA/CPRA), or other privacy laws, including:
+- Right to Access: You may request confirmation of whether SmartExn processes your personal data and obtain a copy of that data.
+- Right to Rectification: You may request correction of inaccurate or incomplete personal information.
+- Right to Erasure: You may request deletion of your account and personal information, subject to mandatory anti-fraud, escrow, and financial audit record retention requirements.
+- Right to Opt-Out / Restrict Processing: You may withdraw consent for optional analytics tracking at any time through our on-site Cookie Policy controls.
+
+To exercise your privacy rights regarding data held by SmartExn, please contact us at support@smartexn.com. For personal data collected directly by external survey providers within their survey sessions, we encourage you to consult the respective provider's privacy policy to exercise rights directly with them.
+
+9. Support & Data Protection Contacts
 For questions regarding this Privacy Policy or your personal data rights:
 - Support Email: support@smartexn.com
 - Knowledge Base: https://smartexn.com/faqs`;
@@ -80,17 +105,18 @@ For clarification regarding these Terms of Use:
 - Knowledge Base: https://smartexn.com/faqs`;
 
 export const defaultCookiePolicyTitle = "Cookie Policy";
-export const defaultCookiePolicyUpdated = "Last updated: August 16, 2026";
+export const defaultCookiePolicyUpdated = "Last updated: October 27, 2026";
 export const defaultCookiePolicyContent = `1. What Are Cookies
-Cookies and session tokens are small data files placed on your device to ensure secure authentication and reliable website navigation.
+Cookies and local session tokens are small data files placed on your device to ensure secure authentication, platform integrity, and reliable website navigation.
 
 2. How We Use Cookies
-- Essential Authentication: Keeps you securely logged in as you navigate between tasks, campaigns, and dashboard pages.
-- Security & Anti-Fraud: Detects unauthorized multi-session logins and safeguards against CSRF exploits.
-- Preference Settings: Remembers your interface display preferences (e.g. Dark/Light mode and currency displays).
+- Essential Authentication & Security: Keeps you securely logged in as you navigate between tasks, campaigns, and dashboard pages, safeguards active sessions, and prevents Cross-Site Request Forgery (CSRF). These technical cookies cannot be disabled without breaking core platform functionality.
+- Preference Settings: Remembers your interface display preferences (e.g., Dark/Light mode theme and selected currency displays).
+- Optional Analytics Measurement (Google Analytics 4): Measures aggregate traffic patterns, visitor counts, and page load performance. In accordance with Google Consent Mode v2, analytics storage remains completely disabled by default until you explicitly provide consent.
 
-3. Managing Cookies
-You can modify your browser settings to decline cookies; however, authentication and core task submission flows may be impacted.`;
+3. Managing Your Cookie Preferences
+- On-Site Controls: You can grant or withdraw consent for optional analytics cookies at any time using the Cookie & Analytics Preference manager at the top of this Cookie Policy page or via the initial consent banner.
+- Browser Controls: You can configure your browser to decline or delete cookies; however, disabling essential session cookies will prevent authentication and core micro-task submission flows from operating.`;
 
 export const defaultContactUsTitle = "Contact Us";
 export const defaultContactUsUpdated = "Last updated: August 16, 2026";
