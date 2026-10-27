@@ -441,11 +441,22 @@ const normalizePostbackParams = (providerKey, rawParams) => {
     let rawAmount = p.amount || p.reward || p.payout || p.pointValue || p.amount_usd || p.amount_local || p.rate || p.pts || p.val || p.rewardAmount || p.currency_amount || p.rewards || p.reward_amount || p.points || 0;
     let rawCurrency = p.currency || 'USD';
 
+    let rawOfferId = p.offer_id || p.oid || p.offerId || p.campaign_id || '';
+
     if (key === 'theoremreach') {
         rawUserId = p.user_id || p.userId || p.uid || p.subId || p.ext_user_id || '';
         rawTxId = p.transaction_id || p.tx_id || p.trans_id || p.id || '';
         rawAmount = p.reward || p.currency_reward || p.reward_amount || p.amount || 0;
         rawCurrency = p.currency || 'USD';
+    }
+
+    if (key === 'lootably') {
+        rawAmount = (p.currencyReward !== undefined && p.currencyReward !== null && p.currencyReward !== '')
+            ? p.currencyReward
+            : (p.reward || p.amount || 0);
+        if (p.offerID !== undefined && p.offerID !== null && p.offerID !== '') {
+            rawOfferId = p.offerID;
+        }
     }
 
     // Detect Reversal / Chargeback
@@ -471,7 +482,7 @@ const normalizePostbackParams = (providerKey, rawParams) => {
         rawReward: Number(rawAmount) || 0,
         rawCurrency: rawCurrency,
         rewardUSD: 0, // Will be calculated based on provider config
-        offerId: String(p.offer_id || p.oid || p.offerId || p.campaign_id || '').trim(),
+        offerId: String(rawOfferId).trim(),
         offerName: String(p.o_name || p.offer_name || p.offerName || p.campaign_name || p.reward_name || `${providerKey} reward`).trim(),
         isReversal,
         signature: String(p.sig || p.signature || p.hash || '').trim()
@@ -835,7 +846,7 @@ export const handlePostback = async (req, res) => {
                     log.status = 'Duplicate';
                     log.errorMessage = 'Duplicate reversal callback received; already reversed.';
                     try { await log.save(); } catch (_) {}
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
                 const origTx = await Transaction.findOne({
@@ -901,10 +912,10 @@ export const handlePostback = async (req, res) => {
                         },
                         simulatedProviderResponse: {
                             statusCode: 200,
-                            body: providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK'
+                            body: providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK'
                         }
                     };
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
                 // Safety guard: If original credit was never received, an unmatched reversal must not deduct user earnings or create liability,
@@ -945,7 +956,7 @@ export const handlePostback = async (req, res) => {
                     log.status = 'IgnoredUnmatchedReversalWithMarker';
                     log.errorMessage = 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely and durable reversal marker persisted.';
                     try { await log.save(); } catch (_) {}
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
                 // Re-verify lock ownership immediately before reversal balance deduction
@@ -1032,7 +1043,7 @@ export const handlePostback = async (req, res) => {
                             log.status = 'Duplicate';
                             log.errorMessage = 'Duplicate reversal transaction key verified';
                             try { await log.save(); } catch (_) {}
-                            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                         }
                     }
 
@@ -1090,7 +1101,7 @@ export const handlePostback = async (req, res) => {
                     senderType: 'System'
                 });
 
-                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
             } else {
                 // ==========================================
                 // P6: ATOMIC REWARD CREDITING (taskEarningsBalance)
@@ -1155,10 +1166,10 @@ export const handlePostback = async (req, res) => {
                         },
                         simulatedProviderResponse: {
                             statusCode: 200,
-                            body: providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK'
+                            body: providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK'
                         }
                     };
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
                 // Verify lock ownership is still valid before processing credit
@@ -1177,7 +1188,7 @@ export const handlePostback = async (req, res) => {
                     log.status = 'Duplicate';
                     log.errorMessage = 'Duplicate credit transaction detected';
                     try { await log.save(); } catch (_) {}
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'DUP_ALREADY_PROCESSED');
                 }
 
                 // Safety guard: Check if an out-of-order reversal has already been processed for this transaction ID.
@@ -1192,7 +1203,7 @@ export const handlePostback = async (req, res) => {
                     log.status = 'PreReversed';
                     log.errorMessage = 'Credit received after pre-existing reversal; balance mutation bypassed safely at net zero.';
                     try { await log.save(); } catch (_) {}
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
                 // Restore blocked and earning-restricted user protection (Check 1: pre-check)
@@ -1240,7 +1251,7 @@ export const handlePostback = async (req, res) => {
                         log.status = 'Duplicate';
                         log.errorMessage = 'Duplicate transaction key caught by database constraint';
                         try { await log.save(); } catch (_) {}
-                        return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+                        return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'DUP_ALREADY_PROCESSED');
                     }
                     throw err;
                 }
@@ -1347,13 +1358,13 @@ export const handlePostback = async (req, res) => {
                 });
 
                 // Return provider-expected success body
-                if (providerKey === 'torox' || providerKey === 'cpx_research') {
+                if (providerKey === 'torox' || providerKey === 'cpx_research' || providerKey === 'lootably') {
                     return res.status(200).send('1');
                 }
                 if (providerKey === 'wannads' || providerKey === 'notik' || providerKey === 'bitlabs') {
                     return res.status(200).send('OK');
                 }
-                if (providerKey === 'revlum' || providerKey === 'monlix' || providerKey === 'lootably') {
+                if (providerKey === 'revlum' || providerKey === 'monlix') {
                     return res.status(200).json({ success: true, status: 'processed', txId: normalized.externalTxId });
                 }
 
