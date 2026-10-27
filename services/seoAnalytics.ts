@@ -114,14 +114,32 @@ const SENSITIVE_KEY_PATTERNS = [
 ];
 
 /**
+ * Evaluates whether explicit user consent has been granted for analytics storage and measurement.
+ * Safe for SSR and environments with restricted storage.
+ */
+export function hasAnalyticsConsent(): boolean {
+  try {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('smartexn_cookie_consent') === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Generic Privacy-Safe Analytics Event Dispatcher (GA4 Conversion & Interaction Events)
  *
- * Enforces zero-PII sanitization:
+ * Enforces zero-PII sanitization and strict consent verification:
+ * - Completely suppresses event dispatch and dataLayer queueing when consent is not granted or denied.
  * - Strips personal identifiers, credentials, contact details, proof attachments, and financial metrics.
  * - Safely checks window.gtag / window.dataLayer without throwing errors.
  */
 export function trackAnalyticsEvent(eventName: string, parameters: Record<string, unknown> = {}): void {
   try {
+    if (!hasAnalyticsConsent()) {
+      return;
+    }
+
     if (!eventName || typeof eventName !== 'string') return;
 
     // Build sanitized parameters allowing only safe non-PII keys
@@ -156,6 +174,10 @@ export function trackAnalyticsEvent(eventName: string, parameters: Record<string
  */
 export function trackSeoEvent(eventName: string, payload: SeoEventPayload = {}): void {
   try {
+    if (!hasAnalyticsConsent()) {
+      return;
+    }
+
     // 1. Never track private routes or sensitive actions
     if (payload.seo_cluster === 'private') {
       return;
@@ -196,6 +218,10 @@ export const seoAnalytics = {
    * Tracks a public SPA page view on route change
    */
   trackPageView: (pathname: string, title?: string): void => {
+    if (!hasAnalyticsConsent()) {
+      return;
+    }
+
     const cleanPath = sanitizePublicPath(pathname);
     const cluster = getSeoClusterFromPath(cleanPath);
 
