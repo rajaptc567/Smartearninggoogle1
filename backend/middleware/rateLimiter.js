@@ -47,6 +47,23 @@ export const financeLimiter = rateLimit({
 });
 
 /**
+ * POSTBACK RATE LIMITER
+ * Dedicated generous rate limit (1000 req / 15m) for S2S webhook callbacks
+ * from verified offerwall and survey networks (TheoremReach, Torox, etc.)
+ * to prevent DoS flooding while protecting against unthrottled abuse.
+ */
+export const postbackLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
+    message: {
+        success: false,
+        error: 'Postback rate limit exceeded.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+/**
  * TASK ACTION LIMITER
  * Protects task submissions, campaigns, disputes, and conversions from rapid automation.
  */
@@ -60,3 +77,5 @@ export const taskActionLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
 });
+
+

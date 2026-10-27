@@ -13,7 +13,7 @@ import User from './models/User.js';
 
 // Middleware
 import { authMiddleware } from './middleware/authMiddleware.js';
-import { globalLimiter } from './middleware/rateLimiter.js';
+import { globalLimiter, postbackLimiter } from './middleware/rateLimiter.js';
 
 // Route files
 import userRoutes from './routes/userRoutes.js';
@@ -161,8 +161,13 @@ io.on('connection', (socket) => {
  */
 app.set('trust proxy', 1);
 
-// Apply Global Rate Limiting
-app.use('/api', globalLimiter);
+// Apply Rate Limiting (dedicated postbackLimiter for S2S callbacks, globalLimiter for rest of API)
+app.use('/api', (req, res, next) => {
+    if (req.path.startsWith('/v1/postbacks')) {
+        return postbackLimiter(req, res, next);
+    }
+    return globalLimiter(req, res, next);
+});
 
 // Enable CORS
 app.use(cors(corsOptions));
