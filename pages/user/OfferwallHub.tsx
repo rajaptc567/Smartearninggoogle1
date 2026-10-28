@@ -11,6 +11,7 @@ interface OfferwallProvider {
     enabled: boolean;
     appId: string;
     iframeUrlTemplate: string;
+    iframeUrl?: string; // Confirmed backend-generated URL
     exchangeRateMultiplier: number;
     badge?: string;
     icon?: string;
@@ -124,6 +125,7 @@ export const OfferwallHub: React.FC = () => {
         if (provider.providerKey === 'torox') {
             return toroxSessionUrl || '';
         }
+        if (provider.iframeUrl) return provider.iframeUrl; // Prefer pre-computed
         if (!provider.iframeUrlTemplate) return '';
         const uid = currentUser?._id || currentUser?.username || 'test_user';
         const aid = provider.appId || 'demo_app_id';
@@ -498,7 +500,7 @@ export const OfferwallHub: React.FC = () => {
                                     Browse Other Offerwalls & Surveys
                                 </button>
                             </div>
-                        ) : selectedProvider.iframeUrlTemplate && selectedProvider.appId ? (
+                        ) : (selectedProvider.iframeUrl || (selectedProvider.iframeUrlTemplate && selectedProvider.appId)) ? (
                             <>
                                 {iframeLoading && (
                                     <div className="absolute inset-0 z-20 bg-slate-950 flex flex-col items-center justify-center gap-3 text-slate-400">
