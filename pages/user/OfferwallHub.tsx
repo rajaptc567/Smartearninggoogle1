@@ -35,6 +35,7 @@ export const OfferwallHub: React.FC = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [refreshError, setRefreshError] = useState<string | null>(null);
     const [iframeTimeoutError, setIframeTimeoutError] = useState<string | null>(null);
+    const [iframeKey, setIframeKey] = useState<number>(0);
 
     // Torox server-authenticated session state
     const [toroxSessionUrl, setToroxSessionUrl] = useState<string | null>(null);
@@ -95,6 +96,7 @@ export const OfferwallHub: React.FC = () => {
         setRefreshError(null);
         setIframeTimeoutError(null);
         setIframeLoading(true);
+        setIframeKey(prev => prev + 1);
 
         try {
             const res = await fetch('/api/v1/postbacks/providers', {
@@ -360,6 +362,7 @@ export const OfferwallHub: React.FC = () => {
                                 setIframeLoading(true);
                                 setRefreshError(null);
                                 setIframeTimeoutError(null);
+                                setIframeKey(0);
                             }}
                             className={`p-3.5 rounded-2xl border transition-all text-left flex flex-col justify-between relative group ${
                                 isSelected
@@ -498,6 +501,7 @@ export const OfferwallHub: React.FC = () => {
                                         </div>
                                     )}
                                     <iframe
+                                        key={`torox_${iframeKey}`}
                                         src={toroxSessionUrl}
                                         title={selectedProvider.name}
                                         onLoad={() => setIframeLoading(false)}
