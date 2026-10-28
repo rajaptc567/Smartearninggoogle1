@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useData } from '../../hooks/useData';
+import { getHeaders } from '../../services/api';
 
 interface OfferwallProvider {
     _id: string;
@@ -92,7 +93,9 @@ export const OfferwallHub: React.FC = () => {
     useEffect(() => {
         const fetchProviders = async () => {
             try {
-                const res = await fetch('/api/v1/postbacks/providers');
+                const res = await fetch('/api/v1/postbacks/providers', {
+                    headers: getHeaders()
+                });
                 const data = await res.json();
                 if (data.success && Array.isArray(data.data)) {
                     setProviders(data.data);
