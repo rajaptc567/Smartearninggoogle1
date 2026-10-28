@@ -1417,16 +1417,22 @@ export const getOfferwallProviders = async (req, res) => {
         // Public / Worker View: Only enabled, non-disabled, non-suspended providers with SAFE projection
         const providers = await OfferwallProvider.find(
             { enabled: true, status: { $nin: ['DISABLED', 'SUSPENDED', 'NOT_STARTED'] } },
-            'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status enabled userRevenueSharePercent platformRevenueSharePercent commissionMode'
+            'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status enabled userRevenueSharePercent platformRevenueSharePercent commissionMode appId'
         ).sort({ category: 1, name: 1 });
 
         const sanitized = providers.map(p => {
             const obj = p.toObject();
             if (req.user?.id && obj.iframeUrlTemplate) {
-                obj.iframeUrl = obj.iframeUrlTemplate
-                    .replace(/\{userId\}/g, String(req.user.id))
-                    .replace(/\{appId\}/g, p.appId || '');
+                if (p.appId && p.appId.trim()) {
+                    obj.iframeUrl = obj.iframeUrlTemplate
+                        .replace(/\{userId\}/g, String(req.user.id))
+                        .replace(/\{appId\}/g, p.appId.trim());
+                } else {
+                    obj.iframeUrl = '';
+                    obj.configurationError = 'App ID / Placement ID is not configured for this provider.';
+                }
             }
+            delete obj.appId;
             return obj;
         });
 

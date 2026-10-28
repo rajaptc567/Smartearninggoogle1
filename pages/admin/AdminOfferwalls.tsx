@@ -805,6 +805,24 @@ export const AdminOfferwalls: React.FC = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Operational Status</label>
+                                    <select
+                                        value={editingProvider.status || 'NOT_STARTED'}
+                                        onChange={(e) => setEditingProvider({ ...editingProvider, status: e.target.value })}
+                                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold uppercase"
+                                    >
+                                        <option value="NOT_STARTED">Not Started</option>
+                                        <option value="CREDENTIALS_PENDING">Credentials Pending</option>
+                                        <option value="SANDBOX">Sandbox</option>
+                                        <option value="TESTING">Testing</option>
+                                        <option value="PRODUCTION_READY">Production Ready</option>
+                                        <option value="ACTIVE">Active</option>
+                                        <option value="DISABLED">Disabled</option>
+                                        <option value="SUSPENDED">Suspended</option>
+                                    </select>
+                                </div>
+
+                                <div>
                                     <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Exchange Multiplier (1 USD = ? User $)</label>
                                     <input
                                         type="number"
@@ -814,7 +832,9 @@ export const AdminOfferwalls: React.FC = () => {
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
                                     />
                                 </div>
+                            </div>
 
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Signature Scheme</label>
                                     <select
