@@ -501,7 +501,6 @@ export const OfferwallHub: React.FC = () => {
                                         </div>
                                     )}
                                     <iframe
-                                        key={`torox_${iframeKey}`}
                                         src={toroxSessionUrl}
                                         title={selectedProvider.name}
                                         onLoad={() => setIframeLoading(false)}
@@ -608,6 +607,7 @@ export const OfferwallHub: React.FC = () => {
                                     </div>
                                 )}
                                 <iframe
+                                    key={`provider_${selectedProvider.providerKey}_${iframeKey}`}
                                     src={getComputedIframeUrl(selectedProvider)}
                                     title={selectedProvider.name}
                                     onLoad={() => setIframeLoading(false)}
