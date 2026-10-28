@@ -10,6 +10,7 @@ interface OfferwallProvider {
     group: string;
     enabled: boolean;
     appId: string;
+    apiKey?: string;
     secretKey: string;
     postbackKey: string;
     iframeUrlTemplate: string;
@@ -328,6 +329,14 @@ export const AdminOfferwalls: React.FC = () => {
                                     </p>
 
                                     <div className="space-y-2 bg-slate-950/80 rounded-xl p-3 text-xs mb-4">
+                                        {p.providerKey === 'theoremreach' && (
+                                            <div className="flex items-center justify-between text-slate-400">
+                                                <span>API Key:</span>
+                                                <span className={`font-mono font-bold ${p.apiKey ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                                    {p.apiKey ? '••••••••' : 'Not Configured'}
+                                                </span>
+                                            </div>
+                                        )}
                                         <div className="flex items-center justify-between text-slate-400">
                                             <span>App / Placement ID:</span>
                                             <span className="font-mono text-slate-200 font-bold">{p.appId || 'Not Configured'}</span>
@@ -683,7 +692,20 @@ export const AdminOfferwalls: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                                        API Key {editingProvider.providerKey === 'theoremreach' && <span className="text-amber-400 font-bold">(Entry Link)</span>}
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={editingProvider.apiKey || ''}
+                                        onChange={(e) => setEditingProvider({ ...editingProvider, apiKey: e.target.value })}
+                                        placeholder={editingProvider.providerKey === 'theoremreach' ? 'TheoremReach API Key' : 'API Key'}
+                                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-mono"
+                                    />
+                                </div>
+
                                 <div>
                                     <label className="block text-xs font-bold uppercase text-slate-400 mb-1">App ID / Pub ID / Placement ID</label>
                                     <input

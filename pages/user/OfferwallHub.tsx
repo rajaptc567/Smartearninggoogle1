@@ -20,6 +20,7 @@ interface OfferwallProvider {
     technicalReadinessScore?: number;
     approvalLikelihoodScore?: string;
     complianceNotes?: string;
+    configurationError?: string;
 }
 
 export const OfferwallHub: React.FC = () => {
@@ -529,7 +530,7 @@ export const OfferwallHub: React.FC = () => {
                                     {selectedProvider.name} Configuration Status
                                 </h3>
                                 <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                                    {selectedProvider.complianceNotes ||
+                                    {selectedProvider.configurationError || selectedProvider.complianceNotes ||
                                         `This network is technically verified and integrated with SmartEXN's S2S Postback Engine. Once the administrator configures the production App ID and API Keys in the Admin Panel, the live iframe will render here automatically.`}
                                 </p>
 

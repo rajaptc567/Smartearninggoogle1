@@ -1405,6 +1405,111 @@ export const handlePostback = async (req, res) => {
  * P9: Get all configured offerwall providers (Admin or Public sanitized)
  * Prevents exposure of provider secrets, postback keys, or IP whitelists to workers or public.
  */
+/**
+ * Constructs a secure, validated TheoremReach respondent entry URL.
+ * 
+ * Official TheoremReach Web Integration Requirements:
+ * 1. api_key: Dedicated API key from TheoremReach Publisher Portal.
+ * 2. user_id: Authenticated SmartExn user ID.
+ * 3. Security Hash (HMAC-SHA1): When signature is required, HMAC-SHA1 is calculated
+ *    over the exact URL before '&hash=' using the secretKey, formatted in URL-safe Base64
+ *    (+ -> -, / -> _, trim =).
+ * 4. Explicit parameter audit:
+ *    - api_key (from provider.apiKey)
+ *    - user_id (from authenticated user ID)
+ *    - partner_id / appId (from provider.appId if configured)
+ *    - exchange_rate (from provider.exchangeRateMultiplier)
+ *    - currency_name_plural (from provider.customConfig?.currencyNamePlural or default)
+ *    - external_id (from user ID)
+ * 5. Fails closed with descriptive error if required parameters or macros are missing.
+ */
+export const constructTheoremReachEntryUrl = (provider, userId) => {
+    if (!userId) {
+        return { url: '', error: 'Authenticated user session is required to launch TheoremReach.' };
+    }
+
+    const apiKey = (provider.apiKey || '').trim();
+    if (!apiKey) {
+        return { 
+            url: '', 
+            error: 'TheoremReach API Key is not configured. Please enter the dedicated API Key in the Admin Panel.' 
+        };
+    }
+
+    const secretKey = (provider.secretKey || '').trim();
+    const requireSignature = provider.requireSignature !== false;
+    if (requireSignature && !secretKey) {
+        return {
+            url: '',
+            error: 'TheoremReach Secret Key is missing for HMAC-SHA1 security hash. Please configure it in the Admin Panel.'
+        };
+    }
+
+    // Determine base template
+    let template = (provider.iframeUrlTemplate || '').trim();
+    if (!template) {
+        template = 'https://theoremreach.com/respondent_entry/direct?api_key={apiKey}&user_id={userId}';
+    }
+
+    // Substitute dedicated API Key (supporting {apiKey}, {api_key}, and legacy api_key={appId})
+    let url = template
+        .replace(/api_key=\{appId\}/g, `api_key=${encodeURIComponent(apiKey)}`)
+        .replace(/\{apiKey\}/g, encodeURIComponent(apiKey))
+        .replace(/\{api_key\}/g, encodeURIComponent(apiKey));
+
+    // Substitute user ID
+    url = url
+        .replace(/\{userId\}/g, encodeURIComponent(String(userId)))
+        .replace(/\{user_id\}/g, encodeURIComponent(String(userId)))
+        .replace(/\{external_id\}/g, encodeURIComponent(String(userId)));
+
+    // Substitute partner_id / placement_id / appId if present
+    const appId = (provider.appId || '').trim();
+    if (appId) {
+        url = url
+            .replace(/\{appId\}/g, encodeURIComponent(appId))
+            .replace(/\{partner_id\}/g, encodeURIComponent(appId))
+            .replace(/\{placement_id\}/g, encodeURIComponent(appId))
+            .replace(/\{pubId\}/g, encodeURIComponent(appId));
+    }
+
+    // Substitute exchange rate if present
+    if (provider.exchangeRateMultiplier !== undefined && provider.exchangeRateMultiplier !== null) {
+        url = url.replace(/\{exchange_rate\}/g, encodeURIComponent(String(provider.exchangeRateMultiplier)));
+    }
+
+    // Substitute currency name plural if present
+    const currencyName = (provider.customConfig?.currencyNamePlural || provider.customConfig?.currency_name_plural || '').trim();
+    if (currencyName) {
+        url = url.replace(/\{currency_name_plural\}/g, encodeURIComponent(currencyName));
+    }
+
+    // Audit for any remaining unsubstituted macros
+    const unparsedMacros = url.match(/\{[a-zA-Z0-9_]+\}/g);
+    if (unparsedMacros && unparsedMacros.length > 0) {
+        return {
+            url: '',
+            error: `Missing configuration for entry URL macro(s): ${unparsedMacros.join(', ')}. Please update provider settings in the Admin Panel.`
+        };
+    }
+
+    // Generate HMAC-SHA1 hash if required
+    if (requireSignature && secretKey) {
+        // Strip any existing hash parameter to ensure exact pre-hash URL
+        let urlBeforeHash = url;
+        if (urlBeforeHash.includes('hash=')) {
+            urlBeforeHash = urlBeforeHash.split(/[?&]hash=/)[0];
+        }
+
+        const hmac = crypto.createHmac('sha1', secretKey).update(urlBeforeHash).digest('base64');
+        const urlSafeHash = hmac.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const separator = urlBeforeHash.includes('?') ? '&' : '?';
+        url = `${urlBeforeHash}${separator}hash=${urlSafeHash}`;
+    }
+
+    return { url, error: null };
+};
+
 export const getOfferwallProviders = async (req, res) => {
     try {
         const isAdmin = isAuthorizedAdmin(req.user);
@@ -1417,12 +1522,24 @@ export const getOfferwallProviders = async (req, res) => {
         // Public / Worker View: Only enabled, non-disabled, non-suspended providers with SAFE projection
         const providers = await OfferwallProvider.find(
             { enabled: true, status: { $nin: ['DISABLED', 'SUSPENDED', 'NOT_STARTED'] } },
-            'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status enabled userRevenueSharePercent platformRevenueSharePercent commissionMode appId'
+            'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status enabled userRevenueSharePercent platformRevenueSharePercent commissionMode appId apiKey secretKey exchangeRateMultiplier requireSignature signatureType customConfig'
         ).sort({ category: 1, name: 1 });
 
         const sanitized = providers.map(p => {
             const obj = p.toObject();
-            if (req.user?.id && obj.iframeUrlTemplate) {
+            if (p.providerKey === 'theoremreach') {
+                if (req.user?.id) {
+                    const trResult = constructTheoremReachEntryUrl(p, req.user.id);
+                    if (trResult.url) {
+                        obj.iframeUrl = trResult.url;
+                    } else {
+                        obj.iframeUrl = '';
+                        obj.configurationError = trResult.error;
+                    }
+                } else {
+                    obj.iframeUrl = '';
+                }
+            } else if (req.user?.id && obj.iframeUrlTemplate) {
                 if (p.appId && p.appId.trim()) {
                     obj.iframeUrl = obj.iframeUrlTemplate
                         .replace(/\{userId\}/g, String(req.user.id))
@@ -1433,6 +1550,9 @@ export const getOfferwallProviders = async (req, res) => {
                 }
             }
             delete obj.appId;
+            delete obj.apiKey;
+            delete obj.secretKey;
+            delete obj.postbackKey;
             return obj;
         });
 
@@ -1455,7 +1575,7 @@ export const updateOfferwallProvider = async (req, res) => {
         const body = req.body || {};
 
         const ALLOWED_FIELDS = [
-            'name', 'category', 'group', 'enabled', 'appId', 'secretKey', 'postbackKey',
+            'name', 'category', 'group', 'enabled', 'appId', 'apiKey', 'secretKey', 'postbackKey',
             'iframeUrlTemplate', 'exchangeRateMultiplier', 'commissionMode', 'userRevenueSharePercent',
             'platformRevenueSharePercent', 'ipWhitelist', 'requireSignature', 'signatureType',
             'testMode', 'description', 'badge', 'icon', 'status', 'approvalStatus',
@@ -2125,7 +2245,9 @@ export const seedVerifiedNetworks = async () => {
             group: 'Group B: Survey Routers',
             enabled: true,
             commissionMode: 'provider_managed',
-            iframeUrlTemplate: 'https://theoremreach.com/respondent_entry/direct?api_key={appId}&user_id={userId}',
+            apiKey: '',
+            appId: '',
+            iframeUrlTemplate: 'https://theoremreach.com/respondent_entry/direct?api_key={apiKey}&user_id={userId}',
             signatureType: 'hmac_sha1',
             requireSignature: true,
             technicalReadinessScore: 100,

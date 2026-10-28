@@ -30,6 +30,10 @@ const OfferwallProviderSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    apiKey: {
+        type: String,
+        default: ''
+    },
     secretKey: {
         type: String,
         default: ''
