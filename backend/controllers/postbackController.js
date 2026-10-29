@@ -1827,6 +1827,42 @@ export const simulatePostback = async (req, res) => {
  * POST https://api.wall.torox.io/partner/session?placement_id=<PLACEMENT_ID>&token=<APP_TOKEN>
  * Request Body: { "player": { "uid": "<AUTHENTICATED_USER_ID>" } }
  */
+export const getTheoremReachEntryUrl = async (req, res) => {
+    try {
+        const provider = await OfferwallProvider.findOne({ providerKey: 'theoremreach' });
+        if (!provider || !provider.enabled) {
+            return res.status(404).json({ success: false, error: 'Provider not found or disabled' });
+        }
+        
+        const transaction_id = crypto.randomUUID();
+        const params = {
+            api_key: provider.apiKey,
+            user_id: req.user.id,
+            transaction_id: transaction_id,
+            currency_name_plural: 'points',
+            exchange_rate: provider.exchangeRateMultiplier || 1.0,
+            partner_id: provider.appId
+        };
+        
+        const queryString = Object.entries(params)
+            .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+            .join('&');
+        
+        const hash = crypto.createHmac('sha1', provider.secretKey)
+            .update(queryString)
+            .digest('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+            
+        const url = `https://theoremreach.com/respondent_entry/secured?${queryString}&hash=${hash}`;
+        return res.json({ success: true, url });
+    } catch (err) {
+        console.error('[TheoremReach Entry Error]:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to generate entry URL' });
+    }
+};
+
 export const createToroxSession = async (req, res) => {
     try {
         // 1. Enforce authentication - derive user ID strictly from server-side req.user.id

@@ -41,6 +41,11 @@ export const OfferwallHub: React.FC = () => {
     const [toroxSessionUrl, setToroxSessionUrl] = useState<string | null>(null);
     const [toroxSessionError, setToroxSessionError] = useState<string | null>(null);
     const [toroxSessionLoading, setToroxSessionLoading] = useState<boolean>(false);
+    
+    // TheoremReach secured entry state
+    const [theoremreachSessionUrl, setTheoremreachSessionUrl] = useState<string | null>(null);
+    const [theoremreachSessionError, setTheoremreachSessionError] = useState<string | null>(null);
+    const [theoremreachSessionLoading, setTheoremreachSessionLoading] = useState<boolean>(false);
 
     const location = useLocation();
     const searchParams = new URLSearchParams(location.search);
@@ -83,6 +88,42 @@ export const OfferwallHub: React.FC = () => {
             setToroxSessionError(err?.message || 'Network error connecting to Torox session service');
         } finally {
             setToroxSessionLoading(false);
+        }
+    };
+
+    const fetchTheoremReachSession = async () => {
+        setTheoremreachSessionLoading(true);
+        setTheoremreachSessionError(null);
+        setTheoremreachSessionUrl(null);
+        setIframeLoading(true);
+        setIframeTimeoutError(null);
+
+        try {
+            const token = localStorage.getItem('authToken');
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json'
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const res = await fetch('/api/v1/postbacks/theoremreach/entry', {
+                method: 'GET',
+                headers
+            });
+            const data = await res.json().catch(() => null);
+
+            if (res.ok && data?.success && data?.url) {
+                setTheoremreachSessionUrl(data.url);
+            } else {
+                const msg = data?.error || data?.message || `Failed to create TheoremReach session (HTTP ${res.status})`;
+                setTheoremreachSessionError(msg);
+            }
+        } catch (err: any) {
+            setTheoremreachSessionError(err?.message || 'Network error connecting to TheoremReach session service');
+        } finally {
+            setTheoremreachSessionLoading(false);
+            setIframeLoading(false);
         }
     };
 
@@ -138,10 +179,15 @@ export const OfferwallHub: React.FC = () => {
     useEffect(() => {
         if (selectedProvider?.providerKey === 'torox') {
             fetchToroxSession();
+        } else if (selectedProvider?.providerKey === 'theoremreach') {
+            fetchTheoremReachSession();
         } else {
             setToroxSessionUrl(null);
             setToroxSessionError(null);
             setToroxSessionLoading(false);
+            setTheoremreachSessionUrl(null);
+            setTheoremreachSessionError(null);
+            setTheoremreachSessionLoading(false);
         }
     }, [selectedProvider?.providerKey]);
 
@@ -184,7 +230,7 @@ export const OfferwallHub: React.FC = () => {
             return toroxSessionUrl || '';
         }
         if (provider.providerKey === 'theoremreach') {
-            return provider.iframeUrl || ''; // Never attempt incomplete client-side fallback without backend apiKey & signature hash
+            return theoremreachSessionUrl || ''; 
         }
         if (provider.iframeUrl) return provider.iframeUrl; // Prefer pre-computed
         if (!provider.iframeUrlTemplate) return '';

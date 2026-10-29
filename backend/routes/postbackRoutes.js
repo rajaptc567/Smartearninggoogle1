@@ -8,6 +8,7 @@ import {
     getOfferwallLogs, 
     simulatePostback,
     createToroxSession,
+    getTheoremReachEntryUrl,
     isAuthorizedAdmin
 } from '../controllers/postbackController.js';
 
@@ -46,6 +47,9 @@ router.get('/providers', getOfferwallProviders);
 
 // Dedicated authenticated endpoint for Torox offerwall session creation
 router.post('/torox/session', requireAuth, createToroxSession);
+
+// Dedicated authenticated endpoint for TheoremReach signed entry URL creation
+router.get('/theoremreach/entry', requireAuth, getTheoremReachEntryUrl);
 
 // Admin management endpoints
 router.put('/providers/:providerKey', requireAdmin, updateOfferwallProvider);
