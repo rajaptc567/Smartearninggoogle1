@@ -35,6 +35,7 @@ export const OfferwallHub: React.FC = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [refreshError, setRefreshError] = useState<string | null>(null);
     const [iframeTimeoutError, setIframeTimeoutError] = useState<string | null>(null);
+    const [iframeWarning, setIframeWarning] = useState<string | null>(null);
     const [iframeKey, setIframeKey] = useState<number>(0);
 
     // Torox server-authenticated session state
@@ -165,10 +166,9 @@ export const OfferwallHub: React.FC = () => {
     useEffect(() => {
         let timer: NodeJS.Timeout | null = null;
         if (iframeLoading && selectedProvider) {
-            setIframeTimeoutError(null);
+            setIframeWarning(null);
             timer = setTimeout(() => {
-                setIframeLoading(false);
-                setIframeTimeoutError('Connection to survey provider timed out. The third-party iframe took too long to respond. Please check your network or click Refresh.');
+                setIframeWarning('Connection to survey provider is taking longer than expected. Please wait or click Refresh.');
             }, 15000);
         }
         return () => {
@@ -646,17 +646,25 @@ export const OfferwallHub: React.FC = () => {
                             </div>
                         ) : (selectedProvider.iframeUrl || (selectedProvider.providerKey !== 'theoremreach' && selectedProvider.iframeUrlTemplate && selectedProvider.appId)) ? (
                             <>
-                                {iframeLoading && (
+                                {iframeLoading && !iframeWarning && (
                                     <div className="absolute inset-0 z-20 bg-slate-950 flex flex-col items-center justify-center gap-3 text-slate-400">
                                         <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
                                         <span className="text-xs font-bold uppercase tracking-wider">Connecting to {selectedProvider.name}...</span>
+                                    </div>
+                                )}
+                                {iframeWarning && (
+                                    <div className="absolute top-4 left-4 right-4 z-20 p-4 bg-amber-950/80 border border-amber-500/50 text-amber-200 text-xs font-bold rounded-xl">
+                                        {iframeWarning}
                                     </div>
                                 )}
                                 <iframe
                                     key={`provider_${selectedProvider.providerKey}_${iframeKey}`}
                                     src={getComputedIframeUrl(selectedProvider)}
                                     title={selectedProvider.name}
-                                    onLoad={() => setIframeLoading(false)}
+                                    onLoad={() => {
+                                        setIframeLoading(false);
+                                        setIframeWarning(null);
+                                    }}
                                     className="w-full h-[700px] border-0 rounded-b-3xl"
                                     allow="camera; microphone; geolocation; autoplay; clipboard-write"
                                     sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"

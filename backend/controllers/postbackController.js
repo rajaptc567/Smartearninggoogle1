@@ -1844,18 +1844,23 @@ export const getTheoremReachEntryUrl = async (req, res) => {
             partner_id: provider.appId
         };
         
+        // Canonical string: full URL (base + query) sorted by parameter name
+        const baseUrl = 'https://theoremreach.com/respondent_entry/secured';
         const queryString = Object.entries(params)
+            .sort(([a], [b]) => a.localeCompare(b))
             .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
             .join('&');
+            
+        const fullUrl = `${baseUrl}?${queryString}`;
         
         const hash = crypto.createHmac('sha1', provider.secretKey)
-            .update(queryString)
+            .update(fullUrl)
             .digest('base64')
             .replace(/\+/g, '-')
             .replace(/\//g, '_')
             .replace(/=+$/, '');
             
-        const url = `https://theoremreach.com/respondent_entry/secured?${queryString}&hash=${hash}`;
+        const url = `${fullUrl}&hash=${hash}`;
         return res.json({ success: true, url });
     } catch (err) {
         console.error('[TheoremReach Entry Error]:', err.message);
