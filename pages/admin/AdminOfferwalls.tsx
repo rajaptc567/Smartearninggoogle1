@@ -886,146 +886,148 @@ export const AdminOfferwalls: React.FC = () => {
                                 <p className="text-[10px] text-slate-500 mt-1">Available placeholders: <code className="text-indigo-400">&#123;appId&#125;</code>, <code className="text-indigo-400">&#123;userId&#125;</code></p>
                             </div>
 
-                            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-4">
-                                <div className="border-b border-slate-800 pb-3">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-base">🌐</span>
-                                        <h4 className="text-xs font-black uppercase text-indigo-300 tracking-wider">
-                                            TheoremReach Dashboard Configuration & Reference URLs
-                                        </h4>
+                            {editingProvider.providerKey === 'theoremreach' && (
+                                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-4">
+                                    <div className="border-b border-slate-800 pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">🌐</span>
+                                            <h4 className="text-xs font-black uppercase text-indigo-300 tracking-wider">
+                                                TheoremReach Dashboard Configuration & Reference URLs
+                                            </h4>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-1">
+                                            These settings correspond to fields configured in your <strong>TheoremReach Publisher Portal</strong> (Apps &gt; Web Integration). Configure these URLs in your TheoremReach dashboard to direct respondents and reward callbacks to SmartExn.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-slate-400 mt-1">
-                                        These settings correspond to fields configured in your <strong>TheoremReach Publisher Portal</strong> (Apps &gt; Web Integration). Configure these URLs in your TheoremReach dashboard to direct respondents and reward callbacks to SmartExn.
-                                    </p>
+
+                                    {/* Redirect URLs Grid */}
+                                    <div>
+                                        <span className="block text-[11px] font-black uppercase text-slate-300 mb-2">
+                                            1. Respondent Exit &amp; Outcome Redirect URLs (Configured in TheoremReach Dashboard)
+                                        </span>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Default Redirect URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={editingProvider.defaultRedirectUrl || ''}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, defaultRedirectUrl: e.target.value })}
+                                                    placeholder={`${window.location.origin}/member/offerwalls`}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Success Redirect URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={editingProvider.successRedirectUrl || ''}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, successRedirectUrl: e.target.value })}
+                                                    placeholder={`${window.location.origin}/member/offerwalls?status=success`}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Partial Reward Redirect URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={editingProvider.partialRedirectUrl || ''}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, partialRedirectUrl: e.target.value })}
+                                                    placeholder={`${window.location.origin}/member/offerwalls?status=partial`}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Disqualified Redirect URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={editingProvider.disqualifiedRedirectUrl || ''}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, disqualifiedRedirectUrl: e.target.value })}
+                                                    placeholder={`${window.location.origin}/member/offerwalls?status=disqualified`}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Quota Full Redirect URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={editingProvider.quotaFullRedirectUrl || ''}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, quotaFullRedirectUrl: e.target.value })}
+                                                    placeholder={`${window.location.origin}/member/offerwalls?status=quotafull`}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Security Redirect URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={editingProvider.securityRedirectUrl || ''}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, securityRedirectUrl: e.target.value })}
+                                                    placeholder={`${window.location.origin}/member/offerwalls?status=security`}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Callbacks, Webhooks & Reversal Policy */}
+                                    <div className="pt-3 border-t border-slate-800 space-y-3">
+                                        <span className="block text-[11px] font-black uppercase text-slate-300">
+                                            2. Server Callbacks, Webhooks &amp; Reversals
+                                        </span>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                                                    Reward Callback URL (Inbound S2S Endpoint)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={editingProvider.rewardCallbackUrl || getFullPostbackUrl(editingProvider.providerKey)}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, rewardCallbackUrl: e.target.value })}
+                                                    placeholder={getFullPostbackUrl(editingProvider.providerKey)}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                                />
+                                                <p className="text-[10px] text-slate-500 mt-1">
+                                                    Active incoming S2S endpoint receiving survey rewards and reversals with HMAC-SHA1 signature verification.
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                                                    Event Webhook URL (Inbound Event Receiver)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={editingProvider.eventWebhookUrl || 'https://smartexn.com/api/v1/postbacks/theoremreach/events'}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, eventWebhookUrl: e.target.value })}
+                                                    placeholder="https://smartexn.com/api/v1/postbacks/theoremreach/events"
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
+                                                />
+                                                <p className="text-[10px] text-slate-500 mt-1">
+                                                    Inbound TheoremReach Event Webhook endpoint receiving async event notifications (reversal, ban) with enc_salt deduplication and HMAC-SHA1 signature verification.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between gap-4">
+                                            <div>
+                                                <span className="text-[11px] font-bold uppercase text-white block">
+                                                    Include Reversals In Reward Callback
+                                                </span>
+                                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                                    Reflects whether reversals/chargebacks are enabled in your TheoremReach dashboard. SmartExn safely and atomically processes all valid reversal postbacks without balance leaks or duplicate deductions.
+                                                </p>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={editingProvider.includeReversalsInRewardCallback ?? true}
+                                                onChange={(e) => setEditingProvider({ ...editingProvider, includeReversalsInRewardCallback: e.target.checked })}
+                                                className="w-4 h-4 rounded accent-indigo-600 shrink-0"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-
-                                {/* Redirect URLs Grid */}
-                                <div>
-                                    <span className="block text-[11px] font-black uppercase text-slate-300 mb-2">
-                                        1. Respondent Exit &amp; Outcome Redirect URLs (Configured in TheoremReach Dashboard)
-                                    </span>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                                        <div>
-                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Default Redirect URL</label>
-                                            <input
-                                                type="text"
-                                                value={editingProvider.defaultRedirectUrl || ''}
-                                                onChange={(e) => setEditingProvider({ ...editingProvider, defaultRedirectUrl: e.target.value })}
-                                                placeholder={`${window.location.origin}/member/offerwalls`}
-                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Success Redirect URL</label>
-                                            <input
-                                                type="text"
-                                                value={editingProvider.successRedirectUrl || ''}
-                                                onChange={(e) => setEditingProvider({ ...editingProvider, successRedirectUrl: e.target.value })}
-                                                placeholder={`${window.location.origin}/member/offerwalls?status=success`}
-                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Partial Reward Redirect URL</label>
-                                            <input
-                                                type="text"
-                                                value={editingProvider.partialRedirectUrl || ''}
-                                                onChange={(e) => setEditingProvider({ ...editingProvider, partialRedirectUrl: e.target.value })}
-                                                placeholder={`${window.location.origin}/member/offerwalls?status=partial`}
-                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Disqualified Redirect URL</label>
-                                            <input
-                                                type="text"
-                                                value={editingProvider.disqualifiedRedirectUrl || ''}
-                                                onChange={(e) => setEditingProvider({ ...editingProvider, disqualifiedRedirectUrl: e.target.value })}
-                                                placeholder={`${window.location.origin}/member/offerwalls?status=disqualified`}
-                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Quota Full Redirect URL</label>
-                                            <input
-                                                type="text"
-                                                value={editingProvider.quotaFullRedirectUrl || ''}
-                                                onChange={(e) => setEditingProvider({ ...editingProvider, quotaFullRedirectUrl: e.target.value })}
-                                                placeholder={`${window.location.origin}/member/offerwalls?status=quotafull`}
-                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">Security Redirect URL</label>
-                                            <input
-                                                type="text"
-                                                value={editingProvider.securityRedirectUrl || ''}
-                                                onChange={(e) => setEditingProvider({ ...editingProvider, securityRedirectUrl: e.target.value })}
-                                                placeholder={`${window.location.origin}/member/offerwalls?status=security`}
-                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Callbacks, Webhooks & Reversal Policy */}
-                                <div className="pt-3 border-t border-slate-800 space-y-3">
-                                    <span className="block text-[11px] font-black uppercase text-slate-300">
-                                        2. Server Callbacks, Webhooks &amp; Reversals
-                                    </span>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                                        <div>
-                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
-                                                Reward Callback URL (Inbound S2S Endpoint)
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={editingProvider.rewardCallbackUrl || getFullPostbackUrl(editingProvider.providerKey)}
-                                                onChange={(e) => setEditingProvider({ ...editingProvider, rewardCallbackUrl: e.target.value })}
-                                                placeholder={getFullPostbackUrl(editingProvider.providerKey)}
-                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
-                                            />
-                                            <p className="text-[10px] text-slate-500 mt-1">
-                                                Active incoming S2S endpoint receiving survey rewards and reversals with HMAC-SHA1 signature verification.
-                                            </p>
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
-                                                Event Webhook URL (Inbound Event Receiver)
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={editingProvider.eventWebhookUrl || 'https://smartexn.com/api/v1/postbacks/theoremreach/events'}
-                                                onChange={(e) => setEditingProvider({ ...editingProvider, eventWebhookUrl: e.target.value })}
-                                                placeholder="https://smartexn.com/api/v1/postbacks/theoremreach/events"
-                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono"
-                                            />
-                                            <p className="text-[10px] text-slate-500 mt-1">
-                                                Inbound TheoremReach Event Webhook endpoint receiving async event notifications (reversal, ban) with enc_salt deduplication and HMAC-SHA1 signature verification.
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between gap-4">
-                                        <div>
-                                            <span className="text-[11px] font-bold uppercase text-white block">
-                                                Include Reversals In Reward Callback
-                                            </span>
-                                            <p className="text-[10px] text-slate-400 mt-0.5">
-                                                Reflects whether reversals/chargebacks are enabled in your TheoremReach dashboard. SmartExn safely and atomically processes all valid reversal postbacks without balance leaks or duplicate deductions.
-                                            </p>
-                                        </div>
-                                        <input
-                                            type="checkbox"
-                                            checked={editingProvider.includeReversalsInRewardCallback ?? true}
-                                            onChange={(e) => setEditingProvider({ ...editingProvider, includeReversalsInRewardCallback: e.target.checked })}
-                                            className="w-4 h-4 rounded accent-indigo-600 shrink-0"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                            )}
 
                             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs">
                                 <span className="text-slate-400 font-bold">Your Postback URL for this provider:</span>
