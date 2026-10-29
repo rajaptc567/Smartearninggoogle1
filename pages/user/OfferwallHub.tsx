@@ -96,7 +96,6 @@ export const OfferwallHub: React.FC = () => {
         setTheoremreachSessionLoading(true);
         setTheoremreachSessionError(null);
         setTheoremreachSessionUrl(null);
-        setIframeLoading(true);
         setIframeTimeoutError(null);
 
         try {
@@ -124,7 +123,6 @@ export const OfferwallHub: React.FC = () => {
             setTheoremreachSessionError(err?.message || 'Network error connecting to TheoremReach session service');
         } finally {
             setTheoremreachSessionLoading(false);
-            setIframeLoading(false);
         }
     };
 
