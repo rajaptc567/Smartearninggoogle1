@@ -148,14 +148,23 @@ const validHash = crypto.createHash('md5').update(`${validTransId}-cpx_secret_12
 const extUserIdHash = crypto.createHash('md5').update(`user_123-cpx_secret_123`).digest('hex');
 
 const resValid = verifySignature(cpxProvider, { trans_id: validTransId, hash: validHash }, '127.0.0.1');
-assert.strictEqual(resValid.valid, true, 'CPX valid trans_id signature accepted');
+assert.strictEqual(resValid.valid, true, 'CPX valid trans_id signature under hash accepted');
+
+const resValidSecureHash = verifySignature(cpxProvider, { trans_id: validTransId, secure_hash: validHash }, '127.0.0.1');
+assert.strictEqual(resValidSecureHash.valid, true, 'CPX valid trans_id signature under secure_hash accepted');
+
+const resValidSig = verifySignature(cpxProvider, { trans_id: validTransId, signature: validHash }, '127.0.0.1');
+assert.strictEqual(resValidSig.valid, true, 'CPX valid trans_id signature under signature accepted');
+
+const resInvalidHash = verifySignature(cpxProvider, { trans_id: validTransId, secure_hash: 'invalid_hash_string' }, '127.0.0.1');
+assert.strictEqual(resInvalidHash.valid, false, 'CPX invalid signature correctly rejected');
 
 const resMissing = verifySignature(cpxProvider, { trans_id: validTransId }, '127.0.0.1');
 assert.strictEqual(resMissing.valid, false, 'CPX missing signature rejected');
 
 const resExtUserOnly = verifySignature(cpxProvider, { trans_id: validTransId, ext_user_id: 'user_123', hash: extUserIdHash }, '127.0.0.1');
 assert.strictEqual(resExtUserOnly.valid, false, 'CPX ext_user_id-only signature correctly rejected');
-console.log('✓ Test 5 Passed: CPX Research Signature Fallback Removal & Validation.');
+console.log('✓ Test 5 Passed: CPX Research Signature Aliases (hash, secure_hash, signature) & Validation.');
 
 console.log('======================================================');
 console.log('All Postback Security Audit & Simulator Tests Passed!');

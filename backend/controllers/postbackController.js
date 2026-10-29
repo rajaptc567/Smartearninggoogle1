@@ -75,6 +75,7 @@ const maskSensitiveData = (data) => {
             lowerKey === 'authorization' ||
             lowerKey === 'signature' ||
             lowerKey === 'sig' ||
+            lowerKey.includes('hash') ||
             lowerKey === 'key'
         ) {
             sanitized[key] = '***REDACTED***';
@@ -296,7 +297,7 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
         }
 
         if (key === 'cpx_research') {
-            const hash = params.hash || params.signature || '';
+            const hash = params.hash || params.secure_hash || params.signature || '';
             const transId = params.trans_id || params.transaction_id || '';
             if (!hash) return { valid: false, error: 'CPX signature missing' };
             const expected = crypto.createHash('md5').update(`${transId}-${secret}`).digest('hex');
@@ -475,6 +476,31 @@ const normalizePostbackParams = (providerKey, rawParams) => {
 
     const rewardNum = Math.abs(Number(rawAmount) || 0);
 
+    let eventType = 'complete';
+    let offerName = String(p.o_name || p.offer_name || p.offerName || p.campaign_name || p.reward_name || `${providerKey} reward`).trim();
+
+    if (key === 'cpx_research') {
+        const rawType = String(p.type || '').trim().toLowerCase();
+        if (rawType === 'out') {
+            eventType = 'out';
+            if (!p.o_name && !p.offer_name && !p.offerName && !p.campaign_name && !p.reward_name) {
+                offerName = 'CPX Survey Screenout Consolation';
+            }
+        } else if (rawType === 'bonus') {
+            eventType = 'bonus';
+            if (!p.o_name && !p.offer_name && !p.offerName && !p.campaign_name && !p.reward_name) {
+                offerName = 'CPX Survey Rating Bonus';
+            }
+        } else if (rawType === 'complete' || !rawType) {
+            eventType = 'complete';
+            if (!p.o_name && !p.offer_name && !p.offerName && !p.campaign_name && !p.reward_name) {
+                offerName = 'CPX Research Survey';
+            }
+        } else {
+            eventType = 'unsupported';
+        }
+    }
+
     return {
         userId: String(rawUserId).trim(),
         externalTxId: String(rawTxId).trim(),
@@ -483,9 +509,10 @@ const normalizePostbackParams = (providerKey, rawParams) => {
         rawCurrency: rawCurrency,
         rewardUSD: 0, // Will be calculated based on provider config
         offerId: String(rawOfferId).trim(),
-        offerName: String(p.o_name || p.offer_name || p.offerName || p.campaign_name || p.reward_name || `${providerKey} reward`).trim(),
+        offerName,
+        eventType,
         isReversal,
-        signature: String(p.sig || p.signature || p.hash || '').trim()
+        signature: String(p.sig || p.signature || p.hash || p.secure_hash || '').trim()
     };
 };
 
@@ -737,6 +764,47 @@ export const handlePostback = async (req, res) => {
         log.userId = user._id;
         log.username = user.username;
 
+        // CPX Research Event-Type Validation & Zero-Value Screen-Out Handling
+        if (providerKey === 'cpx_research') {
+            if (normalized.eventType === 'unsupported') {
+                if (isDryRun) {
+                    req.dryRunResult = {
+                        isDryRun: true,
+                        mutationsPerformed: false,
+                        provider: providerKey,
+                        validation: {
+                            status: 'FAILED',
+                            error: `UNSUPPORTED_EVENT_TYPE: Unsupported CPX event type '${rawParams.type}'`
+                        }
+                    };
+                } else {
+                    log.status = 'Rejected';
+                    log.errorMessage = `Unsupported CPX event type: '${rawParams.type}'. Callback safely acknowledged without crediting.`;
+                    try { await log.save(); } catch (_) {}
+                }
+                return res.status(200).send('1');
+            }
+
+            if (normalized.eventType === 'out' && normalized.rawReward <= 0) {
+                if (isDryRun) {
+                    req.dryRunResult = {
+                        isDryRun: true,
+                        mutationsPerformed: false,
+                        provider: providerKey,
+                        validation: {
+                            status: 'PASSED',
+                            action: 'ZERO_VALUE_SCREENOUT_BYPASSED'
+                        }
+                    };
+                } else {
+                    log.status = 'Processed';
+                    log.errorMessage = 'Zero-value CPX screen-out event acknowledged; balance mutation bypassed safely.';
+                    try { await log.save(); } catch (_) {}
+                }
+                return res.status(200).send('1');
+            }
+        }
+
         // TheoremReach Exchange Rate & Conversion Semantics Validation
         if (providerKey === 'theoremreach') {
             if (typeof provider.exchangeRateMultiplier !== 'number' || provider.exchangeRateMultiplier <= 0) {
@@ -782,11 +850,17 @@ export const handlePostback = async (req, res) => {
         log.userRewardUSD = userRewardUSD;
         log.platformRevenueUSD = platformRevenueUSD;
 
-        // Isolate genuine test/debug callbacks (TheoremReach only)
-        const isDebugCallback = (providerKey === 'theoremreach') && (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1);
+        // Isolate genuine test/debug callbacks (TheoremReach & CPX Research)
+        const isDebugCallback = ((providerKey === 'theoremreach') && (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1)) ||
+            ((providerKey === 'cpx_research') && (
+                rawParams.test === '1' || rawParams.test === 'true' || rawParams.test === true ||
+                rawParams.is_test === '1' || rawParams.is_test === 'true' || rawParams.is_test === true ||
+                rawParams.debug === '1' || rawParams.debug === 'true' || rawParams.debug === true ||
+                rawParams.status === 'test'
+            ));
         if (isDebugCallback) {
             log.status = 'TestCallback';
-            log.errorMessage = 'TheoremReach test callback with debug indicator received; live user balance mutation and transaction record bypassed.';
+            log.errorMessage = `${provider.name || providerKey} test callback with debug/test indicator received; live user balance mutation and transaction record bypassed.`;
             try { await log.save(); } catch (_) {}
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
         }
@@ -1240,7 +1314,11 @@ export const handlePostback = async (req, res) => {
                         balanceAfter,
                         status: riskStatus === 'REVIEW' ? 'Pending' : 'Approved',
                         riskStatus,
-                        description: `Completed ${provider.name} Offer/Survey: ${normalized.offerName}`,
+                        description: providerKey === 'cpx_research' && normalized.eventType === 'out'
+                            ? `${provider.name} Screenout Consolation: ${normalized.offerName}`
+                            : providerKey === 'cpx_research' && normalized.eventType === 'bonus'
+                            ? `${provider.name} Survey Rating Bonus: ${normalized.offerName}`
+                            : `Completed ${provider.name} Offer/Survey: ${normalized.offerName}`,
                         sourceWallet: 'External',
                         destinationWallet: 'TaskEarnings',
                         offerwallProvider: providerKey,
@@ -1350,10 +1428,22 @@ export const handlePostback = async (req, res) => {
                 try { await log.save(); } catch (_) {}
 
                 // Notify Worker in Inbox
+                let notifSubject = `Offerwall Reward Credited! 🎁 (+$${userRewardUSD})`;
+                let notifMessage = `You earned $${userRewardUSD} from ${provider.name} (${normalized.offerName}). The reward has been credited directly to your Work & Earn Task Balance!`;
+                if (providerKey === 'cpx_research') {
+                    if (normalized.eventType === 'out') {
+                        notifSubject = `Survey Screenout Consolation Credited! ℹ️ (+$${userRewardUSD})`;
+                        notifMessage = `You received a consolation reward of $${userRewardUSD} from ${provider.name} (${normalized.offerName}) for participating in a survey attempt.`;
+                    } else if (normalized.eventType === 'bonus') {
+                        notifSubject = `Survey Rating Bonus Credited! ⭐ (+$${userRewardUSD})`;
+                        notifMessage = `You received a survey rating bonus of $${userRewardUSD} from ${provider.name} (${normalized.offerName}). The reward has been credited to your Task Balance!`;
+                    }
+                }
+
                 await Notification.create({
                     userId: user._id,
-                    subject: `Offerwall Reward Credited! 🎁 (+$${userRewardUSD})`,
-                    message: `You earned $${userRewardUSD} from ${provider.name} (${normalized.offerName}). The reward has been credited directly to your Work & Earn Task Balance!`,
+                    subject: notifSubject,
+                    message: notifMessage,
                     senderType: 'System'
                 });
 
@@ -1752,6 +1842,7 @@ export const simulatePostback = async (req, res) => {
             queryParams.sig = 'INVALID_SIGNATURE_FOR_TEST';
             queryParams.signature = 'INVALID_SIGNATURE_FOR_TEST';
             queryParams.hash = 'INVALID_SIGNATURE_FOR_TEST';
+            queryParams.secure_hash = 'INVALID_SIGNATURE_FOR_TEST';
         }
 
         const simIp = (provider.ipWhitelist && provider.ipWhitelist.length > 0) ? provider.ipWhitelist[0] : '127.0.0.1';
