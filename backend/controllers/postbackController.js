@@ -1834,6 +1834,10 @@ export const getTheoremReachEntryUrl = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Provider not found or disabled' });
         }
         
+        if (!provider.apiKey || !provider.appId || !provider.secretKey) {
+            return res.status(400).json({ success: false, error: 'TheoremReach credentials (apiKey, appId, secretKey) are missing or incomplete' });
+        }
+        
         const transaction_id = crypto.randomUUID();
         const params = {
             api_key: provider.apiKey,

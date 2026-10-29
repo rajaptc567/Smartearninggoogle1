@@ -574,76 +574,67 @@ export const OfferwallHub: React.FC = () => {
                                     </button>
                                 </div>
                             )
-                        ) : selectedProvider.providerKey === 'theoremreach' && currentUser?.customFields?.theoremreachBanned ? (
-                            <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto">
-                                <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl mb-4 text-amber-400">
-                                    🛡️
+                        ) : selectedProvider.providerKey === 'theoremreach' ? (
+                            currentUser?.customFields?.theoremreachBanned ? (
+                                <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto">
+                                    <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl mb-4 text-amber-400">🛡️</div>
+                                    <h3 className="text-lg font-black text-white mb-2">TheoremReach Access Restricted</h3>
+                                    <p className="text-slate-300 text-sm leading-relaxed mb-6">
+                                        {currentUser?.customFields?.theoremreachBanReason
+                                            ? `Notice from survey partner: ${currentUser.customFields.theoremreachBanReason}. Access to TheoremReach surveys has been restricted.`
+                                            : 'Access to TheoremReach surveys is currently restricted for this account by the survey provider.'}
+                                    </p>
+                                    <button
+                                        onClick={() => {
+                                            const nextProv = providers.find(p => p.providerKey !== 'theoremreach' && p.enabled);
+                                            if (nextProv) setSelectedProvider(nextProv);
+                                        }}
+                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all"
+                                    >
+                                        Browse Other Offerwalls & Surveys
+                                    </button>
                                 </div>
-                                <h3 className="text-lg font-black text-white mb-2">
-                                    TheoremReach Access Restricted
-                                </h3>
-                                <p className="text-slate-300 text-sm leading-relaxed mb-6">
-                                    {currentUser?.customFields?.theoremreachBanReason
-                                        ? `Notice from survey partner: ${currentUser.customFields.theoremreachBanReason}. Access to TheoremReach surveys has been restricted.`
-                                        : 'Access to TheoremReach surveys is currently restricted for this account by the survey provider.'}
-                                </p>
-                                <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-left space-y-2 text-xs mb-6">
-                                    <div className="flex items-center justify-between text-slate-400">
-                                        <span>Provider Status:</span>
-                                        <span className="font-bold text-amber-400">Restricted (Provider Only)</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-slate-400">
-                                        <span>SmartExn Account:</span>
-                                        <span className="font-bold text-emerald-400">Active</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-slate-400">
-                                        <span>Other Offerwalls & Tasks:</span>
-                                        <span className="font-bold text-emerald-400">Available</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-slate-400">
-                                        <span>Withdrawals & Wallet:</span>
-                                        <span className="font-bold text-emerald-400">Unrestricted</span>
-                                    </div>
+                            ) : theoremreachSessionLoading ? (
+                                <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center gap-3 text-slate-400">
+                                    <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                    <span className="text-xs font-bold uppercase tracking-wider">Initializing secure TheoremReach session...</span>
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        const nextProv = providers.find(p => p.providerKey !== 'theoremreach' && p.enabled);
-                                        if (nextProv) setSelectedProvider(nextProv);
-                                    }}
-                                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all"
-                                >
-                                    Browse Other Offerwalls & Surveys
-                                </button>
-                            </div>
-                        ) : refreshError || iframeTimeoutError ? (
-                            <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto">
-                                <div className="w-16 h-16 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-3xl mb-4 text-rose-400">
-                                    ⚠️
+                            ) : theoremreachSessionError ? (
+                                <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto">
+                                    <div className="w-16 h-16 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-3xl mb-4 text-rose-400">⚠️</div>
+                                    <h3 className="text-lg font-black text-white mb-2">Connection Notice (TheoremReach)</h3>
+                                    <p className="text-slate-300 text-sm leading-relaxed mb-6">{theoremreachSessionError}</p>
+                                    <button onClick={fetchTheoremReachSession} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all">🔄 Retry Connection</button>
                                 </div>
-                                <h3 className="text-lg font-black text-white mb-2">
-                                    Connection Notice ({selectedProvider.name})
-                                </h3>
-                                <p className="text-slate-300 text-sm leading-relaxed mb-6">
-                                    {refreshError || iframeTimeoutError}
-                                </p>
-                                <button
-                                    onClick={handleRefreshProvider}
-                                    disabled={isRefreshing}
-                                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all flex items-center gap-2 mx-auto disabled:opacity-50"
-                                >
-                                    {isRefreshing ? (
-                                        <>
-                                            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                                            <span>Retrying...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span>🔄</span>
-                                            <span>Retry Connection</span>
-                                        </>
+                            ) : theoremreachSessionUrl ? (
+                                <>
+                                    {iframeLoading && !iframeWarning && (
+                                        <div className="absolute inset-0 z-20 bg-slate-950 flex flex-col items-center justify-center gap-3 text-slate-400">
+                                            <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                            <span className="text-xs font-bold uppercase tracking-wider">Connecting to TheoremReach...</span>
+                                        </div>
                                     )}
-                                </button>
-                            </div>
+                                    {iframeWarning && (
+                                        <div className="absolute top-4 left-4 right-4 z-20 p-4 bg-amber-950/80 border border-amber-500/50 text-amber-200 text-xs font-bold rounded-xl">
+                                            {iframeWarning}
+                                        </div>
+                                    )}
+                                    <iframe
+                                        key={`provider_${selectedProvider.providerKey}_${iframeKey}`}
+                                        src={theoremreachSessionUrl}
+                                        title={selectedProvider.name}
+                                        onLoad={() => { setIframeLoading(false); setIframeWarning(null); }}
+                                        className="w-full h-[700px] border-0 rounded-b-3xl"
+                                        allow="camera; microphone; geolocation; autoplay; clipboard-write"
+                                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+                                    />
+                                </>
+                            ) : (
+                                <div className="flex-1 min-h-[500px] flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto">
+                                    <h3 className="text-lg font-black text-white mb-2">TheoremReach Session Standby</h3>
+                                    <button onClick={fetchTheoremReachSession} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all">Connect to Surveys</button>
+                                </div>
+                            )
                         ) : (selectedProvider.iframeUrl || (selectedProvider.providerKey !== 'theoremreach' && selectedProvider.iframeUrlTemplate && selectedProvider.appId)) ? (
                             <>
                                 {iframeLoading && !iframeWarning && (
