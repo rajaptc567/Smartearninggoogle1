@@ -168,6 +168,28 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
         return { valid: false, error: 'TheoremReach HMAC-SHA1 signature mismatch' };
     }
 
+    // CPX Research must always enforce MD5 signature verification and cannot be bypassed by requireSignature=false or ip_only
+    if (key === 'cpx_research') {
+        const secret = provider.secretKey || provider.postbackKey || '';
+        if (!secret) {
+            return { valid: false, error: 'CPX secret key is not configured; failing closed' };
+        }
+        const hash = params.hash || params.secure_hash || params.signature || '';
+        const transId = params.trans_id || params.transaction_id || '';
+        if (!hash) return { valid: false, error: 'CPX signature missing' };
+        const expected = crypto.createHash('md5').update(`${transId}-${secret}`).digest('hex');
+        if (!safeTimingCompare(hash, expected)) {
+            return { valid: false, error: 'CPX signature mismatch' };
+        }
+        if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
+            const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+            if (!ipMatches) {
+                return { valid: false, error: 'Client IP not in whitelist' };
+            }
+        }
+        return { valid: true };
+    }
+
     // Fail closed: requireSignature: true with signatureType: 'none' must not pass
     if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
         return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
@@ -462,7 +484,13 @@ const normalizePostbackParams = (providerKey, rawParams) => {
 
     // Detect Reversal / Chargeback
     let isReversal = false;
-    if (
+    if (key === 'cpx_research') {
+        // CPX Research reversal handling is strictly tied to status=2 or explicit reversal type
+        // Earning callbacks with negative amounts are malformed payout values, not valid reversals
+        if (p.status === '2' || p.status === 2 || p.type === 'reversal' || p.type === 'chargeback') {
+            isReversal = true;
+        }
+    } else if (
         p.status === '2' || p.status === 2 || 
         p.status === '0' || p.status === 0 || 
         p.status === 'chargeback' || p.status === 'reversal' || p.status === 'REV' || 
@@ -785,7 +813,12 @@ export const handlePostback = async (req, res) => {
                 return res.status(200).send('1');
             }
 
-            if (normalized.eventType === 'out' && normalized.rawReward <= 0) {
+            const isZeroValScreenout = normalized.eventType === 'out' && (
+                (!rawParams.amount_local || isNaN(Number(rawParams.amount_local)) || Number(rawParams.amount_local) <= 0) &&
+                (!rawParams.amount_usd || isNaN(Number(rawParams.amount_usd)) || Number(rawParams.amount_usd) <= 0) &&
+                normalized.rawReward <= 0
+            );
+            if (isZeroValScreenout) {
                 if (isDryRun) {
                     req.dryRunResult = {
                         isDryRun: true,
@@ -824,8 +857,8 @@ export const handlePostback = async (req, res) => {
             }
         }
 
-        // CPX Research Conversion, Currency & Amount Validation
-        if (providerKey === 'cpx_research') {
+        // CPX Research Conversion, Currency & Amount Validation for Completion / Bonus Events
+        if (providerKey === 'cpx_research' && !normalized.isReversal) {
             // Conversion & Exchange Rate Multiplier Validation: Fail closed if invalid, non-finite, or <= 0
             if (typeof provider.exchangeRateMultiplier !== 'number' || !Number.isFinite(provider.exchangeRateMultiplier) || provider.exchangeRateMultiplier <= 0) {
                 if (isDryRun) {
@@ -848,8 +881,9 @@ export const handlePostback = async (req, res) => {
             const callbackCurrency = (rawParams.currency || '').toString().trim().toUpperCase();
 
             if (provider.commissionMode === 'provider_managed') {
-                // Must have a confirmed currency config; cannot assume amount_local is USD
-                if (!providerCurrency && !callbackCurrency) {
+                // Must have an explicit, valid Admin-configured CPX payout currency
+                // A callback-supplied currency must NEVER replace missing Admin configuration
+                if (!providerCurrency) {
                     if (isDryRun) {
                         req.dryRunResult = {
                             isDryRun: true,
@@ -859,13 +893,14 @@ export const handlePostback = async (req, res) => {
                         };
                     } else {
                         log.status = 'Error';
-                        log.errorMessage = 'CPX Research payout currency is not configured; cannot establish amount_local currency safely; failing closed';
+                        log.errorMessage = 'CPX Research payout currency is not configured in Admin settings; failing closed';
                         try { await log.save(); } catch (_) {}
                     }
                     return res.status(400).send('CPX_CURRENCY_NOT_CONFIGURED');
                 }
 
-                if (providerCurrency && callbackCurrency && providerCurrency !== callbackCurrency) {
+                // If callback currency is supplied, compare it with the configured currency and reject mismatches
+                if (callbackCurrency && providerCurrency !== callbackCurrency) {
                     if (isDryRun) {
                         req.dryRunResult = {
                             isDryRun: true,
@@ -880,6 +915,8 @@ export const handlePostback = async (req, res) => {
                     }
                     return res.status(400).send('CPX_CURRENCY_MISMATCH');
                 }
+
+                // If callback currency is absent, proceed strictly using Admin-configured providerCurrency
 
                 // provider_managed must require a valid amount_local value
                 const rawLocal = rawParams.amount_local;
@@ -935,6 +972,22 @@ export const handlePostback = async (req, res) => {
                     return res.status(400).send('CPX_CURRENCY_MISMATCH');
                 }
 
+                if (providerCurrency && providerCurrency !== 'USD') {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: { status: 'FAILED', error: 'CPX_CURRENCY_MISMATCH' }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = `CPX Research smartexn_managed expects USD payout, but configured currency is '${providerCurrency}'; failing closed`;
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('CPX_CURRENCY_MISMATCH');
+                }
+
                 // smartexn_managed must require a valid amount_usd value
                 const rawUsd = rawParams.amount_usd;
                 if (rawUsd === undefined || rawUsd === null || String(rawUsd).trim() === '') {
@@ -984,11 +1037,11 @@ export const handlePostback = async (req, res) => {
             // In provider_managed, strictly consume valid amount_local without fallback
             // In smartexn_managed, strictly consume valid amount_usd without fallback
             if (provider.commissionMode === 'provider_managed') {
-                const userPayoutVal = Math.abs(Number(rawParams.amount_local));
-                grossUSD = Number((userPayoutVal * provider.exchangeRateMultiplier).toFixed(4));
+                const userPayoutVal = Math.abs(Number(rawParams.amount_local || 0));
+                grossUSD = Number((userPayoutVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
             } else {
-                const grossVal = Math.abs(Number(rawParams.amount_usd));
-                grossUSD = Number((grossVal * provider.exchangeRateMultiplier).toFixed(4));
+                const grossVal = Math.abs(Number(rawParams.amount_usd || 0));
+                grossUSD = Number((grossVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
             }
         } else {
             grossUSD = Number((absReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
