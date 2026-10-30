@@ -10,7 +10,8 @@ import { LoadingCircle } from '../../components/ui/LoadingCircle';
 const transactionTypes = [
     'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
     'Withdrawal Request', 'Withdrawal Refund', 'Plan Purchase', 'Transfer Sent', 
-    'Transfer Received', 'Transfer Request', 'Transfer Refund'
+    'Transfer Received', 'Transfer Request', 'Transfer Refund',
+    'Offerwall Reward', 'Offerwall Reversal'
 ];
 
 const Transactions: React.FC = () => {

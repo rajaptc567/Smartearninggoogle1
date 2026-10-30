@@ -399,12 +399,14 @@ const WorkAndEarnHistory: React.FC = () => {
                 });
             });
 
-        // 5. Standalone Task Rewards from Transactions table (e.g. manual admin credit or offerwall)
+        // 5. Standalone Task Rewards & Offerwalls from Transactions table (e.g. manual admin credit or offerwall)
         (transactions || [])
             .filter(t => t.userId?.toString() === userIdStr && (
                 t.type === 'Task Reward' ||
                 t.type === 'Micro-Task' ||
-                t.type === 'Task Completed'
+                t.type === 'Task Completed' ||
+                t.type === 'Offerwall Reward' ||
+                t.type === 'Offerwall Reversal'
             ))
             .forEach(t => {
                 const txIdStr = String(t._id);
@@ -430,21 +432,33 @@ const WorkAndEarnHistory: React.FC = () => {
                     rewardBase = rewardUSD * exchangeRate;
                 }
 
+                const isReversal = t.type === 'Offerwall Reversal' || t.type?.toLowerCase().includes('reversal');
+                const signedAmountUSD = isReversal ? -rewardUSD : rewardUSD;
+                const signedAmountBase = isReversal ? -rewardBase : rewardBase;
+
+                const providerName = (t as any).offerwallProvider || 'Offerwall';
+                const flowStr = isReversal ? 'Task Wallet ➔ Provider Reversal' : 'Task Escrow ➔ Task Wallet';
+                const typeLabelStr = isReversal ? 'Reward Reversed' : (t.type === 'Offerwall Reward' ? 'Offerwall Earned' : 'Task Earned');
+                const titleStr = t.description || (isReversal ? `Offerwall Reversal (${providerName})` : (t.type === 'Offerwall Reward' ? `Offerwall Reward: ${providerName}` : 'Micro Task Reward Credited'));
+                const subTitleStr = isReversal 
+                    ? `Deducted $${rewardUSD.toFixed(2)} USD (${rewardBase.toFixed(2)} ${userCurr}) due to provider reversal`
+                    : `Earned $${rewardUSD.toFixed(2)} USD (${rewardBase.toFixed(2)} ${userCurr})`;
+
                 list.push({
                     id: txIdStr,
                     itemType: 'task_completed',
-                    typeLabel: 'Task Earned',
-                    title: t.description || 'Micro Task Reward Credited',
-                    subTitle: `Earned $${rewardUSD.toFixed(2)} USD (${rewardBase.toFixed(2)} ${userCurr})`,
-                    amountUSD: rewardUSD,
-                    amountBase: rewardBase,
+                    typeLabel: typeLabelStr,
+                    title: titleStr,
+                    subTitle: subTitleStr,
+                    amountUSD: signedAmountUSD,
+                    amountBase: signedAmountBase,
                     currency: userCurr,
                     exchangeRate: t.exchangeRate || exchangeRate,
                     status: t.status || 'Approved',
                     date: t.date || new Date().toISOString(),
                     rawItem: t,
                     trxId: txIdStr,
-                    flow: 'Task Escrow ➔ Task Wallet',
+                    flow: flowStr,
                     remainingBalanceUSD: 0,
                     remainingBalanceBase: 0,
                     isAutoApproved: Boolean((t as any).isAutoApproved || (t as any).autoApproved || (t.description && t.description.toLowerCase().includes('auto-approved')))
@@ -591,7 +605,7 @@ const WorkAndEarnHistory: React.FC = () => {
                     totalTransferredInUSD += Math.abs(item.amountUSD);
                 }
             } else if (item.itemType === 'task_completed') {
-                totalEarnedUSD += Math.abs(item.amountUSD);
+                totalEarnedUSD += item.amountUSD;
             } else if (item.itemType === 'conversion') {
                 totalConvertedUSD += Math.abs(item.amountUSD);
             } else if (item.itemType === 'deposit') {

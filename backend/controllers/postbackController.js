@@ -19,6 +19,22 @@ const getClientIp = (req) => {
 };
 
 /**
+ * Helper to safely query actual admin/super_admin user IDs for offerwall notifications
+ */
+const getAdminUsersForNotification = async () => {
+    try {
+        const isDbConnected = User.db?.readyState === 1;
+        const isMocked = typeof User.find === 'function' && (User.find.name !== 'find' || User.find.length !== 3);
+        if (isDbConnected || isMocked) {
+            return await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
+        }
+        return [];
+    } catch (_) {
+        return [];
+    }
+};
+
+/**
  * Constant-time string comparison for normalized hex signatures (case/whitespace insensitive)
  */
 const safeTimingCompare = (a, b) => {
@@ -1396,6 +1412,35 @@ export const handlePostback = async (req, res) => {
                     senderType: 'System'
                 });
 
+                // Dedicated System Notification for Admins
+                try {
+                    const adminUsers = await getAdminUsersForNotification();
+                    if (adminUsers && adminUsers.length > 0) {
+                        const adminSubject = `Offerwall Reversal Alert: ${user.username} (-$${deductionAmount.toFixed(2)}) ⚠️`;
+                        const adminMessage = `Offerwall chargeback/reversal processed for member ${user.username}: $${deductionAmount.toFixed(2)} deducted from task earnings (${provider.name} - ${normalized.offerName}). Ref: ${normalized.externalTxId}. Transaction ID: ${tx._id}. Status: ${chargebackStatus}.`;
+                        for (const admin of adminUsers) {
+                            await Notification.create({
+                                userId: admin._id,
+                                subject: adminSubject,
+                                message: adminMessage,
+                                senderType: 'System'
+                            });
+                        }
+                    }
+                } catch (adminNotifErr) {
+                    console.error('[Admin Notification Warning] Failed to dispatch reversal notification to admins:', adminNotifErr.message);
+                }
+
+                // Real-time synchronization
+                try {
+                    const io = req.app?.get('io');
+                    if (io) {
+                        io.emit('DATA_CHANGED');
+                    }
+                } catch (socketErr) {
+                    console.error('[Socket.IO Warning] Failed to emit DATA_CHANGED on reversal:', socketErr.message);
+                }
+
                 return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
             } else {
                 // ==========================================
@@ -1667,6 +1712,35 @@ export const handlePostback = async (req, res) => {
                     message: notifMessage,
                     senderType: 'System'
                 });
+
+                // Dedicated System Notification for Admins
+                try {
+                    const adminUsers = await getAdminUsersForNotification();
+                    if (adminUsers && adminUsers.length > 0) {
+                        const adminSubject = `Offerwall Reward Credited: ${user.username} (+$${userRewardUSD.toFixed(2)}) 🎁`;
+                        const adminMessage = `Member ${user.username} earned $${userRewardUSD.toFixed(2)} from ${provider.name} (${normalized.offerName}). Ref: ${normalized.externalTxId}. Transaction ID: ${tx._id}.`;
+                        for (const admin of adminUsers) {
+                            await Notification.create({
+                                userId: admin._id,
+                                subject: adminSubject,
+                                message: adminMessage,
+                                senderType: 'System'
+                            });
+                        }
+                    }
+                } catch (adminNotifErr) {
+                    console.error('[Admin Notification Warning] Failed to dispatch reward notification to admins:', adminNotifErr.message);
+                }
+
+                // Real-time synchronization
+                try {
+                    const io = req.app?.get('io');
+                    if (io) {
+                        io.emit('DATA_CHANGED');
+                    }
+                } catch (socketErr) {
+                    console.error('[Socket.IO Warning] Failed to emit DATA_CHANGED on reward credit:', socketErr.message);
+                }
 
                 // Return provider-expected success body
                 if (providerKey === 'torox' || providerKey === 'cpx_research' || providerKey === 'lootably') {
