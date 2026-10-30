@@ -1292,7 +1292,13 @@ export const handlePostback = async (req, res) => {
                     log.status = 'Error';
                     log.errorMessage = `User not found or balance deduction failed during reversal for user ID ${user._id}`;
                     try { await log.save(); } catch (_) {}
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
+                    if (providerKey === 'cpx_research' || providerKey === 'torox') {
+                        return res.status(400).send('0');
+                    }
+                    if (providerKey === 'lootably') {
+                        return res.status(400).send('ERROR');
+                    }
+                    return res.status(400).send('USER_UPDATE_FAILED');
                 }
 
                 const balanceBefore = currentEarnings;
