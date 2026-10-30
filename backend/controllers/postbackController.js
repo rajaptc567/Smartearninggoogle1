@@ -1150,7 +1150,7 @@ export const handlePostback = async (req, res) => {
                     type: 'Offerwall Reward'
                 });
 
-                const deductionAmount = origTx ? (origTx.userRewardAmount || origTx.amountUSD) : userRewardUSD;
+                const deductionAmount = origTx ? (origTx.userRewardAmount ?? origTx.amountUSD) : userRewardUSD;
                 const currentEarnings = user.taskEarningsBalance || 0;
                 const newEarnings = currentEarnings - deductionAmount;
                 let chargebackStatus = 'Settled';

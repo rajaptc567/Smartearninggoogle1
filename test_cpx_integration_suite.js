@@ -960,6 +960,144 @@ async function runSection6() {
     assert.strictEqual(resUnmatched.body, '1', '6h: returns 1');
     assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '6h: unmatched reversal does NOT mutate balance');
 
+    // ------------------------------------------------------------------------
+    // REGRESSION TESTS FOR NULLISH FALLBACK CORRECTION:
+    // origTx.userRewardAmount ?? origTx.amountUSD
+    // ------------------------------------------------------------------------
+
+    // 6i (Test A): Original transaction has userRewardAmount = 0 and non-zero amountUSD.
+    // Nullish coalescing MUST select 0 and must NOT fall back to amountUSD (0.50).
+    // Verify zero reversal deduction and zero user balance deduction.
+    const txId6i = 'cpx_tx_nullish_test_a_zero_reward';
+    const hash6i = crypto.createHash('md5').update(`${txId6i}-${cpxSecret}`).digest('hex');
+    db.users.set(testUserId, { ...baseUser, taskEarningsBalance: 10.00 });
+    await Transaction.create({
+        _id: 'tx_orig_test_6i',
+        userId: testUserId,
+        userName: baseUser.username,
+        currency: 'USD',
+        type: 'Offerwall Reward',
+        amount: 0,
+        amountUSD: 0.50, // Non-zero amountUSD on record
+        grossAmount: 0.50,
+        userRewardAmount: 0, // Legitimate 0 user reward
+        platformRevenueAmount: 0.50,
+        balanceBefore: 10.00,
+        balanceAfter: 10.00,
+        idempotencyKey: `cpx_research:${txId6i}`,
+        status: 'Approved',
+        sourceWallet: 'External',
+        destinationWallet: 'TaskEarnings',
+        offerwallProvider: 'cpx_research',
+        externalTransactionId: txId6i
+    });
+
+    const req6i = createMockReq('cpx_research', {
+        user_id: testUserId,
+        trans_id: txId6i,
+        amount_usd: '0.50',
+        status: '2',
+        secure_hash: hash6i
+    });
+    const res6i = createMockRes();
+    await handlePostback(req6i, res6i);
+
+    assert.strictEqual(res6i.statusCode, 200, '6i (Test A): reversal accepted with 200');
+    assert.strictEqual(res6i.body, '1', '6i (Test A): returns 1');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '6i (Test A): user balance untouched, no unintended deduction when userRewardAmount=0');
+    const revTx6i = Array.from(db.transactions.values()).find(t => t.type === 'Offerwall Reversal' && t.externalTransactionId === txId6i);
+    assert.ok(revTx6i, '6i (Test A): reversal transaction recorded');
+    assert.strictEqual(revTx6i.amount, 0, '6i (Test A): reversal transaction amount is 0');
+    assert.strictEqual(revTx6i.amountUSD, 0, '6i (Test A): reversal transaction amountUSD is 0');
+    assert.strictEqual(revTx6i.userRewardAmount, 0, '6i (Test A): reversal userRewardAmount is exactly 0');
+
+    // 6j (Test B): Original transaction has a positive userRewardAmount.
+    // Verify that the exact original positive userRewardAmount is reversed.
+    const txId6j = 'cpx_tx_nullish_test_b_positive_reward';
+    const hash6j = crypto.createHash('md5').update(`${txId6j}-${cpxSecret}`).digest('hex');
+    db.users.set(testUserId, { ...baseUser, taskEarningsBalance: 10.85 });
+    await Transaction.create({
+        _id: 'tx_orig_test_6j',
+        userId: testUserId,
+        userName: baseUser.username,
+        currency: 'USD',
+        type: 'Offerwall Reward',
+        amount: 0.85,
+        amountUSD: 1.00, // Different from userRewardAmount
+        grossAmount: 1.00,
+        userRewardAmount: 0.85, // Positive user reward
+        platformRevenueAmount: 0.15,
+        balanceBefore: 10.00,
+        balanceAfter: 10.85,
+        idempotencyKey: `cpx_research:${txId6j}`,
+        status: 'Approved',
+        sourceWallet: 'External',
+        destinationWallet: 'TaskEarnings',
+        offerwallProvider: 'cpx_research',
+        externalTransactionId: txId6j
+    });
+
+    const req6j = createMockReq('cpx_research', {
+        user_id: testUserId,
+        trans_id: txId6j,
+        amount_usd: '1.00',
+        status: '2',
+        secure_hash: hash6j
+    });
+    const res6j = createMockRes();
+    await handlePostback(req6j, res6j);
+
+    assert.strictEqual(res6j.statusCode, 200, '6j (Test B): reversal accepted with 200');
+    assert.strictEqual(res6j.body, '1', '6j (Test B): returns 1');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '6j (Test B): exact positive userRewardAmount (0.85) reversed, returning balance to 10.00');
+    const revTx6j = Array.from(db.transactions.values()).find(t => t.type === 'Offerwall Reversal' && t.externalTransactionId === txId6j);
+    assert.ok(revTx6j, '6j (Test B): reversal transaction recorded');
+    assert.strictEqual(revTx6j.amount, 0.85, '6j (Test B): reversal amount matches original userRewardAmount');
+    assert.strictEqual(revTx6j.userRewardAmount, 0.85, '6j (Test B): reversal userRewardAmount is 0.85');
+
+    // 6k (Test C): Original transaction has userRewardAmount absent/null.
+    // Verify that the existing amountUSD fallback remains available where appropriate.
+    const txId6k = 'cpx_tx_nullish_test_c_null_fallback';
+    const hash6k = crypto.createHash('md5').update(`${txId6k}-${cpxSecret}`).digest('hex');
+    db.users.set(testUserId, { ...baseUser, taskEarningsBalance: 10.60 });
+    await Transaction.create({
+        _id: 'tx_orig_test_6k',
+        userId: testUserId,
+        userName: baseUser.username,
+        currency: 'USD',
+        type: 'Offerwall Reward',
+        amount: 0.60,
+        amountUSD: 0.60,
+        grossAmount: 0.60,
+        userRewardAmount: null, // Explicitly null/absent
+        platformRevenueAmount: 0,
+        balanceBefore: 10.00,
+        balanceAfter: 10.60,
+        idempotencyKey: `cpx_research:${txId6k}`,
+        status: 'Approved',
+        sourceWallet: 'External',
+        destinationWallet: 'TaskEarnings',
+        offerwallProvider: 'cpx_research',
+        externalTransactionId: txId6k
+    });
+
+    const req6k = createMockReq('cpx_research', {
+        user_id: testUserId,
+        trans_id: txId6k,
+        amount_usd: '0.60',
+        status: '2',
+        secure_hash: hash6k
+    });
+    const res6k = createMockRes();
+    await handlePostback(req6k, res6k);
+
+    assert.strictEqual(res6k.statusCode, 200, '6k (Test C): reversal accepted with 200');
+    assert.strictEqual(res6k.body, '1', '6k (Test C): returns 1');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '6k (Test C): amountUSD fallback (0.60) used when userRewardAmount is null');
+    const revTx6k = Array.from(db.transactions.values()).find(t => t.type === 'Offerwall Reversal' && t.externalTransactionId === txId6k);
+    assert.ok(revTx6k, '6k (Test C): reversal transaction recorded');
+    assert.strictEqual(revTx6k.amount, 0.60, '6k (Test C): reversal amount matches amountUSD');
+
     console.log('✓ Section 6 Passed: Event Types (complete, out, bonus, unsupported) & Reversals.');
 }
 
