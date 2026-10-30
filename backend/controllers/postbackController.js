@@ -1999,6 +1999,34 @@ export const updateOfferwallProvider = async (req, res) => {
             }
         }
 
+        // Credential preservation: Do not overwrite existing secretKey or apiKey with empty string or mask ('••••••••') on unrelated saves
+        if (sanitizedUpdates.secretKey !== undefined) {
+            const trimmedSecret = String(sanitizedUpdates.secretKey).trim();
+            if (!trimmedSecret || trimmedSecret === '••••••••' || /^•+$/.test(trimmedSecret)) {
+                delete sanitizedUpdates.secretKey;
+            } else {
+                sanitizedUpdates.secretKey = trimmedSecret;
+            }
+        }
+        if (sanitizedUpdates.apiKey !== undefined) {
+            const trimmedApiKey = String(sanitizedUpdates.apiKey).trim();
+            if (!trimmedApiKey || trimmedApiKey === '••••••••' || /^•+$/.test(trimmedApiKey)) {
+                delete sanitizedUpdates.apiKey;
+            } else {
+                sanitizedUpdates.apiKey = trimmedApiKey;
+            }
+        }
+
+        if (sanitizedUpdates.customConfig !== undefined && typeof sanitizedUpdates.customConfig === 'object') {
+            const existing = await OfferwallProvider.findOne({ providerKey: providerKey.toLowerCase() });
+            if (existing && existing.customConfig) {
+                sanitizedUpdates.customConfig = {
+                    ...existing.customConfig,
+                    ...sanitizedUpdates.customConfig
+                };
+            }
+        }
+
         if (sanitizedUpdates.commissionMode !== undefined) {
             const mode = String(sanitizedUpdates.commissionMode).trim().toLowerCase();
             if (mode !== 'provider_managed' && mode !== 'smartexn_managed') {

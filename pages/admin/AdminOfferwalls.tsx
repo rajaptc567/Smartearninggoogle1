@@ -28,6 +28,13 @@ interface OfferwallProvider {
     technicalReadinessScore: number;
     approvalLikelihoodScore: string;
     complianceNotes?: string;
+    status?: string;
+    approvalStatus?: string;
+    integrationStatus?: string;
+    customConfig?: {
+        currency?: string;
+        [key: string]: any;
+    };
     defaultRedirectUrl?: string;
     successRedirectUrl?: string;
     partialRedirectUrl?: string;
@@ -141,10 +148,19 @@ export const AdminOfferwalls: React.FC = () => {
 
         setIsSaving(true);
         try {
+            const payload: any = { ...editingProvider };
+            // Credential safety: omit empty or masked credentials so existing stored secrets are preserved
+            if (payload.secretKey !== undefined && (!payload.secretKey.trim() || payload.secretKey.trim() === '••••••••' || /^•+$/.test(payload.secretKey.trim()))) {
+                delete payload.secretKey;
+            }
+            if (payload.apiKey !== undefined && (!payload.apiKey.trim() || payload.apiKey.trim() === '••••••••' || /^•+$/.test(payload.apiKey.trim()))) {
+                delete payload.apiKey;
+            }
+
             const res = await fetch(`/api/v1/postbacks/providers/${editingProvider.providerKey}`, {
                 method: 'PUT',
                 headers: getHeaders(),
-                body: JSON.stringify(editingProvider)
+                body: JSON.stringify(payload)
             });
             const data = await res.json();
             if (data.success) {
@@ -707,23 +723,27 @@ export const AdminOfferwalls: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">App ID / Pub ID / Placement ID</label>
+                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                                        App ID / Pub ID / Placement ID {editingProvider.providerKey === 'cpx_research' && <span className="text-indigo-400 font-bold">(Publisher App ID)</span>}
+                                    </label>
                                     <input
                                         type="text"
                                         value={editingProvider.appId || ''}
                                         onChange={(e) => setEditingProvider({ ...editingProvider, appId: e.target.value })}
-                                        placeholder="e.g. 14892 or app_live_xyz"
+                                        placeholder={editingProvider.providerKey === 'cpx_research' ? 'CPX App ID (e.g. 37470)' : 'e.g. 14892 or app_live_xyz'}
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-mono"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Secret Key / Hash Key</label>
+                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                                        Secret Key / Hash Key {editingProvider.providerKey === 'cpx_research' && <span className="text-indigo-400 font-bold">(App Secure Hash)</span>}
+                                    </label>
                                     <input
                                         type="password"
                                         value={editingProvider.secretKey || ''}
                                         onChange={(e) => setEditingProvider({ ...editingProvider, secretKey: e.target.value })}
-                                        placeholder="Enter provider secret key"
+                                        placeholder={editingProvider.providerKey === 'cpx_research' ? 'Leave blank to preserve existing secret' : 'Enter provider secret key'}
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-mono"
                                     />
                                 </div>
@@ -1024,6 +1044,165 @@ export const AdminOfferwalls: React.FC = () => {
                                                 onChange={(e) => setEditingProvider({ ...editingProvider, includeReversalsInRewardCallback: e.target.checked })}
                                                 className="w-4 h-4 rounded accent-indigo-600 shrink-0"
                                             />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {editingProvider.providerKey === 'cpx_research' && (
+                                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-4">
+                                    <div className="border-b border-slate-800 pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">📊</span>
+                                            <h4 className="text-xs font-black uppercase text-indigo-300 tracking-wider">
+                                                CPX Research Publisher Portal &amp; S2S Integration
+                                            </h4>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-1">
+                                            Settings matching your <strong>CPX Research Publisher Dashboard</strong> (Settings &gt; Postback / App Configuration). SmartExn verifies inbound postback signatures via <code className="text-indigo-400 font-mono">MD5(trans_id + &quot;-&quot; + app_secure_hash)</code> and constructs secure user iframe entry URLs using <code className="text-indigo-400 font-mono">MD5(ext_user_id + &quot;-&quot; + app_secure_hash)</code>.
+                                        </p>
+                                    </div>
+
+                                    {/* CPX Payout Currency & Mode Status */}
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                                                    CPX Payout Currency {editingProvider.commissionMode === 'provider_managed' && <span className="text-rose-400 font-black">*Required</span>}
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={editingProvider.customConfig?.currency || ''}
+                                                    onChange={(e) => setEditingProvider({
+                                                        ...editingProvider,
+                                                        customConfig: {
+                                                            ...(editingProvider.customConfig || {}),
+                                                            currency: e.target.value.trim().toUpperCase()
+                                                        }
+                                                    })}
+                                                    placeholder="USD"
+                                                    maxLength={5}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-mono font-bold uppercase"
+                                                />
+                                                <p className="text-[10px] text-slate-500 mt-1">
+                                                    Configured payout currency in CPX dashboard (e.g. USD, EUR).
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                                                    Approval Status
+                                                </label>
+                                                <select
+                                                    value={editingProvider.approvalStatus || 'Pending'}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, approvalStatus: e.target.value })}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-bold"
+                                                >
+                                                    <option value="Pending">Pending</option>
+                                                    <option value="Submitted">Submitted</option>
+                                                    <option value="Under Review">Under Review</option>
+                                                    <option value="Approved">Approved</option>
+                                                    <option value="Rejected">Rejected</option>
+                                                </select>
+                                                <p className="text-[10px] text-slate-500 mt-1">
+                                                    Network review / account approval milestone.
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                                                    Integration Status
+                                                </label>
+                                                <select
+                                                    value={editingProvider.integrationStatus || 'Not Started'}
+                                                    onChange={(e) => setEditingProvider({ ...editingProvider, integrationStatus: e.target.value })}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-bold"
+                                                >
+                                                    <option value="Not Started">Not Started</option>
+                                                    <option value="In Progress">In Progress</option>
+                                                    <option value="Configured">Configured</option>
+                                                    <option value="Tested">Tested</option>
+                                                    <option value="Verified">Verified</option>
+                                                </select>
+                                                <p className="text-[10px] text-slate-500 mt-1">
+                                                    Technical end-to-end sandbox verification phase.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Accounting Mode Notice */}
+                                        {editingProvider.commissionMode === 'provider_managed' ? (
+                                            <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-xs space-y-1">
+                                                <div className="flex items-center gap-2 font-black text-emerald-400">
+                                                    <span>⚙️</span>
+                                                    <span>Provider-Managed Mode Active (Requires Payout Currency + Exchange Multiplier)</span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-300">
+                                                    CPX delivers net user rewards via <code className="text-emerald-300 font-mono">amount_local</code> in {editingProvider.customConfig?.currency || 'configured currency'}. Converted to USD using Exchange Multiplier ({editingProvider.exchangeRateMultiplier || 1.0}x). 100% of the converted reward credits to worker with 0% SmartExn deduction.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl text-xs space-y-1">
+                                                <div className="flex items-center gap-2 font-black text-amber-400">
+                                                    <span>💰</span>
+                                                    <span>SmartExn-Managed Mode Active (Direct USD Accounting)</span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-300">
+                                                    CPX delivers gross publisher revenue in <code className="text-amber-300 font-mono">amount_usd</code>. No exchange multiplier is applied. Configured split ({100 - (editingProvider.platformRevenueSharePercent !== undefined ? editingProvider.platformRevenueSharePercent : (100 - (editingProvider.userRevenueSharePercent ?? 70)))}% worker / {editingProvider.platformRevenueSharePercent !== undefined ? editingProvider.platformRevenueSharePercent : (100 - (editingProvider.userRevenueSharePercent ?? 70))}% platform) is applied exactly once.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* S2S Postback URL & Query Parameters Reference */}
+                                    <div className="pt-3 border-t border-slate-800 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="block text-[11px] font-black uppercase text-slate-300">
+                                                CPX Server-to-Server (S2S) Callback Specification
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => copyToClipboard(getFullPostbackUrl('cpx_research'), 'cpx_modal_url')}
+                                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-lg text-[10px] font-bold"
+                                            >
+                                                {copiedUrl === 'cpx_modal_url' ? '✓ Copied!' : 'Copy CPX S2S URL'}
+                                            </button>
+                                        </div>
+
+                                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 font-mono text-[11px] text-indigo-300 break-all select-all">
+                                            {getFullPostbackUrl('cpx_research')}?trans_id=&#123;trans_id&#125;&amp;user_id=&#123;user_id&#125;&amp;amount_usd=&#123;amount_usd&#125;&amp;amount_local=&#123;amount_local&#125;&amp;status=&#123;status&#125;&amp;type=&#123;type&#125;&amp;secure_hash=&#123;secure_hash&#125;
+                                        </div>
+
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] text-slate-400 font-mono">
+                                            <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                                                <strong className="text-white block font-sans">trans_id</strong>
+                                                <span>CPX Transaction ID</span>
+                                            </div>
+                                            <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                                                <strong className="text-white block font-sans">user_id / ext_user_id</strong>
+                                                <span>SmartExn User ID</span>
+                                            </div>
+                                            <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                                                <strong className="text-white block font-sans">amount_usd / local</strong>
+                                                <span>USD Gross or Local Payout</span>
+                                            </div>
+                                            <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                                                <strong className="text-white block font-sans">status / type</strong>
+                                                <span>1=Credit, 2=Reversal; out=Screenout</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Iframe Entry Security Reference */}
+                                    <div className="pt-3 border-t border-slate-800 space-y-2 text-xs">
+                                        <span className="block text-[11px] font-black uppercase text-slate-300">
+                                            Secure Iframe Entry URL Builder
+                                        </span>
+                                        <p className="text-[11px] text-slate-400">
+                                            SmartExn backend signs user entry URLs server-side using <code className="text-indigo-400 font-mono">secure_hash = MD5(ext_user_id + &quot;-&quot; + app_secure_hash)</code>. The App Secure Hash is strictly kept on the server and never sent to browser clients.
+                                        </p>
+                                        <div className="p-2 bg-slate-900 rounded-lg border border-slate-800 font-mono text-[10px] text-slate-300 break-all">
+                                            https://offers.cpx-research.com/index.php?app_id={editingProvider.appId || '37470'}&amp;ext_user_id=&#123;userId&#125;&amp;secure_hash=&#123;server_computed_md5&#125;
                                         </div>
                                     </div>
                                 </div>

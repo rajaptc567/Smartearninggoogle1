@@ -4,7 +4,8 @@ import {
     verifySignature,
     constructCpxEntryUrl,
     handlePostback,
-    getOfferwallProviders
+    getOfferwallProviders,
+    updateOfferwallProvider
 } from './backend/controllers/postbackController.js';
 import User from './backend/models/User.js';
 import Transaction from './backend/models/Transaction.js';
@@ -158,8 +159,16 @@ OfferwallProvider.findByIdAndUpdate = async (id, update) => {
     return { _id: id };
 };
 
-OfferwallProvider.findOneAndUpdate = async (filter, update) => {
-    return { _id: 'cpx_prov_id' };
+OfferwallProvider.findOneAndUpdate = async (filter, update, options) => {
+    const key = filter.providerKey?.toLowerCase();
+    if (!key) return null;
+    let prov = db.providers.get(key);
+    if (!prov) return null;
+    if (update.$set) {
+        prov = { ...prov, ...update.$set };
+        db.providers.set(key, prov);
+    }
+    return prov;
 };
 
 OfferwallProvider.find = (filter = {}) => {
@@ -1201,6 +1210,136 @@ async function runSection8() {
 }
 
 // ============================================================================
+// SECTION 9: ADMIN CONFIGURATION & SECRET PRESERVATION SAFETY
+// ============================================================================
+console.log('--- Section 9: Admin Configuration & Secret Preservation Safety ---');
+async function runSection9() {
+    db.clear();
+
+    const initialSecret = 'super_secret_cpx_key_123';
+    const cpxAdminProv = {
+        ...baseCpxProvider,
+        appId: '37470',
+        secretKey: initialSecret,
+        customConfig: { currency: 'USD' }
+    };
+    db.providers.set('cpx_research', cpxAdminProv);
+
+    // Mock admin request
+    const adminUser = { id: 'admin_user_id', role: 'admin' };
+
+    // 9a: Saving provider with empty secretKey MUST PRESERVE the existing stored secretKey
+    const updateReqEmptySecret = {
+        params: { providerKey: 'cpx_research' },
+        user: adminUser,
+        body: {
+            appId: '37470',
+            secretKey: '', // Empty: admin did not re-type secret
+            customConfig: { currency: 'EUR' }
+        }
+    };
+    const updateResEmptySecret = createMockRes();
+    await updateOfferwallProvider(updateReqEmptySecret, updateResEmptySecret);
+
+    assert.strictEqual(updateResEmptySecret.statusCode, 200, '9a: updateOfferwallProvider succeeds');
+    const provAfterEmpty = db.providers.get('cpx_research');
+    assert.strictEqual(provAfterEmpty.secretKey, initialSecret, '9a: secretKey preserved when saving empty string');
+    assert.strictEqual(provAfterEmpty.customConfig.currency, 'EUR', '9a: currency updated to EUR');
+
+    // 9b: Saving provider with masked secretKey '••••••••' MUST PRESERVE existing stored secretKey
+    const updateReqMaskedSecret = {
+        params: { providerKey: 'cpx_research' },
+        user: adminUser,
+        body: {
+            secretKey: '••••••••', // Masked placeholder
+            status: 'TESTING',
+            approvalStatus: 'Under Review',
+            integrationStatus: 'In Progress'
+        }
+    };
+    const updateResMaskedSecret = createMockRes();
+    await updateOfferwallProvider(updateReqMaskedSecret, updateResMaskedSecret);
+
+    assert.strictEqual(updateResMaskedSecret.statusCode, 200, '9b: update with mask succeeds');
+    const provAfterMask = db.providers.get('cpx_research');
+    assert.strictEqual(provAfterMask.secretKey, initialSecret, '9b: secretKey preserved when saving mask');
+    assert.strictEqual(provAfterMask.status, 'TESTING', '9b: status updated');
+    assert.strictEqual(provAfterMask.approvalStatus, 'Under Review', '9b: approvalStatus updated');
+    assert.strictEqual(provAfterMask.integrationStatus, 'In Progress', '9b: integrationStatus updated');
+
+    // 9c: Explicitly providing a new secret key updates it cleanly
+    const updateReqNewSecret = {
+        params: { providerKey: 'cpx_research' },
+        user: adminUser,
+        body: {
+            secretKey: 'brand_new_valid_secret_hash_key'
+        }
+    };
+    const updateResNewSecret = createMockRes();
+    await updateOfferwallProvider(updateReqNewSecret, updateResNewSecret);
+
+    assert.strictEqual(updateResNewSecret.statusCode, 200, '9c: new secret update succeeds');
+    const provAfterNew = db.providers.get('cpx_research');
+    assert.strictEqual(provAfterNew.secretKey, 'brand_new_valid_secret_hash_key', '9c: secretKey updated to new key');
+
+    // 9d: CPX Entry URL validation - missing appId or secretKey fails closed
+    const noAppIdProv = { ...provAfterNew, appId: '' };
+    const noAppIdRes = constructCpxEntryUrl(noAppIdProv, testUserId);
+    assert.strictEqual(noAppIdRes.url, '', '9d: missing appId produces empty URL');
+    assert.ok(noAppIdRes.error.includes('App ID is not configured'), '9d: descriptive App ID error');
+
+    const noSecretProv = { ...provAfterNew, secretKey: '' };
+    const noSecretRes = constructCpxEntryUrl(noSecretProv, testUserId);
+    assert.strictEqual(noSecretRes.url, '', '9d: missing secretKey produces empty URL');
+    assert.ok(noSecretRes.error.includes('Secure Hash Key is missing'), '9d: descriptive Secure Hash error');
+
+    // 9e: Valid CPX Entry URL constructs correct MD5(ext_user_id + "-" + secretKey)
+    const validEntry = constructCpxEntryUrl(provAfterNew, testUserId);
+    const expectedEntryHash = crypto.createHash('md5').update(`${testUserId}-brand_new_valid_secret_hash_key`).digest('hex');
+    assert.ok(validEntry.url.includes(`app_id=37470`), '9e: entry URL contains appId=37470');
+    assert.ok(validEntry.url.includes(`ext_user_id=${testUserId}`), '9e: entry URL contains ext_user_id');
+    assert.ok(validEntry.url.includes(`secure_hash=${expectedEntryHash}`), '9e: entry URL contains MD5(userId + "-" + secretKey)');
+
+    // 9f: CPX Postback Signature verification uses MD5(trans_id + "-" + secretKey)
+    const txId9f = 'cpx_tx_9f';
+    const expectedPostbackSig = crypto.createHash('md5').update(`${txId9f}-brand_new_valid_secret_hash_key`).digest('hex');
+    const validSigResult = verifySignature(provAfterNew, {
+        trans_id: txId9f,
+        secure_hash: expectedPostbackSig
+    }, '127.0.0.1');
+    assert.strictEqual(validSigResult.valid, true, '9f: valid CPX postback signature verified');
+
+    const tamperedSigResult = verifySignature(provAfterNew, {
+        trans_id: txId9f,
+        secure_hash: 'invalid_tampered_signature_value'
+    }, '127.0.0.1');
+    assert.strictEqual(tamperedSigResult.valid, false, '9f: tampered postback signature fails');
+
+    // 9g: TheoremReach Regression Protection: TheoremReach config and signature logic remain completely untouched
+    const trProv = {
+        providerKey: 'theoremreach',
+        name: 'TheoremReach',
+        apiKey: 'tr_test_api_key',
+        secretKey: 'tr_test_secret_key',
+        enabled: true,
+        status: 'ACTIVE'
+    };
+    const trTxId = 'tr_tx_9g';
+    const trRawUrl = `https://smartexn.com/api/v1/postbacks/theoremreach?user_id=${testUserId}&transaction_id=${trTxId}&reward=50`;
+    const trHmac = crypto.createHmac('sha1', 'tr_test_secret_key').update(trRawUrl).digest('base64');
+    const trSig = trHmac.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const trSigResult = verifySignature(trProv, {
+        user_id: testUserId,
+        transaction_id: trTxId,
+        reward: '50',
+        sig: trSig
+    }, '127.0.0.1');
+    assert.strictEqual(trSigResult.valid, true, '9g: TheoremReach HMAC-SHA1 signature verification remains 100% intact');
+
+    console.log('✓ Section 9 Passed: Admin Configuration, Secret Preservation & Multi-Network Invariants.');
+}
+
+// ============================================================================
 // RUN ALL ASYNC TEST SECTIONS
 // ============================================================================
 async function runAll() {
@@ -1210,6 +1349,7 @@ async function runAll() {
     await runSection6();
     await runSection7();
     await runSection8();
+    await runSection9();
 
     // Restore original model methods
     User.findById = origUserFindById;
