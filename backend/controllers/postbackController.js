@@ -824,6 +824,156 @@ export const handlePostback = async (req, res) => {
             }
         }
 
+        // CPX Research Conversion, Currency & Amount Validation
+        if (providerKey === 'cpx_research') {
+            // Conversion & Exchange Rate Multiplier Validation: Fail closed if invalid, non-finite, or <= 0
+            if (typeof provider.exchangeRateMultiplier !== 'number' || !Number.isFinite(provider.exchangeRateMultiplier) || provider.exchangeRateMultiplier <= 0) {
+                if (isDryRun) {
+                    req.dryRunResult = {
+                        isDryRun: true,
+                        mutationsPerformed: false,
+                        provider: providerKey,
+                        validation: { status: 'FAILED', error: 'CPX_EXCHANGE_RATE_NOT_CONFIGURED' }
+                    };
+                } else {
+                    log.status = 'Error';
+                    log.errorMessage = 'CPX Research exchange rate multiplier is not configured or invalid; failing closed';
+                    try { await log.save(); } catch (_) {}
+                }
+                return res.status(400).send('CPX_EXCHANGE_RATE_NOT_CONFIGURED');
+            }
+
+            // Payout Currency Validation: Do not assume amount_local is USD or multiplier=1.0 is universally correct
+            const providerCurrency = (provider.customConfig?.currency || provider.currency || '').toString().trim().toUpperCase();
+            const callbackCurrency = (rawParams.currency || '').toString().trim().toUpperCase();
+
+            if (provider.commissionMode === 'provider_managed') {
+                // Must have a confirmed currency config; cannot assume amount_local is USD
+                if (!providerCurrency && !callbackCurrency) {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: { status: 'FAILED', error: 'CPX_CURRENCY_NOT_CONFIGURED' }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = 'CPX Research payout currency is not configured; cannot establish amount_local currency safely; failing closed';
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('CPX_CURRENCY_NOT_CONFIGURED');
+                }
+
+                if (providerCurrency && callbackCurrency && providerCurrency !== callbackCurrency) {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: { status: 'FAILED', error: 'CPX_CURRENCY_MISMATCH' }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = `CPX Research currency mismatch between configured '${providerCurrency}' and callback '${callbackCurrency}'; failing closed`;
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('CPX_CURRENCY_MISMATCH');
+                }
+
+                // provider_managed must require a valid amount_local value
+                const rawLocal = rawParams.amount_local;
+                if (rawLocal === undefined || rawLocal === null || String(rawLocal).trim() === '') {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: { status: 'FAILED', error: 'MISSING_AMOUNT_LOCAL' }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = 'CPX Research provider_managed mode requires amount_local parameter; failing closed';
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('MISSING_AMOUNT_LOCAL');
+                }
+
+                const parsedLocal = Number(rawLocal);
+                const isInvalidLocal = isNaN(parsedLocal) || !Number.isFinite(parsedLocal) || parsedLocal <= 0;
+
+                if (isInvalidLocal) {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: { status: 'FAILED', error: 'INVALID_AMOUNT_LOCAL' }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = `CPX Research invalid amount_local value: '${rawLocal}'; failing closed`;
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('INVALID_AMOUNT_LOCAL');
+                }
+            } else {
+                // smartexn_managed mode: gross revenue is amount_usd in USD
+                if (callbackCurrency && callbackCurrency !== 'USD') {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: { status: 'FAILED', error: 'CPX_CURRENCY_MISMATCH' }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = `CPX Research smartexn_managed expects USD payout, but callback currency is '${callbackCurrency}'; failing closed`;
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('CPX_CURRENCY_MISMATCH');
+                }
+
+                // smartexn_managed must require a valid amount_usd value
+                const rawUsd = rawParams.amount_usd;
+                if (rawUsd === undefined || rawUsd === null || String(rawUsd).trim() === '') {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: { status: 'FAILED', error: 'MISSING_AMOUNT_USD' }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = 'CPX Research smartexn_managed mode requires amount_usd parameter; failing closed';
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('MISSING_AMOUNT_USD');
+                }
+
+                const parsedUsd = Number(rawUsd);
+                const isInvalidUsd = isNaN(parsedUsd) || !Number.isFinite(parsedUsd) || parsedUsd <= 0;
+
+                if (isInvalidUsd) {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: { status: 'FAILED', error: 'INVALID_AMOUNT_USD' }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = `CPX Research invalid amount_usd value: '${rawUsd}'; failing closed`;
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('INVALID_AMOUNT_USD');
+                }
+            }
+        }
+
         // P8: Gross / User / Platform Split Calculation
         let grossUSD;
         const absReward = Math.abs(normalized.rawReward);
@@ -831,17 +981,14 @@ export const handlePostback = async (req, res) => {
             grossUSD = Number((absReward / (provider.exchangeRateMultiplier || 70.0)).toFixed(4));
         } else if (providerKey === 'cpx_research') {
             // CPX Research Revenue & Payout Accounting
-            // amount_usd represents gross publisher revenue; amount_local represents user payout in configured currency
+            // In provider_managed, strictly consume valid amount_local without fallback
+            // In smartexn_managed, strictly consume valid amount_usd without fallback
             if (provider.commissionMode === 'provider_managed') {
-                const userPayoutVal = (rawParams.amount_local !== undefined && rawParams.amount_local !== '')
-                    ? Math.abs(Number(rawParams.amount_local) || 0)
-                    : absReward;
-                grossUSD = Number((userPayoutVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+                const userPayoutVal = Math.abs(Number(rawParams.amount_local));
+                grossUSD = Number((userPayoutVal * provider.exchangeRateMultiplier).toFixed(4));
             } else {
-                const grossVal = (rawParams.amount_usd !== undefined && rawParams.amount_usd !== '')
-                    ? Math.abs(Number(rawParams.amount_usd) || 0)
-                    : absReward;
-                grossUSD = Number((grossVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+                const grossVal = Math.abs(Number(rawParams.amount_usd));
+                grossUSD = Number((grossVal * provider.exchangeRateMultiplier).toFixed(4));
             }
         } else {
             grossUSD = Number((absReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
@@ -1639,11 +1786,10 @@ export const constructCpxEntryUrl = (provider, userId) => {
     }
 
     const secretKey = (provider.secretKey || '').trim();
-    const requireSignature = provider.requireSignature !== false;
-    if (requireSignature && !secretKey) {
+    if (!secretKey) {
         return {
             url: '',
-            error: 'CPX Research Secure Hash Key is missing for secure entry hash. Please configure it in the Admin Panel.'
+            error: 'CPX Research Secure Hash Key is missing for mandatory secure entry hash. Please configure it in the Admin Panel.'
         };
     }
 
@@ -1662,18 +1808,26 @@ export const constructCpxEntryUrl = (provider, userId) => {
         .replace(/\{subId\}/g, encodeURIComponent(uid))
         .replace(/\{uid\}/g, encodeURIComponent(uid));
 
-    if (requireSignature && secretKey) {
-        const secureHash = crypto.createHash('md5').update(`${uid}-${secretKey}`).digest('hex');
-        if (url.includes('{secure_hash}')) {
-            url = url.replace(/\{secure_hash\}/g, encodeURIComponent(secureHash));
-        } else if (url.includes('{secureHash}')) {
-            url = url.replace(/\{secureHash\}/g, encodeURIComponent(secureHash));
-        } else if (url.includes('{hash}')) {
-            url = url.replace(/\{hash\}/g, encodeURIComponent(secureHash));
-        } else if (!url.includes('secure_hash=')) {
-            const separator = url.includes('?') ? '&' : '?';
-            url = `${url}${separator}secure_hash=${encodeURIComponent(secureHash)}`;
-        }
+    // Secure entry hash is unconditionally mandatory for CPX Research
+    const secureHash = crypto.createHash('md5').update(`${uid}-${secretKey}`).digest('hex');
+    if (url.includes('{secure_hash}')) {
+        url = url.replace(/\{secure_hash\}/g, encodeURIComponent(secureHash));
+    } else if (url.includes('{secureHash}')) {
+        url = url.replace(/\{secureHash\}/g, encodeURIComponent(secureHash));
+    } else if (url.includes('{hash}')) {
+        url = url.replace(/\{hash\}/g, encodeURIComponent(secureHash));
+    } else if (!url.includes('secure_hash=')) {
+        const separator = url.includes('?') ? '&' : '?';
+        url = `${url}${separator}secure_hash=${encodeURIComponent(secureHash)}`;
+    }
+
+    // Audit for any remaining unsubstituted macros
+    const unparsedMacros = url.match(/\{[a-zA-Z0-9_]+\}/g);
+    if (unparsedMacros && unparsedMacros.length > 0) {
+        return {
+            url: '',
+            error: `Missing configuration for entry URL macro(s): ${unparsedMacros.join(', ')}. Please update provider settings in the Admin Panel.`
+        };
     }
 
     return { url, error: null };
@@ -1907,6 +2061,21 @@ export const simulatePostback = async (req, res) => {
                 queryParams.sig = crypto.createHash('md5').update(`${simOid}-${userId}-${secret}`).digest('hex');
             } else if (pKey === 'cpx_research') {
                 queryParams.hash = crypto.createHash('md5').update(`${simTxId}-${secret}`).digest('hex');
+                if (req.body.amount_local !== undefined) {
+                    queryParams.amount_local = req.body.amount_local;
+                } else if (provider.commissionMode === 'provider_managed') {
+                    queryParams.amount_local = amount;
+                }
+                if (req.body.amount_usd !== undefined) {
+                    queryParams.amount_usd = req.body.amount_usd;
+                } else if (provider.commissionMode === 'smartexn_managed') {
+                    queryParams.amount_usd = amount;
+                }
+                if (req.body.currency !== undefined) {
+                    queryParams.currency = req.body.currency;
+                } else if (provider.commissionMode === 'provider_managed' && !provider.customConfig?.currency && !provider.currency) {
+                    queryParams.currency = 'USD';
+                }
             } else if (pKey === 'wannads') {
                 queryParams.subId = userId;
                 queryParams.transId = simTxId;
