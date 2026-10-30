@@ -11,7 +11,8 @@ import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiate
 const transactionTypes = [
     'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
     'Withdrawal Request', 'Withdrawal Refund', 'Plan Purchase', 'Transfer Sent', 
-    'Transfer Received', 'Transfer Request', 'Transfer Refund'
+    'Transfer Received', 'Transfer Request', 'Transfer Refund',
+    'Offerwall Reward', 'Offerwall Reversal'
 ];
 
 const Users: React.FC = () => {
@@ -1738,7 +1739,12 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                             <tr><th className="p-4">Date</th><th className="p-4">Type</th><th className="p-4 text-right">Amount</th><th className="p-4 text-center">Status</th><th className="p-4">Description</th></tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-gray-800">
-                                            {transactions.filter(t => t.userId === user._id).map(tx => (
+                                             {transactions.filter(t => {
+                                                 if (t.userId !== user._id) return false;
+                                                 if (historyTypeFilter && t.type !== historyTypeFilter) return false;
+                                                 if (historyStatusFilter && (t.status || 'Approved') !== historyStatusFilter) return false;
+                                                 return true;
+                                             }).map(tx => (
                                                 <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                                     <td className="p-4 font-mono text-gray-400">{new Date(tx.date).toLocaleDateString()}</td>
                                                     <td className="p-4 font-bold">{tx.type}</td>

@@ -1287,6 +1287,13 @@ export const handlePostback = async (req, res) => {
                     },
                     { new: true }
                 );
+                if (!updatedUser) {
+                    console.error('[Reversal Error] User not found or update failed for user ID:', user._id);
+                    log.status = 'Error';
+                    log.errorMessage = `User not found or balance deduction failed during reversal for user ID ${user._id}`;
+                    try { await log.save(); } catch (_) {}
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
+                }
 
                 const balanceBefore = currentEarnings;
                 const balanceAfter = updatedUser ? updatedUser.taskEarningsBalance : 0;
@@ -1390,10 +1397,14 @@ export const handlePostback = async (req, res) => {
                     throw revTxErr;
                 }
 
-                // Update Provider metrics atomically
-                await OfferwallProvider.findByIdAndUpdate(provider._id, {
-                    $inc: { totalReversalCount: 1 }
-                });
+                // Update Provider metrics atomically (isolated)
+                try {
+                    await OfferwallProvider.findByIdAndUpdate(provider._id, {
+                        $inc: { totalReversalCount: 1 }
+                    });
+                } catch (metricsErr) {
+                    console.warn('[Offerwall Metrics Warning] Failed to update provider reversal statistics:', metricsErr.message);
+                }
 
                 log.status = 'Reversed';
                 log.transactionId = tx._id;
@@ -1405,12 +1416,16 @@ export const handlePostback = async (req, res) => {
                 log.userBalanceAfter = balanceAfter;
                 try { await log.save(); } catch (_) {}
 
-                await Notification.create({
-                    userId: user._id,
-                    subject: `Offerwall Reversal: ${provider.name} ⚠️`,
-                    message: `An offerwall reward of $${deductionAmount} was revoked by the advertiser/provider (${provider.name} - ${normalized.offerName}). Your task earnings balance has been adjusted.`,
-                    senderType: 'System'
-                });
+                try {
+                    await Notification.create({
+                        userId: user._id,
+                        subject: `Offerwall Reversal: ${provider.name} ⚠️`,
+                        message: `An offerwall reward of $${deductionAmount} was revoked by the advertiser/provider (${provider.name} - ${normalized.offerName}). Your task earnings balance has been adjusted.`,
+                        senderType: 'System'
+                    });
+                } catch (notifErr) {
+                    console.warn('[Notification Warning] Failed to create user reversal notification:', notifErr.message);
+                }
 
                 // Dedicated System Notification for Admins
                 try {
@@ -1677,15 +1692,19 @@ export const handlePostback = async (req, res) => {
                     return res.status(403).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'USER_RESTRICTED');
                 }
 
-                // Update Provider metrics atomically
-                await OfferwallProvider.findByIdAndUpdate(provider._id, {
-                    $inc: {
-                        totalGrossPayoutUSD: grossUSD,
-                        totalUserPayoutUSD: userRewardUSD,
-                        totalPlatformRevenueUSD: platformRevenueUSD,
-                        totalPostbackCount: 1
-                    }
-                });
+                // Update Provider metrics atomically (isolated)
+                try {
+                    await OfferwallProvider.findByIdAndUpdate(provider._id, {
+                        $inc: {
+                            totalGrossPayoutUSD: grossUSD,
+                            totalUserPayoutUSD: userRewardUSD,
+                            totalPlatformRevenueUSD: platformRevenueUSD,
+                            totalPostbackCount: 1
+                        }
+                    });
+                } catch (metricsErr) {
+                    console.warn('[Offerwall Metrics Warning] Failed to update provider reward statistics:', metricsErr.message);
+                }
 
                 log.status = 'Processed';
                 log.transactionId = tx._id;
@@ -1706,12 +1725,16 @@ export const handlePostback = async (req, res) => {
                     }
                 }
 
-                await Notification.create({
-                    userId: user._id,
-                    subject: notifSubject,
-                    message: notifMessage,
-                    senderType: 'System'
-                });
+                try {
+                    await Notification.create({
+                        userId: user._id,
+                        subject: notifSubject,
+                        message: notifMessage,
+                        senderType: 'System'
+                    });
+                } catch (notifErr) {
+                    console.warn('[Notification Warning] Failed to create user reward notification:', notifErr.message);
+                }
 
                 // Dedicated System Notification for Admins
                 try {
