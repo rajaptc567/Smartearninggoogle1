@@ -230,6 +230,9 @@ export const OfferwallHub: React.FC = () => {
         if (provider.providerKey === 'theoremreach') {
             return theoremreachSessionUrl || ''; 
         }
+        if (provider.providerKey === 'cpx_research') {
+            return provider.iframeUrl || '';
+        }
         if (provider.iframeUrl) return provider.iframeUrl; // Prefer pre-computed
         if (!provider.iframeUrlTemplate) return '';
         const uid = currentUser?._id || currentUser?.username || 'test_user';
@@ -633,7 +636,7 @@ export const OfferwallHub: React.FC = () => {
                                     <button onClick={fetchTheoremReachSession} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all">Connect to Surveys</button>
                                 </div>
                             )
-                        ) : (selectedProvider.iframeUrl || (selectedProvider.providerKey !== 'theoremreach' && selectedProvider.iframeUrlTemplate && selectedProvider.appId)) ? (
+                        ) : (selectedProvider.iframeUrl || (selectedProvider.providerKey !== 'theoremreach' && selectedProvider.providerKey !== 'cpx_research' && selectedProvider.iframeUrlTemplate && selectedProvider.appId)) ? (
                             <>
                                 {iframeLoading && !iframeWarning && (
                                     <div className="absolute inset-0 z-20 bg-slate-950 flex flex-col items-center justify-center gap-3 text-slate-400">

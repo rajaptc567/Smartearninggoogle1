@@ -829,6 +829,20 @@ export const handlePostback = async (req, res) => {
         const absReward = Math.abs(normalized.rawReward);
         if (providerKey === 'theoremreach') {
             grossUSD = Number((absReward / (provider.exchangeRateMultiplier || 70.0)).toFixed(4));
+        } else if (providerKey === 'cpx_research') {
+            // CPX Research Revenue & Payout Accounting
+            // amount_usd represents gross publisher revenue; amount_local represents user payout in configured currency
+            if (provider.commissionMode === 'provider_managed') {
+                const userPayoutVal = (rawParams.amount_local !== undefined && rawParams.amount_local !== '')
+                    ? Math.abs(Number(rawParams.amount_local) || 0)
+                    : absReward;
+                grossUSD = Number((userPayoutVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+            } else {
+                const grossVal = (rawParams.amount_usd !== undefined && rawParams.amount_usd !== '')
+                    ? Math.abs(Number(rawParams.amount_usd) || 0)
+                    : absReward;
+                grossUSD = Number((grossVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+            }
         } else {
             grossUSD = Number((absReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
         }
@@ -1600,6 +1614,71 @@ export const constructTheoremReachEntryUrl = (provider, userId) => {
     return { url, error: null };
 };
 
+/**
+ * Constructs a secure, validated CPX Research entry / iframe URL.
+ * 
+ * Official CPX Research Web Integration Requirements:
+ * 1. app_id: Dedicated CPX App ID (e.g. 37470).
+ * 2. ext_user_id: Unique SmartExn user identifier.
+ * 3. secure_hash: Cryptographic MD5 hash of (ext_user_id + "-" + app_secure_hash)
+ *    generated strictly server-side using the secretKey / secure hash from the CPX Publisher Dashboard.
+ * 4. Fails closed with descriptive error if App ID or Secret Key is missing when signature is required.
+ * 5. Private secretKey is NEVER exposed to the frontend or included in URL parameters.
+ */
+export const constructCpxEntryUrl = (provider, userId) => {
+    if (!userId) {
+        return { url: '', error: 'Authenticated user session is required to launch CPX Research.' };
+    }
+
+    const appId = (provider.appId || '').trim();
+    if (!appId) {
+        return {
+            url: '',
+            error: 'CPX Research App ID is not configured. Please configure App ID in the Admin Panel.'
+        };
+    }
+
+    const secretKey = (provider.secretKey || '').trim();
+    const requireSignature = provider.requireSignature !== false;
+    if (requireSignature && !secretKey) {
+        return {
+            url: '',
+            error: 'CPX Research Secure Hash Key is missing for secure entry hash. Please configure it in the Admin Panel.'
+        };
+    }
+
+    const uid = String(userId).trim();
+    let template = (provider.iframeUrlTemplate || '').trim();
+    if (!template) {
+        template = 'https://offers.cpx-research.com/index.php?app_id={appId}&ext_user_id={userId}';
+    }
+
+    let url = template
+        .replace(/\{appId\}/g, encodeURIComponent(appId))
+        .replace(/\{pubId\}/g, encodeURIComponent(appId))
+        .replace(/\{userId\}/g, encodeURIComponent(uid))
+        .replace(/\{user_id\}/g, encodeURIComponent(uid))
+        .replace(/\{ext_user_id\}/g, encodeURIComponent(uid))
+        .replace(/\{subId\}/g, encodeURIComponent(uid))
+        .replace(/\{uid\}/g, encodeURIComponent(uid));
+
+    if (requireSignature && secretKey) {
+        const secureHash = crypto.createHash('md5').update(`${uid}-${secretKey}`).digest('hex');
+        if (url.includes('{secure_hash}')) {
+            url = url.replace(/\{secure_hash\}/g, encodeURIComponent(secureHash));
+        } else if (url.includes('{secureHash}')) {
+            url = url.replace(/\{secureHash\}/g, encodeURIComponent(secureHash));
+        } else if (url.includes('{hash}')) {
+            url = url.replace(/\{hash\}/g, encodeURIComponent(secureHash));
+        } else if (!url.includes('secure_hash=')) {
+            const separator = url.includes('?') ? '&' : '?';
+            url = `${url}${separator}secure_hash=${encodeURIComponent(secureHash)}`;
+        }
+    }
+
+    return { url, error: null };
+};
+
 export const getOfferwallProviders = async (req, res) => {
     try {
         const isAdmin = isAuthorizedAdmin(req.user);
@@ -1615,7 +1694,18 @@ export const getOfferwallProviders = async (req, res) => {
             'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status enabled userRevenueSharePercent platformRevenueSharePercent commissionMode appId apiKey secretKey exchangeRateMultiplier requireSignature signatureType customConfig'
         ).sort({ category: 1, name: 1 });
 
-        const sanitized = providers.map(p => {
+        // Phase 6: CPX-Only Visibility Gate
+        // CPX Research must remain hidden from normal users unless its status is explicitly ACTIVE and enabled is true.
+        // NOT_STARTED, TESTING, SANDBOX, CREDENTIALS_PENDING, PRODUCTION_READY, DISABLED, and SUSPENDED must not expose CPX.
+        // Other providers retain their existing visibility rules unchanged.
+        const visibleProviders = providers.filter(p => {
+            if (p.providerKey === 'cpx_research') {
+                return p.enabled === true && p.status === 'ACTIVE';
+            }
+            return true;
+        });
+
+        const sanitized = visibleProviders.map(p => {
             const obj = p.toObject();
             if (p.providerKey === 'theoremreach') {
                 if (req.user?.id) {
@@ -1625,6 +1715,18 @@ export const getOfferwallProviders = async (req, res) => {
                     } else {
                         obj.iframeUrl = '';
                         obj.configurationError = trResult.error;
+                    }
+                } else {
+                    obj.iframeUrl = '';
+                }
+            } else if (p.providerKey === 'cpx_research') {
+                if (req.user?.id) {
+                    const cpxResult = constructCpxEntryUrl(p, req.user.id);
+                    if (cpxResult.url) {
+                        obj.iframeUrl = cpxResult.url;
+                    } else {
+                        obj.iframeUrl = '';
+                        obj.configurationError = cpxResult.error;
                     }
                 } else {
                     obj.iframeUrl = '';

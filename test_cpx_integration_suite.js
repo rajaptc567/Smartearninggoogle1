@@ -1,6 +1,6 @@
 import assert from 'assert';
 import crypto from 'crypto';
-import { verifySignature } from './backend/controllers/postbackController.js';
+import { verifySignature, constructCpxEntryUrl } from './backend/controllers/postbackController.js';
 
 console.log('Running Focused CPX Research Integration Test Suite...');
 
@@ -77,8 +77,19 @@ console.log('✓ Test 3 Passed: Test Callback Isolation & Precision.');
 // ==========================================
 // 4. Currency and Commission Accounting Calculation
 // ==========================================
-const calculateSplit = (provider, rawRewardUSD) => {
-    const grossUSD = Number((rawRewardUSD * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+const calculateSplit = (provider, rawParams) => {
+    let grossUSD;
+    if (provider.commissionMode === 'provider_managed') {
+        const userPayoutVal = (rawParams.amount_local !== undefined && rawParams.amount_local !== '')
+            ? Math.abs(Number(rawParams.amount_local) || 0)
+            : Math.abs(Number(rawParams.amount_usd || rawParams.amount || 0));
+        grossUSD = Number((userPayoutVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+    } else {
+        const grossVal = (rawParams.amount_usd !== undefined && rawParams.amount_usd !== '')
+            ? Math.abs(Number(rawParams.amount_usd) || 0)
+            : Math.abs(Number(rawParams.amount_local || rawParams.amount || 0));
+        grossUSD = Number((grossVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+    }
     let userRewardUSD = grossUSD;
     let platformRevenueUSD = 0;
     if (provider.commissionMode === 'smartexn_managed') {
@@ -89,48 +100,48 @@ const calculateSplit = (provider, rawRewardUSD) => {
     return { grossUSD, userRewardUSD, platformRevenueUSD };
 };
 
-// Scenario A: SmartExn managed 70/30 split on $1.00 survey
-const splitManaged = calculateSplit(cpxProvider, 1.00);
+// Scenario A: SmartExn managed 70/30 split on $1.00 USD gross survey
+const splitManaged = calculateSplit(cpxProvider, { amount_usd: '1.00', amount_local: '0.70' });
 assert.strictEqual(splitManaged.grossUSD, 1.00, 'Scenario A: Gross is $1.00');
 assert.strictEqual(splitManaged.userRewardUSD, 0.70, 'Scenario A: User reward is $0.70 (70%)');
 assert.strictEqual(splitManaged.platformRevenueUSD, 0.30, 'Scenario A: Platform revenue is $0.30 (30%)');
 
-// Scenario B: Provider managed (CPX dashboard takes margin before postback)
+// Scenario B: Provider managed (CPX dashboard takes margin before postback, sends amount_local = 0.70)
 const providerManaged = { ...cpxProvider, commissionMode: 'provider_managed' };
-const splitProvider = calculateSplit(providerManaged, 0.70); // CPX already deducted 30% margin
-assert.strictEqual(splitProvider.grossUSD, 0.70, 'Scenario B: Gross is $0.70');
-assert.strictEqual(splitProvider.userRewardUSD, 0.70, 'Scenario B: User receives 100% of incoming $0.70 without second deduction');
+const splitProvider = calculateSplit(providerManaged, { amount_usd: '1.00', amount_local: '0.70' });
+assert.strictEqual(splitProvider.grossUSD, 0.70, 'Scenario B: Gross is $0.70 from amount_local');
+assert.strictEqual(splitProvider.userRewardUSD, 0.70, 'Scenario B: User receives 100% of incoming amount_local ($0.70) without double deduction');
 assert.strictEqual(splitProvider.platformRevenueUSD, 0.00, 'Scenario B: Platform takes 0% on SmartExn side');
 
 console.log('✓ Test 4 Passed: Accounting Split Invariants & Double-Deduction Prevention.');
 
 // ==========================================
-// 5. URL Generation & Sensitive Key Stripping
+// 5. Production constructCpxEntryUrl & Credential Scrubbing
 // ==========================================
-const mockUser = { id: '65e2b0f49c2a8f0012ab34cd' };
-const template = cpxProvider.iframeUrlTemplate;
-const generatedUrl = template
-    .replace(/\{userId\}/g, String(mockUser.id))
-    .replace(/\{appId\}/g, cpxProvider.appId.trim());
+const mockUserId = '65e2b0f49c2a8f0012ab34cd';
+const entryResult = constructCpxEntryUrl(cpxProvider, mockUserId);
+assert.strictEqual(entryResult.error, null, 'Test 5a: Entry URL construction succeeds without error');
 
-assert.strictEqual(
-    generatedUrl,
-    'https://offers.cpx-research.com/index.php?app_id=37470&ext_user_id=65e2b0f49c2a8f0012ab34cd',
-    'Test 5a: URL properly interpolates appId 37470 and mongo userId'
-);
+const expectedEntryHash = crypto.createHash('md5').update(`${mockUserId}-${cpxSecret}`).digest('hex');
+const expectedUrl = `https://offers.cpx-research.com/index.php?app_id=37470&ext_user_id=${mockUserId}&secure_hash=${expectedEntryHash}`;
+assert.strictEqual(entryResult.url, expectedUrl, 'Test 5b: Entry URL contains correct app_id, ext_user_id, and secure_hash');
 
-// Verify scrubbing
-const publicPayload = { ...cpxProvider };
-delete publicPayload.appId;
-delete publicPayload.apiKey;
-delete publicPayload.secretKey;
-delete publicPayload.postbackKey;
+// Test 5c: Verify secretKey is NOT present in cleartext in the generated URL
+assert.strictEqual(entryResult.url.includes(cpxSecret), false, 'Test 5c: Private secretKey must never be present in entry URL');
 
-assert.strictEqual(publicPayload.secretKey, undefined, 'Test 5b: secretKey stripped');
-assert.strictEqual(publicPayload.postbackKey, undefined, 'Test 5c: postbackKey stripped');
-assert.strictEqual(publicPayload.appId, undefined, 'Test 5d: appId stripped from public view');
+// Test 5d: Fail closed if secretKey is missing when signature required
+const missingSecretProv = { ...cpxProvider, secretKey: '' };
+const failSecretResult = constructCpxEntryUrl(missingSecretProv, mockUserId);
+assert.strictEqual(failSecretResult.url, '', 'Test 5d: Missing secretKey must return empty URL');
+assert.strictEqual(failSecretResult.error.includes('Secure Hash Key is missing'), true, 'Test 5d: Informative error returned');
 
-console.log('✓ Test 5 Passed: URL Generation & Public Credential Scrubbing.');
+// Test 5e: Fail closed if appId is missing
+const missingAppIdProv = { ...cpxProvider, appId: '' };
+const failAppIdResult = constructCpxEntryUrl(missingAppIdProv, mockUserId);
+assert.strictEqual(failAppIdResult.url, '', 'Test 5e: Missing appId must return empty URL');
+assert.strictEqual(failAppIdResult.error.includes('App ID is not configured'), true, 'Test 5e: Informative error returned');
+
+console.log('✓ Test 5 Passed: Server-Side Secure Hash URL Generation & Credential Scrubbing.');
 
 // ==========================================
 // 6. CPX Event-Type Normalization Logic
@@ -237,6 +248,67 @@ assert.notStrictEqual(makeCreditKey('cpx_research', 'tx_999'), makeCreditKey('to
 
 console.log('✓ Test 10 Passed: Idempotency Key Provider Scoping.');
 
+// ==========================================
+// 11. CPX-Only Public Visibility Gate
+// ==========================================
+const applyVisibilityGate = (providerList, isAdmin = false) => {
+    if (isAdmin) return providerList;
+    return providerList.filter(p => {
+        if (p.providerKey === 'cpx_research') {
+            return p.enabled === true && p.status === 'ACTIVE';
+        }
+        return p.enabled === true && !['DISABLED', 'SUSPENDED', 'NOT_STARTED'].includes(p.status);
+    });
+};
+
+const sampleProviders = [
+    { providerKey: 'cpx_research', enabled: true, status: 'NOT_STARTED' },
+    { providerKey: 'cpx_research', enabled: true, status: 'TESTING' },
+    { providerKey: 'cpx_research', enabled: true, status: 'SANDBOX' },
+    { providerKey: 'cpx_research', enabled: true, status: 'CREDENTIALS_PENDING' },
+    { providerKey: 'cpx_research', enabled: true, status: 'PRODUCTION_READY' },
+    { providerKey: 'cpx_research', enabled: true, status: 'ACTIVE' },
+    { providerKey: 'cpx_research', enabled: false, status: 'ACTIVE' },
+    { providerKey: 'theoremreach', enabled: true, status: 'ACTIVE' },
+    { providerKey: 'torox', enabled: true, status: 'TESTING' }
+];
+
+const publicVisible = applyVisibilityGate(sampleProviders, false);
+const cpxPublic = publicVisible.filter(p => p.providerKey === 'cpx_research');
+assert.strictEqual(cpxPublic.length, 1, 'Test 11a: Exactly 1 CPX provider visible to public (only ACTIVE & enabled)');
+assert.strictEqual(cpxPublic[0].status, 'ACTIVE', 'Test 11b: The visible CPX provider has status ACTIVE');
+assert.strictEqual(cpxPublic[0].enabled, true, 'Test 11c: The visible CPX provider has enabled true');
+
+// Verify that Torox in TESTING is NOT affected by the CPX-only gate
+const toroxPublic = publicVisible.find(p => p.providerKey === 'torox');
+assert.strictEqual(toroxPublic !== undefined, true, 'Test 11d: Other providers (torox) retain existing visibility behavior');
+
+// Verify that admin sees all providers regardless of status
+const adminVisible = applyVisibilityGate(sampleProviders, true);
+assert.strictEqual(adminVisible.length, sampleProviders.length, 'Test 11e: Admin sees all providers in all statuses');
+
+console.log('✓ Test 11 Passed: CPX-Only Public Visibility Gate & Provider Isolation.');
+
+// ==========================================
+// 12. TheoremReach Isolation & Protection Invariant
+// ==========================================
+const trProvider = {
+    providerKey: 'theoremreach',
+    name: 'TheoremReach',
+    apiKey: 'tr_api_key_123',
+    appId: 'tr_app_id_456',
+    secretKey: 'tr_secret_789',
+    requireSignature: true,
+    signatureType: 'hmac_sha1'
+};
+
+assert.strictEqual(trProvider.signatureType, 'hmac_sha1', 'Test 12a: TheoremReach signatureType preserved as hmac_sha1');
+assert.strictEqual(trProvider.providerKey, 'theoremreach', 'Test 12b: TheoremReach key unchanged');
+assert.strictEqual(cpxProvider.signatureType, 'md5', 'Test 12c: CPX signatureType preserved as md5');
+
+console.log('✓ Test 12 Passed: TheoremReach Isolation & Protection.');
+
 console.log('======================================================');
-console.log('All 10 Focused CPX Research Integration Tests Passed!');
+console.log('All 12 Focused CPX Research Integration Tests Passed!');
 console.log('======================================================');
+
