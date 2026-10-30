@@ -509,7 +509,12 @@ const normalizePostbackParams = (providerKey, rawParams) => {
 
     if (key === 'cpx_research') {
         const rawType = String(p.type || '').trim().toLowerCase();
-        if (rawType === 'out') {
+        if (isReversal) {
+            eventType = rawType || 'reversal';
+            if (!p.o_name && !p.offer_name && !p.offerName && !p.campaign_name && !p.reward_name) {
+                offerName = 'CPX Research Survey Reversal';
+            }
+        } else if (rawType === 'out') {
             eventType = 'out';
             if (!p.o_name && !p.offer_name && !p.offerName && !p.campaign_name && !p.reward_name) {
                 offerName = 'CPX Survey Screenout Consolation';
@@ -794,7 +799,7 @@ export const handlePostback = async (req, res) => {
 
         // CPX Research Event-Type Validation & Zero-Value Screen-Out Handling
         if (providerKey === 'cpx_research') {
-            if (normalized.eventType === 'unsupported') {
+            if (normalized.eventType === 'unsupported' && !normalized.isReversal) {
                 if (isDryRun) {
                     req.dryRunResult = {
                         isDryRun: true,
@@ -859,28 +864,27 @@ export const handlePostback = async (req, res) => {
 
         // CPX Research Conversion, Currency & Amount Validation for Completion / Bonus Events
         if (providerKey === 'cpx_research' && !normalized.isReversal) {
-            // Conversion & Exchange Rate Multiplier Validation: Fail closed if invalid, non-finite, or <= 0
-            if (typeof provider.exchangeRateMultiplier !== 'number' || !Number.isFinite(provider.exchangeRateMultiplier) || provider.exchangeRateMultiplier <= 0) {
-                if (isDryRun) {
-                    req.dryRunResult = {
-                        isDryRun: true,
-                        mutationsPerformed: false,
-                        provider: providerKey,
-                        validation: { status: 'FAILED', error: 'CPX_EXCHANGE_RATE_NOT_CONFIGURED' }
-                    };
-                } else {
-                    log.status = 'Error';
-                    log.errorMessage = 'CPX Research exchange rate multiplier is not configured or invalid; failing closed';
-                    try { await log.save(); } catch (_) {}
-                }
-                return res.status(400).send('CPX_EXCHANGE_RATE_NOT_CONFIGURED');
-            }
-
-            // Payout Currency Validation: Do not assume amount_local is USD or multiplier=1.0 is universally correct
             const providerCurrency = (provider.customConfig?.currency || provider.currency || '').toString().trim().toUpperCase();
             const callbackCurrency = (rawParams.currency || '').toString().trim().toUpperCase();
 
             if (provider.commissionMode === 'provider_managed') {
+                // provider_managed requires a valid positive conversion multiplier (USD per 1 unit of local currency)
+                if (typeof provider.exchangeRateMultiplier !== 'number' || !Number.isFinite(provider.exchangeRateMultiplier) || provider.exchangeRateMultiplier <= 0) {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: { status: 'FAILED', error: 'CPX_EXCHANGE_RATE_NOT_CONFIGURED' }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = 'CPX Research exchange rate multiplier is not configured or invalid for provider_managed mode; failing closed';
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('CPX_EXCHANGE_RATE_NOT_CONFIGURED');
+                }
+
                 // Must have an explicit, valid Admin-configured CPX payout currency
                 // A callback-supplied currency must NEVER replace missing Admin configuration
                 if (!providerCurrency) {
@@ -955,7 +959,8 @@ export const handlePostback = async (req, res) => {
                     return res.status(400).send('INVALID_AMOUNT_LOCAL');
                 }
             } else {
-                // smartexn_managed mode: gross revenue is amount_usd in USD
+                // smartexn_managed mode: gross publisher revenue is amount_usd in USD directly
+                // smartexn_managed does NOT require or use an exchangeRateMultiplier
                 if (callbackCurrency && callbackCurrency !== 'USD') {
                     if (isDryRun) {
                         req.dryRunResult = {
@@ -1034,14 +1039,16 @@ export const handlePostback = async (req, res) => {
             grossUSD = Number((absReward / (provider.exchangeRateMultiplier || 70.0)).toFixed(4));
         } else if (providerKey === 'cpx_research') {
             // CPX Research Revenue & Payout Accounting
-            // In provider_managed, strictly consume valid amount_local without fallback
-            // In smartexn_managed, strictly consume valid amount_usd without fallback
+            // In provider_managed, amount_local is net user reward in local currency;
+            // convert to USD using configured exchange multiplier (USD per 1 unit of local currency).
+            // In smartexn_managed, amount_usd is the publisher gross revenue in USD directly;
+            // never multiply by exchangeRateMultiplier or apply FX conversion.
             if (provider.commissionMode === 'provider_managed') {
                 const userPayoutVal = Math.abs(Number(rawParams.amount_local || 0));
                 grossUSD = Number((userPayoutVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
             } else {
                 const grossVal = Math.abs(Number(rawParams.amount_usd || 0));
-                grossUSD = Number((grossVal * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+                grossUSD = Number(grossVal.toFixed(4));
             }
         } else {
             grossUSD = Number((absReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));

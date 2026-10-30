@@ -449,17 +449,19 @@ async function runSection3() {
 }
 
 // ============================================================================
-// SECTION 4: CURRENCY VALIDATION & CONVERSION CONFIGURATION
+// SECTION 4: CURRENCY VALIDATION & MODE-SPECIFIC MULTIPLIER GUARDS
 // ============================================================================
-console.log('--- Section 4: Currency Validation & Conversion Configuration ---');
+console.log('--- Section 4: Currency Validation & Mode-Specific Multiplier Guards ---');
 async function runSection4() {
-    // 4a: Missing / invalid exchangeRateMultiplier fails closed
+    // 4a: provider_managed mode strictly requires a valid positive conversion multiplier
     db.clear();
-    const badRateProvider = {
+    const badRateProvManaged = {
         ...baseCpxProvider,
+        commissionMode: 'provider_managed',
+        customConfig: { currency: 'USD' },
         exchangeRateMultiplier: 0 // invalid
     };
-    db.providers.set('cpx_research', badRateProvider);
+    db.providers.set('cpx_research', badRateProvManaged);
     db.users.set(testUserId, { ...baseUser });
 
     const txId4a = 'cpx_tx_4a';
@@ -467,60 +469,88 @@ async function runSection4() {
     const req4a = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId4a,
-        amount_usd: '1.00',
+        amount_local: '1.00',
         secure_hash: hash4a
     });
     const res4a = createMockRes();
     await handlePostback(req4a, res4a);
 
-    assert.strictEqual(res4a.statusCode, 400, '4a: invalid exchangeRateMultiplier must return HTTP 400');
+    assert.strictEqual(res4a.statusCode, 400, '4a: invalid exchangeRateMultiplier in provider_managed must return HTTP 400');
     assert.strictEqual(res4a.body, 'CPX_EXCHANGE_RATE_NOT_CONFIGURED', '4a: error code CPX_EXCHANGE_RATE_NOT_CONFIGURED');
     assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4a: balance untouched');
 
-    // 4b: provider_managed mode with UNCONFIGURED Admin currency fails closed even when callback supplies currency
-    // CRITICAL: A callback-supplied currency must NEVER replace missing Admin configuration
+    // 4b: smartexn_managed mode does NOT require or depend on an FX multiplier
     db.clear();
-    const noCurrencyProvider = {
+    const noMultiplierSmartexnProv = {
         ...baseCpxProvider,
-        commissionMode: 'provider_managed',
-        customConfig: {} // no currency configured in Admin!
+        commissionMode: 'smartexn_managed',
+        exchangeRateMultiplier: undefined, // omitted / not configured
+        userRevenueSharePercent: 70,
+        customConfig: { currency: 'USD' }
     };
-    db.providers.set('cpx_research', noCurrencyProvider);
+    db.providers.set('cpx_research', noMultiplierSmartexnProv);
     db.users.set(testUserId, { ...baseUser });
 
-    const txId4b = 'cpx_tx_4b';
+    const txId4b = 'cpx_tx_4b_nomult';
     const hash4b = crypto.createHash('md5').update(`${txId4b}-${cpxSecret}`).digest('hex');
     const req4b = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId4b,
-        amount_local: '0.70',
-        currency: 'USD', // Callback sends USD, but Admin has NO currency configured!
+        amount_usd: '1.00',
         secure_hash: hash4b
     });
     const res4b = createMockRes();
     await handlePostback(req4b, res4b);
 
-    assert.strictEqual(res4b.statusCode, 400, '4b: missing Admin currency must fail closed even when callback supplies currency');
-    assert.strictEqual(res4b.body, 'CPX_CURRENCY_NOT_CONFIGURED', '4b: error code CPX_CURRENCY_NOT_CONFIGURED');
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4b: balance untouched');
+    assert.strictEqual(res4b.statusCode, 200, '4b: smartexn_managed succeeds without requiring exchangeRateMultiplier');
+    assert.strictEqual(res4b.body, '1', '4b: returns 1');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.70, '4b: credited 70% of $1.00 ($0.70)');
 
-    // 4c: provider_managed mode with missing Admin currency AND absent callback currency fails closed
+    // 4c: provider_managed mode with UNCONFIGURED Admin currency fails closed even when callback supplies currency
+    // CRITICAL: A callback-supplied currency must NEVER replace missing Admin configuration
+    db.clear();
+    const noCurrencyProvider = {
+        ...baseCpxProvider,
+        commissionMode: 'provider_managed',
+        exchangeRateMultiplier: 1.0,
+        customConfig: {} // no currency configured in Admin!
+    };
+    db.providers.set('cpx_research', noCurrencyProvider);
+    db.users.set(testUserId, { ...baseUser });
+
     const txId4c = 'cpx_tx_4c';
     const hash4c = crypto.createHash('md5').update(`${txId4c}-${cpxSecret}`).digest('hex');
     const req4c = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId4c,
         amount_local: '0.70',
+        currency: 'USD', // Callback sends USD, but Admin has NO currency configured!
         secure_hash: hash4c
     });
     const res4c = createMockRes();
     await handlePostback(req4c, res4c);
 
-    assert.strictEqual(res4c.statusCode, 400, '4c: missing Admin currency without callback currency must return HTTP 400');
+    assert.strictEqual(res4c.statusCode, 400, '4c: missing Admin currency must fail closed even when callback supplies currency');
     assert.strictEqual(res4c.body, 'CPX_CURRENCY_NOT_CONFIGURED', '4c: error code CPX_CURRENCY_NOT_CONFIGURED');
     assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4c: balance untouched');
 
-    // 4d: provider_managed mode with MATCHING currencies (Admin configured EUR, callback EUR) succeeds
+    // 4d: provider_managed mode with missing Admin currency AND absent callback currency fails closed
+    const txId4d = 'cpx_tx_4d';
+    const hash4d = crypto.createHash('md5').update(`${txId4d}-${cpxSecret}`).digest('hex');
+    const req4d = createMockReq('cpx_research', {
+        user_id: testUserId,
+        trans_id: txId4d,
+        amount_local: '0.70',
+        secure_hash: hash4d
+    });
+    const res4d = createMockRes();
+    await handlePostback(req4d, res4d);
+
+    assert.strictEqual(res4d.statusCode, 400, '4d: missing Admin currency without callback currency must return HTTP 400');
+    assert.strictEqual(res4d.body, 'CPX_CURRENCY_NOT_CONFIGURED', '4d: error code CPX_CURRENCY_NOT_CONFIGURED');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4d: balance untouched');
+
+    // 4e: provider_managed mode converts amount_local to USD using exchange multiplier without deducting SmartExn commission
     db.clear();
     const eurConfigProvider = {
         ...baseCpxProvider,
@@ -531,67 +561,72 @@ async function runSection4() {
     db.providers.set('cpx_research', eurConfigProvider);
     db.users.set(testUserId, { ...baseUser });
 
-    const txId4d = 'cpx_tx_4d';
-    const hash4d = crypto.createHash('md5').update(`${txId4d}-${cpxSecret}`).digest('hex');
-    const req4d = createMockReq('cpx_research', {
-        user_id: testUserId,
-        trans_id: txId4d,
-        amount_local: '1.00',
-        currency: 'EUR', // Matches Admin config!
-        secure_hash: hash4d
-    });
-    const res4d = createMockRes();
-    await handlePostback(req4d, res4d);
-
-    assert.strictEqual(res4d.statusCode, 200, '4d: matching currency accepted');
-    assert.strictEqual(res4d.body, '1', '4d: returns 1');
-    // 1.00 EUR * 1.10 multiplier = $1.10 USD gross/user reward
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 11.10, '4d: balance credited with converted EUR amount');
-
-    // 4e: provider_managed mode with MISMATCHED currencies (Admin configured USD, callback EUR) fails closed
-    db.clear();
-    const usdConfigProvider = {
-        ...baseCpxProvider,
-        commissionMode: 'provider_managed',
-        customConfig: { currency: 'USD' }
-    };
-    db.providers.set('cpx_research', usdConfigProvider);
-    db.users.set(testUserId, { ...baseUser });
-
     const txId4e = 'cpx_tx_4e';
     const hash4e = crypto.createHash('md5').update(`${txId4e}-${cpxSecret}`).digest('hex');
     const req4e = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId4e,
-        amount_local: '0.70',
-        currency: 'EUR', // Mismatch with configured USD!
+        amount_local: '1.00',
+        currency: 'EUR', // Matches Admin config!
         secure_hash: hash4e
     });
     const res4e = createMockRes();
     await handlePostback(req4e, res4e);
 
-    assert.strictEqual(res4e.statusCode, 400, '4e: currency mismatch must return HTTP 400');
-    assert.strictEqual(res4e.body, 'CPX_CURRENCY_MISMATCH', '4e: error code CPX_CURRENCY_MISMATCH');
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4e: balance untouched');
+    assert.strictEqual(res4e.statusCode, 200, '4e: matching currency accepted');
+    assert.strictEqual(res4e.body, '1', '4e: returns 1');
+    // 1.00 EUR * 1.10 multiplier = $1.10 USD gross and net user reward (no SmartExn commission deduction)
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 11.10, '4e: balance credited with converted EUR amount');
+    const tx4e = Array.from(db.transactions.values())[0];
+    assert.strictEqual(tx4e.grossAmount, 1.10, '4e: grossAmount is 1.10 USD');
+    assert.strictEqual(tx4e.userRewardAmount, 1.10, '4e: userRewardAmount is 1.10 USD (full amount in provider_managed)');
+    assert.strictEqual(tx4e.platformRevenueAmount, 0, '4e: platformRevenueAmount is 0 in provider_managed');
 
-    // 4f: provider_managed mode with ABSENT optional callback currency, but Admin currency configured, proceeds using Admin config
+    // 4f: provider_managed mode with MISMATCHED currencies (Admin configured USD, callback EUR) fails closed
+    db.clear();
+    const usdConfigProvider = {
+        ...baseCpxProvider,
+        commissionMode: 'provider_managed',
+        exchangeRateMultiplier: 1.0,
+        customConfig: { currency: 'USD' }
+    };
+    db.providers.set('cpx_research', usdConfigProvider);
+    db.users.set(testUserId, { ...baseUser });
+
     const txId4f = 'cpx_tx_4f';
     const hash4f = crypto.createHash('md5').update(`${txId4f}-${cpxSecret}`).digest('hex');
     const req4f = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId4f,
-        amount_local: '1.00',
-        // currency parameter omitted in callback
+        amount_local: '0.70',
+        currency: 'EUR', // Mismatch with configured USD!
         secure_hash: hash4f
     });
     const res4f = createMockRes();
     await handlePostback(req4f, res4f);
 
-    assert.strictEqual(res4f.statusCode, 200, '4f: absent callback currency accepted when Admin currency is configured');
-    assert.strictEqual(res4f.body, '1', '4f: returns 1');
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 11.00, '4f: balance credited using configured currency');
+    assert.strictEqual(res4f.statusCode, 400, '4f: currency mismatch must return HTTP 400');
+    assert.strictEqual(res4f.body, 'CPX_CURRENCY_MISMATCH', '4f: error code CPX_CURRENCY_MISMATCH');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4f: balance untouched');
 
-    // 4g: smartexn_managed mode rejects non-USD callback currency
+    // 4g: provider_managed mode with ABSENT optional callback currency, but Admin currency configured, proceeds using Admin config
+    const txId4g = 'cpx_tx_4g';
+    const hash4g = crypto.createHash('md5').update(`${txId4g}-${cpxSecret}`).digest('hex');
+    const req4g = createMockReq('cpx_research', {
+        user_id: testUserId,
+        trans_id: txId4g,
+        amount_local: '1.00',
+        // currency parameter omitted in callback
+        secure_hash: hash4g
+    });
+    const res4g = createMockRes();
+    await handlePostback(req4g, res4g);
+
+    assert.strictEqual(res4g.statusCode, 200, '4g: absent callback currency accepted when Admin currency is configured');
+    assert.strictEqual(res4g.body, '1', '4g: returns 1');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 11.00, '4g: balance credited using configured currency');
+
+    // 4h: smartexn_managed mode rejects non-USD callback currency
     db.clear();
     const smartexnUsdProvider = {
         ...baseCpxProvider,
@@ -601,23 +636,23 @@ async function runSection4() {
     db.providers.set('cpx_research', smartexnUsdProvider);
     db.users.set(testUserId, { ...baseUser });
 
-    const txId4g = 'cpx_tx_4g';
-    const hash4g = crypto.createHash('md5').update(`${txId4g}-${cpxSecret}`).digest('hex');
-    const req4g = createMockReq('cpx_research', {
+    const txId4h = 'cpx_tx_4h';
+    const hash4h = crypto.createHash('md5').update(`${txId4h}-${cpxSecret}`).digest('hex');
+    const req4h = createMockReq('cpx_research', {
         user_id: testUserId,
-        trans_id: txId4g,
+        trans_id: txId4h,
         amount_usd: '1.00',
         currency: 'GBP', // Explicit non-USD callback currency in smartexn_managed
-        secure_hash: hash4g
+        secure_hash: hash4h
     });
-    const res4g = createMockRes();
-    await handlePostback(req4g, res4g);
+    const res4h = createMockRes();
+    await handlePostback(req4h, res4h);
 
-    assert.strictEqual(res4g.statusCode, 400, '4g: smartexn_managed must reject non-USD callback currency');
-    assert.strictEqual(res4g.body, 'CPX_CURRENCY_MISMATCH', '4g: error code CPX_CURRENCY_MISMATCH');
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4g: balance untouched');
+    assert.strictEqual(res4h.statusCode, 400, '4h: smartexn_managed must reject non-USD callback currency');
+    assert.strictEqual(res4h.body, 'CPX_CURRENCY_MISMATCH', '4h: error code CPX_CURRENCY_MISMATCH');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4h: balance untouched');
 
-    // 4h: smartexn_managed mode rejects non-USD configured currency in provider
+    // 4i: smartexn_managed mode rejects non-USD configured currency in provider
     db.clear();
     const smartexnNonUsdProvider = {
         ...baseCpxProvider,
@@ -627,42 +662,57 @@ async function runSection4() {
     db.providers.set('cpx_research', smartexnNonUsdProvider);
     db.users.set(testUserId, { ...baseUser });
 
-    const txId4h = 'cpx_tx_4h';
-    const hash4h = crypto.createHash('md5').update(`${txId4h}-${cpxSecret}`).digest('hex');
-    const req4h = createMockReq('cpx_research', {
+    const txId4i = 'cpx_tx_4i';
+    const hash4i = crypto.createHash('md5').update(`${txId4i}-${cpxSecret}`).digest('hex');
+    const req4i = createMockReq('cpx_research', {
         user_id: testUserId,
-        trans_id: txId4h,
+        trans_id: txId4i,
         amount_usd: '1.00',
-        secure_hash: hash4h
+        secure_hash: hash4i
     });
-    const res4h = createMockRes();
-    await handlePostback(req4h, res4h);
+    const res4i = createMockRes();
+    await handlePostback(req4i, res4i);
 
-    assert.strictEqual(res4h.statusCode, 400, '4h: smartexn_managed must reject non-USD configured currency');
-    assert.strictEqual(res4h.body, 'CPX_CURRENCY_MISMATCH', '4h: error code CPX_CURRENCY_MISMATCH');
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4h: balance untouched');
+    assert.strictEqual(res4i.statusCode, 400, '4i: smartexn_managed must reject non-USD configured currency');
+    assert.strictEqual(res4i.body, 'CPX_CURRENCY_MISMATCH', '4i: error code CPX_CURRENCY_MISMATCH');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '4i: balance untouched');
 
-    console.log('✓ Section 4 Passed: Trusted Currency Validation & Conversion Multiplier Guards.');
+    console.log('✓ Section 4 Passed: Trusted Currency Validation & Mode-Specific Multiplier Guards.');
 }
 
 // ============================================================================
-// SECTION 5: DUPLICATE CALLBACK IDEMPOTENCY & VALID CREDITING
+// SECTION 5: CRITICAL REVENUE ACCOUNTING & DUPLICATE CALLBACK IDEMPOTENCY
 // ============================================================================
-console.log('--- Section 5: Duplicate Callback Idempotency & Valid Crediting ---');
+console.log('--- Section 5: smartexn_managed Direct USD Accounting & Duplicate Idempotency ---');
 async function runSection5() {
     db.clear();
-    db.providers.set('cpx_research', { ...baseCpxProvider });
-    db.users.set(testUserId, { ...baseUser });
+    // Regression example required by user:
+    // Callback: amount_usd = 1.00
+    // exchangeRateMultiplier = 1.10
+    // user share = 70%
+    // platform share = 30%
+    // Expected:
+    // gross publisher revenue = $1.00 (NOT $1.10)
+    // user reward = $0.70
+    // platform share = $0.30
+    // The multiplier MUST NOT change these results!
+    const cpxManagedProv = {
+        ...baseCpxProvider,
+        commissionMode: 'smartexn_managed',
+        exchangeRateMultiplier: 1.10, // Multiplier configured, but must NOT alter amount_usd!
+        userRevenueSharePercent: 70,
+        customConfig: { currency: 'USD' }
+    };
+    db.providers.set('cpx_research', cpxManagedProv);
+    db.users.set(testUserId, { ...baseUser }); // starting balance $10.00
 
     const txId5 = 'cpx_tx_valid_idempotency_5';
     const hash5 = crypto.createHash('md5').update(`${txId5}-${cpxSecret}`).digest('hex');
 
-    // First genuine postback: gross $1.00 USD, 70% share = $0.70 to user
     const reqFirst = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId5,
         amount_usd: '1.00',
-        amount_local: '0.70',
         secure_hash: hash5
     });
     const resFirst = createMockRes();
@@ -670,15 +720,19 @@ async function runSection5() {
 
     assert.strictEqual(resFirst.statusCode, 200, '5a: genuine postback accepted with HTTP 200');
     assert.strictEqual(resFirst.body, '1', '5a: CPX expected response is 1');
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.70, '5a: user balance credited exactly $0.70');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.70, '5a: user balance credited exactly $0.70 (70% of $1.00, unaffected by multiplier 1.10)');
     assert.strictEqual(db.transactions.size, 1, '5a: exactly 1 financial transaction created');
+
+    const createdTx = Array.from(db.transactions.values())[0];
+    assert.strictEqual(createdTx.grossAmount, 1.00, '5a: grossAmount must be exactly $1.00, unaffected by multiplier');
+    assert.strictEqual(createdTx.userRewardAmount, 0.70, '5a: userRewardAmount must be exactly $0.70');
+    assert.strictEqual(createdTx.platformRevenueAmount, 0.30, '5a: platformRevenueAmount must be exactly $0.30');
 
     // Second identical postback (duplicate replay)
     const reqDup = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId5,
         amount_usd: '1.00',
-        amount_local: '0.70',
         secure_hash: hash5
     });
     const resDup = createMockRes();
@@ -689,7 +743,7 @@ async function runSection5() {
     assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.70, '5b: balance must NOT be double-credited');
     assert.strictEqual(db.transactions.size, 1, '5b: transaction count remains exactly 1');
 
-    console.log('✓ Section 5 Passed: Genuine Crediting & Duplicate Postback Idempotency.');
+    console.log('✓ Section 5 Passed: smartexn_managed Direct USD Accounting & Duplicate Idempotency.');
 }
 
 // ============================================================================
@@ -789,12 +843,27 @@ async function runSection6() {
     assert.strictEqual(res6e.body, '1', '6e: returns 1');
     assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, balanceBefore6e, '6e: zero balance mutation');
 
-    // 6f: Matched reversal (status=2) correctly debits and creates reversal record
-    const origBalance = db.users.get(testUserId).taskEarningsBalance;
-    const txId6f = 'cpx_tx_reversal_test';
+    // 6f: Matched reversal with CHANGING MULTIPLIER (Regression test for Requirement 4):
+    // 1. Process a valid original smartexn_managed credit: amount_usd = 1.00, multiplier = 1.0, user share = 70% -> user credited $0.70
+    // 2. Change configured multiplier on provider: exchangeRateMultiplier = 2.5 and userRevenueSharePercent = 50
+    // 3. Send documented CPX reversal callback using status=2 and the same trans_id
+    // 4. Verify that the reversal deduction equals the original credited user amount ($0.70) exactly
+    // 5. Verify duplicate reversal callbacks do not debit twice
+    const origUserBalance = 10.00;
+    db.users.set(testUserId, { ...baseUser, taskEarningsBalance: origUserBalance });
+    const initialProv = {
+        ...baseCpxProvider,
+        commissionMode: 'smartexn_managed',
+        exchangeRateMultiplier: 1.0,
+        userRevenueSharePercent: 70,
+        customConfig: { currency: 'USD' }
+    };
+    db.providers.set('cpx_research', initialProv);
+
+    const txId6f = 'cpx_tx_reversal_changing_multiplier';
     const hash6f = crypto.createHash('md5').update(`${txId6f}-${cpxSecret}`).digest('hex');
 
-    // First credit
+    // Step 1: Credit
     const reqCredit = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId6f,
@@ -803,9 +872,16 @@ async function runSection6() {
         secure_hash: hash6f
     });
     await handlePostback(reqCredit, createMockRes());
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, origBalance + 0.70);
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.70, '6f: original credit succeeded, balance is 10.70');
 
-    // Reversal of txId6f
+    // Step 2: Drastically alter provider configuration (multiplier and share percent)
+    db.providers.set('cpx_research', {
+        ...initialProv,
+        exchangeRateMultiplier: 2.50, // Altered!
+        userRevenueSharePercent: 50   // Altered!
+    });
+
+    // Step 3 & 4: Reversal callback with status=2
     const reqRev = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId6f,
@@ -818,9 +894,9 @@ async function runSection6() {
 
     assert.strictEqual(resRev.statusCode, 200, '6f: reversal accepted');
     assert.strictEqual(resRev.body, '1', '6f: returns 1');
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, origBalance, '6f: balance safely reversed');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '6f: balance reversed by exactly the originally credited $0.70, NOT altered by changed multiplier 2.5 or share 50%');
 
-    // 6g: Duplicate reversal replay acknowledged with HTTP 200 '1' without duplicate debit
+    // Step 5: Duplicate reversal callback replay does not debit twice
     const reqRevDup = createMockReq('cpx_research', {
         user_id: testUserId,
         trans_id: txId6f,
@@ -831,9 +907,41 @@ async function runSection6() {
     const resRevDup = createMockRes();
     await handlePostback(reqRevDup, resRevDup);
 
-    assert.strictEqual(resRevDup.statusCode, 200, '6g: duplicate reversal acknowledged');
-    assert.strictEqual(resRevDup.body, '1', '6g: returns 1');
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, origBalance, '6g: no double deduction');
+    assert.strictEqual(resRevDup.statusCode, 200, '6f: duplicate reversal acknowledged');
+    assert.strictEqual(resRevDup.body, '1', '6f: returns 1');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '6f: duplicate reversal does NOT debit twice');
+
+    // 6g: Explicit reversal with type=reversal and status=2 processes safely without being dropped as unsupported
+    const txId6g = 'cpx_tx_explicit_reversal';
+    const hash6g = crypto.createHash('md5').update(`${txId6g}-${cpxSecret}`).digest('hex');
+
+    // Initial credit for 6g
+    db.providers.set('cpx_research', initialProv);
+    const reqCredit6g = createMockReq('cpx_research', {
+        user_id: testUserId,
+        trans_id: txId6g,
+        amount_usd: '1.00',
+        status: '1',
+        secure_hash: hash6g
+    });
+    await handlePostback(reqCredit6g, createMockRes());
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.70);
+
+    // Reversal with type=reversal
+    const reqRevExplicit = createMockReq('cpx_research', {
+        user_id: testUserId,
+        trans_id: txId6g,
+        amount_usd: '1.00',
+        status: '2',
+        type: 'reversal',
+        secure_hash: hash6g
+    });
+    const resRevExplicit = createMockRes();
+    await handlePostback(reqRevExplicit, resRevExplicit);
+
+    assert.strictEqual(resRevExplicit.statusCode, 200, '6g: explicit reversal accepted');
+    assert.strictEqual(resRevExplicit.body, '1', '6g: returns 1');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '6g: explicit type=reversal processed safely');
 
     // 6h: Unmatched reversal (received before credit or non-existent) persists marker with 0 deduction
     const txId6h = 'cpx_tx_unmatched_reversal';
@@ -850,7 +958,7 @@ async function runSection6() {
 
     assert.strictEqual(resUnmatched.statusCode, 200, '6h: unmatched reversal accepted with 200');
     assert.strictEqual(resUnmatched.body, '1', '6h: returns 1');
-    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, origBalance, '6h: unmatched reversal does NOT mutate balance');
+    assert.strictEqual(db.users.get(testUserId).taskEarningsBalance, 10.00, '6h: unmatched reversal does NOT mutate balance');
 
     console.log('✓ Section 6 Passed: Event Types (complete, out, bonus, unsupported) & Reversals.');
 }
