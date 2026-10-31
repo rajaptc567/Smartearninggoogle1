@@ -199,7 +199,7 @@ const WorkAndEarnHistory: React.FC = () => {
 
         // 2. Transfers from Investment Wallet or Task Earnings to Task Wallet / Campaign Wallet
         (transactions || [])
-            .filter(t => t.userId?.toString() === userIdStr && (
+            .filter(t => t.userId?.toString() === userIdStr && t.type !== 'Deposit' && !t.depositId && (
                 t.type === 'Investment To Task Wallet Transfer' || 
                 t.type === 'Task Wallet Transfer' ||
                 t.type === 'Task Reward Transfer' ||
@@ -212,7 +212,7 @@ const WorkAndEarnHistory: React.FC = () => {
                 t.description?.toLowerCase().includes('task earnings to campaign') ||
                 t.description?.toLowerCase().includes('from investment module') ||
                 t.description?.toLowerCase().includes('from task earnings') ||
-                t.description?.toLowerCase().includes('campaign wallet')
+                (t.description?.toLowerCase().includes('campaign wallet') && !t.description?.toLowerCase().includes('deposit'))
             ))
             .forEach(t => {
                 const txIdStr = String(t._id);
@@ -469,22 +469,43 @@ const WorkAndEarnHistory: React.FC = () => {
         (deposits || [])
             .filter(d => d.userId?.toString() === userIdStr && ((d as any).isHub || (d as any).isHubDeposit || d.userNotes?.toLowerCase().includes('hub') || d.userNotes?.toLowerCase().includes('task')))
             .forEach(d => {
-                const depUSD = d.amountUSD || (d.currency === 'USD' ? d.amount : d.amount / exchangeRate);
+                const matchingTrx = (transactions || []).find(t => 
+                    String(t.depositId) === String(d._id) || 
+                    (t.description && t.description.includes(String(d._id))) ||
+                    (d.transactionId && String(t._id) === String(d.transactionId))
+                );
+                if (matchingTrx) {
+                    addedTrxIds.add(String(matchingTrx._id));
+                }
+                addedTrxIds.add(String(d._id));
+
+                const depUSD = matchingTrx?.amountUSD || d.amountUSD || (d.currency === 'USD' ? d.amount : d.amount / (matchingTrx?.exchangeRate || exchangeRate));
+                const origAmt = matchingTrx?.originalAmount || d.amount;
+                const origCurr = matchingTrx?.originalCurrency || d.currency || userCurr;
+                const origExchangeRate = matchingTrx?.exchangeRate || exchangeRate;
+
+                const isCampaignHub = (d as any).isHub || d.destinationWallet === 'CampaignFunds' || matchingTrx?.destinationWallet === 'CampaignFunds' || d.userNotes?.toLowerCase().includes('campaign') || d.userNotes?.toLowerCase().includes('hub');
+
+                const title = isCampaignHub ? 'Deposit to Campaign Fund' : `Deposit via ${d.paymentMethodName || d.method || 'Payment Gateway'}`;
+                const subTitle = origCurr !== 'USD' && origCurr 
+                    ? `Deposit of ≈ ${Number(origAmt).toLocaleString()} ${origCurr} ($${depUSD.toFixed(2)} USD)`
+                    : `Deposit of $${depUSD.toFixed(2)} USD`;
+
                 list.push({
                     id: d._id,
                     itemType: 'deposit',
                     typeLabel: 'Deposit',
-                    title: `Deposit via ${d.paymentMethodName || d.method || 'Payment Gateway'}`,
-                    subTitle: 'Work & Earn Hub Deposit',
+                    title: title,
+                    subTitle: subTitle,
                     amountUSD: depUSD,
                     amountBase: depUSD * exchangeRate,
                     currency: 'USD',
-                    exchangeRate: exchangeRate,
+                    exchangeRate: origExchangeRate,
                     status: d.status,
-                    date: d.date,
-                    rawItem: d,
-                    trxId: d.transactionId || d._id,
-                    flow: `Payment Gateway (${d.paymentMethodName || d.method || 'Gateway'}) ➔ Task Wallet`,
+                    date: d.date || matchingTrx?.date || new Date().toISOString(),
+                    rawItem: { ...d, matchingTrx },
+                    trxId: matchingTrx?._id ? String(matchingTrx._id) : (d.transactionId || d._id),
+                    flow: isCampaignHub ? `Payment Gateway (${d.paymentMethodName || d.method || 'Gateway'}) ➔ Campaign Wallet` : `Payment Gateway (${d.paymentMethodName || d.method || 'Gateway'}) ➔ Task Wallet`,
                     remainingBalanceUSD: 0,
                     remainingBalanceBase: 0,
                     paymentMethod: d.paymentMethodName || d.method
