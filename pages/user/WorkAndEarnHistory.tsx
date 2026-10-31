@@ -469,11 +469,12 @@ const WorkAndEarnHistory: React.FC = () => {
         (deposits || [])
             .filter(d => d.userId?.toString() === userIdStr && ((d as any).isHub || (d as any).isHubDeposit || d.userNotes?.toLowerCase().includes('hub') || d.userNotes?.toLowerCase().includes('task')))
             .forEach(d => {
-                const matchingTrx = (transactions || []).find(t => 
-                    String(t.depositId) === String(d._id) || 
-                    (t.description && t.description.includes(String(d._id))) ||
-                    (d.transactionId && String(t._id) === String(d.transactionId))
-                );
+                const matchingTrx = (transactions || []).find(t => {
+                    if (t.userId?.toString() !== userIdStr) return false;
+                    const matchDepositId = String(t.depositId) === String(d._id);
+                    const matchDescriptionId = Boolean(t.description && t.description.includes(String(d._id)));
+                    return matchDepositId || matchDescriptionId;
+                });
                 if (matchingTrx) {
                     addedTrxIds.add(String(matchingTrx._id));
                 }
