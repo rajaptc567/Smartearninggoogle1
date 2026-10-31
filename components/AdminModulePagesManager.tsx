@@ -92,6 +92,7 @@ export const AdminModulePagesManager: React.FC = () => {
         transfer: settings?.myCampaignActionsConfig?.transfer !== false,
         analytics: settings?.myCampaignActionsConfig?.analytics !== false,
         convert: settings?.myCampaignActionsConfig?.convert !== false,
+        allowMainInvestmentToCampaign: settings?.myCampaignActionsConfig?.allowMainInvestmentToCampaign === true,
     }));
 
     const [localCampaignConvert, setLocalCampaignConvert] = useState<boolean>(
@@ -120,6 +121,7 @@ export const AdminModulePagesManager: React.FC = () => {
                 transfer: settings.myCampaignActionsConfig?.transfer !== false,
                 analytics: settings.myCampaignActionsConfig?.analytics !== false,
                 convert: settings.myCampaignActionsConfig?.convert !== false,
+                allowMainInvestmentToCampaign: settings.myCampaignActionsConfig?.allowMainInvestmentToCampaign === true,
             });
             setLocalCampaignConvert(settings.campaignConvertEnabled !== false);
         }
@@ -738,6 +740,29 @@ export const AdminModulePagesManager: React.FC = () => {
                             <div className="text-xs font-bold">Convert Action</div>
                             <div className="text-[10px] text-slate-400">Campaign Balance Converter</div>
                         </div>
+                    </div>
+
+                    {/* Independent Toggle: Allow Main / Investment Wallet to Campaign Transfer */}
+                    <div className={`mt-3 p-3.5 rounded-2xl border transition-all ${
+                        localMyCampaignActions.allowMainInvestmentToCampaign
+                            ? 'bg-amber-950/30 border-amber-500/40 text-white'
+                            : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                    }`}>
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-base">⚡</span>
+                                <span className="text-xs font-bold text-slate-200">Allow Main / Investment Wallet to Campaign Transfer</span>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={Boolean(localMyCampaignActions.allowMainInvestmentToCampaign)}
+                                onChange={(e) => setLocalMyCampaignActions(prev => ({ ...prev, allowMainInvestmentToCampaign: e.target.checked }))}
+                                className="w-4 h-4 rounded text-amber-500 bg-slate-800 border-slate-700 cursor-pointer"
+                            />
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                            When enabled (ON), users can transfer funds from Main or Investment Wallets directly to their Campaign Wallet. When disabled (OFF - default), users can only transfer earned Task Rewards into campaigns.
+                        </p>
                     </div>
                 </div>
             </div>

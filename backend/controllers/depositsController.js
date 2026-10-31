@@ -105,15 +105,28 @@ export const createDeposit = async (req, res) => {
 
         const deposit = await Deposit.create(depositData);
         
+        const settings = await Setting.getSettings();
+        const rates = settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.00 };
+        const userCurr = user.currency || 'USD';
+        const rate = rates[userCurr] || 1;
+        const amountUSD = userCurr === 'USD' ? deposit.amount : Number((deposit.amount / rate).toFixed(2));
+
         const transaction = await Transaction.create({
             userId: user._id,
             userName: user.username,
             currency: user.currency,
             type: 'Deposit',
             amount: deposit.amount,
+            originalAmount: deposit.amount,
+            originalCurrency: userCurr,
+            exchangeRate: rate,
+            amountUSD: amountUSD,
             status: 'Pending',
             depositId: deposit._id,
-            description: `Pending Deposit #${deposit._id}`
+            destinationWallet: deposit.isHub ? 'CampaignFunds' : 'Main',
+            description: deposit.isHub 
+                ? `Pending Campaign Wallet Deposit #${deposit._id} (${userCurr !== 'USD' ? `${deposit.amount} ${userCurr} ≈ $${amountUSD.toFixed(2)} USD` : `$${deposit.amount} USD`})`
+                : `Pending Deposit #${deposit._id}`
         });
         
         await Notification.create({
@@ -172,6 +185,31 @@ export const updateDeposit = async (req, res) => {
         }
 
         if (status === 'Approved' && originalStatus !== 'Approved') {
+            const settings = await Setting.getSettings();
+            const rates = settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.00 };
+            const depositCurrency = deposit.currency || 'USD';
+            let creditUSD = deposit.amount;
+            let exchangeRateUsed = 1;
+
+            if (deposit.isHub) {
+                if (depositCurrency === 'USD') {
+                    creditUSD = Number(deposit.amount.toFixed(2));
+                    exchangeRateUsed = 1;
+                } else {
+                    const rate = rates[depositCurrency];
+                    if (!rate || isNaN(rate) || rate <= 0) {
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: `Cannot approve Campaign Wallet deposit: Admin exchange rate for ${depositCurrency} is missing or invalid.` 
+                        });
+                    }
+                    creditUSD = Number((deposit.amount / rate).toFixed(2));
+                    exchangeRateUsed = Number(rate);
+                }
+            } else {
+                exchangeRateUsed = rates[depositCurrency] || 1;
+            }
+
             // Atomic conditional update ensuring only one approval executes
             const updatedDeposit = await Deposit.findOneAndUpdate(
                 { _id: req.params.id, status: { $ne: 'Approved' } },
@@ -187,22 +225,56 @@ export const updateDeposit = async (req, res) => {
             let user = await User.findById(deposit.userId);
             if (user) {
                 if (deposit.isHub) {
-                    user.taskWalletBalance = Number((user.taskWalletBalance + deposit.amount).toFixed(2));
+                    user.taskWalletBalance = Number(((user.taskWalletBalance || 0) + creditUSD).toFixed(2));
+                    if (!user.campaignWalletSources) {
+                        user.campaignWalletSources = { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                    }
+                    user.campaignWalletSources.fromInvestmentUSD = Number(((user.campaignWalletSources.fromInvestmentUSD || 0) + creditUSD).toFixed(2));
                 } else {
-                    user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
+                    user.walletBalance = Number(((user.walletBalance || 0) + deposit.amount).toFixed(2));
                 }
                 await user.save();
             }
 
             await Transaction.findOneAndUpdate(
                 { $or: [{ depositId: deposit._id }, { description: { $regex: deposit._id } }] },
-                { $set: { status: 'Approved', depositId: deposit._id } }
+                { 
+                    $set: { 
+                        status: 'Approved', 
+                        depositId: deposit._id,
+                        originalAmount: deposit.amount,
+                        originalCurrency: depositCurrency,
+                        exchangeRate: exchangeRateUsed,
+                        amountUSD: deposit.isHub ? creditUSD : (depositCurrency === 'USD' ? deposit.amount : Number((deposit.amount / exchangeRateUsed).toFixed(2))),
+                        destinationWallet: deposit.isHub ? 'CampaignFunds' : 'Main',
+                        ...(deposit.isHub ? { 'sourceBreakdown.fromInvestmentUSD': creditUSD } : {})
+                    } 
+                }
             );
+
+            // In-app notification for the user with complete conversion details
+            try {
+                const notifMsg = deposit.isHub
+                    ? (depositCurrency === 'USD'
+                        ? `Your Campaign Wallet deposit #${deposit._id} of $${creditUSD.toFixed(2)} USD has been approved and credited.`
+                        : `Your Campaign Wallet deposit #${deposit._id} of ${deposit.amount} ${depositCurrency} has been converted (Rate: 1 USD = ${exchangeRateUsed} ${depositCurrency}) and credited as $${creditUSD.toFixed(2)} USD.`)
+                    : `Your deposit #${deposit._id} of ${deposit.amount} ${depositCurrency} has been approved and credited to your wallet.`;
+
+                await Notification.create({
+                    userId: deposit.userId,
+                    subject: deposit.isHub ? 'Campaign Wallet Deposit Approved 🪙' : 'Deposit Approved 💳',
+                    message: notifMsg,
+                    senderType: 'System'
+                });
+            } catch (notifErr) {
+                console.error('Failed to create in-app deposit approval notification:', notifErr);
+            }
             
             // Send dynamic templated notification in the background
             const variables = {
                 amount: deposit.amount,
                 currency: deposit.currency,
+                amountUSD: deposit.isHub ? creditUSD : undefined,
                 txId: deposit.transactionId || deposit._id,
                 notes: adminNotes || ''
             };

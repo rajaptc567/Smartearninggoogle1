@@ -5442,40 +5442,51 @@ export const transferTaskEarningsToCampaignWallet = async (req, res) => {
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
+        const settings = await Setting.getSettings();
+        if (settings?.myCampaignActionsConfig?.convert === false || settings?.campaignConvertEnabled === false) {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Task Earnings transfers to Campaign are currently disabled by Admin.' 
+            });
+        }
+
         const transferAmtUSD = Number(amountUSD);
-        if (isNaN(transferAmtUSD) || transferAmtUSD <= 0) {
+        if (isNaN(transferAmtUSD) || !isFinite(transferAmtUSD) || transferAmtUSD <= 0) {
             return res.status(400).json({ success: false, error: 'Please enter a valid transfer amount.' });
         }
 
-        const settings = await Setting.getSettings();
         const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
         const userCurr = user.currency || 'USD';
         const rate = rates[userCurr] || 1;
 
-        const currentTaskEarnings = Number((user.taskEarningsBalance || 0).toFixed(2));
+        // Atomic conditional decrement to prevent concurrent double-spending
+        const updatedUser = await User.findOneAndUpdate(
+            {
+                _id: user._id,
+                taskEarningsBalance: { $gte: transferAmtUSD - 0.0001 }
+            },
+            {
+                $inc: {
+                    taskEarningsBalance: -transferAmtUSD,
+                    taskWalletBalance: transferAmtUSD,
+                    'campaignWalletSources.fromTaskEarningsUSD': transferAmtUSD
+                }
+            },
+            { new: true }
+        );
 
-        if (currentTaskEarnings < transferAmtUSD - 0.001) {
+        if (!updatedUser) {
+            const freshUser = await User.findById(userId);
+            const freshEarnings = freshUser ? Number((freshUser.taskEarningsBalance || 0).toFixed(2)) : 0;
             return res.status(400).json({ 
                 success: false, 
-                error: `Insufficient Task Earnings. Available: $${currentTaskEarnings.toFixed(2)} USD, Requested: $${transferAmtUSD.toFixed(2)} USD.` 
+                error: `Insufficient Task Earnings or concurrent transaction detected. Available: $${freshEarnings.toFixed(2)} USD, Requested: $${transferAmtUSD.toFixed(2)} USD.` 
             });
         }
 
-        user.taskEarningsBalance = Number(Math.max(0, currentTaskEarnings - transferAmtUSD).toFixed(2));
-        user.taskWalletBalance = Number(((user.taskWalletBalance || 0) + transferAmtUSD).toFixed(2));
-
-        // Update campaignWalletSources
-        const curSources = user.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
-        user.campaignWalletSources = {
-            fromInvestmentUSD: curSources.fromInvestmentUSD || 0,
-            fromTaskEarningsUSD: Number(((curSources.fromTaskEarningsUSD || 0) + transferAmtUSD).toFixed(2)),
-            fromRefundsUSD: curSources.fromRefundsUSD || 0
-        };
-        await user.save();
-
         const newTrx = await Transaction.create({
-            userId: user._id,
-            userName: user.username || user.email,
+            userId: updatedUser._id,
+            userName: updatedUser.username || updatedUser.email,
             currency: 'USD',
             type: 'Task Reward Transfer',
             amount: transferAmtUSD,
@@ -5493,7 +5504,7 @@ export const transferTaskEarningsToCampaignWallet = async (req, res) => {
         });
 
         await Notification.create({
-            userId: user._id,
+            userId: updatedUser._id,
             subject: 'Campaign Wallet Funded 🪙',
             message: `Successfully converted $${transferAmtUSD.toFixed(2)} USD from Task Earnings Wallet to Campaign Wallet.`,
             senderType: 'System'
@@ -5503,7 +5514,7 @@ export const transferTaskEarningsToCampaignWallet = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
-                user,
+                user: updatedUser,
                 transferredUSD: transferAmtUSD,
                 transaction: newTrx
             }
@@ -5527,6 +5538,18 @@ export const transferWalletToCampaign = async (req, res) => {
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
         const settings = await Setting.getSettings();
+        if (settings?.myCampaignActionsConfig?.allowMainInvestmentToCampaign !== true) {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Main and Investment wallet transfers to Campaign are currently disabled by Admin.' 
+            });
+        }
+
+        if (sourceWallet !== 'Main' && sourceWallet !== 'Investment') {
+            return res.status(400).json({ success: false, error: 'Invalid source wallet specified. Allowed sources are Main or Investment.' });
+        }
+        const source = sourceWallet;
+
         const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
         const userCurr = user.currency || 'USD';
         const rate = rates[userCurr] || 1;
@@ -5540,34 +5563,58 @@ export const transferWalletToCampaign = async (req, res) => {
             transferInUSD = Number((transferInUserCurr / rate).toFixed(2));
         }
 
-        if (isNaN(transferInUserCurr) || transferInUserCurr <= 0) {
+        if (isNaN(transferInUserCurr) || !isFinite(transferInUserCurr) || transferInUserCurr <= 0) {
             return res.status(400).json({ success: false, error: 'Please enter a valid transfer amount.' });
         }
 
-        const source = sourceWallet === 'Investment' ? 'Investment' : 'Main';
-        const availableBalance = source === 'Investment' 
-            ? ((user.investmentBalance !== undefined && user.investmentBalance !== null && user.investmentBalance > 0) ? user.investmentBalance : (user.walletBalance || 0))
-            : (user.walletBalance || 0);
+        // Selected-wallet-only atomic deduction: never silently substitute one wallet for another
+        let updatedUser = null;
+        if (source === 'Investment') {
+            updatedUser = await User.findOneAndUpdate(
+                {
+                    _id: user._id,
+                    investmentBalance: { $gte: transferInUserCurr - 0.0001 }
+                },
+                {
+                    $inc: {
+                        investmentBalance: -transferInUserCurr,
+                        taskWalletBalance: transferInUSD,
+                        'campaignWalletSources.fromInvestmentUSD': transferInUSD
+                    }
+                },
+                { new: true }
+            );
+        } else {
+            updatedUser = await User.findOneAndUpdate(
+                {
+                    _id: user._id,
+                    walletBalance: { $gte: transferInUserCurr - 0.0001 }
+                },
+                {
+                    $inc: {
+                        walletBalance: -transferInUserCurr,
+                        taskWalletBalance: transferInUSD,
+                        'campaignWalletSources.fromInvestmentUSD': transferInUSD
+                    }
+                },
+                { new: true }
+            );
+        }
 
-        if (availableBalance < transferInUserCurr - 0.001) {
+        if (!updatedUser) {
+            const freshUser = await User.findById(userId);
+            const freshBalance = source === 'Investment'
+                ? Number((freshUser?.investmentBalance || 0).toFixed(2))
+                : Number((freshUser?.walletBalance || 0).toFixed(2));
             return res.status(400).json({ 
                 success: false, 
-                error: `Insufficient balance in ${source} Wallet. Available: ${availableBalance.toFixed(2)} ${userCurr}, Requested: ${transferInUserCurr.toFixed(2)} ${userCurr}` 
+                error: `Insufficient balance in ${source} Wallet or concurrent transfer detected. Available: ${freshBalance.toFixed(2)} ${userCurr}, Requested: ${transferInUserCurr.toFixed(2)} ${userCurr}` 
             });
         }
 
-        if (source === 'Investment' && user.investmentBalance !== undefined && user.investmentBalance !== null && user.investmentBalance > 0) {
-            user.investmentBalance = Number(Math.max(0, user.investmentBalance - transferInUserCurr).toFixed(2));
-        } else {
-            user.walletBalance = Number(Math.max(0, (user.walletBalance || 0) - transferInUserCurr).toFixed(2));
-        }
-
-        user.taskWalletBalance = Number(((user.taskWalletBalance || 0) + transferInUSD).toFixed(2));
-        await user.save();
-
         const newTrx = await Transaction.create({
-            userId: user._id,
-            userName: user.username || user.email,
+            userId: updatedUser._id,
+            userName: updatedUser.username || updatedUser.email,
             currency: userCurr,
             type: source === 'Investment' ? 'Investment To Task Wallet Transfer' : 'Main To Campaign Wallet Transfer',
             amount: -transferInUserCurr,
@@ -5575,12 +5622,19 @@ export const transferWalletToCampaign = async (req, res) => {
             originalAmount: -transferInUserCurr,
             originalCurrency: userCurr,
             exchangeRate: rate,
+            sourceWallet: source,
+            destinationWallet: 'CampaignFunds',
+            sourceBreakdown: {
+                fromInvestmentUSD: transferInUSD,
+                fromTaskEarningsUSD: 0,
+                fromRefundsUSD: 0
+            },
             description: `Transferred ${transferInUserCurr.toFixed(2)} ${userCurr} ($${transferInUSD.toFixed(2)} USD) from ${source} Wallet to Campaign Wallet`,
             status: 'Approved'
         });
 
         await Notification.create({
-            userId: user._id,
+            userId: updatedUser._id,
             subject: 'Campaign Wallet Funded 💳',
             message: `Successfully transferred ${transferInUserCurr.toFixed(2)} ${userCurr} ($${transferInUSD.toFixed(2)} USD) from your ${source} Wallet to your Campaign Wallet.`,
             senderType: 'System'
@@ -5590,7 +5644,7 @@ export const transferWalletToCampaign = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
-                user,
+                user: updatedUser,
                 transferredUserCurr: transferInUserCurr,
                 transferredUSD: transferInUSD,
                 currency: userCurr,

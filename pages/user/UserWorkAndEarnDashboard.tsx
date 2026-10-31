@@ -497,12 +497,18 @@ const UserWorkAndEarnDashboard: React.FC = () => {
 
     // Deposits and Withdrawals for Work & Earn Hub
     const totalHubDepositsBase = useMemo(() => {
+        const rates = state.settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.00 };
         return (deposits || [])
             .filter(d => d.userId?.toString() === userIdStr && (d.status === 'Approved' || d.status === 'Paid') && ((d as any).isHub || (d as any).isTaskWallet || d.userNotes?.toLowerCase().includes('hub') || d.userNotes?.toLowerCase().includes('task')))
-            .reduce((sum, d) => sum + (d.amount || 0), 0);
-    }, [deposits, userIdStr]);
+            .reduce((sum, d) => {
+                const depCurr = d.currency || currentUser.currency || 'USD';
+                const depRate = rates[depCurr] || (depCurr === 'USD' ? 1 : exchangeRate || 1);
+                const amtUSD = depCurr === 'USD' ? (d.amount || 0) : (d.amount || 0) / depRate;
+                return sum + amtUSD;
+            }, 0);
+    }, [deposits, userIdStr, currentUser.currency, state.settings, exchangeRate]);
 
-    const totalHubDepositsUSD = totalHubDepositsBase / (exchangeRate || 1);
+    const totalHubDepositsUSD = totalHubDepositsBase;
 
     const totalHubWithdrawalsBase = useMemo(() => {
         return (withdrawals || [])
@@ -544,9 +550,34 @@ const UserWorkAndEarnDashboard: React.FC = () => {
         return Number((investmentTransferSumUSD + fundsUsedForCampaignUSD + totalHubDepositsUSD).toFixed(2));
     }, [investmentTransferSumUSD, fundsUsedForCampaignUSD, totalHubDepositsUSD]);
 
-    const availableTransferBalanceUSD = useMemo(() => {
-        return Math.max(0, Number((totalTransferredInUSD - totalCampaignPurchasesUSD).toFixed(2)));
-    }, [totalTransferredInUSD, totalCampaignPurchasesUSD]);
+    const campaignRefundsUSD = useMemo(() => {
+        return (transactions || []).reduce((sum, t) => {
+            if (t.userId?.toString() !== userIdStr) return sum;
+            if (t.status === 'Rejected' || t.status === 'Cancelled') return sum;
+            const typeLower = (t.type || '').toLowerCase();
+            const descLower = (t.description || '').toLowerCase();
+            const isRefund = typeLower.includes('refund') || descLower.includes('refund') || typeLower.includes('campaign refund') || descLower.includes('refund from campaign');
+            if (isRefund) {
+                let amtUSD = t.amountUSD && Math.abs(t.amountUSD) > 0 ? Math.abs(t.amountUSD) : Math.abs(t.amount || 0);
+                if (t.currency && t.currency !== 'USD') {
+                    amtUSD = amtUSD / (t.exchangeRate || exchangeRate || 1);
+                }
+                return sum + amtUSD;
+            }
+            return sum;
+        }, 0);
+    }, [transactions, userIdStr, exchangeRate]);
+
+    const netBudgetDeployedUSD = useMemo(() => {
+        return Number((totalCampaignPurchasesUSD - campaignRefundsUSD).toFixed(2));
+    }, [totalCampaignPurchasesUSD, campaignRefundsUSD]);
+
+    const expectedCampaignBalanceUSD = useMemo(() => {
+        return Number((totalTransferredInUSD - netBudgetDeployedUSD).toFixed(2));
+    }, [totalTransferredInUSD, netBudgetDeployedUSD]);
+
+    const spendableCampaignWalletUSD = Number((currentUser.taskWalletBalance || 0).toFixed(2));
+    const availableTransferBalanceUSD = spendableCampaignWalletUSD;
 
     // 2x3 Bento Grid calculations
     const { tasksTodayCount, earnedTodayUSD } = useMemo(() => {
@@ -1525,7 +1556,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                             </span>
                             {currentUser.currency !== 'USD' && (
                                 <span className="text-[11px] sm:text-xs font-bold text-slate-400 font-mono">
-                                    ({getCurrencySymbol()}{(availableTransferBalanceUSD * exchangeRate).toFixed(2)} {currentUser.currency})
+                                    ({currentUser.currency === 'PKR' ? 'Rs.' : getCurrencySymbol()}{(availableTransferBalanceUSD * exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currentUser.currency})
                                 </span>
                             )}
                         </div>
@@ -1545,21 +1576,35 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                                     <span className="font-bold text-blue-300 font-mono">${(investmentTransferSumUSD + totalHubDepositsUSD).toFixed(2)} USD</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-slate-400">From Task Earnings:</span>
+                                    <span className="text-slate-400">Task Earnings Transferred In:</span>
                                     <span className="font-bold text-purple-300 font-mono">${fundsUsedForCampaignUSD.toFixed(2)} USD</span>
                                 </div>
                                 <div className="flex justify-between items-center border-t border-slate-800/60 pt-1">
-                                    <span className="text-slate-300 font-bold">Total Funding:</span>
+                                    <span className="text-slate-300 font-bold">Total Inflow:</span>
                                     <span className="font-bold text-emerald-400 font-mono">${totalTransferredInUSD.toFixed(2)} USD</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-slate-400">Campaign Budget Spent:</span>
+                                    <span className="text-slate-400">Gross Campaign Budget Deployed:</span>
                                     <span className="font-bold text-amber-400 font-mono">-${totalCampaignPurchasesUSD.toFixed(2)} USD</span>
                                 </div>
-                                <div className="flex justify-between items-center pt-1 border-t border-slate-800 font-bold">
-                                    <span className="text-slate-200">Available Campaign Balance:</span>
-                                    <span className="text-blue-300 font-mono">${availableTransferBalanceUSD.toFixed(2)} USD</span>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-400">Campaign Refunds:</span>
+                                    <span className="font-bold text-emerald-400 font-mono">+${campaignRefundsUSD.toFixed(2)} USD</span>
                                 </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-300 font-bold">Net Campaign Budget Used:</span>
+                                    <span className="font-bold text-amber-400 font-mono">-${netBudgetDeployedUSD.toFixed(2)} USD</span>
+                                </div>
+                                <div className="flex justify-between items-center pt-1 border-t border-slate-800 font-bold">
+                                    <span className="text-slate-200">Available Campaign Wallet Balance:</span>
+                                    <span className="text-blue-300 font-mono">${spendableCampaignWalletUSD.toFixed(2)} USD</span>
+                                </div>
+                                {Math.abs(spendableCampaignWalletUSD - expectedCampaignBalanceUSD) > 0.01 && (
+                                    <div className="pt-1 text-[9px] text-amber-400/90 font-medium flex items-center justify-between border-t border-slate-800/40">
+                                        <span>⚠️ Ledger Expected Balance:</span>
+                                        <span className="font-mono font-bold">${expectedCampaignBalanceUSD.toFixed(2)} USD</span>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

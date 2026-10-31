@@ -1325,13 +1325,27 @@ const WorkAndEarnHistory: React.FC = () => {
                                     <span className="block font-medium text-slate-900 dark:text-white">{new Date(selectedItem.date).toLocaleString()}</span>
                                 </div>
 
-                                {/* Base Currency Value - Internal conversion rate hidden */}
+                                {/* Base Currency Value */}
                                 <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl space-y-1 border border-slate-200 dark:border-slate-700/60">
                                     <span className="text-[10px] uppercase font-bold text-slate-400">Base Currency Amount ({userCurr})</span>
                                     <span className="block font-black text-sm text-slate-900 dark:text-white">
                                         {Math.abs(selectedItem.amountBase).toFixed(2)} {userCurr}
                                     </span>
                                 </div>
+
+                                {selectedItem.rawItem?.originalAmount && selectedItem.rawItem?.originalCurrency && (
+                                    <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl space-y-1 border border-slate-200 dark:border-slate-700/60">
+                                        <span className="text-[10px] uppercase font-bold text-slate-400">Original Transaction Source</span>
+                                        <span className="block font-black text-sm text-slate-900 dark:text-white">
+                                            {formatCurrency(selectedItem.rawItem.originalAmount, selectedItem.rawItem.originalCurrency)}
+                                        </span>
+                                        {selectedItem.rawItem.exchangeRate && (
+                                            <span className="text-[9px] text-slate-400 block font-mono">
+                                                Rate: 1 USD = {selectedItem.rawItem.exchangeRate} {selectedItem.rawItem.originalCurrency}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Campaign Details if Campaign Purchase */}
                                 {selectedItem.itemType === 'campaign_purchase' && (

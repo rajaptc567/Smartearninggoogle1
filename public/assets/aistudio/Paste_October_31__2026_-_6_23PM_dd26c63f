@@ -1,0 +1,909 @@
+SMARTEXN — MASTER IMPLEMENTATION PROMPT
+
+Campaign Wallet Currency Reconciliation, Admin Exchange Rates, Dashboard, My Campaign Net Budget Used & Financial History
+
+1. PROJECT CONTEXT — READ BEFORE MAKING CHANGES
+
+Website: https://smartexn.com
+GitHub Repository: https://github.com/rajaptc567/Smartearninggoogle1.git
+Backend API: https://smartearning-api.onrender.com
+
+SmartExn is a LIVE earning and micro-task platform.
+
+The website is already operational, and real users, balances, transactions, campaigns, withdrawals, provider integrations and admin settings exist.
+
+This is an existing implementation task, NOT a new application development task.
+
+IMPORTANT: Continue working in the SAME existing Gemini AI Studio workspace where the previous Campaign Wallet implementation was performed.
+
+Do not restart the implementation from GitHub or replace the existing workspace with an older repository version.
+
+The previous implementation reportedly modified these four files:
+
+1. "pages/user/UserWorkAndEarnDashboard.tsx"
+2. "pages/user/UserTasksSubmit.tsx"
+3. "components/AdminModulePagesManager.tsx"
+4. "backend/controllers/userTasksController.js"
+
+Preserve these existing changes and build upon them.
+
+Before editing, inspect the actual current workspace and identify all existing modifications.
+
+Do not overwrite, remove, or recreate working functionality unnecessarily.
+
+---
+
+2. PRIMARY OBJECTIVE
+
+Complete and verify the Campaign Wallet financial system so that:
+
+- Campaign Wallet accounting always uses USD as its internal base currency.
+- Local currency conversions use the exchange rates configured by Admin.
+- Deposits in PKR, EUR, or other supported currencies are correctly converted into USD before being credited to Campaign Wallet.
+- Dashboard and My Campaign show correct USD balances with local-currency equivalents.
+- Task Earnings and Campaign Wallet remain separate.
+- Admin controls which wallet sources users can transfer into Campaign Wallet.
+- My Campaign includes a Net Budget Used card with an expandable financial breakdown.
+- Campaign spending, refunds, remaining funds and transaction history reconcile correctly.
+- Existing notifications and financial history display correct currency information.
+- No existing live feature or provider integration is disturbed.
+
+---
+
+3. CRITICAL RULE: ADMIN-CONFIGURED EXCHANGE RATES ONLY
+
+This is one of the most important requirements.
+
+All currency conversions MUST use the exchange rates configured by Admin in the existing SmartExn Admin Settings.
+
+Do not hardcode any exchange rate.
+
+For example, if Admin configures:
+
+- 1 USD = 278 PKR
+- 1 USD = 0.92 EUR
+
+The application must use those configured values.
+
+These are examples only, NOT fixed values to insert into the code.
+
+Before implementation:
+
+Inspect:
+
+- Existing Admin exchange-rate settings.
+- Settings database/model.
+- Settings API and backend controllers.
+- Frontend exchange-rate retrieval.
+- Existing currency conversion utilities.
+- Existing conversion formulas throughout the application.
+
+Confirm the actual conversion convention and direction before making changes.
+
+Do not assume whether a stored rate represents USD-to-local or local-to-USD.
+
+Reuse the existing centralized exchange-rate source and conversion functions wherever possible.
+
+Required behaviour:
+
+1. Never hardcode PKR, EUR, or any other exchange rate.
+2. Do not introduce a separate exchange-rate system.
+3. Do not duplicate conversion formulas unnecessarily.
+4. Use the Admin-configured rate for new currency conversions.
+5. When Admin updates a rate, new conversions and current local-currency display equivalents must use the updated rate.
+6. Preserve historical exchange-rate information for old transactions.
+7. Never overwrite historical transaction amounts using today's exchange rate.
+8. If a required exchange rate is missing, invalid, or zero, fail safely. Never credit an incorrectly converted amount.
+9. Do not change the user's profile currency.
+
+If the existing exchange-rate configuration cannot safely support a required conversion, report the issue before introducing a new mechanism.
+
+---
+
+4. CAMPAIGN WALLET — USD BASE-CURRENCY ACCOUNTING
+
+Campaign Wallet must use USD as its internal accounting currency.
+
+The user's profile currency may be PKR, EUR, USD, or another supported currency.
+
+For example:
+
+- User profile currency: PKR
+- Deposit amount: PKR 3,500
+- Admin-configured exchange rate: 1 USD = PKR 278
+- Converted Campaign Wallet credit: approximately USD 12.59
+
+The Campaign Wallet must receive approximately USD 12.59, NOT 3,500 USD.
+
+The original deposit must remain identifiable as:
+
+- Original amount: PKR 3,500
+- Original currency: PKR
+- Converted amount credited: USD 12.59
+- Applicable exchange rate: the rate used for that transaction
+
+Use the application's established rounding and precision rules.
+
+Inspect and correct:
+
+"backend/controllers/depositsController.js"
+
+The existing Hub deposit approval logic reportedly adds "deposit.amount" directly to "user.taskWalletBalance".
+
+Inspect this carefully.
+
+If the deposit is in a non-USD currency, convert it using the Admin-configured exchange rate BEFORE crediting the Campaign Wallet.
+
+If the deposit is already in the USD base currency, credit it without unnecessary conversion.
+
+The Deposit schema currently supports EUR, PKR and USD. Inspect the actual schema and do not introduce USDT as a new deposit currency unless the existing business requirements and payment configuration explicitly require it.
+
+Important:
+
+- Do not convert an already USD-denominated amount twice.
+- Do not change unrelated deposit approval behaviour.
+- Do not affect normal wallet deposits.
+- Do not alter existing payment-provider integrations.
+- Do not change withdrawal accounting.
+- Do not change existing user balances through a bulk migration.
+- Do not automatically recalculate old approved deposits.
+
+Only correct the relevant Campaign Wallet crediting logic for new approvals, with safe handling of existing records.
+
+---
+
+5. DASHBOARD — CAMPAIGN WALLET DISPLAY
+
+File:
+
+"pages/user/UserWorkAndEarnDashboard.tsx"
+
+Inspect the existing Campaign Wallet card and its expandable breakdown.
+
+The previous implementation reportedly already uses:
+
+"currentUser.taskWalletBalance"
+
+as the Campaign Wallet USD balance.
+
+Preserve that authoritative USD balance source if confirmed by the actual code.
+
+Required display:
+
+For a PKR user:
+
+Primary balance:
+
+"$12.59 USD"
+
+Local equivalent:
+
+"(Rs.3,500 PKR)"
+
+The local equivalent must be calculated using the applicable Admin-configured exchange rate.
+
+For an EUR user, show the EUR equivalent.
+
+For a USD user, do not unnecessarily duplicate the USD value.
+
+Important:
+
+The existing expandable Campaign Wallet breakdown already exists.
+
+Reuse and preserve it.
+
+Do not create a duplicate card or a second financial breakdown.
+
+Correct only the incorrect balance conversion/display.
+
+The existing inflow calculation reportedly already converts deposits correctly. Do not break or unnecessarily rewrite it.
+
+The following values must remain consistent:
+
+- Deposits and investments.
+- Task Earnings transferred into Campaign Wallet.
+- Total funding.
+- Campaign budget spent.
+- Available Campaign Wallet balance.
+
+The Campaign Wallet available balance must always be based on the actual USD balance, not the user's local-currency number.
+
+---
+
+6. MY CAMPAIGN — FINANCIAL OVERVIEW
+
+File:
+
+"pages/user/UserTasksSubmit.tsx"
+
+Inspect the existing section:
+
+"Campaign Finances & Capital Overview"
+
+The current implementation reportedly includes:
+
+- Deposit & Investment.
+- Task Earnings.
+- Total Inflow.
+- Budget Deployed.
+- Remaining Funds.
+- Live Escrow Reserved.
+
+Preserve the existing financial cards and their working calculations unless an actual error is identified.
+
+A. Correct Available Campaign Wallet Balance
+
+Use the authoritative USD Campaign Wallet balance.
+
+Show:
+
+"$12.59 USD"
+
+And its local equivalent:
+
+"(Rs.3,500 PKR)"
+
+Use Admin-configured exchange rates.
+
+Do not display a PKR numerical balance with a USD symbol.
+
+Do not convert the USD balance twice.
+
+Do not change the user's profile currency.
+
+B. Keep separate financial accounts
+
+These balances must remain separate:
+
+1. Campaign Wallet.
+2. Task Earnings.
+3. Main/Investment Wallet.
+4. Campaign Escrow.
+
+Do not combine Task Earnings with Campaign Wallet unless an actual completed transfer has taken place.
+
+Do not count pending transfers as completed funding.
+
+Do not count the same deposit, transfer, refund, or campaign expenditure more than once.
+
+---
+
+7. MY CAMPAIGN — NET BUDGET USED CARD WITH DROPDOWN
+
+This is a required UI improvement.
+
+In the existing My Campaign financial overview, add a card titled:
+
+Net Budget Used
+
+The card must show the primary net-used amount immediately.
+
+For example:
+
+- Total campaign budget deployed: $5.75
+- Total refunds: $5.75
+- Net Budget Used: $0.00
+
+Expandable dropdown behaviour
+
+Add a clickable dropdown arrow to this card.
+
+When clicked, expand a breakdown containing EXACTLY these three financial values:
+
+1. Total Amount Used in Campaigns
+2. Total Refunds
+3. Remaining Amount
+
+The primary card value must be the net amount used.
+
+Formula:
+
+"Net Budget Used = Total Amount Used in Campaigns - Total Refunds"
+
+Use the correct authoritative accounting records and existing campaign-finance logic.
+
+Important distinction:
+
+Do not confuse:
+
+- Net Budget Used.
+- Available Campaign Wallet Balance.
+- Remaining Campaign Escrow.
+
+They are different financial concepts.
+
+The card's three expanded values must reconcile with the primary net-used value.
+
+Refund calculation requirements
+
+Inspect all relevant campaign lifecycle scenarios:
+
+- Approved campaigns.
+- Active campaigns.
+- On Hold campaigns.
+- Rejected campaigns.
+- Deleted campaigns.
+- Fully refunded campaigns.
+- Partially refunded campaigns.
+- Pending campaigns.
+- Campaigns with multiple refunds.
+
+Use actual recorded refund amounts.
+
+Do not calculate refunds by assuming that a rejected or deleted campaign automatically received a full refund.
+
+Do not double-count:
+
+- Multiple refund records.
+- Partial refunds.
+- Refunds already included in a campaign transaction.
+- Historical campaign refunds.
+
+If the existing database does not provide reliable information for any calculation, clearly report the limitation instead of inventing a value.
+
+Use the existing dropdown/expandable UI pattern from the Dashboard Campaign Wallet card where appropriate.
+
+Keep the design consistent with SmartExn's existing UI.
+
+---
+
+8. ADMIN CONFIGURATION — TRANSFER SOURCES
+
+File:
+
+"components/AdminModulePagesManager.tsx"
+
+Inspect the existing Admin configuration introduced in the previous implementation.
+
+The Admin must be able to independently enable or disable these Campaign Wallet funding sources:
+
+1. Task Earnings.
+2. Main/Investment Wallet.
+
+Default settings:
+
+- Task Earnings: ENABLED.
+- Main/Investment Wallet: DISABLED.
+
+These defaults must remain intact unless the existing persisted Admin configuration explicitly overrides them.
+
+User-facing behaviour:
+
+Only show transfer sources enabled by Admin.
+
+If Task Earnings is enabled:
+
+- Show Task Earnings as a transfer source.
+- Select it by default.
+- Prefill the user's available Task Earnings balance.
+- Allow the user to edit the amount.
+- Allow partial or full transfers.
+
+If Main/Investment Wallet is enabled:
+
+- Show it as an available source.
+- Prefill the corresponding available balance.
+- Allow valid partial or full transfers.
+
+If a source is disabled by Admin, users must not be able to transfer from it.
+
+Security requirement:
+
+Frontend hiding is NOT sufficient.
+
+The backend must independently verify:
+
+- Whether the source is enabled.
+- Whether the user has sufficient balance.
+- Whether the selected source is valid.
+- Whether the transfer amount is valid.
+- Whether the transfer is permitted under current Admin settings.
+
+Never trust a frontend-supplied balance or permission flag.
+
+---
+
+9. BACKEND TRANSFERS AND CAMPAIGN ACCOUNTING
+
+File:
+
+"backend/controllers/userTasksController.js"
+
+Inspect the existing transfer and campaign accounting implementation.
+
+Preserve the previous implementation's working functionality.
+
+Task Earnings to Campaign Wallet
+
+- Both balances must use their correct USD accounting units.
+- Deduct only the requested amount.
+- Add the same valid USD amount to Campaign Wallet.
+- Update the correct source breakdown.
+- Prevent duplicate submissions and race conditions.
+
+Main/Investment Wallet to Campaign Wallet
+
+The Main/Investment Wallet may be denominated in the user's local currency.
+
+If so:
+
+1. Validate the source balance in its actual stored currency.
+2. Convert the requested amount using the Admin-configured exchange rate.
+3. Deduct the correct local-currency amount.
+4. Credit the corresponding USD amount to Campaign Wallet.
+5. Record the original amount, original currency, converted USD amount, and applicable exchange rate.
+
+Do not mix local-currency amounts with USD amounts.
+
+Atomicity and reliability
+
+Inspect the existing database update mechanism.
+
+Where supported, use atomic conditional updates or MongoDB transactions for multi-document financial operations.
+
+Prevent:
+
+- Negative balances.
+- Duplicate credits.
+- Double deductions.
+- Concurrent transfer race conditions.
+- Partial financial updates.
+- Unauthorized source selection.
+- Invalid exchange-rate calculations.
+
+If MongoDB transaction support is not available in the current deployment configuration, use a safe alternative consistent with the existing architecture and explain the limitation.
+
+Do not introduce an architectural rewrite.
+
+Campaign spending and refunds
+
+Campaign spending, refunds, and Campaign Wallet accounting must remain USD-based.
+
+Do not convert USD refunds into local currency before crediting Campaign Wallet.
+
+Refunds must restore the correct USD amount and corresponding source breakdown.
+
+Preserve existing campaign creation, editing, approval, rejection, deletion, escrow, and dispute workflows.
+
+---
+
+10. TRANSACTION HISTORY — ORIGINAL AND CONVERTED CURRENCY
+
+Inspect:
+
+- "pages/user/WorkAndEarnHistory.tsx"
+- "pages/user/Transactions.tsx"
+- Transaction model/schema.
+- Deposit model/schema.
+- Relevant backend transaction creation and update controllers.
+
+The Transaction model reportedly supports:
+
+- "originalAmount"
+- "originalCurrency"
+- "exchangeRate"
+- "amountUSD"
+- "currency"
+- "depositId"
+- source/destination wallet information.
+
+Verify actual field availability and usage.
+
+Required display
+
+For a PKR deposit:
+
+- Original amount: Rs.3,500 PKR.
+- Converted Campaign Wallet credit: $12.59 USD.
+
+For an EUR deposit:
+
+- Original EUR amount.
+- Converted USD amount.
+
+For a USD deposit:
+
+- Show USD without unnecessary conversion.
+
+Important requirements
+
+- Preserve the original deposit amount and currency.
+- Preserve the historical exchange rate.
+- Never replace historical original amounts with today's rate.
+- Do not invent originalAmount or exchangeRate values for old records.
+- If an old transaction lacks historical conversion information, display only what can be verified.
+- Preserve existing history UI and formatting wherever possible.
+
+The purpose is to correct missing or incorrect information, not redesign the transaction-history system.
+
+---
+
+11. NOTIFICATIONS AND FINANCIAL MESSAGES
+
+Inspect the actual notification pipeline before editing.
+
+Do not assume that a particular notification service or template filename exists.
+
+Identify the real implementation used by:
+
+- Backend notification creation.
+- In-app notifications.
+- Email notifications.
+- Financial notification templates.
+- Frontend notification rendering.
+
+Required behaviour
+
+Where applicable, financial notifications should clearly communicate:
+
+1. Original transaction amount and currency.
+2. Converted USD amount credited or deducted.
+3. Relevant transaction status.
+4. Applicable exchange-rate reference when useful and available.
+
+For example, a Campaign Wallet deposit approval notification may communicate:
+
+"Your PKR 3,500 deposit has been converted and credited as $12.59 USD to your Campaign Wallet."
+
+This is an illustrative example only.
+
+Use actual transaction values.
+
+Important
+
+- Do not break existing notification templates.
+- Do not remove Admin notifications.
+- Do not alter unrelated email or WhatsApp notifications.
+- Do not introduce duplicate notifications.
+- Do not change provider-specific notification handling.
+- Preserve existing notification action links and buttons.
+- Do not display misleading currency values.
+
+Refund and transfer notifications must reflect the actual recorded amounts and currencies.
+
+---
+
+12. EXISTING IMPLEMENTATION — VERIFY BEFORE MODIFYING
+
+The previous Gemini implementation reportedly introduced:
+
+- Dashboard Campaign Wallet expandable breakdown.
+- My Campaign financial overview.
+- Admin transfer-source configuration.
+- Server-side transfer-source checks.
+- Atomic Task Earnings transfer logic.
+- Main/Investment Wallet transfer handling.
+- Transfer amount validation.
+- Duplicate-click protection.
+- Campaign Wallet balance display.
+
+Do not assume these features are correct merely because they were previously implemented.
+
+Verify their actual code.
+
+If they are correct, preserve them.
+
+If they have a specific defect, make the smallest necessary correction.
+
+Do not rewrite working components just to implement the new requirements.
+
+---
+
+13. LIVE WEBSITE SAFETY — STRICT RESTRICTIONS
+
+SmartExn is LIVE.
+
+The following restrictions are mandatory.
+
+Do NOT:
+
+- Delete or reset existing user balances.
+- Modify historical financial records in bulk.
+- Run automatic balance migrations.
+- Recalculate all existing deposits.
+- Change historical campaign refunds.
+- Change existing withdrawals or withdrawal approval logic.
+- Change Task Earnings calculations.
+- Change provider reward callbacks or postbacks.
+- Modify TheoremReach settings or integration.
+- Modify CPX Research settings or integration.
+- Modify any other offerwall or survey provider integration.
+- Change provider commission or payout calculations.
+- Change authentication or email verification.
+- Change user profile currency settings.
+- Change unrelated Admin settings.
+- Remove existing UI options.
+- Change existing live campaign workflows.
+- Remove existing notification actions.
+- Introduce new dependencies unless absolutely necessary.
+
+Provider protection
+
+All provider integrations must remain isolated and unchanged.
+
+This task is ONLY about Campaign Wallet, Admin exchange rates, campaign financial calculations, relevant transaction history, and relevant notifications.
+
+No production actions
+
+Do not:
+
+- Deploy.
+- Push to GitHub.
+- Commit changes.
+- Modify production database records.
+- Change Render environment variables.
+- Change production settings.
+
+Only modify the existing Gemini workspace.
+
+---
+
+14. EXACT FILE SCOPE — INSPECT AND MODIFY ONLY WHERE NECESSARY
+
+Start with these files:
+
+1. "backend/controllers/depositsController.js"
+   
+   - Correct Campaign Wallet deposit conversion during approval.
+   - Use Admin-configured exchange rates.
+   - Preserve original deposit information.
+
+2. "backend/controllers/settingsController.js"
+   
+   - Verify the existing Admin exchange-rate retrieval and convention.
+   - Change only if a genuine issue requires it.
+
+3. "backend/models/User.js"
+   
+   - Verify Campaign Wallet balance and source-breakdown fields.
+   - Do not change schema unnecessarily.
+
+4. "backend/controllers/userTasksController.js"
+   
+   - Verify transfers, campaign spending, refunds, source enforcement, and USD accounting.
+
+5. "pages/user/UserWorkAndEarnDashboard.tsx"
+   
+   - Correct Campaign Wallet USD/local display.
+   - Preserve existing expandable breakdown.
+
+6. "pages/user/UserTasksSubmit.tsx"
+   
+   - Correct My Campaign balance display.
+   - Add Net Budget Used card and dropdown.
+   - Preserve existing financial overview.
+
+7. "components/AdminModulePagesManager.tsx"
+   
+   - Preserve and verify independent transfer-source controls.
+
+8. "pages/user/WorkAndEarnHistory.tsx"
+   
+   - Verify original and converted currency display.
+
+9. "pages/user/Transactions.tsx"
+   
+   - Verify original transaction amount/currency display.
+
+10. Actual notification service, templates, models, and frontend notification components.
+    
+    - Discover the actual files first.
+    - Modify only relevant financial notification paths.
+
+Also inspect any existing shared currency utility or transaction helper if needed.
+
+Do not create unnecessary replacement files.
+
+Do not refactor unrelated modules.
+
+---
+
+15. TESTING AND VALIDATION
+
+Before declaring completion, perform the available relevant tests.
+
+Currency conversion scenarios
+
+Test:
+
+A. PKR deposit:
+
+- Original amount: PKR 3,500.
+- Admin rate: 278 PKR per USD.
+- Expected USD credit: approximately $12.59.
+
+B. EUR deposit:
+
+- Use the currently configured Admin EUR rate.
+- Verify correct conversion direction and rounding.
+
+C. USD deposit:
+
+- Verify no unnecessary conversion occurs.
+
+D. Missing exchange rate:
+
+- Verify the operation fails safely.
+- Verify no incorrect balance is credited.
+
+E. Updated Admin exchange rate:
+
+- Verify subsequent conversions use the updated rate.
+- Verify historical transaction records remain unchanged.
+
+Campaign Wallet tests
+
+Verify:
+
+- Deposit credit.
+- Task Earnings transfer.
+- Main/Investment transfer.
+- Partial transfer.
+- Full transfer.
+- Insufficient balance.
+- Disabled source.
+- Invalid amount.
+- Duplicate submission.
+- Concurrent transfer attempts.
+
+Campaign financial tests
+
+Verify:
+
+- Campaign budget spending.
+- Full refund.
+- Partial refund.
+- Multiple refunds.
+- Rejected campaign.
+- Deleted campaign.
+- Pending campaign.
+- Active campaign.
+- On Hold campaign.
+- Escrow calculation.
+- No double-counting.
+
+Net Budget Used example
+
+Use this reconciliation example:
+
+- Campaign budget deployed: $5.75
+- Total refunds: $5.75
+- Net Budget Used: $0.00
+
+The dropdown must show:
+
+1. Total Amount Used in Campaigns: $5.75
+2. Total Refunds: $5.75
+3. Remaining Amount: $0.00
+
+The primary Net Budget Used value must be $0.00.
+
+Do not use this example as hardcoded application data.
+
+UI tests
+
+Verify:
+
+- Dashboard Campaign Wallet displays USD correctly.
+- Local equivalent is correct.
+- My Campaign displays USD correctly.
+- Local equivalent is correct.
+- Dropdown opens and closes.
+- Three Net Budget Used breakdown values are visible.
+- Mobile layout remains usable.
+- Existing Dashboard and My Campaign features remain functional.
+
+Regression tests
+
+Verify that existing:
+
+- Work & Earn.
+- Task Earnings.
+- Campaign creation.
+- Campaign proof submission.
+- Campaign review.
+- Disputes.
+- Wallet.
+- Deposits.
+- Withdrawals.
+- Transaction history.
+- Admin controls.
+- Notifications.
+- Provider integrations.
+
+remain unaffected.
+
+Run existing build, lint, type checks, and relevant automated tests where available.
+
+Do not claim a test passed unless it was actually executed.
+
+---
+
+16. FINAL IMPLEMENTATION REPORT — MANDATORY
+
+After completing the work, provide a detailed but clear report.
+
+Include:
+
+A. Files changed
+
+List every modified file and the exact reason for each modification.
+
+B. Exchange-rate verification
+
+Explain:
+
+- Where Admin exchange rates are stored.
+- Which API supplies them.
+- Which conversion convention is used.
+- How PKR/EUR is converted into USD.
+- How USD is converted into the user's local currency for display.
+- How historical exchange rates are preserved.
+- Confirm that no hardcoded exchange rates were introduced.
+
+C. Deposit approval
+
+Explain exactly how the new Campaign Wallet deposit approval logic works.
+
+D. Dashboard
+
+Confirm USD balance and local equivalent display.
+
+E. My Campaign
+
+Confirm USD balance, local equivalent, and Net Budget Used dropdown.
+
+F. Financial reconciliation
+
+Explain how campaign spending, refunds, remaining funds, and escrow are calculated.
+
+G. Admin transfer controls
+
+Confirm both transfer sources remain independently configurable and server-side enforcement is active.
+
+H. History and notifications
+
+Explain what original and converted currency information is displayed and where.
+
+I. Tests
+
+List actual commands executed and their results.
+
+Clearly identify any tests that could not be run.
+
+J. Safety audit
+
+Explicitly confirm whether any changes were made to:
+
+- Withdrawals.
+- Provider integrations.
+- Authentication.
+- Existing user balances.
+- Historical transactions.
+- Production settings.
+
+K. Outstanding issues
+
+List anything that remains incomplete, uncertain, or requires manual Admin verification.
+
+---
+
+17. FINAL INSTRUCTION
+
+Work carefully and complete the required implementation in one coordinated pass.
+
+Prioritize financial accuracy, data integrity, backward compatibility, and live website safety.
+
+Do not make assumptions about exchange-rate direction, transaction history, refund calculations, or database fields.
+
+Inspect the existing code before editing.
+
+Preserve all working previous Gemini workspace changes.
+
+Make only the minimum necessary changes to the exact relevant files.
+
+If an operation could affect historical user balances or production financial data, do not perform it automatically. Report the issue and request approval first.
+
+Do not commit, push, deploy, or modify production data.
+
+The final result must be a safe, internally consistent Campaign Wallet system that uses Admin-configured exchange rates, maintains USD-based Campaign Wallet accounting, displays accurate local-currency equivalents, and provides a properly reconciled Net Budget Used breakdown without disturbing SmartExn's existing live functionality.

@@ -145,7 +145,7 @@ const Transactions: React.FC = () => {
                                         {tx.type === 'Commission' && tx.level && ` (Level ${tx.level})`}
                                         {tx.originalAmount && tx.originalCurrency && (
                                             <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase mt-0.5">
-                                                (Orig: {formatCurrency(tx.originalAmount, tx.originalCurrency)})
+                                                (Orig: {formatCurrency(tx.originalAmount, tx.originalCurrency)}{tx.amountUSD ? ` ➔ $${Math.abs(tx.amountUSD).toFixed(2)} USD` : ''})
                                             </span>
                                         )}
                                     </td>
@@ -198,6 +198,8 @@ const Transactions: React.FC = () => {
                                                 {tx.originalAmount && tx.originalCurrency && (
                                                     <div className="mt-2 text-[9px] font-bold text-gray-500 dark:text-gray-400 border-t dark:border-gray-800 pt-1 uppercase">
                                                         Original: {formatCurrency(tx.originalAmount, tx.originalCurrency)}
+                                                        {tx.amountUSD ? ` ➔ Converted: $${Math.abs(tx.amountUSD).toFixed(2)} USD` : ''}
+                                                        {tx.exchangeRate ? ` (Rate: 1 USD = ${tx.exchangeRate} ${tx.originalCurrency})` : ''}
                                                     </div>
                                                 )}
                                             </div>

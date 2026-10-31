@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useData } from '../../hooks/useData';
-import { formatCurrency, UserTask } from '../../types';
+import { formatCurrency, currencySymbols, UserTask } from '../../types';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { createUserTask, submitUserTaskProof, convertUserCurrency, createDispute, convertTaskWalletBalance, updateSubmissionStatus, openTaskDispute, updateUserTaskStatus, deleteUserTask, transferInvestmentToTaskWallet, transferTaskEarningsToCampaignWallet, transferWalletToCampaign, getPendingMandatoryRequirements } from '../../services/api';
@@ -811,10 +811,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
     // Campaign Funds Summary & Amount Trail States
     const [showTransferModal, setShowTransferModal] = useState(false);
-    const [transferSource, setTransferSource] = useState<'Main' | 'Investment' | 'CampaignToMain'>('Main');
-    const [transferInputAmount, setTransferInputAmount] = useState<number | string>(10);
+    const [transferSource, setTransferSource] = useState<'Main' | 'Investment' | 'TaskEarnings' | 'CampaignToMain'>('TaskEarnings');
+    const [transferInputAmount, setTransferInputAmount] = useState<number | string>('');
+    const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
     const [convertInputAmount, setConvertInputAmount] = useState<number | string>(5);
     const [showAmountTrail, setShowAmountTrail] = useState(false);
+    const [showNetBudgetDropdown, setShowNetBudgetDropdown] = useState(false);
     const [amountTrailSearch, setAmountTrailSearch] = useState('');
     const [amountTrailCategory, setAmountTrailCategory] = useState<string>('All');
     const [amountTrailDateRange, setAmountTrailDateRange] = useState<'All' | '30Days' | 'ThisMonth' | 'ThisYear'>('All');
@@ -2223,10 +2225,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         .reduce((acc, t) => acc + getCampaignFin(t).campaignCreationFee, 0);
 
     // Campaign Wallet calculations matching Work & Earn Hub Dashboard
-    const totalHubDepositsBase = (state.deposits || [])
+    const totalHubDepositsUSD = (state.deposits || [])
         .filter(d => d.userId?.toString() === userIdStr && (d.status === 'Approved' || d.status === 'Paid') && ((d as any).isHub || (d as any).isTaskWallet || d.userNotes?.toLowerCase().includes('hub') || d.userNotes?.toLowerCase().includes('task') || d.userNotes?.toLowerCase().includes('campaign')))
-        .reduce((sum, d) => sum + (d.amount || 0), 0);
-    const totalHubDepositsUSD = totalHubDepositsBase / (exchangeRate || 1);
+        .reduce((sum, d) => {
+            const depCurr = d.currency || currentUser.currency || 'USD';
+            const depRate = rates[depCurr] || (depCurr === 'USD' ? 1 : exchangeRate || 1);
+            const amtUSD = depCurr === 'USD' ? (d.amount || 0) : (d.amount || 0) / depRate;
+            return sum + amtUSD;
+        }, 0);
 
     const investmentTransferSumUSD = (state.transactions || []).reduce((sum, trx) => {
         if (trx.userId?.toString() !== userIdStr) return sum;
@@ -2300,14 +2306,35 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
     const taskEarningsTransferredUSD = Number(fundsUsedForCampaignUSD.toFixed(2));
 
-    // 3. Total Funding Transferred In
+    const campaignRefundsUSD = useMemo(() => {
+        return (state.transactions || []).reduce((sum: number, t: any) => {
+            if (t.userId?.toString() !== userIdStr) return sum;
+            if (t.status === 'Rejected' || t.status === 'Cancelled') return sum;
+            const typeLower = (t.type || '').toLowerCase();
+            const descLower = (t.description || '').toLowerCase();
+            const isRefund = typeLower.includes('refund') || descLower.includes('refund') || typeLower.includes('campaign refund') || descLower.includes('refund from campaign');
+            if (isRefund) {
+                let amtUSD = t.amountUSD && Math.abs(t.amountUSD) > 0 ? Math.abs(t.amountUSD) : Math.abs(t.amount || 0);
+                if (t.currency && t.currency !== 'USD') {
+                    amtUSD = amtUSD / (t.exchangeRate || exchangeRate || 1);
+                }
+                return sum + amtUSD;
+            }
+            return sum;
+        }, 0);
+    }, [state.transactions, userIdStr, exchangeRate]);
+
+    const netBudgetDeployedUSD = Number((campaignPurchasesUSD - campaignRefundsUSD).toFixed(2));
+
+    // 3. Total Funding Transferred In (Total Inflow)
     const totalTransferredInUSD = Number((depositAndInvestmentUSD + taskEarningsTransferredUSD).toFixed(2));
 
-    // 5. Remaining Available Campaign Balance
-    let availableTransferBalanceUSD = Math.max(0, Number((totalTransferredInUSD - campaignPurchasesUSD).toFixed(2)));
-    if (availableCampaignWalletUSD > availableTransferBalanceUSD) {
-        availableTransferBalanceUSD = Number(availableCampaignWalletUSD.toFixed(2));
-    }
+    // Ledger Expected Campaign Balance (for reconciliation audit)
+    const expectedCampaignBalanceUSD = Number((totalTransferredInUSD - netBudgetDeployedUSD).toFixed(2));
+
+    // 5. Authoritative Spendable Campaign Wallet Balance from backend user.taskWalletBalance
+    const spendableCampaignWalletUSD = Number((currentUser.taskWalletBalance || 0).toFixed(2));
+    const availableTransferBalanceUSD = spendableCampaignWalletUSD;
 
     // Alias constants for compatibility with audit log & analytics modals
     const transferredInUSD = totalTransferredInUSD;
@@ -5041,9 +5068,108 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </span>
                                 </div>
 
+                                {/* Dual Separate Balances: Worker Task Earnings vs Advertiser Campaign Wallet */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                                    {/* 1. Available Task Earnings Balance (Worker Wallet) */}
+                                    <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-indigo-500/10 dark:from-purple-950/40 dark:via-purple-950/20 dark:to-indigo-950/40 border border-purple-200/80 dark:border-purple-800/60 flex flex-col justify-between shadow-2xs gap-3">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-300 flex items-center justify-center text-xl shrink-0">
+                                                    💼
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                                                            Available Task Earnings
+                                                        </span>
+                                                        <span className="px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-black uppercase bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300">
+                                                            Worker Wallet
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                                                        Earned from completed tasks & surveys
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-baseline justify-between flex-wrap gap-2 pt-1 border-t border-purple-100 dark:border-purple-900/40">
+                                            <div>
+                                                <span className="text-lg sm:text-2xl font-black font-mono text-gray-900 dark:text-white">
+                                                    ${netAvailableTaskEarningsUSD.toFixed(2)} <span className="text-xs font-bold text-gray-500">USD</span>
+                                                </span>
+                                                {currentUser.currency && currentUser.currency !== 'USD' && (
+                                                    <span className="block text-[10px] sm:text-xs font-bold text-gray-500 dark:text-gray-400 font-mono">
+                                                        ({currentUser.currency === 'PKR' ? 'Rs.' : (currencySymbols[currentUser.currency] || '')}{(netAvailableTaskEarningsUSD * (rates[currentUser.currency] || 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currentUser.currency})
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setTransferSource('TaskEarnings');
+                                                    setTransferInputAmount(netAvailableTaskEarningsUSD > 0 ? netAvailableTaskEarningsUSD.toFixed(2) : '');
+                                                    setShowTransferModal(true);
+                                                }}
+                                                disabled={netAvailableTaskEarningsUSD <= 0}
+                                                className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-purple-600/20 flex items-center justify-center gap-1"
+                                            >
+                                                <span>⚡ Transfer to Campaign</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Available Campaign Wallet Balance (Advertiser Wallet) */}
+                                    <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-br from-indigo-500/10 via-blue-500/5 to-cyan-500/10 dark:from-indigo-950/40 dark:via-blue-950/20 dark:to-cyan-950/40 border-2 border-indigo-300/80 dark:border-indigo-700/60 flex flex-col justify-between shadow-2xs gap-3">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-xl shrink-0">
+                                                    💳
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                                                            Available Campaign Wallet
+                                                        </span>
+                                                        <span className="px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-black uppercase bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300">
+                                                            Advertiser Wallet
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                                                        Spendable capital for publishing campaigns
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span className="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                                Authoritative
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-baseline justify-between flex-wrap gap-2 pt-1 border-t border-indigo-100 dark:border-indigo-900/40">
+                                            <div>
+                                                <span className="text-lg sm:text-2xl font-black font-mono text-indigo-950 dark:text-indigo-100">
+                                                    ${spendableCampaignWalletUSD.toFixed(2)} <span className="text-xs font-bold text-gray-500">USD</span>
+                                                </span>
+                                                {currentUser.currency && currentUser.currency !== 'USD' && (
+                                                    <span className="block text-[10px] sm:text-xs font-bold text-gray-500 dark:text-gray-400 font-mono">
+                                                        ({currentUser.currency === 'PKR' ? 'Rs.' : (currencySymbols[currentUser.currency] || '')}{(spendableCampaignWalletUSD * (rates[currentUser.currency] || 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currentUser.currency})
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {Math.abs(spendableCampaignWalletUSD - expectedCampaignBalanceUSD) > 0.01 && (
+                                                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800" title="Calculated from ledger history">
+                                                    ⚠️ Ledger Expected: ${expectedCampaignBalanceUSD.toFixed(2)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-                                    {/* Card 1: Transfer from Deposit & Investment */}
-                                    <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 dark:from-emerald-950/60 dark:to-teal-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex flex-col justify-between shadow-2xs">
+                                    {/* Card 1: Deposit / Investment Funding */}
+                                    <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 dark:from-emerald-950/60 dark:to-teal-950/40 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[8px] sm:text-[9px] font-black text-emerald-600 dark:text-emerald-300 uppercase tracking-wider leading-tight">Deposit & Investment</span>
                                             <span className="text-xs">📈</span>
@@ -5056,22 +5182,22 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </div>
                                     </div>
 
-                                    {/* Card 2: Transfer from Task Earnings */}
-                                    <div className="bg-gradient-to-br from-purple-500/10 to-fuchsia-500/10 dark:from-purple-950/60 dark:to-fuchsia-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-purple-200 dark:border-purple-800/60 flex flex-col justify-between shadow-2xs">
+                                    {/* Card 2: Task Earnings Transferred In */}
+                                    <div className="bg-gradient-to-br from-purple-500/10 to-fuchsia-500/10 dark:from-purple-950/60 dark:to-fuchsia-950/40 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-purple-200 dark:border-purple-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[8px] sm:text-[9px] font-black text-purple-600 dark:text-purple-300 uppercase tracking-wider leading-tight">Task Earnings</span>
+                                            <span className="text-[8px] sm:text-[9px] font-black text-purple-600 dark:text-purple-300 uppercase tracking-wider leading-tight">Task Earnings Inflow</span>
                                             <span className="text-xs">🔄</span>
                                         </div>
                                         <div className="text-sm sm:text-base md:text-lg font-black text-purple-600 dark:text-purple-300 font-mono mt-1 sm:mt-1.5">
                                             ${taskEarningsTransferredUSD.toFixed(2)}
                                         </div>
                                         <div className="text-[8px] sm:text-[9px] font-bold text-purple-600/80 dark:text-purple-300/80 mt-0.5 sm:mt-1 truncate">
-                                            To Campaign
+                                            From Task Wallet
                                         </div>
                                     </div>
 
-                                    {/* Card 3: Total Funding Transferred */}
-                                    <div className="bg-gradient-to-br from-teal-500/10 to-cyan-500/10 dark:from-teal-950/60 dark:to-cyan-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-teal-200 dark:border-teal-800/60 flex flex-col justify-between shadow-2xs">
+                                    {/* Card 3: Total Inflow */}
+                                    <div className="bg-gradient-to-br from-teal-500/10 to-cyan-500/10 dark:from-teal-950/60 dark:to-cyan-950/40 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-teal-200 dark:border-teal-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[8px] sm:text-[9px] font-black text-teal-600 dark:text-teal-300 uppercase tracking-wider leading-tight">Total Inflow</span>
                                             <span className="text-xs">📥</span>
@@ -5080,40 +5206,85 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             ${totalTransferredInUSD.toFixed(2)}
                                         </div>
                                         <div className="text-[8px] sm:text-[9px] font-bold text-teal-600/80 dark:text-teal-300/80 mt-0.5 sm:mt-1 truncate">
-                                            Total Funding
+                                            Total Funding In
                                         </div>
                                     </div>
 
-                                    {/* Card 4: Used / Spent in Campaign */}
-                                    <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 dark:from-amber-950/60 dark:to-orange-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-amber-200 dark:border-amber-800/60 flex flex-col justify-between shadow-2xs">
+                                    {/* Card 4: Net Budget Used (with Clickable Dropdown) */}
+                                    <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 dark:from-amber-950/60 dark:to-orange-950/40 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-amber-200 dark:border-amber-800/60 flex flex-col justify-between shadow-2xs relative">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[8px] sm:text-[9px] font-black text-amber-600 dark:text-amber-300 uppercase tracking-wider leading-tight">Budget Deployed</span>
-                                            <span className="text-xs">🛒</span>
+                                            <span className="text-[8px] sm:text-[9px] font-black text-amber-600 dark:text-amber-300 uppercase tracking-wider leading-tight">Net Budget Used</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowNetBudgetDropdown(!showNetBudgetDropdown)}
+                                                className="text-amber-600 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-100 p-0.5 rounded transition-transform"
+                                                title="Toggle Breakdown Details"
+                                                aria-label="Toggle Net Budget Breakdown"
+                                            >
+                                                <svg 
+                                                    className={`w-3.5 h-3.5 transition-transform duration-200 ${showNetBudgetDropdown ? 'rotate-180' : ''}`} 
+                                                    fill="none" 
+                                                    viewBox="0 0 24 24" 
+                                                    stroke="currentColor" 
+                                                    strokeWidth={2.5}
+                                                >
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </button>
                                         </div>
-                                        <div className="text-sm sm:text-base md:text-lg font-black text-amber-600 dark:text-amber-300 font-mono mt-1 sm:mt-1.5">
-                                            ${campaignPurchasesUSD.toFixed(2)}
+                                        <div className="text-sm sm:text-base md:text-lg font-black text-amber-700 dark:text-amber-300 font-mono mt-1 sm:mt-1.5 flex items-baseline justify-between">
+                                            <span>${netBudgetDeployedUSD.toFixed(2)}</span>
+                                            <span className="text-[8px] font-bold text-gray-500">USD</span>
                                         </div>
-                                        <div className="text-[8px] sm:text-[9px] font-bold text-amber-600/80 dark:text-amber-300/80 mt-0.5 sm:mt-1 truncate">
-                                            Used in Campaigns
-                                        </div>
+
+                                        {/* Expandable Dropdown Breakdown: Exactly 3 Financial Values */}
+                                        {showNetBudgetDropdown ? (
+                                            <div className="mt-1.5 pt-1.5 border-t border-amber-200/80 dark:border-amber-800/60 space-y-1 text-[7px] sm:text-[8px] animate-in fade-in duration-150">
+                                                <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+                                                    <span>1. Total Amount Used in Campaigns:</span>
+                                                    <span className="font-mono font-bold text-gray-900 dark:text-white">${campaignPurchasesUSD.toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400">
+                                                    <span>2. Total Refunds:</span>
+                                                    <span className="font-mono font-bold">-${campaignRefundsUSD.toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center font-black text-amber-700 dark:text-amber-300 pt-1 border-t border-amber-200/60 dark:border-amber-800/40">
+                                                    <span>3. Remaining Amount:</span>
+                                                    <span className="font-mono">${netBudgetDeployedUSD.toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div 
+                                                onClick={() => setShowNetBudgetDropdown(true)}
+                                                className="text-[8px] text-amber-600/80 dark:text-amber-300/80 mt-1 cursor-pointer hover:underline flex items-center justify-between"
+                                            >
+                                                <span>Click for breakdown</span>
+                                                <span className="text-[9px]">▼</span>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* Card 5: Remaining Available Campaign Balance */}
-                                    <div className="bg-gradient-to-br from-indigo-500/10 to-blue-500/10 dark:from-indigo-950/60 dark:to-blue-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-indigo-200 dark:border-indigo-800/60 flex flex-col justify-between shadow-2xs">
+                                    {/* Card 5: Available Campaign Wallet Balance (Authoritative) */}
+                                    <div className="bg-gradient-to-br from-indigo-500/10 to-blue-500/10 dark:from-indigo-950/60 dark:to-blue-950/40 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border-2 border-indigo-300 dark:border-indigo-700 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[8px] sm:text-[9px] font-black text-indigo-600 dark:text-indigo-300 uppercase tracking-wider leading-tight">Remaining Funds</span>
+                                            <span className="text-[8px] sm:text-[9px] font-black text-indigo-700 dark:text-indigo-300 uppercase tracking-wider leading-tight">Available Balance</span>
                                             <span className="text-xs">💰</span>
                                         </div>
                                         <div className="text-sm sm:text-base md:text-lg font-black text-indigo-900 dark:text-indigo-100 font-mono mt-1 sm:mt-1.5">
-                                            ${availableTransferBalanceUSD.toFixed(2)}
+                                            ${spendableCampaignWalletUSD.toFixed(2)} <span className="text-[9px] font-bold text-gray-500">USD</span>
                                         </div>
+                                        {currentUser.currency && currentUser.currency !== 'USD' && (
+                                            <div className="text-[8px] sm:text-[9px] font-bold text-indigo-600/90 dark:text-indigo-300/90 mt-0.5 truncate font-mono">
+                                                ({currentUser.currency === 'PKR' ? 'Rs.' : (currencySymbols[currentUser.currency] || '')}{(spendableCampaignWalletUSD * (rates[currentUser.currency] || 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currentUser.currency})
+                                            </div>
+                                        )}
                                         <div className="text-[8px] sm:text-[9px] font-bold text-indigo-600/80 dark:text-indigo-300/80 mt-0.5 sm:mt-1 truncate">
-                                            Available Balance
+                                            Spendable Funds
                                         </div>
                                     </div>
 
                                     {/* Card 6: Live Escrow Reserved */}
-                                    <div className="bg-gradient-to-br from-sky-500/10 to-blue-500/10 dark:from-sky-950/60 dark:to-blue-950/40 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-sky-200 dark:border-sky-800/60 flex flex-col justify-between shadow-2xs">
+                                    <div className="bg-gradient-to-br from-sky-500/10 to-blue-500/10 dark:from-sky-950/60 dark:to-blue-950/40 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-sky-200 dark:border-sky-800/60 flex flex-col justify-between shadow-2xs">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[8px] sm:text-[9px] font-black text-sky-600 dark:text-sky-300 uppercase tracking-wider leading-tight">Escrow Reserved</span>
                                             <span className="text-xs">🛡️</span>
@@ -8032,217 +8203,367 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             {/* ========================================================================= */}
             {/* 1. TRANSFER FUNDS TO CAMPAIGN WALLET MODAL */}
             {/* ========================================================================= */}
-            {showTransferModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 md:p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6">
-                        <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl font-black shrink-0">
-                                    📥
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Transfer Funds to Campaign Wallet</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Top up your campaign balance from Main or Investment funds.</p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setShowTransferModal(false)}
-                                className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl leading-none"
-                            >
-                                &times;
-                            </button>
-                        </div>
+            {showTransferModal && (() => {
+                const isTaskEarningsAllowed = settings?.myCampaignActionsConfig?.convert !== false && settings?.campaignConvertEnabled !== false;
+                const isMainInvestmentAllowed = settings?.myCampaignActionsConfig?.allowMainInvestmentToCampaign === true;
+                const isCampaignToMainAllowed = settings?.myCampaignActionsConfig?.convert !== false && settings?.campaignConvertEnabled !== false;
+                const userCurr = currentUser.currency || 'USD';
+                const rate = rates[userCurr] || 1;
 
-                        {/* Source Selection */}
-                        <div className="space-y-2">
-                            <label className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 tracking-wider">Select Transfer Direction / Source:</label>
-                            <div className="grid grid-cols-3 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setTransferSource('Main')}
-                                    className={`p-3 rounded-2xl border text-left transition-all ${
-                                        transferSource === 'Main'
-                                            ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20'
-                                            : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                                    }`}
-                                >
-                                    <span className="text-[9px] font-black uppercase block text-gray-400 truncate">💳 Main &rarr; Campaign</span>
-                                    <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
-                                        ${((currentUser.walletBalance || 0) / (rates[currentUser.currency || 'USD'] || 1)).toFixed(2)} USD
-                                    </span>
-                                </button>
+                // Determine active source balance in USD
+                const getSourceBalanceUSD = (source: string) => {
+                    if (source === 'TaskEarnings') return netAvailableTaskEarningsUSD;
+                    if (source === 'Main') return (currentUser.walletBalance || 0) / rate;
+                    if (source === 'Investment') return (currentUser.investmentBalance || 0) / rate;
+                    if (source === 'CampaignToMain') return availableCampaignWalletUSD;
+                    return 0;
+                };
 
-                                <button
-                                    type="button"
-                                    onClick={() => setTransferSource('Investment')}
-                                    className={`p-3 rounded-2xl border text-left transition-all ${
-                                        transferSource === 'Investment'
-                                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
-                                            : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                                    }`}
-                                >
-                                    <span className="text-[9px] font-black uppercase block text-gray-400 truncate">📈 Invest &rarr; Campaign</span>
-                                    <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
-                                        ${((currentUser.investmentBalance || 0) / (rates[currentUser.currency || 'USD'] || 1)).toFixed(2)} USD
-                                    </span>
-                                </button>
+                const currentSourceBalanceUSD = getSourceBalanceUSD(transferSource);
 
-                                <button
-                                    type="button"
-                                    onClick={() => setTransferSource('CampaignToMain')}
-                                    className={`p-3 rounded-2xl border text-left transition-all ${
-                                        transferSource === 'CampaignToMain'
-                                            ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-500 text-purple-700 dark:text-purple-300 ring-2 ring-purple-500/20'
-                                            : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                                    }`}
-                                >
-                                    <span className="text-[9px] font-black uppercase block text-purple-500 dark:text-purple-400 truncate">🔄 Campaign &rarr; Main</span>
-                                    <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
-                                        ${availableCampaignWalletUSD.toFixed(2)} USD
-                                    </span>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Transfer Amount Input */}
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                                <label className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 tracking-wider">Transfer Amount ($ USD):</label>
-                                <span className="text-[10px] font-bold text-gray-400">Base Currency = $ USD</span>
-                            </div>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={transferInputAmount}
-                                    onChange={(e) => setTransferInputAmount(e.target.value)}
-                                    className="w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 font-mono font-black text-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Live Balance Impact Preview */}
-                        {(() => {
-                            const amtUSD = typeof transferInputAmount === 'number' ? transferInputAmount : parseFloat(transferInputAmount as string) || 0;
-                            const rate = rates[currentUser.currency || 'USD'] || 1;
-                            const currentCampaignWalletUSD = availableCampaignWalletUSD;
-
-                            if (transferSource === 'CampaignToMain') {
-                                const newCampaignWalletUSD = Math.max(0, currentCampaignWalletUSD - amtUSD);
-                                const newMainUserCurr = (currentUser.walletBalance || 0) + (amtUSD * rate);
-
-                                return (
-                                    <div className="p-4 bg-purple-50/60 dark:bg-purple-950/30 rounded-2xl border border-purple-200 dark:border-purple-900/40 space-y-2 text-xs">
-                                        <div className="flex justify-between font-medium">
-                                            <span className="text-gray-500 dark:text-gray-400">Campaign Wallet After Transfer:</span>
-                                            <span className={`font-mono font-bold ${currentCampaignWalletUSD < amtUSD ? 'text-red-500' : 'text-purple-600 dark:text-purple-300'}`}>
-                                                ${newCampaignWalletUSD.toFixed(2)} USD
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between font-medium pt-1 border-t border-purple-200 dark:border-purple-800">
-                                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">New Main Wallet Balance:</span>
-                                            <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                                                {newMainUserCurr.toFixed(2)} {currentUser.currency || 'USD'}
-                                            </span>
-                                        </div>
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-gray-800 rounded-[2rem] p-6 md:p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6">
+                            <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl font-black shrink-0">
+                                        📥
                                     </div>
-                                );
-                            } else {
-                                const newCampaignWalletUSD = currentCampaignWalletUSD + amtUSD;
-                                const sourceBalanceUSD = transferSource === 'Main' 
-                                    ? (currentUser.walletBalance || 0) / rate 
-                                    : (currentUser.investmentBalance || 0) / rate;
-                                const newSourceBalanceUSD = Math.max(0, sourceBalanceUSD - amtUSD);
-
-                                return (
-                                    <div className="p-4 bg-gray-50 dark:bg-gray-900/60 rounded-2xl border dark:border-gray-700 space-y-2 text-xs">
-                                        <div className="flex justify-between font-medium">
-                                            <span className="text-gray-500">Source Balance After Transfer:</span>
-                                            <span className={`font-mono font-bold ${newSourceBalanceUSD < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
-                                                ${newSourceBalanceUSD.toFixed(2)} USD
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between font-medium pt-1 border-t border-gray-200 dark:border-gray-700">
-                                            <span className="text-blue-600 dark:text-blue-400 font-bold">New Campaign Wallet Balance:</span>
-                                            <span className="font-mono font-black text-blue-600 dark:text-blue-400 text-sm">
-                                                ${newCampaignWalletUSD.toFixed(2)} USD
-                                            </span>
-                                        </div>
+                                    <div>
+                                        <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Transfer Funds to Campaign Wallet</h3>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Top up your campaign balance from Task Earnings{isMainInvestmentAllowed ? ', Main, or Investment' : ''}.</p>
                                     </div>
-                                );
-                            }
-                        })()}
+                                </div>
+                                <button
+                                    onClick={() => !isSubmittingTransfer && setShowTransferModal(false)}
+                                    disabled={isSubmittingTransfer}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-white font-bold text-2xl leading-none disabled:opacity-40"
+                                >
+                                    &times;
+                                </button>
+                            </div>
 
-                        <div className="flex gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowTransferModal(false)}
-                                className="flex-1 py-3 px-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-black uppercase tracking-wider"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    const transferUSD = typeof transferInputAmount === 'number' ? transferInputAmount : parseFloat(transferInputAmount as string) || 0;
-                                    if (transferUSD <= 0) return;
+                            {/* Permission Guard Notice */}
+                            {!isTaskEarningsAllowed && !isMainInvestmentAllowed && !isCampaignToMainAllowed && (
+                                <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-200 text-xs font-semibold">
+                                    ⚠️ Campaign wallet transfers are currently disabled by Administrator.
+                                </div>
+                            )}
 
-                                    const userCurr = currentUser.currency || 'USD';
-                                    const rate = rates[userCurr] || 1;
-                                    const transferInUserCurr = transferUSD * rate;
+                            {/* Source Selection */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 tracking-wider">Select Transfer Direction / Source:</label>
+                                <div className={`grid gap-2 ${isMainInvestmentAllowed ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
+                                    {/* Task Earnings -> Campaign (Worker Wallet to Advertiser Wallet) */}
+                                    {isTaskEarningsAllowed && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setTransferSource('TaskEarnings');
+                                                setTransferInputAmount(netAvailableTaskEarningsUSD > 0 ? netAvailableTaskEarningsUSD.toFixed(2) : '');
+                                            }}
+                                            className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
+                                                transferSource === 'TaskEarnings'
+                                                    ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-500 text-purple-700 dark:text-purple-300 ring-2 ring-purple-500/20'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                                            }`}
+                                        >
+                                            <span className="text-[9px] font-black uppercase block text-purple-600 dark:text-purple-400 truncate">💼 Task &rarr; Campaign</span>
+                                            <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
+                                                ${netAvailableTaskEarningsUSD.toFixed(2)} USD
+                                            </span>
+                                        </button>
+                                    )}
 
-                                    if (transferSource === 'CampaignToMain') {
-                                        const currentCampaignWalletUSD = availableCampaignWalletUSD;
-                                        if (transferUSD > currentCampaignWalletUSD) {
-                                            alert(`Insufficient funds in Campaign Wallet. Available: $${currentCampaignWalletUSD.toFixed(2)} USD`);
+                                    {/* Main -> Campaign: ONLY rendered when allowMainInvestmentToCampaign is true */}
+                                    {isMainInvestmentAllowed && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setTransferSource('Main');
+                                                const balUSD = (currentUser.walletBalance || 0) / rate;
+                                                setTransferInputAmount(balUSD > 0 ? balUSD.toFixed(2) : '');
+                                            }}
+                                            className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
+                                                transferSource === 'Main'
+                                                    ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                                            }`}
+                                        >
+                                            <span className="text-[9px] font-black uppercase block text-gray-400 truncate">💳 Main &rarr; Campaign</span>
+                                            <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
+                                                ${((currentUser.walletBalance || 0) / rate).toFixed(2)} USD
+                                            </span>
+                                        </button>
+                                    )}
+
+                                    {/* Investment -> Campaign: ONLY rendered when allowMainInvestmentToCampaign is true */}
+                                    {isMainInvestmentAllowed && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setTransferSource('Investment');
+                                                const balUSD = (currentUser.investmentBalance || 0) / rate;
+                                                setTransferInputAmount(balUSD > 0 ? balUSD.toFixed(2) : '');
+                                            }}
+                                            className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
+                                                transferSource === 'Investment'
+                                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                                            }`}
+                                        >
+                                            <span className="text-[9px] font-black uppercase block text-gray-400 truncate">📈 Invest &rarr; Campaign</span>
+                                            <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
+                                                ${((currentUser.investmentBalance || 0) / rate).toFixed(2)} USD
+                                            </span>
+                                        </button>
+                                    )}
+
+                                    {/* Campaign -> Main: Convert Campaign funds back to Main */}
+                                    {isCampaignToMainAllowed && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setTransferSource('CampaignToMain');
+                                                setTransferInputAmount(availableCampaignWalletUSD > 0 ? availableCampaignWalletUSD.toFixed(2) : '');
+                                            }}
+                                            className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
+                                                transferSource === 'CampaignToMain'
+                                                    ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500/20'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                                            }`}
+                                        >
+                                            <span className="text-[9px] font-black uppercase block text-indigo-500 dark:text-indigo-400 truncate">🔄 Campaign &rarr; Main</span>
+                                            <span className="text-xs sm:text-sm font-black font-mono text-gray-900 dark:text-white mt-1 block truncate">
+                                                ${availableCampaignWalletUSD.toFixed(2)} USD
+                                            </span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Transfer Amount Input with Max and Percentage presets */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 tracking-wider">Transfer Amount ($ USD):</label>
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => setTransferInputAmount((currentSourceBalanceUSD * 0.25).toFixed(2))}
+                                            className="px-2 py-0.5 text-[10px] font-bold bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-300 rounded"
+                                        >
+                                            25%
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTransferInputAmount((currentSourceBalanceUSD * 0.50).toFixed(2))}
+                                            className="px-2 py-0.5 text-[10px] font-bold bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-300 rounded"
+                                        >
+                                            50%
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTransferInputAmount(currentSourceBalanceUSD.toFixed(2))}
+                                            className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-900/60 hover:bg-blue-200 text-blue-700 dark:text-blue-300 rounded font-black"
+                                        >
+                                            Max
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                                    <input
+                                        type="number"
+                                        min="0.01"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        value={transferInputAmount}
+                                        onChange={(e) => setTransferInputAmount(e.target.value)}
+                                        className="w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 font-mono font-black text-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400">
+                                    <span>Available in source: <strong className="font-mono text-gray-800 dark:text-gray-200">${currentSourceBalanceUSD.toFixed(2)} USD</strong></span>
+                                    <span>Base Currency = $ USD</span>
+                                </div>
+                            </div>
+
+                            {/* Live Balance Impact Preview */}
+                            {(() => {
+                                const amtUSD = typeof transferInputAmount === 'number' ? transferInputAmount : parseFloat(transferInputAmount as string) || 0;
+                                const currentCampaignWalletUSD = availableCampaignWalletUSD;
+
+                                if (transferSource === 'CampaignToMain') {
+                                    const newCampaignWalletUSD = Math.max(0, currentCampaignWalletUSD - amtUSD);
+                                    const newMainUserCurr = (currentUser.walletBalance || 0) + (amtUSD * rate);
+
+                                    return (
+                                        <div className="p-4 bg-purple-50/60 dark:bg-purple-950/30 rounded-2xl border border-purple-200 dark:border-purple-900/40 space-y-2 text-xs">
+                                            <div className="flex justify-between font-medium">
+                                                <span className="text-gray-500 dark:text-gray-400">Campaign Wallet After Transfer:</span>
+                                                <span className={`font-mono font-bold ${currentCampaignWalletUSD < amtUSD ? 'text-red-500' : 'text-purple-600 dark:text-purple-300'}`}>
+                                                    ${newCampaignWalletUSD.toFixed(2)} USD
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between font-medium pt-1 border-t border-purple-200 dark:border-purple-800">
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">New Main Wallet Balance:</span>
+                                                <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                                                    {newMainUserCurr.toFixed(2)} {userCurr}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                } else if (transferSource === 'TaskEarnings') {
+                                    const currentTaskEarningsUSD = netAvailableTaskEarningsUSD;
+                                    const newTaskEarningsUSD = Math.max(0, currentTaskEarningsUSD - amtUSD);
+                                    const newCampaignWalletUSD = currentCampaignWalletUSD + amtUSD;
+
+                                    return (
+                                        <div className="p-4 bg-purple-50/60 dark:bg-purple-950/30 rounded-2xl border border-purple-200 dark:border-purple-900/40 space-y-2 text-xs">
+                                            <div className="flex justify-between font-medium">
+                                                <span className="text-gray-500 dark:text-gray-400">Task Earnings After Transfer:</span>
+                                                <span className={`font-mono font-bold ${currentTaskEarningsUSD < amtUSD ? 'text-red-500' : 'text-purple-600 dark:text-purple-300'}`}>
+                                                    ${newTaskEarningsUSD.toFixed(2)} USD
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between font-medium pt-1 border-t border-purple-200 dark:border-purple-800">
+                                                <span className="text-blue-600 dark:text-blue-400 font-bold">New Campaign Wallet Balance:</span>
+                                                <span className="font-mono font-black text-blue-600 dark:text-blue-400 text-sm">
+                                                    ${newCampaignWalletUSD.toFixed(2)} USD
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                } else {
+                                    const newCampaignWalletUSD = currentCampaignWalletUSD + amtUSD;
+                                    const sourceBalanceUSD = transferSource === 'Main' 
+                                        ? (currentUser.walletBalance || 0) / rate 
+                                        : (currentUser.investmentBalance || 0) / rate;
+                                    const newSourceBalanceUSD = Math.max(0, sourceBalanceUSD - amtUSD);
+
+                                    return (
+                                        <div className="p-4 bg-gray-50 dark:bg-gray-900/60 rounded-2xl border dark:border-gray-700 space-y-2 text-xs">
+                                            <div className="flex justify-between font-medium">
+                                                <span className="text-gray-500">Source Balance After Transfer:</span>
+                                                <span className={`font-mono font-bold ${newSourceBalanceUSD < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
+                                                    ${newSourceBalanceUSD.toFixed(2)} USD
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between font-medium pt-1 border-t border-gray-200 dark:border-gray-700">
+                                                <span className="text-blue-600 dark:text-blue-400 font-bold">New Campaign Wallet Balance:</span>
+                                                <span className="font-mono font-black text-blue-600 dark:text-blue-400 text-sm">
+                                                    ${newCampaignWalletUSD.toFixed(2)} USD
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                            })()}
+
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => !isSubmittingTransfer && setShowTransferModal(false)}
+                                    disabled={isSubmittingTransfer}
+                                    className="flex-1 py-3 px-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-40"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isSubmittingTransfer || (!isTaskEarningsAllowed && !isMainInvestmentAllowed && !isCampaignToMainAllowed)}
+                                    onClick={async () => {
+                                        if (isSubmittingTransfer) return;
+
+                                        const rawStr = String(transferInputAmount ?? '').trim();
+                                        if (!rawStr) {
+                                            alert("Please enter a transfer amount.");
                                             return;
                                         }
 
-                                        try {
-                                            const res = await convertTaskWalletBalance({ userId: currentUser._id, amountUSD: transferUSD });
-                                            dispatch({ type: 'UPDATE_USER', payload: res.user || res });
-                                            alert(`Successfully transferred $${transferUSD.toFixed(2)} USD (${transferInUserCurr.toFixed(2)} ${userCurr}) from Campaign Wallet back to Main Wallet!`);
-                                            setShowTransferModal(false);
-                                        } catch (err: any) {
-                                            alert(err.message || 'Transfer failed');
-                                        }
-                                    } else {
-                                        const availableSourceUSD = transferSource === 'Main' 
-                                            ? (currentUser.walletBalance || 0) / rate 
-                                            : (currentUser.investmentBalance || 0) / rate;
-
-                                        if (transferUSD > availableSourceUSD) {
-                                            alert(`Insufficient funds in ${transferSource} Wallet. Available: $${availableSourceUSD.toFixed(2)} USD`);
+                                        const transferUSD = parseFloat(rawStr);
+                                        if (isNaN(transferUSD) || !isFinite(transferUSD) || transferUSD <= 0) {
+                                            alert("Please enter a valid transfer amount greater than $0.00 USD.");
                                             return;
                                         }
 
+                                        // Strict 2 decimal places check
+                                        if (rawStr.includes('.') && rawStr.split('.')[1].length > 2) {
+                                            alert("Transfer amount cannot have more than 2 decimal places.");
+                                            return;
+                                        }
+
+                                        if (transferSource === 'TaskEarnings' && !isTaskEarningsAllowed) {
+                                            alert("Task Earnings transfers to Campaign Wallet are currently disabled by Administrator.");
+                                            return;
+                                        }
+
+                                        if ((transferSource === 'Main' || transferSource === 'Investment') && !isMainInvestmentAllowed) {
+                                            alert("Main and Investment transfers to Campaign Wallet are disabled by Administrator.");
+                                            return;
+                                        }
+
+                                        const maxAvail = getSourceBalanceUSD(transferSource);
+                                        if (transferUSD > maxAvail + 0.000001) {
+                                            alert(`Insufficient funds in ${transferSource === 'TaskEarnings' ? 'Task Earnings' : transferSource} balance. Available: $${maxAvail.toFixed(2)} USD`);
+                                            return;
+                                        }
+
+                                        setIsSubmittingTransfer(true);
                                         try {
-                                            const res = await transferWalletToCampaign({
-                                                userId: currentUser._id,
-                                                amountUserCurr: transferInUserCurr,
-                                                amountUSD: transferUSD,
-                                                sourceWallet: transferSource as 'Main' | 'Investment'
-                                            });
-                                            dispatch({ type: 'UPDATE_USER', payload: res.user });
-                                            if (res.transaction) {
-                                                dispatch({ type: 'ADD_TRANSACTION', payload: res.transaction });
+                                            if (transferSource === 'CampaignToMain') {
+                                                const res = await convertTaskWalletBalance({ userId: currentUser._id, amountUSD: transferUSD });
+                                                dispatch({ type: 'UPDATE_USER', payload: res.user || res });
+                                                alert(`Successfully transferred $${transferUSD.toFixed(2)} USD (${(transferUSD * rate).toFixed(2)} ${userCurr}) from Campaign Wallet back to Main Wallet!`);
+                                                setShowTransferModal(false);
+                                            } else if (transferSource === 'TaskEarnings') {
+                                                const res = await transferTaskEarningsToCampaignWallet({
+                                                    userId: currentUser._id,
+                                                    amountUSD: transferUSD
+                                                });
+                                                dispatch({ type: 'UPDATE_USER', payload: res.user || res });
+                                                if (res.transaction) {
+                                                    dispatch({ type: 'ADD_TRANSACTION', payload: res.transaction });
+                                                }
+                                                alert(`Successfully transferred $${transferUSD.toFixed(2)} USD from Task Earnings to Campaign Wallet!`);
+                                                setShowTransferModal(false);
+                                            } else {
+                                                const transferInUserCurr = transferUSD * rate;
+                                                const res = await transferWalletToCampaign({
+                                                    userId: currentUser._id,
+                                                    amountUserCurr: transferInUserCurr,
+                                                    amountUSD: transferUSD,
+                                                    sourceWallet: transferSource as 'Main' | 'Investment'
+                                                });
+                                                dispatch({ type: 'UPDATE_USER', payload: res.user });
+                                                if (res.transaction) {
+                                                    dispatch({ type: 'ADD_TRANSACTION', payload: res.transaction });
+                                                }
+                                                alert(`Successfully transferred $${transferUSD.toFixed(2)} USD from ${transferSource} Wallet to Campaign Wallet!`);
+                                                setShowTransferModal(false);
                                             }
-                                            setShowTransferModal(false);
                                         } catch (err: any) {
                                             alert(err.message || 'Transfer failed');
+                                        } finally {
+                                            setIsSubmittingTransfer(false);
                                         }
-                                    }
-                                }}
-                                className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-blue-500/20"
-                            >
-                                Confirm & Transfer
-                            </button>
+                                    }}
+                                    className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                                >
+                                    {isSubmittingTransfer ? (
+                                        <>
+                                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                            <span>Processing...</span>
+                                        </>
+                                    ) : (
+                                        <span>Confirm & Transfer</span>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* ========================================================================= */}
             {/* 2. CONVERT TASK EARNINGS MODAL */}
