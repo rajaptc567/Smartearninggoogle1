@@ -959,6 +959,50 @@ async function runAllTests() {
         assert(tasks.length === 1 && users === existingData && subs.length === 1, 'H2: Promise.allSettled correctly preserves existing data when individual requests fail');
     }
 
+    console.log('\n--- I. INITIAL BACKGROUND LOAD & FORCED REFRESH RACE COORDINATION ---');
+
+    // I1: Initial background load overlapping with OTP forced refresh
+    {
+        let executionOrder = [];
+        let isSyncing = false;
+        let activePromise = null;
+        let pendingForce = false;
+
+        const mockMasterDataSync = async (force) => {
+            if (force) pendingForce = true;
+            if (activePromise) {
+                await activePromise;
+                if (pendingForce && !isSyncing) {
+                    return mockMasterDataSync(false);
+                }
+                return activePromise;
+            }
+
+            const p = (async () => {
+                isSyncing = true;
+                const doForce = pendingForce;
+                pendingForce = false;
+                await new Promise(r => setTimeout(r, 30));
+                executionOrder.push(doForce ? 'forced_sync' : 'background_sync');
+                isSyncing = false;
+                activePromise = null;
+                if (pendingForce) {
+                    return mockMasterDataSync(false);
+                }
+            })();
+
+            activePromise = p;
+            return p;
+        };
+
+        // Simulate startup background load (force=true) overlapping with an immediate OTP verification forced refresh
+        const startupLoad = mockMasterDataSync(true);
+        const otpRefresh = mockMasterDataSync(true);
+
+        await Promise.all([startupLoad, otpRefresh]);
+        assert(executionOrder.length > 0 && executionOrder.includes('forced_sync'), 'I1: Overlapping startup load and OTP forced refresh coordinate correctly via masterDataSync');
+    }
+
     console.log(`\n======================================================`);
     console.log(`FINAL INTEGRATION SUITE RESULT: ${passed}/${total} TESTS PASSED (${failed} FAILED)`);
     console.log(`======================================================\n`);

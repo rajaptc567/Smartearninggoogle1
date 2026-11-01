@@ -572,7 +572,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             }
 
             // Phase 2: Deferred non-critical background loading ONLY for authenticated users
-            // Public homepage visitors never fetch payment methods, investment plans, or private data on startup!
+            // Coordinated through masterDataSync(true) to prevent race conditions, duplicate requests, and stale state.
             if (!isLoggedIn) {
                 return;
             }
@@ -585,39 +585,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 if (!isMounted) return;
 
                 try {
-                    const backgroundPrivate = [
-                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
-                    ];
-
-                    const privateResults = await Promise.allSettled(backgroundPrivate);
-
-                    if (!isMounted) return;
-
-                    const getValue = (results: any[], idx: number, fallback: any) =>
-                        (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
-
-                    dispatch({
-                        type: 'SET_ALL_DATA',
-                        payload: {
-                            users: getValue(privateResults, 0, state.users),
-                            deposits: getValue(privateResults, 1, state.deposits),
-                            withdrawals: getValue(privateResults, 2, state.withdrawals),
-                            transactions: getValue(privateResults, 3, state.transactions),
-                            notifications: getValue(privateResults, 4, state.notifications),
-                            paymentMethods: getValue(privateResults, 5, state.paymentMethods),
-                            investmentPlans: getValue(privateResults, 6, state.investmentPlans),
-                            rules: getValue(privateResults, 7, state.rules),
-                            settings: getValue(privateResults, 8, state.settings),
-                            transfers: getValue(privateResults, 9, state.transfers),
-                            logs: getValue(privateResults, 10, state.logs),
-                            passwordResetRequests: getValue(privateResults, 11, state.passwordResetRequests),
-                            disputes: getValue(privateResults, 12, state.disputes),
-                            tasks: getValue(privateResults, 13, state.tasks),
-                            userTasks: getValue(privateResults, 14, state.userTasks),
-                            userTaskSubmissions: getValue(privateResults, 15, state.userTaskSubmissions)
-                        }
-                    });
+                    await masterDataSyncRef.current(true);
                 } catch (bgError) {
                     console.warn("Background data load error:", bgError);
                 }
