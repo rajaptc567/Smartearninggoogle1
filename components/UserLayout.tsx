@@ -26,7 +26,9 @@ const UserLayout: React.FC = () => {
   const needsAnyVerification = currentUser && (needsEmailVerification || needsWhatsappVerification);
 
   const [emailCode, setEmailCode] = useState('');
+  const [emailToken, setEmailToken] = useState('');
   const [whatsappCode, setWhatsappCode] = useState('');
+  const [whatsappToken, setWhatsappToken] = useState('');
   const [verifyingEmail, setVerifyingEmail] = useState(false);
   const [verifyingWhatsapp, setVerifyingWhatsapp] = useState(false);
   const [emailError, setEmailError] = useState('');
@@ -57,17 +59,37 @@ const UserLayout: React.FC = () => {
     return () => clearInterval(interval);
   }, [whatsappResendTimer]);
 
+  const extractToken = (raw: string) => {
+    if (!raw) return '';
+    const trimmed = raw.trim();
+    if (trimmed.includes('token=')) {
+      try {
+        const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+        return url.searchParams.get('token') || trimmed;
+      } catch {
+        const match = trimmed.match(/token=([a-zA-Z0-9_-]+)/);
+        return match ? match[1] : trimmed;
+      }
+    }
+    return trimmed;
+  };
+
   const handleVerifyEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!emailCode || emailCode.length < 5) {
-      setEmailError('Please enter a valid verification code.');
+    if (!emailCode || emailCode.length !== 6) {
+      setEmailError('Please enter a valid 6-digit verification code.');
+      return;
+    }
+    const token = extractToken(emailToken);
+    if (!token) {
+      setEmailError('Please click the verification link in your email or paste the token/link above.');
       return;
     }
     setVerifyingEmail(true);
     setEmailError('');
     setEmailSuccess('');
     try {
-      const res = await verifyEmail(emailCode);
+      const res = await verifyEmail(token, emailCode);
       if (res.success) {
         setEmailSuccess('Email verified successfully!');
         dispatch({ type: 'UPDATE_USER', payload: res.data });
@@ -83,15 +105,20 @@ const UserLayout: React.FC = () => {
 
   const handleVerifyWhatsapp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!whatsappCode || whatsappCode.length < 5) {
-      setWhatsappError('Please enter a valid verification code.');
+    if (!whatsappCode || whatsappCode.length !== 6) {
+      setWhatsappError('Please enter a valid 6-digit verification code.');
+      return;
+    }
+    const token = extractToken(whatsappToken);
+    if (!token) {
+      setWhatsappError('Please click the verification link in your WhatsApp or paste the token/link above.');
       return;
     }
     setVerifyingWhatsapp(true);
     setWhatsappError('');
     setWhatsappSuccess('');
     try {
-      const res = await verifyWhatsapp(whatsappCode);
+      const res = await verifyWhatsapp(token, whatsappCode);
       if (res.success) {
         setWhatsappSuccess('WhatsApp verified successfully!');
         dispatch({ type: 'UPDATE_USER', payload: res.data });
@@ -518,9 +545,16 @@ const UserLayout: React.FC = () => {
                   </h3>
                   <span className="text-[10px] uppercase font-black tracking-widest text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">Pending</span>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">We auto-sent a 6-digit code to <strong className="text-gray-700 dark:text-gray-300">{currentUser?.email}</strong>.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Click the verification link sent to <strong className="text-gray-700 dark:text-gray-300">{currentUser?.email}</strong> or enter your link/token and 6-digit code below:</p>
                 
                 <form onSubmit={handleVerifyEmail} className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Paste verification link or token"
+                    value={emailToken}
+                    onChange={(e) => setEmailToken(e.target.value)}
+                    className="w-full bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -563,9 +597,16 @@ const UserLayout: React.FC = () => {
                   </h3>
                   <span className="text-[10px] uppercase font-black tracking-widest text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">Pending</span>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">We auto-sent a 6-digit code to your registered WhatsApp number: <strong className="text-gray-700 dark:text-gray-300">{currentUser?.whatsapp || currentUser?.phone}</strong>.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Click the verification link sent to <strong className="text-gray-700 dark:text-gray-300">{currentUser?.whatsapp || currentUser?.phone}</strong> or enter your link/token and 6-digit code below:</p>
                 
                 <form onSubmit={handleVerifyWhatsapp} className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Paste verification link or token"
+                    value={whatsappToken}
+                    onChange={(e) => setWhatsappToken(e.target.value)}
+                    className="w-full bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
                   <div className="flex gap-2">
                     <input
                       type="text"

@@ -1115,22 +1115,16 @@ export const sendCustomAdminMessage = async (req, res) => {
 
 export const verifyEmailCode = async (req, res) => {
     try {
-        const { code, token } = req.body;
-        if (!code || !token) {
-            return res.status(400).json({ success: false, error: 'Both verification code and link token are required.' });
-        }
-
-        const codeStr = String(code).trim();
-        const tokenStr = String(token).trim();
-
-        if (!/^\d{6}$/.test(codeStr)) {
+        const { code, token } = req.body || {};
+        if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
             return res.status(400).json({ success: false, error: 'Invalid verification code format. OTP must be exactly 6 numeric digits.' });
         }
-        if (!tokenStr) {
+        if (typeof token !== 'string' || !token.trim()) {
             return res.status(400).json({ success: false, error: 'Verification link token is required.' });
         }
 
-        const hashedCode = createHash('sha256').update(codeStr).digest('hex');
+        const tokenStr = token.trim();
+        const hashedCode = createHash('sha256').update(code).digest('hex');
         const hashedToken = createHash('sha256').update(tokenStr).digest('hex');
 
         const updatedUser = await User.findOneAndUpdate(
@@ -1173,22 +1167,16 @@ export const verifyEmailCode = async (req, res) => {
 
 export const verifyWhatsappCode = async (req, res) => {
     try {
-        const { code, token } = req.body;
-        if (!code || !token) {
-            return res.status(400).json({ success: false, error: 'Both verification code and link token are required.' });
-        }
-
-        const codeStr = String(code).trim();
-        const tokenStr = String(token).trim();
-
-        if (!/^\d{6}$/.test(codeStr)) {
+        const { code, token } = req.body || {};
+        if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
             return res.status(400).json({ success: false, error: 'Invalid verification code format. OTP must be exactly 6 numeric digits.' });
         }
-        if (!tokenStr) {
+        if (typeof token !== 'string' || !token.trim()) {
             return res.status(400).json({ success: false, error: 'Verification link token is required.' });
         }
 
-        const hashedCode = createHash('sha256').update(codeStr).digest('hex');
+        const tokenStr = token.trim();
+        const hashedCode = createHash('sha256').update(code).digest('hex');
         const hashedToken = createHash('sha256').update(tokenStr).digest('hex');
 
         const updatedUser = await User.findOneAndUpdate(
@@ -1231,7 +1219,7 @@ export const verifyWhatsappCode = async (req, res) => {
 
 export const resendEmailCode = async (req, res) => {
     try {
-        if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
+        if (!req.user || !req.user.id) return res.status(401).json({ success: false, error: 'Unauthorized.' });
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
 
@@ -1240,7 +1228,7 @@ export const resendEmailCode = async (req, res) => {
         }
 
         const settings = await Setting.getSettings();
-        if (!settings.emailVerificationRequired) {
+        if (!settings || !settings.emailVerificationRequired) {
             return res.status(400).json({ success: false, error: 'Email verification is currently disabled.' });
         }
 
@@ -1274,11 +1262,17 @@ export const resendEmailCode = async (req, res) => {
             return res.status(400).json({ success: false, error: deliveryResult?.email?.error || 'Failed to deliver verification email. Please try again.' });
         }
 
-        user.emailVerificationOtpHash = newOtpHash;
-        user.emailVerificationExpires = newExpires;
-        user.emailVerificationTokenHash = newTokenHash;
-        user.emailVerificationTokenExpires = newTokenExpires;
-        await user.save();
+        await User.findOneAndUpdate(
+            { _id: user._id, emailVerified: false },
+            {
+                $set: {
+                    emailVerificationOtpHash: newOtpHash,
+                    emailVerificationExpires: newExpires,
+                    emailVerificationTokenHash: newTokenHash,
+                    emailVerificationTokenExpires: newTokenExpires
+                }
+            }
+        );
 
         res.status(200).json({ success: true, message: 'Verification code and link sent to your email.' });
     } catch (err) {
@@ -1288,7 +1282,7 @@ export const resendEmailCode = async (req, res) => {
 
 export const resendWhatsappCode = async (req, res) => {
     try {
-        if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
+        if (!req.user || !req.user.id) return res.status(401).json({ success: false, error: 'Unauthorized.' });
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
 
@@ -1297,7 +1291,7 @@ export const resendWhatsappCode = async (req, res) => {
         }
 
         const settings = await Setting.getSettings();
-        if (!settings.whatsappVerificationRequired) {
+        if (!settings || !settings.whatsappVerificationRequired) {
             return res.status(400).json({ success: false, error: 'WhatsApp verification is currently disabled.' });
         }
 
@@ -1322,11 +1316,17 @@ export const resendWhatsappCode = async (req, res) => {
             return res.status(400).json({ success: false, error: deliveryResult?.whatsapp?.error || 'Failed to deliver WhatsApp verification message. Please try again.' });
         }
 
-        user.whatsappVerificationOtpHash = newOtpHash;
-        user.whatsappVerificationExpires = newExpires;
-        user.whatsappVerificationTokenHash = newTokenHash;
-        user.whatsappVerificationTokenExpires = newTokenExpires;
-        await user.save();
+        await User.findOneAndUpdate(
+            { _id: user._id, whatsappVerified: false },
+            {
+                $set: {
+                    whatsappVerificationOtpHash: newOtpHash,
+                    whatsappVerificationExpires: newExpires,
+                    whatsappVerificationTokenHash: newTokenHash,
+                    whatsappVerificationTokenExpires: newTokenExpires
+                }
+            }
+        );
 
         res.status(200).json({ success: true, message: 'Verification code and link sent to your WhatsApp.' });
     } catch (err) {

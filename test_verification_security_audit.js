@@ -1,15 +1,18 @@
-import { createHash, randomBytes, randomInt } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import mongoose from 'mongoose';
 import { verifyEmailCode, verifyWhatsappCode, resendEmailCode, resendWhatsappCode } from './backend/controllers/usersController.js';
+import { authorize } from './backend/middleware/authMiddleware.js';
 import User from './backend/models/User.js';
 import Setting from './backend/models/Setting.js';
+import * as automationModule from './backend/utils/automation.js';
 
-// Disable mongoose buffering for offline unit testing
+// Disable mongoose command buffering for isolated offline unit testing
 mongoose.set('bufferCommands', false);
 
-console.log('=== REAL CONTROLLER & MIDDLEWARE INTEGRATION VERIFICATION TEST SUITE ===\n');
+console.log('=== SMARTEXN EMAIL & WHATSAPP VERIFICATION SECURITY HARDENING TEST SUITE ===\n');
 
 let passed = 0;
+let failed = 0;
 let total = 0;
 
 function assert(cond, name, details = '') {
@@ -18,17 +21,21 @@ function assert(cond, name, details = '') {
         passed++;
         console.log(`[PASS] ${name} ${details ? '- ' + details : ''}`);
     } else {
+        failed++;
         console.error(`[FAIL] ${name} ${details ? '- ' + details : ''}`);
     }
 }
 
-function createMockReqRes({ body = {}, user = null, params = {} } = {}) {
+function createMockReqRes({ body = {}, user = null, params = {}, path = '/api/users/profile', headers = {} } = {}) {
     const req = {
         body,
         user,
         params,
+        path,
+        originalUrl: path,
+        headers,
         protocol: 'https',
-        get: () => 'smartexn.com'
+        get: (h) => (h === 'host' ? 'smartexn.com' : headers[h] || null)
     };
 
     const res = {
@@ -54,6 +61,7 @@ function setupMockUserModel() {
     const origFindOneAndUpdate = User.findOneAndUpdate;
     const origFindById = User.findById;
     const origFindOne = User.findOne;
+    const origFind = User.find;
 
     User.createMockUser = function(data) {
         const id = 'user_' + (idCounter++);
@@ -64,6 +72,8 @@ function setupMockUserModel() {
             phone: data.phone || '+1234567890',
             whatsapp: data.whatsapp || '+1234567890',
             role: data.role || 'user',
+            status: data.status || 'Active',
+            restrictions: data.restrictions || {},
             emailVerified: data.emailVerified ?? false,
             whatsappVerified: data.whatsappVerified ?? false,
             emailVerificationOtpHash: data.emailVerificationOtpHash || null,
@@ -83,8 +93,19 @@ function setupMockUserModel() {
         return doc;
     };
 
-    User.findById = async function(id) {
-        return memoryUsers.get(id) || null;
+    User.findById = function(id) {
+        return {
+            select: function() {
+                return {
+                    lean: async function() {
+                        return memoryUsers.get(id) || null;
+                    }
+                };
+            },
+            then: function(resolve) {
+                return Promise.resolve(memoryUsers.get(id) || null).then(resolve);
+            }
+        };
     };
 
     User.findOne = async function(query) {
@@ -107,6 +128,7 @@ function setupMockUserModel() {
             let match = true;
             const now = new Date();
 
+            if (query._id && user._id !== query._id) match = false;
             if (query.emailVerificationTokenHash && user.emailVerificationTokenHash !== query.emailVerificationTokenHash) match = false;
             if (query.emailVerificationOtpHash && user.emailVerificationOtpHash !== query.emailVerificationOtpHash) match = false;
             if (query.emailVerificationExpires && query.emailVerificationExpires.$gt && !(user.emailVerificationExpires > now)) match = false;
@@ -140,6 +162,7 @@ function setupMockUserModel() {
             User.findOneAndUpdate = origFindOneAndUpdate;
             User.findById = origFindById;
             User.findOne = origFindOne;
+            User.find = origFind;
         }
     };
 }
@@ -162,10 +185,9 @@ Setting.findOne = async function() {
 const mockScope = setupMockUserModel();
 
 async function runAllTests() {
-    // --- PART A: EMAIL VERIFICATION FORMAT & SECURITY ---
-    console.log('--- A. EMAIL VERIFICATION CONTROLLER FORMAT & SECURITY ---');
+    console.log('--- A. EMAIL VERIFICATION CONTROLLER: FORMAT, TYPES & CREDENTIALS ---');
 
-    // Case A1: Correct 6-digit OTP & correct token
+    // Case A1: Correct 6-digit OTP string & valid link token
     {
         const rawOtp = '123456';
         const rawToken = 'valid_token_abc';
@@ -179,66 +201,92 @@ async function runAllTests() {
 
         const { req, res } = createMockReqRes({ body: { code: rawOtp, token: rawToken } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 200 && res.jsonResponse.success === true && user.emailVerified === true, 'A1: Correct 6-digit OTP and token verifies successfully');
+        assert(res.statusCode === 200 && res.jsonResponse.success === true && user.emailVerified === true, 'A1: Correct 6-digit OTP string and token verifies successfully');
     }
 
-    // Case A2: Incorrect OTP
+    // Case A2: Numeric OTP (number instead of string) -> Must be rejected without casting
     {
-        const rawOtp = '123456';
-        const wrongOtp = '654321';
+        const rawOtp = 123456;
         const rawToken = 'token_a2';
-        const user = User.createMockUser({
-            emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
-            emailVerificationExpires: new Date(Date.now() + 600000),
-            emailVerificationTokenHash: createHash('sha256').update(rawToken).digest('hex'),
-            emailVerificationTokenExpires: new Date(Date.now() + 86400000),
-            emailVerified: false
-        });
-
-        const { req, res } = createMockReqRes({ body: { code: wrongOtp, token: rawToken } });
+        const { req, res } = createMockReqRes({ body: { code: rawOtp, token: rawToken } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 400 && res.jsonResponse.success === false && user.emailVerified === false, 'A2: Incorrect OTP rejected');
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A2: Numeric OTP (number type) strictly rejected without casting');
     }
 
-    // Case A3: Missing OTP
+    // Case A3: Object OTP -> Must be rejected
     {
-        const { req, res } = createMockReqRes({ body: { token: 'some_token' } });
+        const { req, res } = createMockReqRes({ body: { code: { value: '123456' }, token: 'token_a3' } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 400 && res.jsonResponse.error.includes('required'), 'A3: Missing OTP rejected');
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A3: Object OTP strictly rejected');
     }
 
-    // Case A4: Missing Token
+    // Case A4: Boolean OTP -> Must be rejected
     {
-        const { req, res } = createMockReqRes({ body: { code: '123456' } });
+        const { req, res } = createMockReqRes({ body: { code: true, token: 'token_a4' } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 400 && res.jsonResponse.error.includes('required'), 'A4: Missing token rejected');
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A4: Boolean OTP strictly rejected');
     }
 
-    // Case A5: Non-numeric OTP
+    // Case A5: Leading whitespace in OTP -> Must be rejected without auto-trimming
+    {
+        const { req, res } = createMockReqRes({ body: { code: ' 123456', token: 'token_a5' } });
+        await verifyEmailCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A5: Leading whitespace in OTP rejected without auto-trimming');
+    }
+
+    // Case A6: Trailing whitespace in OTP -> Must be rejected without auto-trimming
+    {
+        const { req, res } = createMockReqRes({ body: { code: '123456 ', token: 'token_a6' } });
+        await verifyEmailCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A6: Trailing whitespace in OTP rejected without auto-trimming');
+    }
+
+    // Case A7: Non-numeric / Alphanumeric OTP
     {
         const { req, res } = createMockReqRes({ body: { code: '123a56', token: 'valid_token' } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A5: Non-numeric OTP ("123a56") rejected');
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A7: Alphanumeric OTP ("123a56") rejected');
     }
 
-    // Case A6: OTP shorter than 6 digits
+    // Case A8: Short OTP (5 digits)
     {
         const { req, res } = createMockReqRes({ body: { code: '12345', token: 'valid_token' } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A6: Short OTP ("12345") rejected');
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A8: Short OTP ("12345") rejected');
     }
 
-    // Case A7: OTP longer than 6 digits
+    // Case A9: Long OTP (7 digits)
     {
         const { req, res } = createMockReqRes({ body: { code: '1234567', token: 'valid_token' } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A7: Long OTP ("1234567") rejected');
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'A9: Long OTP ("1234567") rejected');
     }
 
-    // Case A8: Expired OTP
+    // Case A10: Missing Link Token
+    {
+        const { req, res } = createMockReqRes({ body: { code: '123456' } });
+        await verifyEmailCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('token is required'), 'A10: Missing link token rejected');
+    }
+
+    // Case A11: Whitespace-only Link Token
+    {
+        const { req, res } = createMockReqRes({ body: { code: '123456', token: '   ' } });
+        await verifyEmailCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('token is required'), 'A11: Whitespace-only link token rejected');
+    }
+
+    // Case A12: Non-string Link Token
+    {
+        const { req, res } = createMockReqRes({ body: { code: '123456', token: 12345 } });
+        await verifyEmailCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('token is required'), 'A12: Non-string link token rejected');
+    }
+
+    // Case A13: Expired OTP (10-minute expiry)
     {
         const rawOtp = '123456';
-        const rawToken = 'token_a8';
+        const rawToken = 'token_a13';
         const user = User.createMockUser({
             emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
             emailVerificationExpires: new Date(Date.now() - 1000), // Expired
@@ -249,13 +297,13 @@ async function runAllTests() {
 
         const { req, res } = createMockReqRes({ body: { code: rawOtp, token: rawToken } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 400 && user.emailVerified === false, 'A8: Expired OTP rejected');
+        assert(res.statusCode === 400 && user.emailVerified === false, 'A13: Expired OTP rejected');
     }
 
-    // Case A9: Expired Link Token
+    // Case A14: Expired Link Token (24-hour expiry)
     {
         const rawOtp = '123456';
-        const rawToken = 'token_a9';
+        const rawToken = 'token_a14';
         const user = User.createMockUser({
             emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
             emailVerificationExpires: new Date(Date.now() + 600000),
@@ -266,13 +314,13 @@ async function runAllTests() {
 
         const { req, res } = createMockReqRes({ body: { code: rawOtp, token: rawToken } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 400 && user.emailVerified === false, 'A9: Expired link token rejected');
+        assert(res.statusCode === 400 && user.emailVerified === false, 'A14: Expired link token rejected');
     }
 
-    // Case A10: Reused Credentials
+    // Case A15: Single-use credential consumption / Replay attack
     {
         const rawOtp = '123456';
-        const rawToken = 'token_a10';
+        const rawToken = 'token_a15';
         const user = User.createMockUser({
             emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
             emailVerificationExpires: new Date(Date.now() + 600000),
@@ -287,14 +335,13 @@ async function runAllTests() {
         const reqRes2 = createMockReqRes({ body: { code: rawOtp, token: rawToken } });
         await verifyEmailCode(reqRes2.req, reqRes2.res);
 
-        assert(reqRes1.res.statusCode === 200 && reqRes2.res.statusCode === 400, 'A10: Reused credentials rejected on second attempt');
+        assert(reqRes1.res.statusCode === 200 && reqRes2.res.statusCode === 400, 'A15: Replay attack rejected - Credentials consumed on first use');
     }
 
 
-    // --- PART B: WHATSAPP VERIFICATION FORMAT & SECURITY ---
-    console.log('\n--- B. WHATSAPP VERIFICATION CONTROLLER FORMAT & SECURITY ---');
+    console.log('\n--- B. WHATSAPP VERIFICATION CONTROLLER: FORMAT, TYPES & CREDENTIALS ---');
 
-    // Case B1: Correct 6-digit WhatsApp OTP & token
+    // Case B1: Correct 6-digit WhatsApp OTP string & token
     {
         const rawOtp = '654321';
         const rawToken = 'wa_token_b1';
@@ -308,30 +355,51 @@ async function runAllTests() {
 
         const { req, res } = createMockReqRes({ body: { code: rawOtp, token: rawToken } });
         await verifyWhatsappCode(req, res);
-        assert(res.statusCode === 200 && res.jsonResponse.success === true && user.whatsappVerified === true, 'B1: Correct 6-digit WhatsApp OTP verifies successfully');
+        assert(res.statusCode === 200 && res.jsonResponse.success === true && user.whatsappVerified === true, 'B1: Correct 6-digit WhatsApp OTP string and token verifies successfully');
     }
 
-    // Case B2: Non-numeric WhatsApp OTP
+    // Case B2: Numeric WhatsApp OTP -> Rejected without casting
     {
-        const { req, res } = createMockReqRes({ body: { code: 'abc123', token: 'wa_token' } });
+        const { req, res } = createMockReqRes({ body: { code: 654321, token: 'wa_token_b2' } });
         await verifyWhatsappCode(req, res);
-        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'B2: Non-numeric WhatsApp OTP rejected');
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'B2: Numeric WhatsApp OTP strictly rejected');
     }
 
-    // Case B3: Invalid length WhatsApp OTP
+    // Case B3: Leading whitespace in WhatsApp OTP -> Rejected
     {
-        const { req, res } = createMockReqRes({ body: { code: '1234', token: 'wa_token' } });
+        const { req, res } = createMockReqRes({ body: { code: ' 654321', token: 'wa_token_b3' } });
         await verifyWhatsappCode(req, res);
-        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'B3: 4-digit WhatsApp OTP rejected');
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'B3: Leading whitespace WhatsApp OTP rejected');
+    }
+
+    // Case B4: Non-numeric WhatsApp OTP
+    {
+        const { req, res } = createMockReqRes({ body: { code: 'abc123', token: 'wa_token_b4' } });
+        await verifyWhatsappCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'B4: Non-numeric WhatsApp OTP rejected');
+    }
+
+    // Case B5: Short WhatsApp OTP (4 digits)
+    {
+        const { req, res } = createMockReqRes({ body: { code: '1234', token: 'wa_token_b5' } });
+        await verifyWhatsappCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('numeric digits'), 'B5: Short 4-digit WhatsApp OTP rejected');
+    }
+
+    // Case B6: Missing WhatsApp link token
+    {
+        const { req, res } = createMockReqRes({ body: { code: '654321' } });
+        await verifyWhatsappCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('token is required'), 'B6: Missing WhatsApp link token rejected');
     }
 
 
-    // --- PART C: ATOMICITY & CONCURRENCY ---
-    console.log('\n--- C. ATOMICITY & CONCURRENCY TEST ---');
+    console.log('\n--- C. ATOMICITY & RACE CONDITION PREVENTION ---');
 
+    // Case C1: Simultaneous concurrent verification requests
     {
         const rawOtp = '987654';
-        const rawToken = 'atomic_token_c';
+        const rawToken = 'atomic_token_c1';
         const user = User.createMockUser({
             emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
             emailVerificationExpires: new Date(Date.now() + 600000),
@@ -351,62 +419,60 @@ async function runAllTests() {
         const successCount = (reqRes1.res.statusCode === 200 ? 1 : 0) + (reqRes2.res.statusCode === 200 ? 1 : 0);
         const failCount = (reqRes1.res.statusCode === 400 ? 1 : 0) + (reqRes2.res.statusCode === 400 ? 1 : 0);
 
-        assert(successCount === 1 && failCount === 1 && user.emailVerified === true, 'C1: Concurrent requests - Exactly 1 succeeds, 1 fails');
+        assert(successCount === 1 && failCount === 1 && user.emailVerified === true, 'C1: Concurrent race condition test - Exactly 1 succeeds, 1 fails');
     }
 
 
-    // --- PART D: SETTINGS COMBINATIONS & MIDDLEWARE ENFORCEMENT ---
-    console.log('\n--- D. SETTINGS COMBINATIONS & RESEND/MIDDLEWARE ENFORCEMENT ---');
+    console.log('\n--- D. SETTINGS COMBINATIONS & FAIL-CLOSED ENFORCEMENT ---');
 
-    const testUser = User.createMockUser({ emailVerified: false, whatsappVerified: false });
-    const reqUser = { id: testUser._id, role: 'user' };
+    const unverifiedUser = User.createMockUser({ emailVerified: false, whatsappVerified: false, role: 'user' });
 
     // D1: Email ON / WhatsApp ON
-    mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: true };
     {
-        const resResendEmail = createMockReqRes({ user: reqUser });
-        await resendEmailCode(resResendEmail.req, resResendEmail.res);
-        assert(resResendEmail.res.statusCode === 400 && resResendEmail.res.jsonResponse.error, 'D1: Email ON / WA ON - Resend reached delivery check');
+        mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: true };
+        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
+        let nextCalled = false;
+        await authorize(['user'])(req, res, () => { nextCalled = true; });
+        assert(res.statusCode === 403 && res.jsonResponse.needsEmailVerification === true && res.jsonResponse.needsWhatsappVerification === true, 'D1: Setting 1 (Email ON, WA ON) - Blocks both');
     }
 
     // D2: Email ON / WhatsApp OFF
-    mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: false };
     {
-        const resEmail = createMockReqRes({ user: reqUser });
-        await resendEmailCode(resEmail.req, resEmail.res);
-
-        const resWA = createMockReqRes({ user: reqUser });
-        await resendWhatsappCode(resWA.req, resWA.res);
-
-        assert(resEmail.res.statusCode === 400 && resEmail.res.jsonResponse.error && resWA.res.jsonResponse.error.includes('disabled'), 'D2: Email ON / WA OFF - Email Resend Allowed to Delivery, WA Resend Blocked');
+        mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: false };
+        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
+        let nextCalled = false;
+        await authorize(['user'])(req, res, () => { nextCalled = true; });
+        assert(res.statusCode === 403 && res.jsonResponse.needsEmailVerification === true && res.jsonResponse.needsWhatsappVerification === false, 'D2: Setting 2 (Email ON, WA OFF) - Blocks email only');
     }
 
     // D3: Email OFF / WhatsApp ON
-    mockSettings = { emailVerificationRequired: false, whatsappVerificationRequired: true };
     {
-        const resEmail = createMockReqRes({ user: reqUser });
-        await resendEmailCode(resEmail.req, resEmail.res);
-
-        const resWA = createMockReqRes({ user: reqUser });
-        await resendWhatsappCode(resWA.req, resWA.res);
-
-        assert(resEmail.res.jsonResponse.error.includes('disabled') && resWA.res.statusCode === 400 && resWA.res.jsonResponse.error, 'D3: Email OFF / WA ON - Email Resend Blocked, WA Resend Allowed to Delivery');
+        mockSettings = { emailVerificationRequired: false, whatsappVerificationRequired: true };
+        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
+        let nextCalled = false;
+        await authorize(['user'])(req, res, () => { nextCalled = true; });
+        assert(res.statusCode === 403 && res.jsonResponse.needsEmailVerification === false && res.jsonResponse.needsWhatsappVerification === true, 'D3: Setting 3 (Email OFF, WA ON) - Blocks WA only');
     }
 
     // D4: Email OFF / WhatsApp OFF
-    mockSettings = { emailVerificationRequired: false, whatsappVerificationRequired: false };
     {
-        const resEmail = createMockReqRes({ user: reqUser });
-        await resendEmailCode(resEmail.req, resEmail.res);
+        mockSettings = { emailVerificationRequired: false, whatsappVerificationRequired: false };
+        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
+        let nextCalled = false;
+        await authorize(['user'])(req, res, () => { nextCalled = true; });
+        assert(nextCalled === true, 'D4: Setting 4 (Email OFF, WA OFF) - Allows access when neither required');
+    }
 
-        const resWA = createMockReqRes({ user: reqUser });
-        await resendWhatsappCode(resWA.req, resWA.res);
-
-        assert(resEmail.res.jsonResponse.error.includes('disabled') && resWA.res.jsonResponse.error.includes('disabled'), 'D4: Email OFF / WA OFF - Both Resends Blocked');
+    // D5: Fail-closed on missing / invalid settings
+    {
+        mockSettings = null;
+        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
+        let nextCalled = false;
+        await authorize(['user'])(req, res, () => { nextCalled = true; });
+        assert(res.statusCode === 500 && res.jsonResponse.error.includes('settings unavailable'), 'D5: Fail-closed on missing/invalid settings (500)');
     }
 
 
-    // --- PART E: RESEND SECURITY & ALREADY-VERIFIED PROTECTION ---
     console.log('\n--- E. RESEND SECURITY & ALREADY-VERIFIED PROTECTION ---');
 
     mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: true };
@@ -415,32 +481,70 @@ async function runAllTests() {
     {
         const { req, res } = createMockReqRes({ user: null });
         await resendEmailCode(req, res);
-        assert(res.statusCode === 401, 'E1: Unauthenticated resend rejected (401)');
+        assert(res.statusCode === 401, 'E1: Unauthenticated email resend rejected (401)');
     }
 
     // E2: Already-Verified Email Resend
     {
-        const verifiedUser = User.createMockUser({ emailVerified: true, whatsappVerified: false });
-        const { req, res } = createMockReqRes({ user: { id: verifiedUser._id, role: 'user' } });
+        const verifiedEmailUser = User.createMockUser({ emailVerified: true, whatsappVerified: false });
+        const { req, res } = createMockReqRes({ user: { id: verifiedEmailUser._id, role: 'user' } });
         await resendEmailCode(req, res);
         assert(res.statusCode === 400 && res.jsonResponse.error.includes('already verified'), 'E2: Already-verified Email resend rejected (400)');
     }
 
     // E3: Already-Verified WhatsApp Resend
     {
-        const verifiedUser = User.createMockUser({ emailVerified: false, whatsappVerified: true });
-        const { req, res } = createMockReqRes({ user: { id: verifiedUser._id, role: 'user' } });
+        const verifiedWaUser = User.createMockUser({ emailVerified: false, whatsappVerified: true });
+        const { req, res } = createMockReqRes({ user: { id: verifiedWaUser._id, role: 'user' } });
         await resendWhatsappCode(req, res);
         assert(res.statusCode === 400 && res.jsonResponse.error.includes('already verified'), 'E3: Already-verified WhatsApp resend rejected (400)');
     }
 
+    // E4: Resend when Email verification is disabled in settings
+    {
+        mockSettings = { emailVerificationRequired: false, whatsappVerificationRequired: true };
+        const pendingUser = User.createMockUser({ emailVerified: false });
+        const { req, res } = createMockReqRes({ user: { id: pendingUser._id, role: 'user' } });
+        await resendEmailCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('disabled'), 'E4: Resend rejected when Email verification is disabled');
+    }
+
+    // E5: Resend when WhatsApp verification is disabled in settings
+    {
+        mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: false };
+        const pendingUser = User.createMockUser({ whatsappVerified: false });
+        const { req, res } = createMockReqRes({ user: { id: pendingUser._id, role: 'user' } });
+        await resendWhatsappCode(req, res);
+        assert(res.statusCode === 400 && res.jsonResponse.error.includes('disabled'), 'E5: Resend rejected when WhatsApp verification is disabled');
+    }
+
+    // E6: Delivery failure safety: Hashes must NOT be modified if delivery fails
+    {
+        mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: true };
+        const initialOtpHash = 'initial_otp_hash_123';
+        const pendingUser = User.createMockUser({
+            emailVerified: false,
+            emailVerificationOtpHash: initialOtpHash
+        });
+
+        // Offline / default delivery attempt will fail because no SMTP / external provider is configured in unit test
+        const { req, res } = createMockReqRes({ user: { id: pendingUser._id, role: 'user' } });
+        await resendEmailCode(req, res);
+        assert(res.statusCode === 400 && pendingUser.emailVerificationOtpHash === initialOtpHash, 'E6: Delivery failure safety - Hashes NOT modified if delivery fails');
+    }
+
     console.log(`\n======================================================`);
-    console.log(`FINAL INTEGRATION SUITE RESULT: ${passed}/${total} TESTS PASSED`);
+    console.log(`FINAL INTEGRATION SUITE RESULT: ${passed}/${total} TESTS PASSED (${failed} FAILED)`);
     console.log(`======================================================\n`);
-    process.exit(0);
+
+    if (failed > 0) {
+        process.exit(1);
+    } else {
+        process.exit(0);
+    }
 }
 
 runAllTests().catch(err => {
-    console.error('Test runner execution error:', err);
+    console.error('Test runner fatal error:', err);
     process.exit(1);
 });
