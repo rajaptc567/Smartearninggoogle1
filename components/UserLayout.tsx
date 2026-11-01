@@ -75,11 +75,22 @@ const UserLayout: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tokenFromUrl = params.get('token');
-    if (tokenFromUrl) {
+    if (!tokenFromUrl) return;
+
+    const pathname = (location.pathname || '').toLowerCase();
+    const typeParam = (params.get('type') || params.get('channel') || '').toLowerCase();
+
+    // 1. Detect the current verification type from the actual route/path
+    const isEmailRoute = pathname === '/verify-email' || pathname.startsWith('/verify-email') || pathname.includes('verify-email') || typeParam === 'email';
+    const isWhatsappRoute = pathname === '/verify-whatsapp' || pathname.startsWith('/verify-whatsapp') || pathname.includes('verify-whatsapp') || typeParam === 'whatsapp';
+
+    // 2. Assign URL token strictly to the matching channel only
+    if (isEmailRoute && !isWhatsappRoute) {
       setEmailToken(tokenFromUrl);
+    } else if (isWhatsappRoute && !isEmailRoute) {
       setWhatsappToken(tokenFromUrl);
     }
-  }, [location.search]);
+  }, [location.pathname, location.search]);
 
   const extractToken = (raw: string) => {
     if (!raw) return '';

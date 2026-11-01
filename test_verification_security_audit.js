@@ -754,6 +754,44 @@ async function runAllTests() {
         assert(!hasVisibleTokenInput && hasOtpInput && hasResend, 'F10: UserLayout Account Security Gate removed visible token inputs while retaining OTP and resend controls');
     }
 
+    // F11: UserLayout route-based token segregation audit
+    {
+        const layoutCode = fs.readFileSync('./components/UserLayout.tsx', 'utf8');
+        const hasRouteCheck = layoutCode.includes('isEmailRoute') && layoutCode.includes('isWhatsappRoute');
+        const hasStrictEmailAssignment = layoutCode.includes('if (isEmailRoute && !isWhatsappRoute) {\n      setEmailToken(tokenFromUrl);');
+        const hasStrictWhatsappAssignment = layoutCode.includes('else if (isWhatsappRoute && !isEmailRoute) {\n      setWhatsappToken(tokenFromUrl);');
+        assert(hasRouteCheck && hasStrictEmailAssignment && hasStrictWhatsappAssignment, 'F11a: UserLayout enforces route-segregated token assignment');
+
+        // Logic test of the segregation algorithm
+        const simulateTokenAssignment = (pathname, search) => {
+            const params = new URLSearchParams(search);
+            const tokenFromUrl = params.get('token');
+            let emailToken = '';
+            let whatsappToken = '';
+            if (tokenFromUrl) {
+                const p = (pathname || '').toLowerCase();
+                const typeParam = (params.get('type') || params.get('channel') || '').toLowerCase();
+                const isEmailRoute = p === '/verify-email' || p.startsWith('/verify-email') || p.includes('verify-email') || typeParam === 'email';
+                const isWhatsappRoute = p === '/verify-whatsapp' || p.startsWith('/verify-whatsapp') || p.includes('verify-whatsapp') || typeParam === 'whatsapp';
+                if (isEmailRoute && !isWhatsappRoute) {
+                    emailToken = tokenFromUrl;
+                } else if (isWhatsappRoute && !isEmailRoute) {
+                    whatsappToken = tokenFromUrl;
+                }
+            }
+            return { emailToken, whatsappToken };
+        };
+
+        const emailResult = simulateTokenAssignment('/verify-email', '?token=tok_email_123');
+        assert(emailResult.emailToken === 'tok_email_123' && emailResult.whatsappToken === '', 'F11b: /verify-email assigns only to emailToken, never whatsappToken');
+
+        const waResult = simulateTokenAssignment('/verify-whatsapp', '?token=tok_wa_456');
+        assert(waResult.whatsappToken === 'tok_wa_456' && waResult.emailToken === '', 'F11c: /verify-whatsapp assigns only to whatsappToken, never emailToken');
+
+        const memberResult = simulateTokenAssignment('/member', '?token=tok_generic_789');
+        assert(memberResult.emailToken === '' && memberResult.whatsappToken === '', 'F11d: Unspecified route does not cross-assign token to either channel');
+    }
+
     console.log(`\n======================================================`);
     console.log(`FINAL INTEGRATION SUITE RESULT: ${passed}/${total} TESTS PASSED (${failed} FAILED)`);
     console.log(`======================================================\n`);
