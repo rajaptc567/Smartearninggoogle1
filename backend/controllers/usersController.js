@@ -1120,8 +1120,18 @@ export const verifyEmailCode = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Both verification code and link token are required.' });
         }
 
-        const hashedCode = createHash('sha256').update(code).digest('hex');
-        const hashedToken = createHash('sha256').update(token).digest('hex');
+        const codeStr = String(code).trim();
+        const tokenStr = String(token).trim();
+
+        if (!/^\d{6}$/.test(codeStr)) {
+            return res.status(400).json({ success: false, error: 'Invalid verification code format. OTP must be exactly 6 numeric digits.' });
+        }
+        if (!tokenStr) {
+            return res.status(400).json({ success: false, error: 'Verification link token is required.' });
+        }
+
+        const hashedCode = createHash('sha256').update(codeStr).digest('hex');
+        const hashedToken = createHash('sha256').update(tokenStr).digest('hex');
 
         const updatedUser = await User.findOneAndUpdate(
             {
@@ -1168,8 +1178,18 @@ export const verifyWhatsappCode = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Both verification code and link token are required.' });
         }
 
-        const hashedCode = createHash('sha256').update(code).digest('hex');
-        const hashedToken = createHash('sha256').update(token).digest('hex');
+        const codeStr = String(code).trim();
+        const tokenStr = String(token).trim();
+
+        if (!/^\d{6}$/.test(codeStr)) {
+            return res.status(400).json({ success: false, error: 'Invalid verification code format. OTP must be exactly 6 numeric digits.' });
+        }
+        if (!tokenStr) {
+            return res.status(400).json({ success: false, error: 'Verification link token is required.' });
+        }
+
+        const hashedCode = createHash('sha256').update(codeStr).digest('hex');
+        const hashedToken = createHash('sha256').update(tokenStr).digest('hex');
 
         const updatedUser = await User.findOneAndUpdate(
             {
@@ -1214,6 +1234,10 @@ export const resendEmailCode = async (req, res) => {
         if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+
+        if (user.emailVerified) {
+            return res.status(400).json({ success: false, error: 'Email is already verified.' });
+        }
 
         const settings = await Setting.getSettings();
         if (!settings.emailVerificationRequired) {
@@ -1267,6 +1291,10 @@ export const resendWhatsappCode = async (req, res) => {
         if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+
+        if (user.whatsappVerified) {
+            return res.status(400).json({ success: false, error: 'WhatsApp is already verified.' });
+        }
 
         const settings = await Setting.getSettings();
         if (!settings.whatsappVerificationRequired) {
