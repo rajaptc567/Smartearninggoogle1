@@ -281,7 +281,7 @@ const Register: React.FC = () => {
             const needsEmail = Boolean(emailDelivered && !createdUser.emailVerified);
             const needsWa = Boolean(waDelivered && !createdUser.whatsappVerified);
 
-            let message = 'Registration successful!';
+            let message = 'Your account has been created successfully. Please check your Email and WhatsApp for your verification code.';
             if (res.verificationStatus) {
                 const { email, whatsapp } = res.verificationStatus;
                 if (email?.attempted && !email?.success) {
@@ -289,9 +289,6 @@ const Register: React.FC = () => {
                 }
                 if (whatsapp?.attempted && !whatsapp?.success) {
                     message += `\n\nWhatsApp verification delivery failed: ${whatsapp.error || 'Unknown error'}. You may proceed without WhatsApp verification.`;
-                }
-                if ((email?.attempted && email?.success) || (whatsapp?.attempted && whatsapp?.success)) {
-                    message += '\n\nPlease check your messages for your verification link and 6-digit OTP.';
                 }
             }
             
