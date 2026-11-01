@@ -29,10 +29,10 @@ import {
 const router = express.Router();
 
 // Verification routes (Publicly accessible, controller enforces security)
-router.post('/verify-email', verifyEmailCode);
-router.post('/verify-whatsapp', verifyWhatsappCode);
-router.post('/resend-email', authorize(['user', 'admin']), resendEmailCode);
-router.post('/resend-whatsapp', authorize(['user', 'admin']), resendWhatsappCode);
+router.post('/verify-email', verificationLimiter, verifyEmailCode);
+router.post('/verify-whatsapp', verificationLimiter, verifyWhatsappCode);
+router.post('/resend-email', verificationLimiter, resendEmailCode);
+router.post('/resend-whatsapp', verificationLimiter, resendWhatsappCode);
 
 // Public/Auth routes with rate limiting
 router.post('/login', authLimiter, loginUser);

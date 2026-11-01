@@ -78,4 +78,17 @@ export const taskActionLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-
+/**
+ * VERIFICATION LIMITER
+ * Strict limits for OTP/Token verification to block brute-force.
+ */
+export const verificationLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5, // 5 attempts per 15 mins
+    message: {
+        success: false,
+        error: 'Too many verification attempts. Please wait 15 minutes before trying again.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
