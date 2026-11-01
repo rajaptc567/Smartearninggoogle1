@@ -95,6 +95,7 @@ export const authorize = (allowedRoles = []) => {
                     }
                 } catch (err) {
                     console.error('Backend verification enforcement error:', err);
+                    return res.status(500).json({ success: false, error: 'Internal server error during verification enforcement.' });
                 }
             }
         }

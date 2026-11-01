@@ -274,9 +274,6 @@ const Register: React.FC = () => {
             // Trigger non-financial GA4 sign_up event with no PII
             seoAnalytics.trackSignUp('platform_registration');
 
-            // Trigger non-financial GA4 sign_up event with no PII
-            seoAnalytics.trackSignUp('platform_registration');
-
             let message = 'Registration successful!';
             if (res.verificationStatus) {
                 const { email, whatsapp } = res.verificationStatus;

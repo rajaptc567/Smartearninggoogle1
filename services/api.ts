@@ -172,22 +172,20 @@ export const login = async (email: string, password: string): Promise<{ token: s
     return { token: result.token, data: result.data };
 };
 
-export const verifyEmail = async (codeOrToken: string, isToken: boolean = false): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
-    const payload = isToken ? { token: codeOrToken } : { code: codeOrToken };
+export const verifyEmail = async (token: string, code: string): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/verify-email`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ token, code }),
     });
     return handleResponse(response);
 };
 
-export const verifyWhatsapp = async (codeOrToken: string, isToken: boolean = false): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
-    const payload = isToken ? { token: codeOrToken } : { code: codeOrToken };
+export const verifyWhatsapp = async (token: string, code: string): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/verify-whatsapp`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ token, code }),
     });
     return handleResponse(response);
 };

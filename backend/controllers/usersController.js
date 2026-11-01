@@ -1115,44 +1115,35 @@ export const sendCustomAdminMessage = async (req, res) => {
 export const verifyEmailCode = async (req, res) => {
     try {
         const { code, token } = req.body;
-        let user;
-
-        if (token) {
-            const hashed = createHash('sha256').update(token).digest('hex');
-            user = await User.findOne({
-                emailVerificationTokenHash: hashed,
-                emailVerificationTokenExpires: { $gt: new Date() }
-            });
-            if (!user) {
-                return res.status(400).json({ success: false, error: 'Invalid or expired verification link.' });
-            }
-            user.emailVerified = true;
-            user.emailVerificationOtpHash = undefined;
-            user.emailVerificationExpires = undefined;
-            user.emailVerificationTokenHash = undefined;
-            user.emailVerificationTokenExpires = undefined;
-        } else if (code) {
-            if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
-            user = await User.findById(req.user.id);
-            if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-
-            if (!user.emailVerificationExpires || user.emailVerificationExpires < new Date()) {
-                return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new one.' });
-            }
-
-            const hashedCode = createHash('sha256').update(code).digest('hex');
-            if (user.emailVerificationOtpHash !== hashedCode) {
-                return res.status(400).json({ success: false, error: 'Invalid verification code.' });
-            }
-            user.emailVerified = true;
-            user.emailVerificationOtpHash = undefined;
-            user.emailVerificationExpires = undefined;
-            user.emailVerificationTokenHash = undefined;
-            user.emailVerificationTokenExpires = undefined;
-        } else {
-            return res.status(400).json({ success: false, error: 'Verification code or token is required.' });
+        if (!code || !token) {
+            return res.status(400).json({ success: false, error: 'Both verification code and link token are required.' });
         }
 
+        const hashedCode = createHash('sha256').update(code).digest('hex');
+        const hashedToken = createHash('sha256').update(token).digest('hex');
+
+        const user = await User.findOne({
+            emailVerificationTokenHash: hashedToken,
+            emailVerificationTokenExpires: { $gt: new Date() }
+        });
+        
+        if (!user) {
+            return res.status(400).json({ success: false, error: 'Invalid or expired verification link.' });
+        }
+        
+        if (!user.emailVerificationExpires || user.emailVerificationExpires < new Date()) {
+            return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new one.' });
+        }
+
+        if (user.emailVerificationOtpHash !== hashedCode) {
+            return res.status(400).json({ success: false, error: 'Invalid verification code.' });
+        }
+
+        user.emailVerified = true;
+        user.emailVerificationOtpHash = undefined;
+        user.emailVerificationExpires = undefined;
+        user.emailVerificationTokenHash = undefined;
+        user.emailVerificationTokenExpires = undefined;
         await user.save();
 
         const newToken = jwt.sign({ 
@@ -1172,44 +1163,35 @@ export const verifyEmailCode = async (req, res) => {
 export const verifyWhatsappCode = async (req, res) => {
     try {
         const { code, token } = req.body;
-        let user;
-
-        if (token) {
-            const hashed = createHash('sha256').update(token).digest('hex');
-            user = await User.findOne({
-                whatsappVerificationTokenHash: hashed,
-                whatsappVerificationTokenExpires: { $gt: new Date() }
-            });
-            if (!user) {
-                return res.status(400).json({ success: false, error: 'Invalid or expired verification link.' });
-            }
-            user.whatsappVerified = true;
-            user.whatsappVerificationOtpHash = undefined;
-            user.whatsappVerificationExpires = undefined;
-            user.whatsappVerificationTokenHash = undefined;
-            user.whatsappVerificationTokenExpires = undefined;
-        } else if (code) {
-            if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
-            user = await User.findById(req.user.id);
-            if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-
-            if (!user.whatsappVerificationExpires || user.whatsappVerificationExpires < new Date()) {
-                return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new one.' });
-            }
-
-            const hashedCode = createHash('sha256').update(code).digest('hex');
-            if (user.whatsappVerificationOtpHash !== hashedCode) {
-                return res.status(400).json({ success: false, error: 'Invalid verification code.' });
-            }
-            user.whatsappVerified = true;
-            user.whatsappVerificationOtpHash = undefined;
-            user.whatsappVerificationExpires = undefined;
-            user.whatsappVerificationTokenHash = undefined;
-            user.whatsappVerificationTokenExpires = undefined;
-        } else {
-            return res.status(400).json({ success: false, error: 'Verification code or token is required.' });
+        if (!code || !token) {
+            return res.status(400).json({ success: false, error: 'Both verification code and link token are required.' });
         }
 
+        const hashedCode = createHash('sha256').update(code).digest('hex');
+        const hashedToken = createHash('sha256').update(token).digest('hex');
+
+        const user = await User.findOne({
+            whatsappVerificationTokenHash: hashedToken,
+            whatsappVerificationTokenExpires: { $gt: new Date() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ success: false, error: 'Invalid or expired verification link.' });
+        }
+
+        if (!user.whatsappVerificationExpires || user.whatsappVerificationExpires < new Date()) {
+            return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new one.' });
+        }
+
+        if (user.whatsappVerificationOtpHash !== hashedCode) {
+            return res.status(400).json({ success: false, error: 'Invalid verification code.' });
+        }
+
+        user.whatsappVerified = true;
+        user.whatsappVerificationOtpHash = undefined;
+        user.whatsappVerificationExpires = undefined;
+        user.whatsappVerificationTokenHash = undefined;
+        user.whatsappVerificationTokenExpires = undefined;
         await user.save();
 
         const newToken = jwt.sign({ 
