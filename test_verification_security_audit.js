@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
+import fs from 'fs';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import { verifyEmailCode, verifyWhatsappCode, resendEmailCode, resendWhatsappCode } from './backend/controllers/usersController.js';
@@ -583,6 +584,174 @@ async function runAllTests() {
         assert(res.statusCode === 200 && res.jsonResponse.token, 'E7a: Token issued upon verification');
         const decoded = jwt.verify(res.jsonResponse.token, process.env.JWT_SECRET);
         assert(decoded.emailVerified === true && decoded.emailVerificationEnforced === false && decoded.whatsappVerified === false && decoded.whatsappVerificationEnforced === true, 'E7b: JWT payload accurately reflects verification and enforcement states');
+    }
+
+    console.log('\n--- F. AUTHENTICATED SESSION VERIFICATION (OTP-ONLY) & FALLBACK URL AUDIT ---');
+
+    // F1: Authenticated user verifies Email using OTP only (no token provided)
+    {
+        const rawOtp = '234567';
+        const rawToken = 'pending_token_f1';
+        const authUser = User.createMockUser({
+            emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
+            emailVerificationExpires: new Date(Date.now() + 600000),
+            emailVerificationTokenHash: createHash('sha256').update(rawToken).digest('hex'),
+            emailVerificationTokenExpires: new Date(Date.now() + 86400000),
+            emailVerified: false,
+            emailVerificationEnforced: true
+        });
+
+        const { req, res } = createMockReqRes({ 
+            user: { id: authUser._id, role: 'user' }, 
+            body: { code: rawOtp } 
+        });
+        await verifyEmailCode(req, res);
+        assert(res.statusCode === 200 && res.jsonResponse.success === true && authUser.emailVerified === true && authUser.emailVerificationEnforced === false, 'F1: Authenticated user verifies email using OTP only (no token provided)');
+        assert(Boolean(res.jsonResponse.token), 'F1b: Fresh JWT issued upon authenticated OTP-only verification');
+    }
+
+    // F2: Authenticated user submits wrong OTP without token -> fails (400)
+    {
+        const rawOtp = '345678';
+        const authUser = User.createMockUser({
+            emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
+            emailVerificationExpires: new Date(Date.now() + 600000),
+            emailVerified: false,
+            emailVerificationEnforced: true
+        });
+
+        const { req, res } = createMockReqRes({ 
+            user: { id: authUser._id, role: 'user' }, 
+            body: { code: '999999' } // Incorrect code
+        });
+        await verifyEmailCode(req, res);
+        assert(res.statusCode === 400 && authUser.emailVerified === false, 'F2: Authenticated user with wrong OTP is rejected (400)');
+    }
+
+    // F3: Authenticated user submits expired OTP without token -> fails (400)
+    {
+        const rawOtp = '456789';
+        const authUser = User.createMockUser({
+            emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
+            emailVerificationExpires: new Date(Date.now() - 1000), // Expired
+            emailVerified: false,
+            emailVerificationEnforced: true
+        });
+
+        const { req, res } = createMockReqRes({ 
+            user: { id: authUser._id, role: 'user' }, 
+            body: { code: rawOtp } 
+        });
+        await verifyEmailCode(req, res);
+        assert(res.statusCode === 400 && authUser.emailVerified === false, 'F3: Authenticated user with expired OTP is rejected (400)');
+    }
+
+    // F4: Replay protection for authenticated OTP-only verification
+    {
+        const rawOtp = '567890';
+        const authUser = User.createMockUser({
+            emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
+            emailVerificationExpires: new Date(Date.now() + 600000),
+            emailVerified: false,
+            emailVerificationEnforced: true
+        });
+
+        const reqRes1 = createMockReqRes({ user: { id: authUser._id, role: 'user' }, body: { code: rawOtp } });
+        const reqRes2 = createMockReqRes({ user: { id: authUser._id, role: 'user' }, body: { code: rawOtp } });
+
+        await verifyEmailCode(reqRes1.req, reqRes1.res);
+        await verifyEmailCode(reqRes2.req, reqRes2.res);
+
+        assert(reqRes1.res.statusCode === 200 && reqRes2.res.statusCode === 400, 'F4: Replay protection - Second OTP-only attempt is rejected');
+    }
+
+    // F5: Authenticated user verifies WhatsApp using OTP only (no token provided)
+    {
+        const rawOtp = '678901';
+        const rawToken = 'pending_wa_token_f5';
+        const authUser = User.createMockUser({
+            whatsappVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
+            whatsappVerificationExpires: new Date(Date.now() + 600000),
+            whatsappVerificationTokenHash: createHash('sha256').update(rawToken).digest('hex'),
+            whatsappVerificationTokenExpires: new Date(Date.now() + 86400000),
+            whatsappVerified: false,
+            whatsappVerificationEnforced: true
+        });
+
+        const { req, res } = createMockReqRes({ 
+            user: { id: authUser._id, role: 'user' }, 
+            body: { code: rawOtp } 
+        });
+        await verifyWhatsappCode(req, res);
+        assert(res.statusCode === 200 && res.jsonResponse.success === true && authUser.whatsappVerified === true && authUser.whatsappVerificationEnforced === false, 'F5: Authenticated user verifies WhatsApp using OTP only (no token provided)');
+    }
+
+    // F6: Cross-user token protection: Authenticated User A tries to use User B's token
+    {
+        const rawOtp = '789012';
+        const rawTokenUserB = 'token_for_user_b';
+        
+        // User A (authenticated)
+        const userA = User.createMockUser({
+            emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
+            emailVerificationExpires: new Date(Date.now() + 600000),
+            emailVerificationTokenHash: createHash('sha256').update('token_for_user_a').digest('hex'),
+            emailVerificationTokenExpires: new Date(Date.now() + 86400000),
+            emailVerified: false,
+            emailVerificationEnforced: true
+        });
+
+        // User B
+        const userB = User.createMockUser({
+            emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
+            emailVerificationExpires: new Date(Date.now() + 600000),
+            emailVerificationTokenHash: createHash('sha256').update(rawTokenUserB).digest('hex'),
+            emailVerificationTokenExpires: new Date(Date.now() + 86400000),
+            emailVerified: false,
+            emailVerificationEnforced: true
+        });
+
+        // User A submits User B's token
+        const { req, res } = createMockReqRes({ 
+            user: { id: userA._id, role: 'user' }, 
+            body: { code: rawOtp, token: rawTokenUserB } 
+        });
+        await verifyEmailCode(req, res);
+        assert(res.statusCode === 400 && userA.emailVerified === false && userB.emailVerified === false, 'F6: Cross-user token hijacking strictly blocked by session match');
+    }
+
+    // F7: Fallback URL audit in Email templates (createUser and resendEmailCode)
+    {
+        const controllerCode = fs.readFileSync('./backend/controllers/usersController.js', 'utf8');
+        const hasInstruction = controllerCode.includes('If the button does not work, copy or open this verification link:');
+        const hasVisibleLink = controllerCode.includes('<a href="${escapedVerifyUrl}"') && controllerCode.includes('>${escapedVerifyUrl}</a>');
+        const hasEscapeHelper = controllerCode.includes('const escapedVerifyUrl = escapeHtml(verifyUrl);');
+        assert(hasInstruction && hasVisibleLink && hasEscapeHelper, 'F7: Verification email contains visible, escaped fallback URL with copy instructions');
+    }
+
+    // F8: Fallback URL audit in WhatsApp message templates
+    {
+        const controllerCode = fs.readFileSync('./backend/controllers/usersController.js', 'utf8');
+        const hasWaInstruction = controllerCode.includes('If the button does not work, copy or open this verification link: ${verifyUrl}');
+        assert(hasWaInstruction, 'F8: WhatsApp verification message contains clear instructions and full verification URL');
+    }
+
+    // F9: VerifyLanding UI inspection: OTP is the only visible input (no tokenInput)
+    {
+        const landingCode = fs.readFileSync('./pages/VerifyLanding.tsx', 'utf8');
+        const hasTokenInput = landingCode.includes('tokenInput');
+        const hasOnlyOtpInput = landingCode.includes('placeholder="Enter 6-digit OTP"') && !hasTokenInput;
+        const extractsFromUrl = landingCode.includes("searchParams.get('token')");
+        assert(hasOnlyOtpInput && extractsFromUrl, 'F9: VerifyLanding presents OTP as only input, reading token from URL searchParams');
+    }
+
+    // F10: UserLayout UI inspection: token inputs removed, OTP and resend buttons retained
+    {
+        const layoutCode = fs.readFileSync('./components/UserLayout.tsx', 'utf8');
+        const hasVisibleTokenInput = layoutCode.includes('placeholder="Paste verification link or token"');
+        const hasOtpInput = layoutCode.includes('placeholder="Enter 6-digit code"');
+        const hasResend = layoutCode.includes('handleResendEmail') && layoutCode.includes('handleResendWhatsapp');
+        assert(!hasVisibleTokenInput && hasOtpInput && hasResend, 'F10: UserLayout Account Security Gate removed visible token inputs while retaining OTP and resend controls');
     }
 
     console.log(`\n======================================================`);

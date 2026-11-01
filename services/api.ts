@@ -172,20 +172,28 @@ export const login = async (email: string, password: string): Promise<{ token: s
     return { token: result.token, data: result.data };
 };
 
-export const verifyEmail = async (token: string, code: string): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
+export const verifyEmail = async (token: string | null | undefined, code: string): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
+    const payload: { code: string; token?: string } = { code };
+    if (token && typeof token === 'string' && token.trim()) {
+        payload.token = token.trim();
+    }
     const response = await fetch(`${API_BASE_URL}/users/verify-email`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ token, code }),
+        body: JSON.stringify(payload),
     });
     return handleResponse(response);
 };
 
-export const verifyWhatsapp = async (token: string, code: string): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
+export const verifyWhatsapp = async (token: string | null | undefined, code: string): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
+    const payload: { code: string; token?: string } = { code };
+    if (token && typeof token === 'string' && token.trim()) {
+        payload.token = token.trim();
+    }
     const response = await fetch(`${API_BASE_URL}/users/verify-whatsapp`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ token, code }),
+        body: JSON.stringify(payload),
     });
     return handleResponse(response);
 };

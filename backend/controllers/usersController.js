@@ -13,6 +13,16 @@ import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
 import jwt from 'jsonwebtoken';
 
+const escapeHtml = (str) => {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
 
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
@@ -445,6 +455,7 @@ export const createUser = async (req, res) => {
         if (settings.emailVerificationRequired && emailCode) {
             try {
                 const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-email?token=${rawEmailToken}`;
+                const escapedVerifyUrl = escapeHtml(verifyUrl);
                 const res = await sendAutomatedMessage({
                     toEmail: user.email,
                     subject: 'Verify Your Email Address - SmartExn',
@@ -456,7 +467,11 @@ export const createUser = async (req, res) => {
                             ${emailCode}
                         </div>
                         <div style="text-align: center; margin: 20px 0;">
-                            <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Verify Email Address</a>
+                            <a href="${escapedVerifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Verify Email Address</a>
+                        </div>
+                        <div style="margin: 20px 0; text-align: center;">
+                            <p style="font-size: 13px; color: #4b5563; margin-bottom: 8px;">If the button does not work, copy or open this verification link:</p>
+                            <a href="${escapedVerifyUrl}" style="font-size: 13px; color: #2563eb; word-break: break-all; text-decoration: underline;">${escapedVerifyUrl}</a>
                         </div>
                         <p style="font-size: 12px; color: #6b7280;">This link is valid for 24 hours.</p>
                     </div>`,
@@ -476,7 +491,7 @@ export const createUser = async (req, res) => {
                     const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-whatsapp?token=${rawWhatsappToken}`;
                     const res = await sendAutomatedMessage({
                         toPhone: recipientNumber,
-                        messageText: `Dear ${user.fullName || user.username}, your SmartExn WhatsApp verification code is: ${whatsappCode} (valid for 10 mins). Or verify instantly here: ${verifyUrl}`,
+                        messageText: `Dear ${user.fullName || user.username}, your SmartExn WhatsApp verification code is: ${whatsappCode} (valid for 10 mins). If the button does not work, copy or open this verification link: ${verifyUrl}`,
                         forceWhatsapp: true
                     });
                     waResult = res.whatsapp;
@@ -1141,22 +1156,37 @@ export const verifyEmailCode = async (req, res) => {
         if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
             return res.status(400).json({ success: false, error: 'Invalid verification code format. OTP must be exactly 6 numeric digits.' });
         }
-        if (typeof token !== 'string' || !token.trim()) {
+
+        const hasToken = typeof token === 'string' && Boolean(token.trim());
+        const hasAuthSession = Boolean(req.user && req.user.id);
+
+        if (!hasToken && !hasAuthSession) {
             return res.status(400).json({ success: false, error: 'Verification link token is required.' });
         }
 
-        const tokenStr = token.trim();
         const hashedCode = createHash('sha256').update(code).digest('hex');
-        const hashedToken = createHash('sha256').update(tokenStr).digest('hex');
+        const now = new Date();
+
+        const filter = {
+            emailVerified: false,
+            emailVerificationOtpHash: hashedCode,
+            emailVerificationExpires: { $gt: now }
+        };
+
+        if (hasToken) {
+            const tokenStr = token.trim();
+            const hashedToken = createHash('sha256').update(tokenStr).digest('hex');
+            filter.emailVerificationTokenHash = hashedToken;
+            filter.emailVerificationTokenExpires = { $gt: now };
+            if (hasAuthSession) {
+                filter._id = req.user.id;
+            }
+        } else {
+            filter._id = req.user.id;
+        }
 
         const updatedUser = await User.findOneAndUpdate(
-            {
-                emailVerificationTokenHash: hashedToken,
-                emailVerificationOtpHash: hashedCode,
-                emailVerificationExpires: { $gt: new Date() },
-                emailVerificationTokenExpires: { $gt: new Date() },
-                emailVerified: false
-            },
+            filter,
             {
                 $set: { emailVerified: true, emailVerificationEnforced: false },
                 $unset: {
@@ -1195,22 +1225,37 @@ export const verifyWhatsappCode = async (req, res) => {
         if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
             return res.status(400).json({ success: false, error: 'Invalid verification code format. OTP must be exactly 6 numeric digits.' });
         }
-        if (typeof token !== 'string' || !token.trim()) {
+
+        const hasToken = typeof token === 'string' && Boolean(token.trim());
+        const hasAuthSession = Boolean(req.user && req.user.id);
+
+        if (!hasToken && !hasAuthSession) {
             return res.status(400).json({ success: false, error: 'Verification link token is required.' });
         }
 
-        const tokenStr = token.trim();
         const hashedCode = createHash('sha256').update(code).digest('hex');
-        const hashedToken = createHash('sha256').update(tokenStr).digest('hex');
+        const now = new Date();
+
+        const filter = {
+            whatsappVerified: false,
+            whatsappVerificationOtpHash: hashedCode,
+            whatsappVerificationExpires: { $gt: now }
+        };
+
+        if (hasToken) {
+            const tokenStr = token.trim();
+            const hashedToken = createHash('sha256').update(tokenStr).digest('hex');
+            filter.whatsappVerificationTokenHash = hashedToken;
+            filter.whatsappVerificationTokenExpires = { $gt: now };
+            if (hasAuthSession) {
+                filter._id = req.user.id;
+            }
+        } else {
+            filter._id = req.user.id;
+        }
 
         const updatedUser = await User.findOneAndUpdate(
-            {
-                whatsappVerificationTokenHash: hashedToken,
-                whatsappVerificationOtpHash: hashedCode,
-                whatsappVerificationExpires: { $gt: new Date() },
-                whatsappVerificationTokenExpires: { $gt: new Date() },
-                whatsappVerified: false
-            },
+            filter,
             {
                 $set: { whatsappVerified: true, whatsappVerificationEnforced: false },
                 $unset: {
@@ -1266,6 +1311,7 @@ export const resendEmailCode = async (req, res) => {
         const newTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
         const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-email?token=${rawEmailToken}`;
+        const escapedVerifyUrl = escapeHtml(verifyUrl);
         const deliveryResult = await sendAutomatedMessage({
             toEmail: user.email,
             subject: 'Verify Your Email Address - SmartExn',
@@ -1277,7 +1323,11 @@ export const resendEmailCode = async (req, res) => {
                     ${code}
                 </div>
                 <div style="text-align: center; margin: 20px 0;">
-                    <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Verify Email Address</a>
+                    <a href="${escapedVerifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Verify Email Address</a>
+                </div>
+                <div style="margin: 20px 0; text-align: center;">
+                    <p style="font-size: 13px; color: #4b5563; margin-bottom: 8px;">If the button does not work, copy or open this verification link:</p>
+                    <a href="${escapedVerifyUrl}" style="font-size: 13px; color: #2563eb; word-break: break-all; text-decoration: underline;">${escapedVerifyUrl}</a>
                 </div>
                 <p style="font-size: 12px; color: #6b7280;">This link is valid for 24 hours.</p>
             </div>`,
@@ -1335,7 +1385,7 @@ export const resendWhatsappCode = async (req, res) => {
         const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-whatsapp?token=${rawWhatsappToken}`;
         const deliveryResult = await sendAutomatedMessage({
             toPhone: recipientNumber,
-            messageText: `Dear ${user.fullName || user.username}, your new SmartExn WhatsApp verification code is: ${code} (valid for 10 mins). Or verify instantly here: ${verifyUrl}`,
+            messageText: `Dear ${user.fullName || user.username}, your new SmartExn WhatsApp verification code is: ${code} (valid for 10 mins). If the button does not work, copy or open this verification link: ${verifyUrl}`,
             forceWhatsapp: true
         });
 
