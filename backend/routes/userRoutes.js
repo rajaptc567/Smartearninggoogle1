@@ -28,9 +28,9 @@ import {
 
 const router = express.Router();
 
-// Verification routes
-router.post('/verify-email', authorize(['user', 'admin']), verifyEmailCode);
-router.post('/verify-whatsapp', authorize(['user', 'admin']), verifyWhatsappCode);
+// Verification routes (Publicly accessible, controller enforces security)
+router.post('/verify-email', verifyEmailCode);
+router.post('/verify-whatsapp', verifyWhatsappCode);
 router.post('/resend-email', authorize(['user', 'admin']), resendEmailCode);
 router.post('/resend-whatsapp', authorize(['user', 'admin']), resendWhatsappCode);
 
