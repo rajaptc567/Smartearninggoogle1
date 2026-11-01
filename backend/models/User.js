@@ -148,6 +148,14 @@ const UserSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    emailVerificationEnforced: {
+        type: Boolean,
+        default: false,
+    },
+    whatsappVerificationEnforced: {
+        type: Boolean,
+        default: false,
+    },
     emailMarketingConsent: {
         type: Boolean,
         default: false,

@@ -416,8 +416,10 @@ export const createUser = async (req, res) => {
             req.body.emailVerificationTokenHash = createHash('sha256').update(rawEmailToken).digest('hex');
             req.body.emailVerificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
             req.body.emailVerified = false;
+            req.body.emailVerificationEnforced = false;
         } else {
             req.body.emailVerified = true;
+            req.body.emailVerificationEnforced = false;
         }
 
         if (settings.whatsappVerificationRequired) {
@@ -428,8 +430,10 @@ export const createUser = async (req, res) => {
             req.body.whatsappVerificationTokenHash = createHash('sha256').update(rawWhatsappToken).digest('hex');
             req.body.whatsappVerificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
             req.body.whatsappVerified = false;
+            req.body.whatsappVerificationEnforced = false;
         } else {
             req.body.whatsappVerified = true;
+            req.body.whatsappVerificationEnforced = false;
         }
 
         const user = await User.create(req.body);
@@ -485,6 +489,20 @@ export const createUser = async (req, res) => {
             }
         }
 
+        // Set per-user enforcement ONLY when respective verification message is successfully delivered
+        let needsDbUpdate = false;
+        if (settings.emailVerificationRequired && emailResult.success) {
+            user.emailVerificationEnforced = true;
+            needsDbUpdate = true;
+        }
+        if (settings.whatsappVerificationRequired && waResult.success) {
+            user.whatsappVerificationEnforced = true;
+            needsDbUpdate = true;
+        }
+        if (needsDbUpdate) {
+            await user.save();
+        }
+
         if (sponsorUser) {
             await Notification.create({ userId: sponsorUser._id, subject: 'New Team Member!', message: `Great news! @${user.username} has joined your network.` });
             
@@ -521,7 +539,9 @@ export const createUser = async (req, res) => {
             role: user.role || 'user', 
             email: user.email,
             emailVerified: user.emailVerified,
-            whatsappVerified: user.whatsappVerified
+            whatsappVerified: user.whatsappVerified,
+            emailVerificationEnforced: user.emailVerificationEnforced,
+            whatsappVerificationEnforced: user.whatsappVerificationEnforced
         }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
         res.status(201).json({ 
@@ -548,7 +568,9 @@ export const loginUser = async (req, res) => {
             role: user.role || 'user', 
             email: user.email,
             emailVerified: user.emailVerified,
-            whatsappVerified: user.whatsappVerified
+            whatsappVerified: user.whatsappVerified,
+            emailVerificationEnforced: user.emailVerificationEnforced,
+            whatsappVerificationEnforced: user.whatsappVerificationEnforced
         }, process.env.JWT_SECRET, { expiresIn: '24h' });
         
         res.status(200).json({ success: true, token, data: user });
@@ -1136,7 +1158,7 @@ export const verifyEmailCode = async (req, res) => {
                 emailVerified: false
             },
             {
-                $set: { emailVerified: true },
+                $set: { emailVerified: true, emailVerificationEnforced: false },
                 $unset: {
                     emailVerificationOtpHash: "",
                     emailVerificationExpires: "",
@@ -1156,7 +1178,9 @@ export const verifyEmailCode = async (req, res) => {
             role: updatedUser.role || 'user', 
             email: updatedUser.email,
             emailVerified: updatedUser.emailVerified,
-            whatsappVerified: updatedUser.whatsappVerified
+            whatsappVerified: updatedUser.whatsappVerified,
+            emailVerificationEnforced: updatedUser.emailVerificationEnforced,
+            whatsappVerificationEnforced: updatedUser.whatsappVerificationEnforced
         }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
         res.status(200).json({ success: true, token: newToken, data: updatedUser, message: 'Email verified successfully.' });
@@ -1188,7 +1212,7 @@ export const verifyWhatsappCode = async (req, res) => {
                 whatsappVerified: false
             },
             {
-                $set: { whatsappVerified: true },
+                $set: { whatsappVerified: true, whatsappVerificationEnforced: false },
                 $unset: {
                     whatsappVerificationOtpHash: "",
                     whatsappVerificationExpires: "",
@@ -1208,7 +1232,9 @@ export const verifyWhatsappCode = async (req, res) => {
             role: updatedUser.role || 'user', 
             email: updatedUser.email,
             emailVerified: updatedUser.emailVerified,
-            whatsappVerified: updatedUser.whatsappVerified
+            whatsappVerified: updatedUser.whatsappVerified,
+            emailVerificationEnforced: updatedUser.emailVerificationEnforced,
+            whatsappVerificationEnforced: updatedUser.whatsappVerificationEnforced
         }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
         res.status(200).json({ success: true, token: newToken, data: updatedUser, message: 'WhatsApp verified successfully.' });
@@ -1269,7 +1295,8 @@ export const resendEmailCode = async (req, res) => {
                     emailVerificationOtpHash: newOtpHash,
                     emailVerificationExpires: newExpires,
                     emailVerificationTokenHash: newTokenHash,
-                    emailVerificationTokenExpires: newTokenExpires
+                    emailVerificationTokenExpires: newTokenExpires,
+                    emailVerificationEnforced: true
                 }
             }
         );
@@ -1323,7 +1350,8 @@ export const resendWhatsappCode = async (req, res) => {
                     whatsappVerificationOtpHash: newOtpHash,
                     whatsappVerificationExpires: newExpires,
                     whatsappVerificationTokenHash: newTokenHash,
-                    whatsappVerificationTokenExpires: newTokenExpires
+                    whatsappVerificationTokenExpires: newTokenExpires,
+                    whatsappVerificationEnforced: true
                 }
             }
         );

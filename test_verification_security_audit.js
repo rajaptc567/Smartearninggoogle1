@@ -1,13 +1,15 @@
 import { createHash, randomBytes } from 'crypto';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
 import { verifyEmailCode, verifyWhatsappCode, resendEmailCode, resendWhatsappCode } from './backend/controllers/usersController.js';
 import { authorize } from './backend/middleware/authMiddleware.js';
 import User from './backend/models/User.js';
 import Setting from './backend/models/Setting.js';
-import * as automationModule from './backend/utils/automation.js';
 
 // Disable mongoose command buffering for isolated offline unit testing
 mongoose.set('bufferCommands', false);
+
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_jwt_secret_key_1234567890';
 
 console.log('=== SMARTEXN EMAIL & WHATSAPP VERIFICATION SECURITY HARDENING TEST SUITE ===\n');
 
@@ -76,6 +78,8 @@ function setupMockUserModel() {
             restrictions: data.restrictions || {},
             emailVerified: data.emailVerified ?? false,
             whatsappVerified: data.whatsappVerified ?? false,
+            emailVerificationEnforced: data.emailVerificationEnforced ?? false,
+            whatsappVerificationEnforced: data.whatsappVerificationEnforced ?? false,
             emailVerificationOtpHash: data.emailVerificationOtpHash || null,
             emailVerificationExpires: data.emailVerificationExpires || null,
             emailVerificationTokenHash: data.emailVerificationTokenHash || null,
@@ -196,12 +200,13 @@ async function runAllTests() {
             emailVerificationExpires: new Date(Date.now() + 600000),
             emailVerificationTokenHash: createHash('sha256').update(rawToken).digest('hex'),
             emailVerificationTokenExpires: new Date(Date.now() + 86400000),
-            emailVerified: false
+            emailVerified: false,
+            emailVerificationEnforced: true
         });
 
         const { req, res } = createMockReqRes({ body: { code: rawOtp, token: rawToken } });
         await verifyEmailCode(req, res);
-        assert(res.statusCode === 200 && res.jsonResponse.success === true && user.emailVerified === true, 'A1: Correct 6-digit OTP string and token verifies successfully');
+        assert(res.statusCode === 200 && res.jsonResponse.success === true && user.emailVerified === true && user.emailVerificationEnforced === false, 'A1: Correct 6-digit OTP string and token verifies successfully and clears enforcement');
     }
 
     // Case A2: Numeric OTP (number instead of string) -> Must be rejected without casting
@@ -350,12 +355,13 @@ async function runAllTests() {
             whatsappVerificationExpires: new Date(Date.now() + 600000),
             whatsappVerificationTokenHash: createHash('sha256').update(rawToken).digest('hex'),
             whatsappVerificationTokenExpires: new Date(Date.now() + 86400000),
-            whatsappVerified: false
+            whatsappVerified: false,
+            whatsappVerificationEnforced: true
         });
 
         const { req, res } = createMockReqRes({ body: { code: rawOtp, token: rawToken } });
         await verifyWhatsappCode(req, res);
-        assert(res.statusCode === 200 && res.jsonResponse.success === true && user.whatsappVerified === true, 'B1: Correct 6-digit WhatsApp OTP string and token verifies successfully');
+        assert(res.statusCode === 200 && res.jsonResponse.success === true && user.whatsappVerified === true && user.whatsappVerificationEnforced === false, 'B1: Correct 6-digit WhatsApp OTP string and token verifies successfully and clears enforcement');
     }
 
     // Case B2: Numeric WhatsApp OTP -> Rejected without casting
@@ -423,53 +429,76 @@ async function runAllTests() {
     }
 
 
-    console.log('\n--- D. SETTINGS COMBINATIONS & FAIL-CLOSED ENFORCEMENT ---');
+    console.log('\n--- D. ALL SIX DELIVERY & SETTINGS SCENARIOS IN AUTH MIDDLEWARE ---');
 
-    const unverifiedUser = User.createMockUser({ emailVerified: false, whatsappVerified: false, role: 'user' });
-
-    // D1: Email ON / WhatsApp ON
-    {
-        mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: true };
-        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
-        let nextCalled = false;
-        await authorize(['user'])(req, res, () => { nextCalled = true; });
-        assert(res.statusCode === 403 && res.jsonResponse.needsEmailVerification === true && res.jsonResponse.needsWhatsappVerification === true, 'D1: Setting 1 (Email ON, WA ON) - Blocks both');
-    }
-
-    // D2: Email ON / WhatsApp OFF
+    // Scenario 1: Email ON, email successfully sent (delivered & enforced)
     {
         mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: false };
-        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
+        const user = User.createMockUser({ emailVerified: false, emailVerificationEnforced: true, whatsappVerified: false, role: 'user' });
+        const { req, res } = createMockReqRes({ user: { id: user._id, role: 'user' } });
         let nextCalled = false;
         await authorize(['user'])(req, res, () => { nextCalled = true; });
-        assert(res.statusCode === 403 && res.jsonResponse.needsEmailVerification === true && res.jsonResponse.needsWhatsappVerification === false, 'D2: Setting 2 (Email ON, WA OFF) - Blocks email only');
+        assert(res.statusCode === 403 && res.jsonResponse.needsEmailVerification === true && res.jsonResponse.needsWhatsappVerification === false && !nextCalled, 'Scenario 1: Email ON, email delivered -> Blocks user for email verification');
     }
 
-    // D3: Email OFF / WhatsApp ON
+    // Scenario 2: Email ON, email delivery failed (enforcement not set)
+    {
+        mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: false };
+        const user = User.createMockUser({ emailVerified: false, emailVerificationEnforced: false, whatsappVerified: false, role: 'user' });
+        const { req, res } = createMockReqRes({ user: { id: user._id, role: 'user' } });
+        let nextCalled = false;
+        await authorize(['user'])(req, res, () => { nextCalled = true; });
+        assert(nextCalled === true, 'Scenario 2: Email ON, email delivery failed -> Does NOT block user, proceeds normally');
+    }
+
+    // Scenario 3: WhatsApp ON, WhatsApp successfully sent (delivered & enforced)
     {
         mockSettings = { emailVerificationRequired: false, whatsappVerificationRequired: true };
-        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
+        const user = User.createMockUser({ emailVerified: false, whatsappVerified: false, whatsappVerificationEnforced: true, role: 'user' });
+        const { req, res } = createMockReqRes({ user: { id: user._id, role: 'user' } });
         let nextCalled = false;
         await authorize(['user'])(req, res, () => { nextCalled = true; });
-        assert(res.statusCode === 403 && res.jsonResponse.needsEmailVerification === false && res.jsonResponse.needsWhatsappVerification === true, 'D3: Setting 3 (Email OFF, WA ON) - Blocks WA only');
+        assert(res.statusCode === 403 && res.jsonResponse.needsWhatsappVerification === true && res.jsonResponse.needsEmailVerification === false && !nextCalled, 'Scenario 3: WhatsApp ON, WhatsApp delivered -> Blocks user for WhatsApp verification');
     }
 
-    // D4: Email OFF / WhatsApp OFF
+    // Scenario 4: WhatsApp ON, WhatsApp delivery failed (enforcement not set)
+    {
+        mockSettings = { emailVerificationRequired: false, whatsappVerificationRequired: true };
+        const user = User.createMockUser({ emailVerified: false, whatsappVerified: false, whatsappVerificationEnforced: false, role: 'user' });
+        const { req, res } = createMockReqRes({ user: { id: user._id, role: 'user' } });
+        let nextCalled = false;
+        await authorize(['user'])(req, res, () => { nextCalled = true; });
+        assert(nextCalled === true, 'Scenario 4: WhatsApp ON, WhatsApp delivery failed -> Does NOT block user, proceeds normally');
+    }
+
+    // Scenario 5: Both ON, only one message delivered (Email sent, WhatsApp failed)
+    {
+        mockSettings = { emailVerificationRequired: true, whatsappVerificationRequired: true };
+        const user = User.createMockUser({ emailVerified: false, emailVerificationEnforced: true, whatsappVerified: false, whatsappVerificationEnforced: false, role: 'user' });
+        const { req, res } = createMockReqRes({ user: { id: user._id, role: 'user' } });
+        let nextCalled = false;
+        await authorize(['user'])(req, res, () => { nextCalled = true; });
+        assert(res.statusCode === 403 && res.jsonResponse.needsEmailVerification === true && res.jsonResponse.needsWhatsappVerification === false, 'Scenario 5: Both ON, only email delivered -> Enforces email, WhatsApp skipped');
+    }
+
+    // Scenario 6: Both OFF
     {
         mockSettings = { emailVerificationRequired: false, whatsappVerificationRequired: false };
-        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
+        const user = User.createMockUser({ emailVerified: false, emailVerificationEnforced: false, whatsappVerified: false, whatsappVerificationEnforced: false, role: 'user' });
+        const { req, res } = createMockReqRes({ user: { id: user._id, role: 'user' } });
         let nextCalled = false;
         await authorize(['user'])(req, res, () => { nextCalled = true; });
-        assert(nextCalled === true, 'D4: Setting 4 (Email OFF, WA OFF) - Allows access when neither required');
+        assert(nextCalled === true, 'Scenario 6: Both OFF -> Allows access with standard signup and login behavior');
     }
 
-    // D5: Fail-closed on missing / invalid settings
+    // Fail-closed test on missing / invalid settings
     {
         mockSettings = null;
-        const { req, res } = createMockReqRes({ user: { id: unverifiedUser._id, role: 'user' } });
+        const user = User.createMockUser({ emailVerified: false, emailVerificationEnforced: true, role: 'user' });
+        const { req, res } = createMockReqRes({ user: { id: user._id, role: 'user' } });
         let nextCalled = false;
         await authorize(['user'])(req, res, () => { nextCalled = true; });
-        assert(res.statusCode === 500 && res.jsonResponse.error.includes('settings unavailable'), 'D5: Fail-closed on missing/invalid settings (500)');
+        assert(res.statusCode === 500 && res.jsonResponse.error.includes('settings unavailable'), 'Fail-closed: Missing/invalid settings return 500');
     }
 
 
@@ -531,6 +560,29 @@ async function runAllTests() {
         const { req, res } = createMockReqRes({ user: { id: pendingUser._id, role: 'user' } });
         await resendEmailCode(req, res);
         assert(res.statusCode === 400 && pendingUser.emailVerificationOtpHash === initialOtpHash, 'E6: Delivery failure safety - Hashes NOT modified if delivery fails');
+    }
+
+    // E7: JWT integrity check: verify signed JWT contains all required verification claims
+    {
+        const rawOtp = '777888';
+        const rawToken = 'jwt_test_token';
+        const testUser = User.createMockUser({
+            emailVerificationOtpHash: createHash('sha256').update(rawOtp).digest('hex'),
+            emailVerificationExpires: new Date(Date.now() + 600000),
+            emailVerificationTokenHash: createHash('sha256').update(rawToken).digest('hex'),
+            emailVerificationTokenExpires: new Date(Date.now() + 86400000),
+            emailVerified: false,
+            emailVerificationEnforced: true,
+            whatsappVerified: false,
+            whatsappVerificationEnforced: true
+        });
+
+        const { req, res } = createMockReqRes({ body: { code: rawOtp, token: rawToken } });
+        await verifyEmailCode(req, res);
+
+        assert(res.statusCode === 200 && res.jsonResponse.token, 'E7a: Token issued upon verification');
+        const decoded = jwt.verify(res.jsonResponse.token, process.env.JWT_SECRET);
+        assert(decoded.emailVerified === true && decoded.emailVerificationEnforced === false && decoded.whatsappVerified === false && decoded.whatsappVerificationEnforced === true, 'E7b: JWT payload accurately reflects verification and enforcement states');
     }
 
     console.log(`\n======================================================`);

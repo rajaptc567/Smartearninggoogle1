@@ -20,10 +20,23 @@ const UserLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Verification configurations & states
-  const needsEmailVerification = settings?.emailVerificationRequired && !currentUser?.emailVerified;
-  const needsWhatsappVerification = settings?.whatsappVerificationRequired && !currentUser?.whatsappVerified;
-  const needsAnyVerification = currentUser && (needsEmailVerification || needsWhatsappVerification);
+  // Authoritative per-user verification enforcement
+  const emailRequiredByAdmin = settings ? settings.emailVerificationRequired !== false : true;
+  const whatsappRequiredByAdmin = settings ? settings.whatsappVerificationRequired !== false : true;
+
+  const needsEmailVerification = Boolean(
+    currentUser?.emailVerificationEnforced && 
+    !currentUser?.emailVerified && 
+    emailRequiredByAdmin
+  );
+
+  const needsWhatsappVerification = Boolean(
+    currentUser?.whatsappVerificationEnforced && 
+    !currentUser?.whatsappVerified && 
+    whatsappRequiredByAdmin
+  );
+
+  const needsAnyVerification = Boolean(currentUser && (needsEmailVerification || needsWhatsappVerification));
 
   const [emailCode, setEmailCode] = useState('');
   const [emailToken, setEmailToken] = useState('');

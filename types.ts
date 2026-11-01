@@ -81,6 +81,8 @@ export interface User {
     isVerified?: boolean;
     emailVerified?: boolean;
     whatsappVerified?: boolean;
+    emailVerificationEnforced?: boolean;
+    whatsappVerificationEnforced?: boolean;
     emailMarketingConsent?: boolean;
     whatsappMarketingConsent?: boolean;
     termsAccepted?: boolean;

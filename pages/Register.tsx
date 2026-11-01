@@ -263,6 +263,7 @@ const Register: React.FC = () => {
 
             if (token) {
                 localStorage.setItem('token', token);
+                localStorage.setItem('authToken', token);
             }
 
             // Add the new user to the global state
@@ -274,22 +275,35 @@ const Register: React.FC = () => {
             // Trigger non-financial GA4 sign_up event with no PII
             seoAnalytics.trackSignUp('platform_registration');
 
+            const emailDelivered = Boolean(res.verificationStatus?.email?.success || createdUser.emailVerificationEnforced);
+            const waDelivered = Boolean(res.verificationStatus?.whatsapp?.success || createdUser.whatsappVerificationEnforced);
+
+            const needsEmail = Boolean(emailDelivered && !createdUser.emailVerified);
+            const needsWa = Boolean(waDelivered && !createdUser.whatsappVerified);
+
             let message = 'Registration successful!';
             if (res.verificationStatus) {
                 const { email, whatsapp } = res.verificationStatus;
-                if (email.attempted && !email.success) {
-                    message += `\n\nEmail verification failed: ${email.error || 'Unknown error'}.`;
+                if (email?.attempted && !email?.success) {
+                    message += `\n\nEmail verification delivery failed: ${email.error || 'Unknown error'}. You may proceed without email verification.`;
                 }
-                if (whatsapp.attempted && !whatsapp.success) {
-                    message += `\n\nWhatsApp verification failed: ${whatsapp.error || 'Unknown error'}.`;
+                if (whatsapp?.attempted && !whatsapp?.success) {
+                    message += `\n\nWhatsApp verification delivery failed: ${whatsapp.error || 'Unknown error'}. You may proceed without WhatsApp verification.`;
                 }
-                if ((email.attempted && email.success) || (whatsapp.attempted && whatsapp.success)) {
-                    message += '\n\nVerification message(s) sent successfully.';
+                if ((email?.attempted && email?.success) || (whatsapp?.attempted && whatsapp?.success)) {
+                    message += '\n\nPlease check your messages for your verification link and 6-digit OTP.';
                 }
             }
             
             alert(message);
-            navigate('/member');
+
+            if (needsEmail) {
+                navigate('/verify-email');
+            } else if (needsWa) {
+                navigate('/verify-whatsapp');
+            } else {
+                navigate('/member');
+            }
 
         } catch (error) {
             console.error("Registration failed:", error);

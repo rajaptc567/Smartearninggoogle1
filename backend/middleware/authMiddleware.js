@@ -76,7 +76,7 @@ export const authorize = (allowedRoles = []) => {
 
             if (!isVerificationRoute) {
                 try {
-                    const dbUser = await User.findById(req.user.id).select('emailVerified whatsappVerified status restrictions').lean();
+                    const dbUser = await User.findById(req.user.id).select('emailVerified whatsappVerified emailVerificationEnforced whatsappVerificationEnforced status restrictions').lean();
                     if (!dbUser || dbUser.status === 'Blocked' || dbUser.restrictions?.loginBlocked) {
                         return res.status(403).json({ success: false, error: 'Account restricted or blocked.' });
                     }
@@ -84,8 +84,8 @@ export const authorize = (allowedRoles = []) => {
                     if (!settings || typeof settings.emailVerificationRequired !== 'boolean' || typeof settings.whatsappVerificationRequired !== 'boolean') {
                         return res.status(500).json({ success: false, error: 'Configuration error: Verification settings unavailable or invalid.' });
                     }
-                    const needsEmail = settings.emailVerificationRequired && !dbUser.emailVerified;
-                    const needsWa = settings.whatsappVerificationRequired && !dbUser.whatsappVerified;
+                    const needsEmail = Boolean(settings.emailVerificationRequired && dbUser.emailVerificationEnforced && !dbUser.emailVerified);
+                    const needsWa = Boolean(settings.whatsappVerificationRequired && dbUser.whatsappVerificationEnforced && !dbUser.whatsappVerified);
 
                     if (needsEmail || needsWa) {
                         return res.status(403).json({

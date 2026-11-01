@@ -10,7 +10,8 @@ interface VerifyLandingProps {
 
 export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token') || '';
+  const urlToken = searchParams.get('token') || '';
+  const [tokenInput, setTokenInput] = useState('');
   const navigate = useNavigate();
   const { dispatch } = useData();
 
@@ -19,8 +20,33 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  const extractToken = (raw: string) => {
+    if (!raw) return '';
+    const trimmed = raw.trim();
+    if (trimmed.includes('token=')) {
+      try {
+        const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+        return url.searchParams.get('token') || trimmed;
+      } catch {
+        const match = trimmed.match(/token=([a-zA-Z0-9_-]+)/);
+        return match ? match[1] : trimmed;
+      }
+    }
+    return trimmed;
+  };
+
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
+    const tokenToUse = extractToken(urlToken || tokenInput);
+    if (!tokenToUse) {
+      setErrorMessage('Verification link token is required. Please open the link from your message or paste it below.');
+      return;
+    }
+    if (!code || code.length !== 6) {
+      setErrorMessage('Please enter the exact 6-digit OTP code.');
+      return;
+    }
+
     setLoading(true);
     setErrorMessage('');
     setSuccessMessage('');
@@ -28,15 +54,16 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
     try {
         let res;
         if (type === 'email') {
-          res = await verifyEmail(token, code);
+          res = await verifyEmail(tokenToUse, code);
         } else {
-          res = await verifyWhatsapp(token, code);
+          res = await verifyWhatsapp(tokenToUse, code);
         }
 
         if (res.success) {
           setSuccessMessage(res.message || `${type === 'email' ? 'Email' : 'WhatsApp'} verified successfully!`);
           if (res.token) {
             localStorage.setItem('token', res.token);
+            localStorage.setItem('authToken', res.token);
           }
           if (res.data) {
             dispatch({ type: 'UPDATE_USER', payload: res.data });
@@ -60,9 +87,22 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
         <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
           {type === 'email' ? 'Email Verification' : 'WhatsApp Verification'}
         </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Please enter the 6-digit OTP received via {type}.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {urlToken 
+            ? `Please enter the 6-digit OTP received via ${type}.` 
+            : `Please enter the verification link/token and 6-digit OTP received via ${type}.`}
+        </p>
         
         <form onSubmit={handleVerify} className="space-y-4">
+            {!urlToken && (
+              <input
+                type="text"
+                placeholder="Paste verification link or token"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                className="w-full bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            )}
             <input
                 type="text"
                 placeholder="Enter 6-digit OTP"

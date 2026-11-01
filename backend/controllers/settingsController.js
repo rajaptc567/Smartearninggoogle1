@@ -203,6 +203,8 @@ export const getPublicSettings = async (req, res) => {
             termsOfUseUpdated: settings.termsOfUseUpdated,
             signUpConfig: settings.signUpConfig || null,
             signUpConsentConfig: settings.signUpConsentConfig || null,
+            emailVerificationRequired: Boolean(settings.emailVerificationRequired),
+            whatsappVerificationRequired: Boolean(settings.whatsappVerificationRequired),
             dataVersion: settings.dataVersion || 1,
             isInitialPageLoaderEnabled: false // Do not block initial public paint with loader
         };
