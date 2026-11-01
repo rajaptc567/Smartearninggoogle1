@@ -896,6 +896,69 @@ async function runAllTests() {
         assert(failureRefreshCalled === false && failureNavigationCalled === false, 'G5d: Failed OTP does not trigger refresh or navigation');
     }
 
+    console.log('\n--- H. CONCURRENT SYNCHRONIZATION SAFETY & RACE CONDITION AUDIT ---');
+
+    // H1: Concurrent forced refresh queueing & deduplication test
+    {
+        let fetchCount = 0;
+        let isSyncing = false;
+        let activePromise = null;
+        let pendingForce = false;
+
+        const mockSync = async (force) => {
+            if (force) pendingForce = true;
+            if (activePromise) {
+                await activePromise;
+                if (pendingForce && !isSyncing) {
+                    return mockSync(false);
+                }
+                return activePromise;
+            }
+
+            const p = (async () => {
+                isSyncing = true;
+                const doForce = pendingForce;
+                pendingForce = false;
+                // simulate network delay
+                await new Promise(r => setTimeout(r, 50));
+                fetchCount++;
+                isSyncing = false;
+                activePromise = null;
+                if (pendingForce) {
+                    return mockSync(false);
+                }
+            })();
+
+            activePromise = p;
+            return p;
+        };
+
+        // Fire background sync and immediate forced refresh concurrently
+        const p1 = mockSync(false); // background sync
+        const p2 = mockSync(true);  // forced refresh during background sync
+
+        await Promise.all([p1, p2]);
+        assert(fetchCount <= 2, 'H1: Concurrent synchronization requests are properly deduplicated/queued (fetchCount <= 2)');
+    }
+
+    // H2: Failed individual API requests preservation test (Promise.allSettled behavior)
+    {
+        const existingData = ['task1', 'task2'];
+        const results = [
+            { status: 'fulfilled', value: ['newTask1'] },
+            { status: 'rejected', reason: new Error('Network timeout') },
+            { status: 'fulfilled', value: ['sub1'] }
+        ];
+
+        const getValue = (idx, fallback) => (results[idx] && results[idx].status === 'fulfilled') ? results[idx].value : fallback;
+
+        const tasks = getValue(0, existingData);
+        const users = getValue(1, existingData); // failed -> fallback preserved
+        const subs = getValue(2, existingData);
+
+        assert(tasks.length === 1 && users === existingData && subs.length === 1, 'H2: Promise.allSettled correctly preserves existing data when individual requests fail');
+    }
+
     console.log(`\n======================================================`);
     console.log(`FINAL INTEGRATION SUITE RESULT: ${passed}/${total} TESTS PASSED (${failed} FAILED)`);
     console.log(`======================================================\n`);

@@ -441,55 +441,83 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         stateRef.current = state;
     }, [state]);
 
-    const masterDataSync = useCallback(async (force: boolean = false) => {
-        if (isSyncingRef.current) return;
-        isSyncingRef.current = true;
-        try {
-            const serverVersion = await getDataVersion();
-            
-            if (lastVersionRef.current === 0) {
-                lastVersionRef.current = serverVersion;
-            }
+    const activeSyncPromiseRef = useRef<Promise<void> | null>(null);
+    const pendingForceRef = useRef<boolean>(false);
 
-            if (force || serverVersion > lastVersionRef.current) {
-                lastVersionRef.current = serverVersion;
-                
-                // Silent background fetch using Promise.allSettled to eliminate UI flicker
-                const results = await Promise.allSettled([
-                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
-                ]);
-                
-                const getValue = (idx: number, fallback: any) => 
-                    (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
-
-                dispatch({ 
-                    type: 'SET_ALL_DATA', 
-                    payload: { 
-                        users: getValue(0, stateRef.current.users), 
-                        deposits: getValue(1, stateRef.current.deposits), 
-                        withdrawals: getValue(2, stateRef.current.withdrawals),
-                        transactions: getValue(3, stateRef.current.transactions), 
-                        notifications: getValue(4, stateRef.current.notifications), 
-                        paymentMethods: getValue(5, stateRef.current.paymentMethods),
-                        investmentPlans: getValue(6, stateRef.current.investmentPlans), 
-                        rules: getValue(7, stateRef.current.rules), 
-                        settings: getValue(8, stateRef.current.settings),
-                        transfers: getValue(9, stateRef.current.transfers), 
-                        logs: getValue(10, stateRef.current.logs), 
-                        passwordResetRequests: getValue(11, stateRef.current.passwordResetRequests),
-                        disputes: getValue(12, stateRef.current.disputes), 
-                        tasks: getValue(13, stateRef.current.tasks),
-                        userTasks: getValue(14, stateRef.current.userTasks),
-                        userTaskSubmissions: getValue(15, stateRef.current.userTaskSubmissions)
-                    } 
-                });
-            }
-        } catch (err) {
-            console.error("Flicker-free live sync payload retrieval failed:", err);
-        } finally {
-            isSyncingRef.current = false;
+    const masterDataSync = useCallback(async (force: boolean = false): Promise<void> => {
+        if (force) {
+            pendingForceRef.current = true;
         }
+
+        if (activeSyncPromiseRef.current) {
+            try {
+                await activeSyncPromiseRef.current;
+            } catch (e) {}
+            if (pendingForceRef.current && !activeSyncPromiseRef.current) {
+                return masterDataSync(false);
+            }
+            return activeSyncPromiseRef.current || Promise.resolve();
+        }
+
+        const syncPromise = (async () => {
+            isSyncingRef.current = true;
+            try {
+                const doForce = pendingForceRef.current;
+                pendingForceRef.current = false;
+
+                const serverVersion = await getDataVersion();
+                
+                if (lastVersionRef.current === 0) {
+                    lastVersionRef.current = serverVersion;
+                }
+
+                if (doForce || serverVersion > lastVersionRef.current) {
+                    lastVersionRef.current = serverVersion;
+                    
+                    // Silent background fetch using Promise.allSettled to eliminate UI flicker
+                    const results = await Promise.allSettled([
+                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
+                    ]);
+                    
+                    const getValue = (idx: number, fallback: any) => 
+                        (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+
+                    dispatch({ 
+                        type: 'SET_ALL_DATA', 
+                        payload: { 
+                            users: getValue(0, stateRef.current.users), 
+                            deposits: getValue(1, stateRef.current.deposits), 
+                            withdrawals: getValue(2, stateRef.current.withdrawals),
+                            transactions: getValue(3, stateRef.current.transactions), 
+                            notifications: getValue(4, stateRef.current.notifications), 
+                            paymentMethods: getValue(5, stateRef.current.paymentMethods),
+                            investmentPlans: getValue(6, stateRef.current.investmentPlans), 
+                            rules: getValue(7, stateRef.current.rules), 
+                            settings: getValue(8, stateRef.current.settings),
+                            transfers: getValue(9, stateRef.current.transfers), 
+                            logs: getValue(10, stateRef.current.logs), 
+                            passwordResetRequests: getValue(11, stateRef.current.passwordResetRequests),
+                            disputes: getValue(12, stateRef.current.disputes), 
+                            tasks: getValue(13, stateRef.current.tasks),
+                            userTasks: getValue(14, stateRef.current.userTasks),
+                            userTaskSubmissions: getValue(15, stateRef.current.userTaskSubmissions)
+                        } 
+                    });
+                }
+            } catch (err) {
+                console.error("Flicker-free live sync payload retrieval failed:", err);
+            } finally {
+                isSyncingRef.current = false;
+                activeSyncPromiseRef.current = null;
+                if (pendingForceRef.current) {
+                    return masterDataSync(false);
+                }
+            }
+        })();
+
+        activeSyncPromiseRef.current = syncPromise;
+        return syncPromise;
     }, []);
 
     const masterDataSyncRef = useRef<(force?: boolean) => Promise<void>>(masterDataSync);
