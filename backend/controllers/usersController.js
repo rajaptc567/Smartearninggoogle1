@@ -7,7 +7,7 @@ import Setting from '../models/Setting.js';
 import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendAutomatedMessage, sendTemplateNotification } from '../utils/automation.js';
 import createLog from '../utils/logger.js';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHash, randomInt } from 'crypto';
 import Deposit from '../models/Deposit.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
@@ -403,17 +403,30 @@ export const createUser = async (req, res) => {
             req.body.marketingConsentVersion = consentConfig.marketingVersion || '1.0';
         }
 
+        let rawEmailToken = null;
+        let rawWhatsappToken = null;
+        let emailCode = null;
+        let whatsappCode = null;
+
         if (settings.emailVerificationRequired) {
-            const code = Math.floor(100000 + Math.random() * 900000).toString();
-            req.body.emailVerificationCode = code;
+            emailCode = randomInt(100000, 1000000).toString();
+            rawEmailToken = randomBytes(32).toString('hex');
+            req.body.emailVerificationOtpHash = createHash('sha256').update(emailCode).digest('hex');
+            req.body.emailVerificationExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+            req.body.emailVerificationTokenHash = createHash('sha256').update(rawEmailToken).digest('hex');
+            req.body.emailVerificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
             req.body.emailVerified = false;
         } else {
             req.body.emailVerified = true;
         }
 
         if (settings.whatsappVerificationRequired) {
-            const code = Math.floor(100000 + Math.random() * 900000).toString();
-            req.body.whatsappVerificationCode = code;
+            whatsappCode = randomInt(100000, 1000000).toString();
+            rawWhatsappToken = randomBytes(32).toString('hex');
+            req.body.whatsappVerificationOtpHash = createHash('sha256').update(whatsappCode).digest('hex');
+            req.body.whatsappVerificationExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+            req.body.whatsappVerificationTokenHash = createHash('sha256').update(rawWhatsappToken).digest('hex');
+            req.body.whatsappVerificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
             req.body.whatsappVerified = false;
         } else {
             req.body.whatsappVerified = true;
@@ -421,38 +434,53 @@ export const createUser = async (req, res) => {
 
         const user = await User.create(req.body);
 
-        // Auto send verification codes if required
-        if (settings.emailVerificationRequired) {
+        let emailResult = { attempted: false, success: false, error: null };
+        let waResult = { attempted: false, success: false, error: null };
+
+        // Auto send verification codes and links if required
+        if (settings.emailVerificationRequired && emailCode) {
             try {
-                await sendAutomatedMessage({
+                const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-email?token=${rawEmailToken}`;
+                const res = await sendAutomatedMessage({
                     toEmail: user.email,
-                    subject: 'Verify Your Email Address - Work & Earn Hub',
+                    subject: 'Verify Your Email Address - SmartExn',
                     messageText: `<div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px;">
                         <h2 style="color: #2563eb; font-weight: 800;">Email Verification Required</h2>
                         <p>Dear <strong>${user.fullName || user.username}</strong>,</p>
-                        <p>Thank you for registering at Work & Earn Hub. To complete your registration, please verify your email address using the following verification code:</p>
+                        <p>Thank you for registering at SmartExn. Please verify your email address using your 6-digit code (valid for 10 minutes) or the secure link below:</p>
                         <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #1e3a8a; margin: 20px 0;">
-                            ${user.emailVerificationCode}
+                            ${emailCode}
                         </div>
-                        <p style="font-size: 12px; color: #6b7280;">This code is valid for registration verification. If you did not request this, please ignore this email.</p>
-                    </div>`
+                        <div style="text-align: center; margin: 20px 0;">
+                            <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Verify Email Address</a>
+                        </div>
+                        <p style="font-size: 12px; color: #6b7280;">This link is valid for 24 hours.</p>
+                    </div>`,
+                    forceEmail: true
                 });
+                emailResult = res.email;
             } catch (err) {
                 console.error('Failed to send email verification code:', err);
+                emailResult.error = err.message;
             }
         }
 
-        if (settings.whatsappVerificationRequired) {
+        if (settings.whatsappVerificationRequired && whatsappCode) {
             try {
                 const recipientNumber = user.whatsapp || user.phone;
                 if (recipientNumber) {
-                    await sendAutomatedMessage({
+                    const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-whatsapp?token=${rawWhatsappToken}`;
+                    const res = await sendAutomatedMessage({
                         toPhone: recipientNumber,
-                        messageText: `Dear ${user.fullName || user.username}, your WhatsApp verification code for Work & Earn Hub is: ${user.whatsappVerificationCode}. Please enter this code to verify your account.`
+                        messageText: `Dear ${user.fullName || user.username}, your SmartExn WhatsApp verification code is: ${whatsappCode} (valid for 10 mins). Or verify instantly here: ${verifyUrl}`
                     });
+                    waResult = res.whatsapp;
+                } else {
+                    waResult.error = 'No WhatsApp number provided';
                 }
             } catch (err) {
                 console.error('Failed to send whatsapp verification code:', err);
+                waResult.error = err.message;
             }
         }
 
@@ -487,7 +515,23 @@ export const createUser = async (req, res) => {
             console.error('Failed to dispatch welcome template notifications:', welcomeErr);
         }
 
-        res.status(201).json({ success: true, data: user });
+        const token = jwt.sign({ 
+            id: user._id, 
+            role: user.role || 'user', 
+            email: user.email,
+            emailVerified: user.emailVerified,
+            whatsappVerified: user.whatsappVerified
+        }, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+        res.status(201).json({ 
+            success: true, 
+            token, 
+            data: user,
+            verificationStatus: {
+                email: emailResult,
+                whatsapp: waResult
+            }
+        });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
@@ -498,7 +542,13 @@ export const loginUser = async (req, res) => {
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
         if (user.status === 'Blocked' || user.restrictions?.loginBlocked) return res.status(403).json({ success: false, error: 'Account restricted.' });
         
-        const token = jwt.sign({ id: user._id, role: user.role || 'user', email: user.email }, process.env.JWT_SECRET, { expiresIn: '24h' });
+        const token = jwt.sign({ 
+            id: user._id, 
+            role: user.role || 'user', 
+            email: user.email,
+            emailVerified: user.emailVerified,
+            whatsappVerified: user.whatsappVerified
+        }, process.env.JWT_SECRET, { expiresIn: '24h' });
         
         res.status(200).json({ success: true, token, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -1064,21 +1114,56 @@ export const sendCustomAdminMessage = async (req, res) => {
 
 export const verifyEmailCode = async (req, res) => {
     try {
-        const { code } = req.body;
-        if (!code) return res.status(400).json({ success: false, error: 'Verification code is required.' });
+        const { code, token } = req.body;
+        let user;
 
-        const user = await User.findById(req.user.id);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+        if (token) {
+            const hashed = createHash('sha256').update(token).digest('hex');
+            user = await User.findOne({
+                emailVerificationTokenHash: hashed,
+                emailVerificationTokenExpires: { $gt: new Date() }
+            });
+            if (!user) {
+                return res.status(400).json({ success: false, error: 'Invalid or expired verification link.' });
+            }
+            user.emailVerified = true;
+            user.emailVerificationOtpHash = undefined;
+            user.emailVerificationExpires = undefined;
+            user.emailVerificationTokenHash = undefined;
+            user.emailVerificationTokenExpires = undefined;
+        } else if (code) {
+            if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
+            user = await User.findById(req.user.id);
+            if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
 
-        if (user.emailVerificationCode !== code) {
-            return res.status(400).json({ success: false, error: 'Invalid verification code.' });
+            if (!user.emailVerificationExpires || user.emailVerificationExpires < new Date()) {
+                return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new one.' });
+            }
+
+            const hashedCode = createHash('sha256').update(code).digest('hex');
+            if (user.emailVerificationOtpHash !== hashedCode) {
+                return res.status(400).json({ success: false, error: 'Invalid verification code.' });
+            }
+            user.emailVerified = true;
+            user.emailVerificationOtpHash = undefined;
+            user.emailVerificationExpires = undefined;
+            user.emailVerificationTokenHash = undefined;
+            user.emailVerificationTokenExpires = undefined;
+        } else {
+            return res.status(400).json({ success: false, error: 'Verification code or token is required.' });
         }
 
-        user.emailVerified = true;
-        user.emailVerificationCode = undefined;
         await user.save();
 
-        res.status(200).json({ success: true, data: user, message: 'Email verified successfully.' });
+        const newToken = jwt.sign({ 
+            id: user._id, 
+            role: user.role || 'user', 
+            email: user.email,
+            emailVerified: user.emailVerified,
+            whatsappVerified: user.whatsappVerified
+        }, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+        res.status(200).json({ success: true, token: newToken, data: user, message: 'Email verified successfully.' });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -1086,21 +1171,56 @@ export const verifyEmailCode = async (req, res) => {
 
 export const verifyWhatsappCode = async (req, res) => {
     try {
-        const { code } = req.body;
-        if (!code) return res.status(400).json({ success: false, error: 'Verification code is required.' });
+        const { code, token } = req.body;
+        let user;
 
-        const user = await User.findById(req.user.id);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+        if (token) {
+            const hashed = createHash('sha256').update(token).digest('hex');
+            user = await User.findOne({
+                whatsappVerificationTokenHash: hashed,
+                whatsappVerificationTokenExpires: { $gt: new Date() }
+            });
+            if (!user) {
+                return res.status(400).json({ success: false, error: 'Invalid or expired verification link.' });
+            }
+            user.whatsappVerified = true;
+            user.whatsappVerificationOtpHash = undefined;
+            user.whatsappVerificationExpires = undefined;
+            user.whatsappVerificationTokenHash = undefined;
+            user.whatsappVerificationTokenExpires = undefined;
+        } else if (code) {
+            if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
+            user = await User.findById(req.user.id);
+            if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
 
-        if (user.whatsappVerificationCode !== code) {
-            return res.status(400).json({ success: false, error: 'Invalid verification code.' });
+            if (!user.whatsappVerificationExpires || user.whatsappVerificationExpires < new Date()) {
+                return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new one.' });
+            }
+
+            const hashedCode = createHash('sha256').update(code).digest('hex');
+            if (user.whatsappVerificationOtpHash !== hashedCode) {
+                return res.status(400).json({ success: false, error: 'Invalid verification code.' });
+            }
+            user.whatsappVerified = true;
+            user.whatsappVerificationOtpHash = undefined;
+            user.whatsappVerificationExpires = undefined;
+            user.whatsappVerificationTokenHash = undefined;
+            user.whatsappVerificationTokenExpires = undefined;
+        } else {
+            return res.status(400).json({ success: false, error: 'Verification code or token is required.' });
         }
 
-        user.whatsappVerified = true;
-        user.whatsappVerificationCode = undefined;
         await user.save();
 
-        res.status(200).json({ success: true, data: user, message: 'WhatsApp verified successfully.' });
+        const newToken = jwt.sign({ 
+            id: user._id, 
+            role: user.role || 'user', 
+            email: user.email,
+            emailVerified: user.emailVerified,
+            whatsappVerified: user.whatsappVerified
+        }, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+        res.status(200).json({ success: true, token: newToken, data: user, message: 'WhatsApp verified successfully.' });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -1108,28 +1228,47 @@ export const verifyWhatsappCode = async (req, res) => {
 
 export const resendEmailCode = async (req, res) => {
     try {
+        if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
 
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        user.emailVerificationCode = code;
-        await user.save();
+        const code = randomInt(100000, 1000000).toString();
+        const rawEmailToken = randomBytes(32).toString('hex');
+        const newOtpHash = createHash('sha256').update(code).digest('hex');
+        const newExpires = new Date(Date.now() + 10 * 60 * 1000);
+        const newTokenHash = createHash('sha256').update(rawEmailToken).digest('hex');
+        const newTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        await sendAutomatedMessage({
+        const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-email?token=${rawEmailToken}`;
+        const deliveryResult = await sendAutomatedMessage({
             toEmail: user.email,
-            subject: 'Verify Your Email Address - Work & Earn Hub',
+            subject: 'Verify Your Email Address - SmartExn',
             messageText: `<div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px;">
                 <h2 style="color: #2563eb; font-weight: 800;">Email Verification Required</h2>
                 <p>Dear <strong>${user.fullName || user.username}</strong>,</p>
-                <p>You requested a new verification code. To verify your email, please use the following code:</p>
+                <p>You requested a new verification code (valid for 10 minutes). Please verify your email using your code or the secure link below:</p>
                 <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #1e3a8a; margin: 20px 0;">
                     ${code}
                 </div>
-                <p style="font-size: 12px; color: #6b7280;">This code is valid for registration verification.</p>
-            </div>`
+                <div style="text-align: center; margin: 20px 0;">
+                    <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Verify Email Address</a>
+                </div>
+                <p style="font-size: 12px; color: #6b7280;">This link is valid for 24 hours.</p>
+            </div>`,
+            forceEmail: true
         });
 
-        res.status(200).json({ success: true, message: 'Verification code sent to your email.' });
+        if (!deliveryResult || !deliveryResult.email || !deliveryResult.email.success) {
+            return res.status(400).json({ success: false, error: deliveryResult?.email?.error || 'Failed to deliver verification email. Please try again.' });
+        }
+
+        user.emailVerificationOtpHash = newOtpHash;
+        user.emailVerificationExpires = newExpires;
+        user.emailVerificationTokenHash = newTokenHash;
+        user.emailVerificationTokenExpires = newTokenExpires;
+        await user.save();
+
+        res.status(200).json({ success: true, message: 'Verification code and link sent to your email.' });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -1137,22 +1276,37 @@ export const resendEmailCode = async (req, res) => {
 
 export const resendWhatsappCode = async (req, res) => {
     try {
+        if (!req.user) return res.status(401).json({ success: false, error: 'Unauthorized.' });
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
 
         const recipientNumber = user.whatsapp || user.phone;
         if (!recipientNumber) return res.status(400).json({ success: false, error: 'No phone or WhatsApp number is configured on your profile.' });
 
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        user.whatsappVerificationCode = code;
-        await user.save();
+        const code = randomInt(100000, 1000000).toString();
+        const rawWhatsappToken = randomBytes(32).toString('hex');
+        const newOtpHash = createHash('sha256').update(code).digest('hex');
+        const newExpires = new Date(Date.now() + 10 * 60 * 1000);
+        const newTokenHash = createHash('sha256').update(rawWhatsappToken).digest('hex');
+        const newTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        await sendAutomatedMessage({
+        const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-whatsapp?token=${rawWhatsappToken}`;
+        const deliveryResult = await sendAutomatedMessage({
             toPhone: recipientNumber,
-            messageText: `Dear ${user.fullName || user.username}, your new WhatsApp verification code for Work & Earn Hub is: ${code}. Please enter this code to verify your account.`
+            messageText: `Dear ${user.fullName || user.username}, your new SmartExn WhatsApp verification code is: ${code} (valid for 10 mins). Or verify instantly here: ${verifyUrl}`
         });
 
-        res.status(200).json({ success: true, message: 'Verification code sent to your WhatsApp.' });
+        if (!deliveryResult || !deliveryResult.whatsapp || !deliveryResult.whatsapp.success) {
+            return res.status(400).json({ success: false, error: deliveryResult?.whatsapp?.error || 'Failed to deliver WhatsApp verification message. Please try again.' });
+        }
+
+        user.whatsappVerificationOtpHash = newOtpHash;
+        user.whatsappVerificationExpires = newExpires;
+        user.whatsappVerificationTokenHash = newTokenHash;
+        user.whatsappVerificationTokenExpires = newTokenExpires;
+        await user.save();
+
+        res.status(200).json({ success: true, message: 'Verification code and link sent to your WhatsApp.' });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

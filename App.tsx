@@ -49,6 +49,7 @@ const Register = lazy(() => import('./pages/Register'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const VerifyLanding = lazy(() => import('./pages/VerifyLanding').then(m => ({ default: m.VerifyLanding })));
 const FaqPage = lazy(() => import('./pages/FaqPage'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const RefundPolicy = lazy(() => import('./pages/RefundPolicy'));
@@ -237,6 +238,8 @@ const App: React.FC = () => {
 
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/verify-email" element={<VerifyLanding type="email" />} />
+            <Route path="/verify-whatsapp" element={<VerifyLanding type="whatsapp" />} />
             <Route path="/faqs" element={<FaqPage />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />

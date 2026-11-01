@@ -1,4 +1,3 @@
-
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -113,8 +112,8 @@ const UserSchema = new mongoose.Schema({
         earning: { type: Boolean, default: false },
         dispute: { type: Boolean, default: false },
         excludeFromTicker: { type: Boolean, default: false },
-        loginBlocked: { type: Boolean, default: false }, // Foundation Step 1 Requirement
-        purchaseBlocked: { type: Boolean, default: false }, // Foundation Step 1 Requirement
+        loginBlocked: { type: Boolean, default: false },
+        purchaseBlocked: { type: Boolean, default: false },
     },
     disputeLossCount: { type: Number, default: 0 },
     trustScore: { type: Number, default: 100 },
@@ -145,15 +144,9 @@ const UserSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
-    emailVerificationCode: {
-        type: String,
-    },
     whatsappVerified: {
         type: Boolean,
         default: false,
-    },
-    whatsappVerificationCode: {
-        type: String,
     },
     emailMarketingConsent: {
         type: Boolean,
@@ -198,6 +191,13 @@ const UserSchema = new mongoose.Schema({
     passwordResetToken: String,
     passwordResetOtp: String,
     passwordResetExpires: Date,
+    emailVerificationOtpHash: String,
+    whatsappVerificationOtpHash: String,
+    emailVerificationExpires: Date,
+    emailVerificationTokenHash: String,
+    emailVerificationTokenExpires: Date,
+    whatsappVerificationTokenHash: String,
+    whatsappVerificationTokenExpires: Date,
 }, {
     timestamps: { createdAt: 'registrationDate', updatedAt: true }
 });
@@ -235,8 +235,6 @@ UserSchema.pre('save', async function(next) {
         }
     }
 
-    // Role Safety: No hardcoded role promotion allowed (P0 Security)
-    
     if (this.isModified('password')) {
         const salt = await bcrypt.genSalt(10);
         this.password = await bcrypt.hash(this.password, salt);

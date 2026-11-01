@@ -103,14 +103,14 @@ export const getUsers = async (): Promise<User[]> => {
     return result.data;
 };
 
-export const createUser = async (userData: Partial<User>): Promise<User> => {
+export const createUser = async (userData: Partial<User>): Promise<{ token: string; data: User; verificationStatus?: any }> => {
     const response = await fetch(`${API_BASE_URL}/users`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(userData),
     });
     const result = await handleResponse(response);
-    return result.data;
+    return { token: result.token, data: result.data || result, verificationStatus: result.verificationStatus };
 };
 
 export const updateUser = async (id: string, userData: Partial<User>): Promise<User> => {
@@ -172,20 +172,22 @@ export const login = async (email: string, password: string): Promise<{ token: s
     return { token: result.token, data: result.data };
 };
 
-export const verifyEmail = async (code: string): Promise<{ success: boolean; data: User; message: string }> => {
+export const verifyEmail = async (codeOrToken: string, isToken: boolean = false): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
+    const payload = isToken ? { token: codeOrToken } : { code: codeOrToken };
     const response = await fetch(`${API_BASE_URL}/users/verify-email`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ code }),
+        body: JSON.stringify(payload),
     });
     return handleResponse(response);
 };
 
-export const verifyWhatsapp = async (code: string): Promise<{ success: boolean; data: User; message: string }> => {
+export const verifyWhatsapp = async (codeOrToken: string, isToken: boolean = false): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
+    const payload = isToken ? { token: codeOrToken } : { code: codeOrToken };
     const response = await fetch(`${API_BASE_URL}/users/verify-whatsapp`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ code }),
+        body: JSON.stringify(payload),
     });
     return handleResponse(response);
 };

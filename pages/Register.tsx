@@ -257,7 +257,13 @@ const Register: React.FC = () => {
         };
 
         try {
-            const createdUser = await apiCreateUser(newUserPayload);
+            const res = await apiCreateUser(newUserPayload);
+            const createdUser = res.data;
+            const token = res.token;
+
+            if (token) {
+                localStorage.setItem('token', token);
+            }
 
             // Add the new user to the global state
             dispatch({ type: 'ADD_USER', payload: createdUser });
@@ -268,7 +274,24 @@ const Register: React.FC = () => {
             // Trigger non-financial GA4 sign_up event with no PII
             seoAnalytics.trackSignUp('platform_registration');
 
-            alert('Registration successful! Redirecting to your dashboard...');
+            // Trigger non-financial GA4 sign_up event with no PII
+            seoAnalytics.trackSignUp('platform_registration');
+
+            let message = 'Registration successful!';
+            if (res.verificationStatus) {
+                const { email, whatsapp } = res.verificationStatus;
+                if (email.attempted && !email.success) {
+                    message += `\n\nEmail verification failed: ${email.error || 'Unknown error'}.`;
+                }
+                if (whatsapp.attempted && !whatsapp.success) {
+                    message += `\n\nWhatsApp verification failed: ${whatsapp.error || 'Unknown error'}.`;
+                }
+                if ((email.attempted && email.success) || (whatsapp.attempted && whatsapp.success)) {
+                    message += '\n\nVerification message(s) sent successfully.';
+                }
+            }
+            
+            alert(message);
             navigate('/member');
 
         } catch (error) {

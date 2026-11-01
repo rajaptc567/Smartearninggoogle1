@@ -1,5 +1,6 @@
-
 import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+import Setting from '../models/Setting.js';
 
 /**
  * PASSIVE AUTH MIDDLEWARE
@@ -24,8 +25,6 @@ export const authMiddleware = (req, res, next) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
-        // Attach identity to request
-        // Fail-safe: if role is missing in token, default to 'user'
         req.user = {
             id: decoded.id || decoded._id || decoded.userId,
             role: decoded.role ? String(decoded.role).trim().toLowerCase() : 'user',
@@ -40,12 +39,12 @@ export const authMiddleware = (req, res, next) => {
 };
 
 /**
- * ROLE AUTHORIZATION MIDDLEWARE
- * Blocks access based on roles.
+ * ROLE AUTHORIZATION & BACKEND VERIFICATION ENFORCEMENT MIDDLEWARE
+ * Blocks access based on roles and enforces pending verification status.
  * @param {Array} allowedRoles - List of roles permitted to access the route
  */
 export const authorize = (allowedRoles = []) => {
-    return (req, res, next) => {
+    return async (req, res, next) => {
         // 1. If no roles are specified, allow by default (unprotected route)
         if (allowedRoles.length === 0) {
             return next();
@@ -59,17 +58,45 @@ export const authorize = (allowedRoles = []) => {
             });
         }
 
-        // 3. MASTER BYPASS: Super Admin always has access
-        if (req.user.role === 'super_admin') {
-            return next();
-        }
+        const role = req.user.role;
+        const isAdmin = role === 'super_admin' || role === 'admin' || role === 'finance' || role === 'support';
 
-        // 4. Role Check
-        if (!allowedRoles.includes(req.user.role)) {
+        // 3. Role Check
+        if (!allowedRoles.includes(role)) {
             return res.status(403).json({
                 success: false,
                 message: 'Unauthorized'
             });
+        }
+
+        // 4. Backend Verification Enforcement for regular users
+        if (!isAdmin && allowedRoles.includes('user')) {
+            const path = req.originalUrl || req.path || '';
+            const isVerificationRoute = path.includes('/verify-email') || path.includes('/verify-whatsapp') || path.includes('/resend-email') || path.includes('/resend-whatsapp');
+
+            if (!isVerificationRoute) {
+                try {
+                    const dbUser = await User.findById(req.user.id).select('emailVerified whatsappVerified status restrictions').lean();
+                    if (!dbUser || dbUser.status === 'Blocked' || dbUser.restrictions?.loginBlocked) {
+                        return res.status(403).json({ success: false, error: 'Account restricted or blocked.' });
+                    }
+                    const settings = await Setting.getSettings();
+                    const needsEmail = settings?.emailVerificationRequired && !dbUser.emailVerified;
+                    const needsWa = settings?.whatsappVerificationRequired && !dbUser.whatsappVerified;
+
+                    if (needsEmail || needsWa) {
+                        return res.status(403).json({
+                            success: false,
+                            error: 'Account verification required.',
+                            pendingVerification: true,
+                            needsEmailVerification: needsEmail,
+                            needsWhatsappVerification: needsWa
+                        });
+                    }
+                } catch (err) {
+                    console.error('Backend verification enforcement error:', err);
+                }
+            }
         }
 
         next();
