@@ -88,7 +88,7 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
           ? 'Email verified successfully! Redirecting to your dashboard. Please wait...' 
           : 'WhatsApp verified successfully! Redirecting to your dashboard. Please wait...';
         
-        setSuccessMessage(res.message || defaultSuccess);
+        setSuccessMessage(defaultSuccess);
 
         if (res.token) {
           localStorage.setItem('token', res.token);

@@ -23,6 +23,27 @@ const escapeHtml = (str) => {
         .replace(/'/g, '&#039;');
 };
 
+const getFrontendBaseUrl = () => {
+    let baseUrl = 'https://smartexn.com';
+    if (process.env.FRONTEND_URL && typeof process.env.FRONTEND_URL === 'string' && process.env.FRONTEND_URL.trim()) {
+        baseUrl = process.env.FRONTEND_URL.trim();
+    } else if (process.env.CLIENT_URL && typeof process.env.CLIENT_URL === 'string' && process.env.CLIENT_URL.trim()) {
+        const firstClient = process.env.CLIENT_URL.split(',')[0].trim();
+        if (firstClient) {
+            baseUrl = firstClient;
+        }
+    }
+    return baseUrl.replace(/\/+$/, '');
+};
+
+const getVerificationUrl = (path, rawToken) => {
+    const base = getFrontendBaseUrl();
+    const url = new URL(path, base);
+    url.searchParams.set('token', rawToken);
+    return url.toString();
+};
+
+
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
 
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
@@ -454,7 +475,7 @@ export const createUser = async (req, res) => {
         // Auto send verification codes and links if required
         if (settings.emailVerificationRequired && emailCode) {
             try {
-                const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-email?token=${rawEmailToken}`;
+                const verifyUrl = getVerificationUrl('/verify-email', rawEmailToken);
                 const escapedVerifyUrl = escapeHtml(verifyUrl);
                 const res = await sendAutomatedMessage({
                     toEmail: user.email,
@@ -488,7 +509,7 @@ export const createUser = async (req, res) => {
             try {
                 const recipientNumber = user.whatsapp || user.phone;
                 if (recipientNumber) {
-                    const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-whatsapp?token=${rawWhatsappToken}`;
+                    const verifyUrl = getVerificationUrl('/verify-whatsapp', rawWhatsappToken);
                     const res = await sendAutomatedMessage({
                         toPhone: recipientNumber,
                         messageText: `Dear ${user.fullName || user.username}, your SmartExn WhatsApp verification code is: ${whatsappCode} (valid for 10 mins). If the button does not work, copy or open this verification link: ${verifyUrl}`,
@@ -1310,7 +1331,7 @@ export const resendEmailCode = async (req, res) => {
         const newTokenHash = createHash('sha256').update(rawEmailToken).digest('hex');
         const newTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-email?token=${rawEmailToken}`;
+        const verifyUrl = getVerificationUrl('/verify-email', rawEmailToken);
         const escapedVerifyUrl = escapeHtml(verifyUrl);
         const deliveryResult = await sendAutomatedMessage({
             toEmail: user.email,
@@ -1382,7 +1403,7 @@ export const resendWhatsappCode = async (req, res) => {
         const newTokenHash = createHash('sha256').update(rawWhatsappToken).digest('hex');
         const newTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-whatsapp?token=${rawWhatsappToken}`;
+        const verifyUrl = getVerificationUrl('/verify-whatsapp', rawWhatsappToken);
         const deliveryResult = await sendAutomatedMessage({
             toPhone: recipientNumber,
             messageText: `Dear ${user.fullName || user.username}, your new SmartExn WhatsApp verification code is: ${code} (valid for 10 mins). If the button does not work, copy or open this verification link: ${verifyUrl}`,

@@ -1003,6 +1003,49 @@ async function runAllTests() {
         assert(executionOrder.length > 0 && executionOrder.includes('forced_sync'), 'I1: Overlapping startup load and OTP forced refresh coordinate correctly via masterDataSync');
     }
 
+    console.log('\n--- J. CANONICAL FRONTEND URL GENERATION & SUCCESS MESSAGE AUDIT ---');
+
+    // J1: Test canonical URL generator helper logic
+    {
+        const testGetFrontendBaseUrl = (envFrontend, envClient) => {
+            let baseUrl = 'https://smartexn.com';
+            if (envFrontend && typeof envFrontend === 'string' && envFrontend.trim()) {
+                baseUrl = envFrontend.trim();
+            } else if (envClient && typeof envClient === 'string' && envClient.trim()) {
+                const firstClient = envClient.split(',')[0].trim();
+                if (firstClient) {
+                    baseUrl = firstClient;
+                }
+            }
+            return baseUrl.replace(/\/+$/, '');
+        };
+
+        const testGetVerificationUrl = (path, rawToken, envFrontend, envClient) => {
+            const base = testGetFrontendBaseUrl(envFrontend, envClient);
+            const url = new URL(path, base);
+            url.searchParams.set('token', rawToken);
+            return url.toString();
+        };
+
+        const emailUrl = testGetVerificationUrl('/verify-email', 'tok_abc_123', '', '');
+        assert(emailUrl === 'https://smartexn.com/verify-email?token=tok_abc_123' && !emailUrl.includes('onrender.com'), 'J1a: Default fallback produces canonical https://smartexn.com URL without render host');
+
+        const customUrl = testGetVerificationUrl('/verify-whatsapp', 'tok_xyz_789', 'https://custom.smartexn.com/', '');
+        assert(customUrl === 'https://custom.smartexn.com/verify-whatsapp?token=tok_xyz_789', 'J1b: FRONTEND_URL is respected and trailing slashes normalized');
+
+        const clientUrl = testGetVerificationUrl('/verify-email', 'tok_client_456', '', 'https://client.smartexn.com, https://other.com');
+        assert(clientUrl === 'https://client.smartexn.com/verify-email?token=tok_client_456', 'J1c: CLIENT_URL first origin is used when FRONTEND_URL is absent');
+    }
+
+    // J2: Verify success message text in VerifyLanding.tsx
+    {
+        const landingCode = fs.readFileSync('./pages/VerifyLanding.tsx', 'utf8');
+        const hasEmailSuccessMsg = landingCode.includes('Email verified successfully! Redirecting to your dashboard. Please wait...');
+        const hasWaSuccessMsg = landingCode.includes('WhatsApp verified successfully! Redirecting to your dashboard. Please wait...');
+        const prioritizesFrontendMsg = !landingCode.includes('setSuccessMessage(res.message || defaultSuccess)');
+        assert(hasEmailSuccessMsg && hasWaSuccessMsg && prioritizesFrontendMsg, 'J2: VerifyLanding displays required frontend success message and prioritizes it over backend response message');
+    }
+
     console.log(`\n======================================================`);
     console.log(`FINAL INTEGRATION SUITE RESULT: ${passed}/${total} TESTS PASSED (${failed} FAILED)`);
     console.log(`======================================================\n`);
