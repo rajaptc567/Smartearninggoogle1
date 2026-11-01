@@ -81,8 +81,11 @@ export const authorize = (allowedRoles = []) => {
                         return res.status(403).json({ success: false, error: 'Account restricted or blocked.' });
                     }
                     const settings = await Setting.getSettings();
-                    const needsEmail = settings?.emailVerificationRequired && !dbUser.emailVerified;
-                    const needsWa = settings?.whatsappVerificationRequired && !dbUser.whatsappVerified;
+                    if (!settings || typeof settings.emailVerificationRequired !== 'boolean' || typeof settings.whatsappVerificationRequired !== 'boolean') {
+                        return res.status(500).json({ success: false, error: 'Configuration error: Verification settings unavailable or invalid.' });
+                    }
+                    const needsEmail = settings.emailVerificationRequired && !dbUser.emailVerified;
+                    const needsWa = settings.whatsappVerificationRequired && !dbUser.whatsappVerified;
 
                     if (needsEmail || needsWa) {
                         return res.status(403).json({

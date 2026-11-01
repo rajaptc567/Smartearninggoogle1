@@ -1,7 +1,7 @@
 
 import express from 'express';
 import { authorize } from '../middleware/authMiddleware.js';
-import { authLimiter } from '../middleware/rateLimiter.js';
+import { authLimiter, verificationLimiter } from '../middleware/rateLimiter.js';
 import {
     getUsers,
     getUser,
@@ -31,8 +31,8 @@ const router = express.Router();
 // Verification routes (Publicly accessible, controller enforces security)
 router.post('/verify-email', verificationLimiter, verifyEmailCode);
 router.post('/verify-whatsapp', verificationLimiter, verifyWhatsappCode);
-router.post('/resend-email', verificationLimiter, resendEmailCode);
-router.post('/resend-whatsapp', verificationLimiter, resendWhatsappCode);
+router.post('/resend-email', authorize(['user', 'admin']), verificationLimiter, resendEmailCode);
+router.post('/resend-whatsapp', authorize(['user', 'admin']), verificationLimiter, resendWhatsappCode);
 
 // Public/Auth routes with rate limiting
 router.post('/login', authLimiter, loginUser);
