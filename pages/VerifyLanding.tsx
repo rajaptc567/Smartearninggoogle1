@@ -31,6 +31,17 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
     return () => clearInterval(interval);
   }, [resendTimer]);
 
+  const getFriendlyError = (rawMsg: string) => {
+    const lower = (rawMsg || '').toLowerCase();
+    if (lower.includes('expired') || lower.includes('invalid') || lower.includes('incorrect') || lower.includes('wrong') || lower.includes('code') || lower.includes('match') || lower.includes('fail')) {
+      return 'The code is incorrect or has expired. Please try again.';
+    }
+    if (lower.includes('missing') || lower.includes('token') || lower.includes('required') || lower.includes('empty')) {
+      return 'Please enter your verification code.';
+    }
+    return 'Something went wrong. Please try again.';
+  };
+
   const handleResend = async () => {
     if (resendTimer > 0) return;
     setErrorMessage('');
@@ -46,10 +57,10 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
         setSuccessMessage(`A new verification code has been sent to your ${type === 'email' ? 'email' : 'WhatsApp'}.`);
         setResendTimer(60);
       } else {
-        setErrorMessage(res.message || 'Failed to resend verification code.');
+        setErrorMessage("We couldn't send your code. Please try again later.");
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to resend verification code.');
+      setErrorMessage("We couldn't send your code. Please try again later.");
     }
   };
 
@@ -60,14 +71,12 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
     const hasAuthToken = typeof window !== 'undefined' && Boolean(localStorage.getItem('authToken'));
 
     if (!urlToken && !currentUser && !hasAuthToken) {
-      setErrorMessage(
-        `Verification token is missing. Please open the verification link sent to your ${type === 'email' ? 'email' : 'WhatsApp'} or log in to your account.`
-      );
+      setErrorMessage('Please enter your verification code.');
       return;
     }
 
     if (!code || code.length !== 6) {
-      setErrorMessage('Please enter the exact 6-digit OTP code.');
+      setErrorMessage('Please enter your verification code.');
       return;
     }
 
@@ -109,11 +118,11 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
         await new Promise(resolve => setTimeout(resolve, 2500));
         navigate('/member');
       } else {
-        setErrorMessage(res.message || 'Verification failed. Please check your code.');
+        setErrorMessage(getFriendlyError(res.message));
         setLoading(false);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Verification failed. Please try again.');
+      setErrorMessage(getFriendlyError(err?.message));
       setLoading(false);
     }
   };

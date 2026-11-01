@@ -107,10 +107,21 @@ const UserLayout: React.FC = () => {
     return trimmed;
   };
 
+  const getFriendlyError = (rawMsg: string) => {
+    const lower = (rawMsg || '').toLowerCase();
+    if (lower.includes('expired') || lower.includes('invalid') || lower.includes('incorrect') || lower.includes('wrong') || lower.includes('code') || lower.includes('match') || lower.includes('fail')) {
+      return 'The code is incorrect or has expired. Please try again.';
+    }
+    if (lower.includes('missing') || lower.includes('token') || lower.includes('required') || lower.includes('empty')) {
+      return 'Please enter your verification code.';
+    }
+    return 'Something went wrong. Please try again.';
+  };
+
   const handleVerifyEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!emailCode || emailCode.length !== 6) {
-      setEmailError('Please enter a valid 6-digit verification code.');
+      setEmailError('Please enter your verification code.');
       return;
     }
     const token = extractToken(emailToken);
@@ -135,10 +146,10 @@ const UserLayout: React.FC = () => {
           console.warn('Dashboard data refresh encountered an error:', refreshErr);
         }
       } else {
-        setEmailError(res.message || 'Verification failed. Please try again.');
+        setEmailError(getFriendlyError(res.message));
       }
     } catch (err: any) {
-      setEmailError(err.message || 'Verification failed. Please try again.');
+      setEmailError(getFriendlyError(err?.message));
     } finally {
       setVerifyingEmail(false);
     }
@@ -147,7 +158,7 @@ const UserLayout: React.FC = () => {
   const handleVerifyWhatsapp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!whatsappCode || whatsappCode.length !== 6) {
-      setWhatsappError('Please enter a valid 6-digit verification code.');
+      setWhatsappError('Please enter your verification code.');
       return;
     }
     const token = extractToken(whatsappToken);
@@ -172,10 +183,10 @@ const UserLayout: React.FC = () => {
           console.warn('Dashboard data refresh encountered an error:', refreshErr);
         }
       } else {
-        setWhatsappError(res.message || 'Verification failed. Please try again.');
+        setWhatsappError(getFriendlyError(res.message));
       }
     } catch (err: any) {
-      setWhatsappError(err.message || 'Verification failed. Please try again.');
+      setWhatsappError(getFriendlyError(err?.message));
     } finally {
       setVerifyingWhatsapp(false);
     }
@@ -189,10 +200,10 @@ const UserLayout: React.FC = () => {
         setEmailSuccess('A new verification code has been sent to your email.');
         setEmailResendTimer(60);
       } else {
-        setEmailError(res.message || 'Failed to resend code.');
+        setEmailError("We couldn't send your code. Please try again later.");
       }
     } catch (err: any) {
-      setEmailError(err.message || 'Failed to resend code.');
+      setEmailError("We couldn't send your code. Please try again later.");
     }
   };
 
@@ -204,10 +215,10 @@ const UserLayout: React.FC = () => {
         setWhatsappSuccess('A new verification code has been sent to your WhatsApp.');
         setWhatsappResendTimer(60);
       } else {
-        setWhatsappError(res.message || 'Failed to resend code.');
+        setWhatsappError("We couldn't send your code. Please try again later.");
       }
     } catch (err: any) {
-      setWhatsappError(err.message || 'Failed to resend code.');
+      setWhatsappError("We couldn't send your code. Please try again later.");
     }
   };
 
