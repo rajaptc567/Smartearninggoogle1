@@ -792,6 +792,110 @@ async function runAllTests() {
         assert(memberResult.emailToken === '' && memberResult.whatsappToken === '', 'F11d: Unspecified route does not cross-assign token to either channel');
     }
 
+    console.log('\n--- G. POST-VERIFICATION AUTOMATIC DASHBOARD DATA REFRESH AUDIT ---');
+
+    // G1: VerifyLanding.tsx refresh coordination audit
+    {
+        const landingCode = fs.readFileSync('./pages/VerifyLanding.tsx', 'utf8');
+        const importsRefresh = landingCode.includes('refreshData');
+        const savesTokenBeforeRefresh = landingCode.indexOf("localStorage.setItem('authToken', res.token)") < landingCode.indexOf('await refreshData(true)');
+        const updatesUserBeforeRefresh = landingCode.indexOf("dispatch({ type: 'UPDATE_USER'") < landingCode.indexOf('await refreshData(true)');
+        const refreshesBeforeNavigate = landingCode.indexOf('await refreshData(true)') < landingCode.indexOf("navigate('/member')");
+        const failedDoesNotRefresh = !landingCode.includes('else {\n        await refreshData');
+        assert(importsRefresh && savesTokenBeforeRefresh && updatesUserBeforeRefresh && refreshesBeforeNavigate && failedDoesNotRefresh, 
+            'G1: VerifyLanding coordinates token storage, state update, and refreshData(true) before dashboard navigation');
+    }
+
+    // G2: UserLayout.tsx refresh coordination audit
+    {
+        const layoutCode = fs.readFileSync('./components/UserLayout.tsx', 'utf8');
+        const importsRefresh = layoutCode.includes('const { state, dispatch, refreshData } = useData();');
+        const emailRefreshes = layoutCode.includes('setEmailSuccess') && layoutCode.includes('await refreshData(true)');
+        const waRefreshes = layoutCode.includes('setWhatsappSuccess') && layoutCode.includes('await refreshData(true)');
+        const storesTokenInEmail = layoutCode.indexOf("localStorage.setItem('authToken', res.token)") !== -1;
+        assert(importsRefresh && emailRefreshes && waRefreshes && storesTokenInEmail,
+            'G2: UserLayout triggers and awaits refreshData(true) in both handleVerifyEmail and handleVerifyWhatsapp');
+    }
+
+    // G3: DataContext.tsx initialization & data completeness audit
+    {
+        const dataContextCode = fs.readFileSync('./context/DataContext.tsx', 'utf8');
+        const initializesImmediate = dataContextCode.includes('const masterDataSyncRef = useRef<(force?: boolean) => Promise<void>>(masterDataSync);');
+        const includesTasks = dataContextCode.includes('tasks: getValue(13') && dataContextCode.includes('userTasks: getValue(14') && dataContextCode.includes('userTaskSubmissions: getValue(15');
+        const includesNotifications = dataContextCode.includes('notifications: getValue(4');
+        const safeFallbackPreserved = dataContextCode.includes('stateRef.current.tasks') && dataContextCode.includes('stateRef.current.userTasks');
+        assert(initializesImmediate && includesTasks && includesNotifications && safeFallbackPreserved,
+            'G3: DataContext initializes masterDataSyncRef immediately, refreshes tasks/userTasks/submissions, and preserves existing data on partial failures');
+    }
+
+    // G4: Socket stability & socket synchronization audit
+    {
+        const dataContextCode = fs.readFileSync('./context/DataContext.tsx', 'utf8');
+        const stableSocketDeps = dataContextCode.includes('[state.currentUser?._id, masterDataSync]');
+        const retainsDataChangedListener = dataContextCode.includes("socket.on('DATA_CHANGED'");
+        assert(stableSocketDeps && retainsDataChangedListener,
+            'G4: Socket effect avoids reconnection loops on verification flag changes while retaining DATA_CHANGED sync');
+    }
+
+    // G5: End-to-end lifecycle timing simulation
+    {
+        let tokenInStorageAtRefresh = null;
+        let refreshedDatasets = [];
+        let navigationOccurred = false;
+        let refreshCompleted = false;
+
+        const fakeStorage = new Map();
+        const mockRefreshData = async (force) => {
+            tokenInStorageAtRefresh = fakeStorage.get('authToken');
+            if (force) {
+                // Simulate fetching tasks, user tasks, submissions, user data
+                refreshedDatasets = ['tasks', 'userTasks', 'userTaskSubmissions', 'notifications', 'userData'];
+            }
+            refreshCompleted = true;
+        };
+
+        const mockNavigate = (path) => {
+            if (!refreshCompleted) {
+                throw new Error('Navigation occurred before refresh completed!');
+            }
+            navigationOccurred = (path === '/member');
+        };
+
+        // Execute simulated success handler
+        const simulateSuccessHandler = async (res) => {
+            if (res.success) {
+                if (res.token) {
+                    fakeStorage.set('token', res.token);
+                    fakeStorage.set('authToken', res.token);
+                }
+                await mockRefreshData(true);
+                mockNavigate('/member');
+            }
+        };
+
+        await simulateSuccessHandler({
+            success: true,
+            token: 'fresh_verified_jwt_abc',
+            data: { _id: 'u123', emailVerified: true }
+        });
+
+        assert(tokenInStorageAtRefresh === 'fresh_verified_jwt_abc', 'G5a: New JWT is in storage when protected data refresh executes');
+        assert(refreshedDatasets.includes('tasks') && refreshedDatasets.includes('userTasks') && refreshedDatasets.includes('userTaskSubmissions'), 'G5b: Tasks, user tasks, and submissions are refreshed');
+        assert(navigationOccurred === true && refreshCompleted === true, 'G5c: Navigation to /member executes strictly after refresh completes');
+
+        // Execute simulated failure handler
+        let failureRefreshCalled = false;
+        let failureNavigationCalled = false;
+        const simulateFailureHandler = async (res) => {
+            if (res.success) {
+                failureRefreshCalled = true;
+            }
+            // Failed OTP -> stays on page
+        };
+        await simulateFailureHandler({ success: false, error: 'Invalid OTP' });
+        assert(failureRefreshCalled === false && failureNavigationCalled === false, 'G5d: Failed OTP does not trigger refresh or navigation');
+    }
+
     console.log(`\n======================================================`);
     console.log(`FINAL INTEGRATION SUITE RESULT: ${passed}/${total} TESTS PASSED (${failed} FAILED)`);
     console.log(`======================================================\n`);

@@ -12,7 +12,7 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
   const [searchParams] = useSearchParams();
   const urlToken = (searchParams.get('token') || '').trim();
   const navigate = useNavigate();
-  const { currentUser, dispatch } = useData();
+  const { currentUser, dispatch, refreshData } = useData();
 
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -55,10 +55,14 @@ export const VerifyLanding: React.FC<VerifyLandingProps> = ({ type }) => {
         }
         if (res.data) {
           dispatch({ type: 'UPDATE_USER', payload: res.data });
+          dispatch({ type: 'SET_CURRENT_USER', payload: { user: res.data, token: res.token } });
         }
-        setTimeout(() => {
-          navigate('/member');
-        }, 1500);
+        try {
+          await refreshData(true);
+        } catch (refreshErr) {
+          console.warn('Dashboard data refresh encountered an error:', refreshErr);
+        }
+        navigate('/member');
       } else {
         setErrorMessage(res.message || 'Verification failed. Please check your code.');
       }

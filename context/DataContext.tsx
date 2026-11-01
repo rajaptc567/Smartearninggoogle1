@@ -1,5 +1,5 @@
 
-import React, { createContext, useReducer, ReactNode, useEffect, useRef } from 'react';
+import React, { createContext, useReducer, ReactNode, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent, UserTask, UserTaskSubmission } from '../types';
 import { 
@@ -435,7 +435,65 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
     const isSyncingRef = useRef<boolean>(false);
-    const masterDataSyncRef = useRef<(force?: boolean) => Promise<void>>(async () => {});
+    const stateRef = useRef<AppState>(state);
+
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
+
+    const masterDataSync = useCallback(async (force: boolean = false) => {
+        if (isSyncingRef.current) return;
+        isSyncingRef.current = true;
+        try {
+            const serverVersion = await getDataVersion();
+            
+            if (lastVersionRef.current === 0) {
+                lastVersionRef.current = serverVersion;
+            }
+
+            if (force || serverVersion > lastVersionRef.current) {
+                lastVersionRef.current = serverVersion;
+                
+                // Silent background fetch using Promise.allSettled to eliminate UI flicker
+                const results = await Promise.allSettled([
+                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
+                ]);
+                
+                const getValue = (idx: number, fallback: any) => 
+                    (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+
+                dispatch({ 
+                    type: 'SET_ALL_DATA', 
+                    payload: { 
+                        users: getValue(0, stateRef.current.users), 
+                        deposits: getValue(1, stateRef.current.deposits), 
+                        withdrawals: getValue(2, stateRef.current.withdrawals),
+                        transactions: getValue(3, stateRef.current.transactions), 
+                        notifications: getValue(4, stateRef.current.notifications), 
+                        paymentMethods: getValue(5, stateRef.current.paymentMethods),
+                        investmentPlans: getValue(6, stateRef.current.investmentPlans), 
+                        rules: getValue(7, stateRef.current.rules), 
+                        settings: getValue(8, stateRef.current.settings),
+                        transfers: getValue(9, stateRef.current.transfers), 
+                        logs: getValue(10, stateRef.current.logs), 
+                        passwordResetRequests: getValue(11, stateRef.current.passwordResetRequests),
+                        disputes: getValue(12, stateRef.current.disputes), 
+                        tasks: getValue(13, stateRef.current.tasks),
+                        userTasks: getValue(14, stateRef.current.userTasks),
+                        userTaskSubmissions: getValue(15, stateRef.current.userTaskSubmissions)
+                    } 
+                });
+            }
+        } catch (err) {
+            console.error("Flicker-free live sync payload retrieval failed:", err);
+        } finally {
+            isSyncingRef.current = false;
+        }
+    }, []);
+
+    const masterDataSyncRef = useRef<(force?: boolean) => Promise<void>>(masterDataSync);
+    masterDataSyncRef.current = masterDataSync;
 
     const refreshSettings = async (): Promise<Settings | null> => {
         try {
@@ -584,59 +642,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             console.log(`Socket syncer successfully connected to server: ${socketUrl}`);
         });
 
-        const masterDataSync = async (force: boolean = false) => {
-            if (isSyncingRef.current) return;
-            isSyncingRef.current = true;
-            try {
-                const serverVersion = await getDataVersion();
-                
-                if (lastVersionRef.current === 0) {
-                    lastVersionRef.current = serverVersion;
-                }
-
-                if (force || serverVersion > lastVersionRef.current) {
-                    lastVersionRef.current = serverVersion;
-                    
-                    // Silent background fetch using Promise.allSettled to eliminate UI flicker
-                    const results = await Promise.allSettled([
-                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
-                    ]);
-                    
-                    const getValue = (idx: number, fallback: any) => 
-                        results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
-
-                    dispatch({ 
-                        type: 'SET_ALL_DATA', 
-                        payload: { 
-                            users: getValue(0, state.users), 
-                            deposits: getValue(1, state.deposits), 
-                            withdrawals: getValue(2, state.withdrawals),
-                            transactions: getValue(3, state.transactions), 
-                            notifications: getValue(4, state.notifications), 
-                            paymentMethods: getValue(5, state.paymentMethods),
-                            investmentPlans: getValue(6, state.investmentPlans), 
-                            rules: getValue(7, state.rules), 
-                            settings: getValue(8, state.settings),
-                            transfers: getValue(9, state.transfers), 
-                            logs: getValue(10, state.logs), 
-                            passwordResetRequests: getValue(11, state.passwordResetRequests),
-                            disputes: getValue(12, state.disputes), 
-                            tasks: getValue(13, state.tasks),
-                            userTasks: getValue(14, state.userTasks),
-                            userTaskSubmissions: getValue(15, state.userTaskSubmissions)
-                        } 
-                    });
-                }
-            } catch (err) {
-                console.error("Flicker-free live sync payload retrieval failed:", err);
-            } finally {
-                isSyncingRef.current = false;
-            }
-        };
-
-        masterDataSyncRef.current = masterDataSync;
-
         // Listen for the master real-time trigger event
         socket.on('DATA_CHANGED', () => {
             console.log('Real-time notification: DATA_CHANGED event received. Syncing states...');
@@ -670,7 +675,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             window.removeEventListener('focus', handleTabReturn);
             document.removeEventListener('visibilitychange', handleTabReturn);
         };
-    }, [state.currentUser]);
+    }, [state.currentUser?._id, masterDataSync]);
 
     // --- CROSS-TAB AUTOMATIC LOGOUT AFTER 10-12 MINUTES OF INACTIVITY ---
     useEffect(() => {

@@ -15,7 +15,7 @@ import Footer from './Footer';
 
 const UserLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { state, dispatch } = useData();
+  const { state, dispatch, refreshData } = useData();
   const { currentUser, notifications, users, deposits, withdrawals, transfers, transactions, investmentPlans, settings } = state;
   const navigate = useNavigate();
   const location = useLocation();
@@ -125,7 +125,15 @@ const UserLayout: React.FC = () => {
           localStorage.setItem('token', res.token);
           localStorage.setItem('authToken', res.token);
         }
-        dispatch({ type: 'UPDATE_USER', payload: res.data });
+        if (res.data) {
+          dispatch({ type: 'UPDATE_USER', payload: res.data });
+          dispatch({ type: 'SET_CURRENT_USER', payload: { user: res.data, token: res.token } });
+        }
+        try {
+          await refreshData(true);
+        } catch (refreshErr) {
+          console.warn('Dashboard data refresh encountered an error:', refreshErr);
+        }
       } else {
         setEmailError(res.message || 'Verification failed. Please try again.');
       }
@@ -154,7 +162,15 @@ const UserLayout: React.FC = () => {
           localStorage.setItem('token', res.token);
           localStorage.setItem('authToken', res.token);
         }
-        dispatch({ type: 'UPDATE_USER', payload: res.data });
+        if (res.data) {
+          dispatch({ type: 'UPDATE_USER', payload: res.data });
+          dispatch({ type: 'SET_CURRENT_USER', payload: { user: res.data, token: res.token } });
+        }
+        try {
+          await refreshData(true);
+        } catch (refreshErr) {
+          console.warn('Dashboard data refresh encountered an error:', refreshErr);
+        }
       } else {
         setWhatsappError(res.message || 'Verification failed. Please try again.');
       }
