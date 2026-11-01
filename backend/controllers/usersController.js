@@ -472,7 +472,8 @@ export const createUser = async (req, res) => {
                     const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-whatsapp?token=${rawWhatsappToken}`;
                     const res = await sendAutomatedMessage({
                         toPhone: recipientNumber,
-                        messageText: `Dear ${user.fullName || user.username}, your SmartExn WhatsApp verification code is: ${whatsappCode} (valid for 10 mins). Or verify instantly here: ${verifyUrl}`
+                        messageText: `Dear ${user.fullName || user.username}, your SmartExn WhatsApp verification code is: ${whatsappCode} (valid for 10 mins). Or verify instantly here: ${verifyUrl}`,
+                        forceWhatsapp: true
                     });
                     waResult = res.whatsapp;
                 } else {
@@ -1275,7 +1276,8 @@ export const resendWhatsappCode = async (req, res) => {
         const verifyUrl = `${req.protocol || 'https'}://${req.get('host') || 'smartexn.com'}/verify-whatsapp?token=${rawWhatsappToken}`;
         const deliveryResult = await sendAutomatedMessage({
             toPhone: recipientNumber,
-            messageText: `Dear ${user.fullName || user.username}, your new SmartExn WhatsApp verification code is: ${code} (valid for 10 mins). Or verify instantly here: ${verifyUrl}`
+            messageText: `Dear ${user.fullName || user.username}, your new SmartExn WhatsApp verification code is: ${code} (valid for 10 mins). Or verify instantly here: ${verifyUrl}`,
+            forceWhatsapp: true
         });
 
         if (!deliveryResult || !deliveryResult.whatsapp || !deliveryResult.whatsapp.success) {

@@ -42,7 +42,7 @@ router.put('/reset-password/:token', authLimiter, resetPasswordWithToken);
 
 // User Directory
 router.route('/')
-    .get(getUsers) 
+    .get(authorize(['admin', 'super_admin']), getUsers) 
     .post(authLimiter, createUser); // Registration protection
 
 // User-Specific actions

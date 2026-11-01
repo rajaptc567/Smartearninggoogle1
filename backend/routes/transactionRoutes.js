@@ -4,7 +4,7 @@ import { authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.route('/').get(getTransactions);
+router.route('/').get(authorize(['user', 'admin']), getTransactions);
 router.route('/reconciliation-audit').get(authorize(['admin', 'super_admin']), getReconciliationReport);
 
 export default router;

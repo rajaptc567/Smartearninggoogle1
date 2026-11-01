@@ -22,6 +22,7 @@ export const sendAutomatedMessage = async ({
     provider = null,
     userId = null,
     forceEmail = false,
+    forceWhatsapp = false,
     sentBy = 'System'
 }) => {
     try {
@@ -75,7 +76,7 @@ export const sendAutomatedMessage = async ({
         let waAttempted = false;
 
         // 2. WhatsApp Sending via UltraMsg
-        if (settings.whatsappAutomationEnabled && toPhone) {
+        if ((settings.whatsappAutomationEnabled || forceWhatsapp) && toPhone) {
             waAttempted = true;
             try {
                 // Format number: remove non-digits, and convert leading 0 to 92 for Pakistan
