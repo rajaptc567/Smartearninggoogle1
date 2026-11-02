@@ -221,10 +221,10 @@ export const launchProviderPlacement = async (req, res) => {
         let launchUrl = '';
 
         // Verification Checks (Email / WhatsApp)
-        if (settings.emailVerificationRequired === true && !user.isEmailVerified) {
+        if (settings.emailVerificationRequired === true && !user.emailVerified) {
             return res.status(403).json({ success: false, error: 'Email verification is required to launch this provider' });
         }
-        if (settings.whatsappVerificationRequired === true && !user.isWhatsappVerified) {
+        if (settings.whatsappVerificationRequired === true && !user.whatsappVerified) {
             return res.status(403).json({ success: false, error: 'WhatsApp verification is required to launch this provider' });
         }
 
@@ -266,11 +266,16 @@ export const launchProviderPlacement = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Failed to construct provider launch URL' });
         }
 
-        // Strict URL Validation: Must be HTTPS and from a trusted provider domain
+        // Strict URL Validation: Must be HTTPS, no embedded credentials, and from a trusted provider domain
         try {
             const parsedUrl = new URL(launchUrl);
             if (parsedUrl.protocol !== 'https:') {
                 return res.status(403).json({ success: false, error: 'Insecure launch URL rejected. HTTPS is mandatory.' });
+            }
+
+            // Reject URLs with embedded credentials (security risk)
+            if (parsedUrl.username || parsedUrl.password) {
+                return res.status(403).json({ success: false, error: 'Launch URL with embedded credentials rejected for security.' });
             }
 
             const trustedHosts = [
