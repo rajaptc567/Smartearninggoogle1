@@ -1,5 +1,6 @@
 import express from 'express';
 import User from '../models/User.js';
+import { authorize } from '../middleware/authMiddleware.js';
 import {
     getAvailablePlacements,
     launchProviderPlacement,
@@ -15,75 +16,66 @@ import {
 const router = express.Router();
 
 /**
- * Explicit Worker Authentication Middleware
- * Ensures req.user exists and possesses a valid user ID.
- */
-const requireAuth = (req, res, next) => {
-    if (!req.user || !req.user.id) {
-        return res.status(401).json({ success: false, error: 'Authentication required. Please log in.' });
-    }
-    next();
-};
-
-/**
  * Strict Admin Role Authorization Middleware
- * Verifies admin / super_admin role from JWT token or performs database check if role is stale.
+ * Always verifies admin / super_admin role against the database on every request.
+ * Rejects stale JWT claims if user is no longer admin/super_admin or is blocked.
  */
 const requireAdmin = async (req, res, next) => {
     if (!req.user || !req.user.id) {
         return res.status(401).json({ success: false, error: 'Authentication required.' });
     }
 
-    const role = req.user.role ? String(req.user.role).trim().toLowerCase() : '';
-    if (['admin', 'super_admin'].includes(role)) {
-        return next();
-    }
-
-    // Database verification fallback for stale JWT tokens
     try {
         const user = await User.findById(req.user.id).select('role status restrictions');
-        if (user && user.status !== 'Blocked' && ['admin', 'super_admin'].includes(user.role)) {
+        if (!user || user.status === 'Blocked' || (typeof user.status === 'string' && user.status.includes('Blocked')) || user.restrictions?.loginBlocked) {
+            return res.status(403).json({ success: false, error: 'Access denied: Account restricted or blocked.' });
+        }
+
+        const role = user.role ? String(user.role).trim().toLowerCase() : '';
+        if (['admin', 'super_admin'].includes(role)) {
             req.user.role = user.role;
             return next();
         }
-    } catch (_) {}
+    } catch (err) {
+        console.error('[Placement requireAdmin Error]:', err.message);
+    }
 
     return res.status(403).json({ success: false, error: 'Access denied: Administrative privileges required.' });
 };
 
 // ==========================================
-// WORKER ROUTES (Protected by requireAuth)
+// WORKER ROUTES (Protected by authorize(['user', 'admin', 'super_admin']))
 // ==========================================
 
 // Get placements eligible for the authenticated user under a specific parent tab
-router.get('/available/:parentTabId', requireAuth, getAvailablePlacements);
+router.get('/available/:parentTabId', authorize(['user', 'admin', 'super_admin']), getAvailablePlacements);
 
 // Re-evaluate eligibility & launch provider session
-router.post('/:placementId/launch', requireAuth, launchProviderPlacement);
+router.post('/:placementId/launch', authorize(['user', 'admin', 'super_admin']), launchProviderPlacement);
 
 // ==========================================
 // ADMIN ROUTES (Protected by requireAdmin)
 // ==========================================
 
 // Get all provider placement records with safe provider metadata
-router.get('/admin', requireAuth, requireAdmin, getAllAdminPlacements);
+router.get('/admin', requireAdmin, getAllAdminPlacements);
 
 // Get safe provider catalog for creating placements
-router.get('/admin/catalog', requireAuth, requireAdmin, getAdminCatalog);
+router.get('/admin/catalog', requireAdmin, getAdminCatalog);
 
 // Create new placement (defaults OFF)
-router.post('/admin', requireAuth, requireAdmin, createAdminPlacement);
+router.post('/admin', requireAdmin, createAdminPlacement);
 
 // Update existing placement
-router.put('/admin/:placementId', requireAuth, requireAdmin, updateAdminPlacement);
+router.put('/admin/:placementId', requireAdmin, updateAdminPlacement);
 
 // Delete placement
-router.delete('/admin/:placementId', requireAuth, requireAdmin, deleteAdminPlacement);
+router.delete('/admin/:placementId', requireAdmin, deleteAdminPlacement);
 
 // Preview placement eligibility for test user (zero wallet/transaction mutations)
-router.post('/admin/:placementId/preview', requireAuth, requireAdmin, previewAdminPlacementEligibility);
+router.post('/admin/:placementId/preview', requireAdmin, previewAdminPlacementEligibility);
 
 // Get placement audit logs
-router.get('/admin/audit', requireAuth, requireAdmin, getAdminAuditLogs);
+router.get('/admin/audit', requireAdmin, getAdminAuditLogs);
 
 export default router;

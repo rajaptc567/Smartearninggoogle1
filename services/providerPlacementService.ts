@@ -73,19 +73,14 @@ export interface LaunchPlacementResponse {
 const API_BASE = '/api/v1/provider-placements';
 
 export const fetchAvailablePlacements = async (parentTabId: string): Promise<ProviderPlacement[]> => {
-    try {
-        const res = await fetch(`${API_BASE}/available/${parentTabId}`, {
-            headers: getHeaders()
-        });
-        const data = await res.json();
-        if (data.success && Array.isArray(data.data)) {
-            return data.data;
-        }
-        return [];
-    } catch (err) {
-        console.error('Failed to fetch available provider placements:', err);
-        return [];
+    const res = await fetch(`${API_BASE}/available/${parentTabId}`, {
+        headers: getHeaders()
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to fetch available provider placements');
     }
+    return Array.isArray(data.data) ? data.data : [];
 };
 
 export const launchPlacement = async (placementId: string): Promise<LaunchPlacementResponse> => {

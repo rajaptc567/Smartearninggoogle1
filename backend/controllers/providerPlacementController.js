@@ -39,6 +39,9 @@ export const getAvailablePlacements = async (req, res) => {
         if (!user || user.status === 'Blocked' || user.restrictions?.loginBlocked) {
             return res.status(403).json({ success: false, error: 'Account restricted or user not found' });
         }
+        if (user.restrictions?.earning === true) {
+            return res.status(403).json({ success: false, error: 'Account earning features are restricted' });
+        }
 
         const { parentTabId } = req.params;
         if (!parentTabId) {
@@ -162,6 +165,9 @@ export const launchProviderPlacement = async (req, res) => {
         if (!user || user.status === 'Blocked' || user.restrictions?.loginBlocked) {
             return res.status(403).json({ success: false, error: 'Account restricted or user not found' });
         }
+        if (user.restrictions?.earning === true) {
+            return res.status(403).json({ success: false, error: 'Account earning features are restricted' });
+        }
 
         const placement = await ProviderPlacement.findById(placementId);
         if (!placement || placement.placementEnabled !== true) {
@@ -171,9 +177,16 @@ export const launchProviderPlacement = async (req, res) => {
         // 1. Check Settings Tab Availability
         const settings = await Setting.getSettings();
         const customTabs = Array.isArray(settings.customEarnTabs) ? settings.customEarnTabs : [];
-        const mainTab = customTabs.find(t => t.id === placement.parentTabId);
+        const mainTab = customTabs.find(t => t.id === placement.parentTabId || (placement.parentTabId === 'other_tasks' && t.id === 'other_tasks'));
         if (!mainTab || mainTab.enabled === false) {
             return res.status(400).json({ success: false, error: 'Parent tab is disabled in system settings' });
+        }
+
+        if (placement.parentTabId === 'other_tasks') {
+            const otherTasksControl = settings.modulePagesConfig?.workAndEarn?.otherTasks;
+            if (otherTasksControl && (otherTasksControl.isEnabled === false || otherTasksControl.isHiddenInNav === true)) {
+                return res.status(400).json({ success: false, error: 'Parent page is disabled in system settings' });
+            }
         }
 
         const subTab = Array.isArray(mainTab.subTabs) ? mainTab.subTabs.find(st => st.id === placement.subTabId) : null;

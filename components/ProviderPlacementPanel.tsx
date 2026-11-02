@@ -36,16 +36,19 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     } | null>(null);
 
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     const loadPlacements = async () => {
         if (!activeTabId) return;
         setIsLoading(true);
         setErrorMessage(null);
+        setFetchError(null);
         try {
             const data = await fetchAvailablePlacements(activeTabId);
             setPlacements(data);
         } catch (err: any) {
             console.error('Failed to load provider placements:', err);
+            setFetchError(err.message || 'Unable to load offer placements. Please try again later.');
         } finally {
             setIsLoading(false);
         }
@@ -106,6 +109,20 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
             <div className={`p-6 text-center bg-slate-900/80 border border-slate-800 rounded-3xl space-y-2 ${className}`}>
                 <RefreshIcon className="w-6 h-6 animate-spin mx-auto text-amber-400" />
                 <p className="text-xs font-bold text-slate-400">Loading verified offer placements...</p>
+            </div>
+        );
+    }
+
+    if (fetchError) {
+        return (
+            <div className={`p-4 bg-rose-500/10 border border-rose-500/30 text-rose-200 rounded-2xl flex items-center justify-between text-xs font-bold ${className}`}>
+                <div className="flex items-center gap-2">
+                    <AlertIcon className="w-5 h-5 text-rose-400 shrink-0" />
+                    <span>Unable to load offer placements: {fetchError}</span>
+                </div>
+                <button onClick={loadPlacements} className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded-xl text-xs font-bold transition-all shrink-0">
+                    Retry
+                </button>
             </div>
         );
     }
