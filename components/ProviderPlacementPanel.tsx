@@ -11,31 +11,39 @@ import {
     AlertCircle as AlertIcon,
     Sparkles as SparklesIcon,
     X as CloseIcon,
-    RefreshCw as RefreshIcon
+    RefreshCw as RefreshIcon,
+    Clock as ClockIcon,
+    HelpCircle as InfoIcon
 } from 'lucide-react';
+import { formatCurrency } from '../types';
+import { JobGig } from './OtherTasksCard';
 
 export interface ProviderPlacementPanelProps {
     activeTabId: string;
-    activeSubTabId?: string; // Add this
+    activeSubTabId?: string;
+    searchQuery?: string;
+    nativeGigs?: JobGig[];
+    onSelectGig?: (gig: JobGig) => void;
+    exchangeRate?: number;
+    userCurrency?: string;
+    onCountChange?: (count: number) => void;
     className?: string;
 }
 
 export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     activeTabId,
-    activeSubTabId, // Add this
+    activeSubTabId = '',
+    searchQuery = '',
+    nativeGigs = [],
+    onSelectGig,
+    exchangeRate = 1,
+    userCurrency = 'USD',
+    onCountChange,
     className = ''
 }) => {
     const [placements, setPlacements] = useState<ProviderPlacement[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [activeSubTab, setActiveSubTab] = useState<string>(activeSubTabId || ''); // Use prop
     const [launchingPlacementId, setLaunchingPlacementId] = useState<string | null>(null);
-
-    // Sync activeSubTab when prop changes
-    useEffect(() => {
-        if (activeSubTabId !== undefined) {
-            setActiveSubTab(activeSubTabId);
-        }
-    }, [activeSubTabId]);
 
     // Active Provider Launch Session
     const [activeLaunchSession, setActiveLaunchSession] = useState<{
@@ -73,7 +81,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         setFetchError(null);
         try {
             const data = await fetchAvailablePlacements(activeTabId);
-            setPlacements(data);
+            setPlacements(data || []);
         } catch (err: any) {
             console.error('Failed to load provider placements:', err);
             setFetchError(err.message || 'Unable to load offer placements. Please try again later.');
@@ -86,33 +94,42 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         loadPlacements();
     }, [activeTabId]);
 
-    // Unique sub-tabs present among returned placements (excluding parent-level)
-    const subTabs = useMemo(() => {
-        const map = new Map<string, string>();
-        for (const p of placements) {
-            if (p.subTabId && !map.has(p.subTabId)) {
-                map.set(p.subTabId, p.subTabName || p.subTabId);
+    // Filter placements based on activeSubTabId and searchQuery
+    const filteredPlacements = useMemo(() => {
+        return placements.filter(p => {
+            // SubTab matching:
+            if (activeSubTabId && activeSubTabId.trim() !== '') {
+                if (p.subTabId !== activeSubTabId) {
+                    return false;
+                }
+            } else {
+                // Main / All Categories: only match parent-level placements (empty or null subTabId)
+                if (p.subTabId && p.subTabId.trim() !== '') {
+                    return false;
+                }
             }
-        }
-        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-    }, [placements]);
 
+            // Search query matching:
+            if (searchQuery && searchQuery.trim() !== '') {
+                const q = searchQuery.trim().toLowerCase();
+                const matchName = p.displayName?.toLowerCase().includes(q);
+                const matchDesc = p.description?.toLowerCase().includes(q);
+                const matchProv = p.providerKey?.toLowerCase().includes(q);
+                if (!matchName && !matchDesc && !matchProv) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+    }, [placements, activeSubTabId, searchQuery]);
+
+    // Notify parent component of the placement count for current selection
     useEffect(() => {
-        // If sub-tabs exist and none selected, select first one.
-        // Parent-level placements are always shown if activeSubTab is empty OR if explicitly allowed.
-        if (subTabs.length > 0 && activeSubTab && !subTabs.some(s => s.id === activeSubTab)) {
-            setActiveSubTab('');
+        if (!isLoading && !fetchError) {
+            onCountChange?.(filteredPlacements.length);
         }
-    }, [subTabs, activeSubTab]);
-
-    const parentLevelPlacements = useMemo(() => {
-        return placements.filter(p => !p.subTabId);
-    }, [placements]);
-
-    const subTabPlacements = useMemo(() => {
-        if (!activeSubTab) return placements.filter(p => p.subTabId);
-        return placements.filter(p => p.subTabId === activeSubTab);
-    }, [placements, activeSubTab]);
+    }, [filteredPlacements.length, isLoading, fetchError, onCountChange]);
 
     const handleLaunchPlacement = async (placement: ProviderPlacement) => {
         if (launchingPlacementId) return;
@@ -137,7 +154,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
 
     if (isLoading) {
         return (
-            <div className={`p-6 text-center bg-slate-900/80 border border-slate-800 rounded-3xl space-y-2 ${className}`}>
+            <div className={`p-8 text-center bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2 ${className}`}>
                 <RefreshIcon className="w-6 h-6 animate-spin mx-auto text-amber-400" />
                 <p className="text-xs font-bold text-slate-400">Loading verified offer placements...</p>
             </div>
@@ -156,10 +173,6 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
                 </button>
             </div>
         );
-    }
-
-    if (placements.length === 0) {
-        return null; // Silent when no active placements configured for this tab
     }
 
     // INLINE DISPLAY MODE RENDER
@@ -251,6 +264,8 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         );
     }
 
+    const totalCount = nativeGigs.length + filteredPlacements.length;
+
     return (
         <div className={`space-y-6 ${className}`}>
             {/* Error Notification */}
@@ -266,66 +281,72 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
                 </div>
             )}
 
-            {/* Parent-Level Placements Section (Always shown) */}
-            {parentLevelPlacements.length > 0 && (
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2 px-1">
-                        <div className="h-px flex-1 bg-slate-800/50"></div>
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Premium Offer Networks</span>
-                        <div className="h-px flex-1 bg-slate-800/50"></div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {parentLevelPlacements.map(p => (
-                            <PlacementCard 
-                                key={p._id} 
-                                placement={p} 
-                                onLaunch={() => handleLaunchPlacement(p)} 
-                                isLaunching={launchingPlacementId === p._id} 
-                            />
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Sub-Tab Filter Pills */}
-            {subTabs.length > 0 && (
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 px-1">
-                        <button
-                            onClick={() => setActiveSubTab('')}
-                            className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shrink-0 border ${
-                                !activeSubTab
-                                    ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg shadow-amber-500/20'
-                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                            }`}
+            {totalCount > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                    {/* Render Native Gigs */}
+                    {nativeGigs.map(gig => (
+                        <div
+                            key={gig.id}
+                            className="bg-slate-950/80 rounded-2xl p-5 shadow-lg border border-slate-800/80 flex flex-col justify-between hover:border-amber-500/50 transition-all group space-y-4"
                         >
-                            All Categories
-                        </button>
-                        {subTabs.map(st => (
-                            <button
-                                key={st.id}
-                                onClick={() => setActiveSubTab(st.id)}
-                                className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shrink-0 border ${
-                                    activeSubTab === st.id
-                                        ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg shadow-amber-500/20'
-                                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                                }`}
-                            >
-                                {st.name}
-                            </button>
-                        ))}
-                    </div>
+                            <div className="space-y-3">
+                                <div className="flex items-start justify-between gap-2">
+                                    <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[10px] font-bold px-2.5 py-1 rounded-xl uppercase tracking-wider">
+                                        {gig.provider}
+                                    </span>
+                                    <span className="text-emerald-400 font-bold text-sm sm:text-base text-right font-mono">
+                                        +{formatCurrency(gig.rewardUSD * exchangeRate, userCurrency)}
+                                        {userCurrency !== 'USD' && (
+                                            <span className="text-[10px] text-slate-400 font-semibold block font-mono">(${gig.rewardUSD.toFixed(2)} USD)</span>
+                                        )}
+                                    </span>
+                                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {subTabPlacements.map(p => (
-                            <PlacementCard 
-                                key={p._id} 
-                                placement={p} 
-                                onLaunch={() => handleLaunchPlacement(p)} 
-                                isLaunching={launchingPlacementId === p._id} 
-                            />
-                        ))}
-                    </div>
+                                <h4 className="font-bold text-white text-sm line-clamp-2 group-hover:text-amber-300 transition-colors">
+                                    {gig.title}
+                                </h4>
+
+                                <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                                    {gig.description}
+                                </p>
+                            </div>
+
+                            <div className="pt-3 border-t border-slate-800/80 space-y-3">
+                                <div className="flex items-center justify-between text-xs text-slate-400">
+                                    <span className="font-semibold flex items-center gap-1 text-slate-400">
+                                        <ClockIcon className="w-3.5 h-3.5 text-slate-500" /> {gig.estimatedTime}
+                                    </span>
+                                    <span className="text-amber-400 font-bold text-[11px] font-mono">{gig.difficulty}</span>
+                                </div>
+
+                                <button
+                                    onClick={() => onSelectGig?.(gig)}
+                                    className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-extrabold uppercase tracking-wider shadow-md shadow-amber-500/10 transition-all flex items-center justify-center gap-2 min-h-[40px]"
+                                >
+                                    <span>Start Offer & Do Task</span>
+                                    <LaunchIcon className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+
+                    {/* Render Provider Placements */}
+                    {filteredPlacements.map(p => (
+                        <PlacementCard
+                            key={p._id}
+                            placement={p}
+                            onLaunch={() => handleLaunchPlacement(p)}
+                            isLaunching={launchingPlacementId === p._id}
+                        />
+                    ))}
+                </div>
+            ) : (
+                <div className="col-span-full py-12 text-center bg-slate-950/80 rounded-2xl border border-dashed border-slate-800 space-y-3">
+                    <InfoIcon className="w-10 h-10 mx-auto text-slate-500" />
+                    <h4 className="font-bold text-slate-300 text-sm">No active offers for this category yet</h4>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        New partner tasks are synchronized daily. Please check back soon or try another network sub-tab above.
+                    </p>
                 </div>
             )}
 

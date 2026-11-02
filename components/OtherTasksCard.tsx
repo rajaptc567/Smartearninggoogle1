@@ -47,9 +47,11 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
     const { currentUser } = state;
     const workAndEarnConfig = useWorkAndEarnConfig();
 
+    // Default activeSubTab to '' (Main / All Categories)
     const [activeSubTab, setActiveSubTab] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
     const [difficultyFilter] = useState<string>('all');
+    const [placementsCount, setPlacementsCount] = useState<number>(0);
 
     const [selectedGig, setSelectedGig] = useState<JobGig | null>(null);
     const [proofInput, setProofInput] = useState('');
@@ -81,7 +83,7 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
         }
         if (Array.isArray(currentMainTab.subTabs)) {
             return currentMainTab.subTabs
-                .filter(st => st.enabled !== false)
+                .filter(st => st && st.enabled !== false)
                 .map(st => ({
                     id: st.id,
                     name: st.name,
@@ -94,17 +96,16 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
         return [];
     }, [currentMainTab]);
 
+    // Safety effect: if activeSubTab is set to a subtab that no longer exists in subTabs, reset to '' (Main / All)
     useEffect(() => {
-        if (subTabs.length > 0) {
-            if (!activeSubTab || !subTabs.some(s => s.id === activeSubTab)) {
-                setActiveSubTab(subTabs[0].id);
-            }
-        } else {
+        if (activeSubTab !== '' && subTabs.length > 0 && !subTabs.some(s => s.id === activeSubTab)) {
+            setActiveSubTab('');
+        } else if (subTabs.length === 0 && activeSubTab !== '') {
             setActiveSubTab('');
         }
     }, [subTabs, activeSubTab]);
 
-    // Filter Offerwall Gigs according to Tab, Search, and Difficulty
+    // Filter Native Offerwall Gigs according to activeSubTab, Search, and Difficulty
     const filteredOfferwallGigs = useMemo(() => {
         return DEFAULT_GIGS.filter(gig => {
             if (activeSubTab) {
@@ -112,6 +113,9 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
                     gig.providerKey.toLowerCase() === activeSubTab.toLowerCase() ||
                     gig.provider.toLowerCase().includes(activeSubTab.toLowerCase());
                 if (!matchSub) return false;
+            } else {
+                // Main / All Categories level
+                if (gig.subTabKey && gig.subTabKey !== '') return false;
             }
 
             if (searchQuery.trim()) {
@@ -207,7 +211,11 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
         }
     };
 
-    const activeNetworkName = subTabs.find(s => s.id === activeSubTab)?.name || currentMainTab?.title || 'Partner';
+    const activeNetworkName = activeSubTab === ''
+        ? (currentMainTab?.title || 'Main / All Categories')
+        : (subTabs.find(s => s.id === activeSubTab)?.name || 'Partner');
+
+    const totalOffersCount = filteredOfferwallGigs.length + placementsCount;
 
     return (
         <div className={`space-y-4 ${className}`}>
@@ -236,7 +244,7 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
                                 {currentMainTab?.title || 'Partner Networks & External Tasks'}
                             </h4>
                             <p className="text-[10px] sm:text-xs text-slate-400">
-                                Select a provider to browse available opportunities.
+                                Select a category or provider to browse available opportunities.
                             </p>
                         </div>
                     </div>
@@ -254,10 +262,23 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
                     </div>
                 </div>
 
-                {/* Sub-Tabs for "Other Tasks" */}
+                {/* Sub-Tabs Navigation for "Other Tasks" */}
                 {subTabs.length > 0 && (
                     <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pt-0.5 sm:pt-1">
-                        <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 sm:mr-2 shrink-0">Networks:</span>
+                        <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 sm:mr-2 shrink-0">Categories:</span>
+                        
+                        {/* Explicit Main / All Categories selection button */}
+                        <button
+                            onClick={() => setActiveSubTab('')}
+                            className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 shrink-0 ${
+                                activeSubTab === ''
+                                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-extrabold'
+                                    : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                            }`}
+                        >
+                            <span>Main / All Categories</span>
+                        </button>
+
                         {subTabs.map(sub => (
                             <button
                                 key={sub.id}
@@ -301,71 +322,23 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
                         </div>
                         <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
                             <span className="text-[10px] sm:text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-lg sm:rounded-xl">
-                                {filteredOfferwallGigs.length} Offers Available
+                                {totalOffersCount} Offers Available
                             </span>
                         </div>
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
-                    {filteredOfferwallGigs.length > 0 ? (
-                        filteredOfferwallGigs.map(gig => (
-                            <div
-                                key={gig.id}
-                                className="bg-slate-950/80 rounded-2xl p-5 shadow-lg border border-slate-800/80 flex flex-col justify-between hover:border-amber-500/50 transition-all group space-y-4"
-                            >
-                                <div className="space-y-3">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[10px] font-bold px-2.5 py-1 rounded-xl uppercase tracking-wider">
-                                            {gig.provider}
-                                        </span>
-                                        <span className="text-emerald-400 font-bold text-sm sm:text-base text-right font-mono">
-                                            +{formatCurrency(gig.rewardUSD * exchangeRate, currentUser?.currency || 'USD')}
-                                            {currentUser?.currency !== 'USD' && (
-                                                <span className="text-[10px] text-slate-400 font-semibold block font-mono">(${gig.rewardUSD.toFixed(2)} USD)</span>
-                                            )}
-                                        </span>
-                                    </div>
-
-                                    <h4 className="font-bold text-white text-sm line-clamp-2 group-hover:text-amber-300 transition-colors">
-                                        {gig.title}
-                                    </h4>
-
-                                    <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                                        {gig.description}
-                                    </p>
-                                </div>
-
-                                <div className="pt-3 border-t border-slate-800/80 space-y-3">
-                                    <div className="flex items-center justify-between text-xs text-slate-400">
-                                        <span className="font-semibold flex items-center gap-1 text-slate-400">
-                                            <ClockIcon className="w-3.5 h-3.5 text-slate-500" /> {gig.estimatedTime}
-                                        </span>
-                                        <span className="text-amber-400 font-bold text-[11px] font-mono">{gig.difficulty}</span>
-                                    </div>
-
-                                    <button
-                                        onClick={() => setSelectedGig(gig)}
-                                        className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-extrabold uppercase tracking-wider shadow-md shadow-amber-500/10 transition-all flex items-center justify-center gap-2 min-h-[40px]"
-                                    >
-                                        <span>Start Offer & Do Task</span>
-                                        <LaunchIcon className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            </div>
-                        ))
-                    ) : (
-                        <div className="col-span-full py-12 text-center bg-slate-950/80 rounded-2xl border border-dashed border-slate-800 space-y-3">
-                            <InfoIcon className="w-10 h-10 mx-auto text-slate-500" />
-                            <h4 className="font-bold text-slate-300 text-sm">No active offers for this category yet</h4>
-                            <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                                New partner tasks are synchronized daily. Please check back soon or try another network sub-tab above.
-                            </p>
-                        </div>
-                    )}
-                </div>
-
-                <ProviderPlacementPanel activeTabId={tabId || 'other_tasks'} activeSubTabId={activeSubTab} />
+                {/* Single unified content panel containing native offer gigs and provider placement cards */}
+                <ProviderPlacementPanel
+                    activeTabId={tabId || 'other_tasks'}
+                    activeSubTabId={activeSubTab}
+                    searchQuery={searchQuery}
+                    nativeGigs={filteredOfferwallGigs}
+                    onSelectGig={(gig) => setSelectedGig(gig)}
+                    exchangeRate={exchangeRate}
+                    userCurrency={currentUser?.currency || 'USD'}
+                    onCountChange={(count) => setPlacementsCount(count)}
+                />
             </div>
 
             {/* OFFERWALL GIG DETAIL MODAL */}
