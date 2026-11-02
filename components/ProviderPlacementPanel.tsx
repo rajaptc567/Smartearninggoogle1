@@ -77,6 +77,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     const loadPlacements = async () => {
         if (!activeTabId) return;
         setIsLoading(true);
+        onCountChange?.(0);
         setErrorMessage(null);
         setFetchError(null);
         try {
@@ -85,6 +86,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         } catch (err: any) {
             console.error('Failed to load provider placements:', err);
             setFetchError(err.message || 'Unable to load offer placements. Please try again later.');
+            onCountChange?.(0);
         } finally {
             setIsLoading(false);
         }
@@ -128,6 +130,8 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     useEffect(() => {
         if (!isLoading && !fetchError) {
             onCountChange?.(filteredPlacements.length);
+        } else {
+            onCountChange?.(0);
         }
     }, [filteredPlacements.length, isLoading, fetchError, onCountChange]);
 

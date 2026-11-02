@@ -83,7 +83,7 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
         }
         if (Array.isArray(currentMainTab.subTabs)) {
             return currentMainTab.subTabs
-                .filter(st => st && st.enabled !== false)
+                .filter(st => st && st.enabled !== false && st.isHiddenInNav !== true)
                 .map(st => ({
                     id: st.id,
                     name: st.name,
@@ -104,6 +104,11 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
             setActiveSubTab('');
         }
     }, [subTabs, activeSubTab]);
+
+    // Reset placement count whenever selection changes to prevent stale count display
+    useEffect(() => {
+        setPlacementsCount(0);
+    }, [activeSubTab, tabId]);
 
     // Filter Native Offerwall Gigs according to activeSubTab, Search, and Difficulty
     const filteredOfferwallGigs = useMemo(() => {

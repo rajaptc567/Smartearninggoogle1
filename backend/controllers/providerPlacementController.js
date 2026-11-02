@@ -189,8 +189,8 @@ export const launchProviderPlacement = async (req, res) => {
             ? { id: 'available_jobs', enabled: true, subTabs: [] }
             : customTabs.find(t => t.id === placement.parentTabId || (placement.parentTabId === 'other_tasks' && t.id === 'other_tasks'));
 
-        if (!mainTab || mainTab.enabled === false) {
-            return res.status(400).json({ success: false, error: 'Parent tab is disabled in system settings' });
+        if (!mainTab || mainTab.enabled === false || mainTab.isHiddenInNav === true) {
+            return res.status(400).json({ success: false, error: 'Parent tab is disabled or hidden in system settings' });
         }
 
         if (placement.parentTabId === 'other_tasks') {
