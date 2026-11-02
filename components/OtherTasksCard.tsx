@@ -14,6 +14,7 @@ import {
     Sparkles as SparklesIcon,
     X as CloseIcon
 } from 'lucide-react';
+import { ProviderPlacementPanel } from './ProviderPlacementPanel';
 
 export interface JobGig {
     id: string;
@@ -363,6 +364,8 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
                         </div>
                     )}
                 </div>
+
+                <ProviderPlacementPanel activeTabId={tabId || 'other_tasks'} activeSubTabId={activeSubTab} />
             </div>
 
             {/* OFFERWALL GIG DETAIL MODAL */}

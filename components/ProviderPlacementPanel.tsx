@@ -16,17 +16,26 @@ import {
 
 export interface ProviderPlacementPanelProps {
     activeTabId: string;
+    activeSubTabId?: string; // Add this
     className?: string;
 }
 
 export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     activeTabId,
+    activeSubTabId, // Add this
     className = ''
 }) => {
     const [placements, setPlacements] = useState<ProviderPlacement[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [activeSubTab, setActiveSubTab] = useState<string>('');
+    const [activeSubTab, setActiveSubTab] = useState<string>(activeSubTabId || ''); // Use prop
     const [launchingPlacementId, setLaunchingPlacementId] = useState<string | null>(null);
+
+    // Sync activeSubTab when prop changes
+    useEffect(() => {
+        if (activeSubTabId !== undefined) {
+            setActiveSubTab(activeSubTabId);
+        }
+    }, [activeSubTabId]);
 
     // Active Provider Launch Session
     const [activeLaunchSession, setActiveLaunchSession] = useState<{

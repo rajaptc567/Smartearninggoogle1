@@ -56,7 +56,6 @@ import {
 } from 'lucide-react';
 import { useWorkAndEarnConfig } from '../../hooks/useWorkAndEarnConfig';
 import OtherTasksCard from '../../components/OtherTasksCard';
-import ProviderPlacementPanel from '../../components/ProviderPlacementPanel';
 import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
 import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
 import { getEffectiveModulePageControl } from '../../data/modulePagesDefaults';
@@ -2346,7 +2345,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             {/* TAB 1: AVAILABLE JOBS */}
             {dashboardTab === 'available_jobs' && (
                 <div className="space-y-4">
-                    <ProviderPlacementPanel activeTabId={dashboardTab} />
+
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-800 pb-3 sm:pb-4">
                         <div className="flex items-start sm:items-center gap-2 sm:gap-2.5">
@@ -2376,7 +2375,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             {/* TAB 2+: DYNAMIC WORK & EARN TABS */}
             {dashboardTab !== 'available_jobs' && (
                 <div className="space-y-4">
-                    <ProviderPlacementPanel activeTabId={dashboardTab} />
+
                     <OtherTasksCard hideHeader={false} tabId={dashboardTab} />
                 </div>
             )}
