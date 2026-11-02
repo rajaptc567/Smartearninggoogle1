@@ -72,6 +72,14 @@ const ProviderPlacementSchema = new mongoose.Schema({
         trim: true,
         uppercase: true
     }],
+    offerwallVisibility: {
+        type: Boolean,
+        default: false
+    },
+    availableTasksVisibility: {
+        type: Boolean,
+        default: false
+    },
     rolloutPercentage: {
         type: Number,
         min: 0,

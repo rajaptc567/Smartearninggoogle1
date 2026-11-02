@@ -194,7 +194,8 @@ async function runTests() {
                 parentTabId: `custom_parent_${RUN_ID}`,
                 subTabId: '',
                 displayName: 'Default Off Placement',
-                launchDisplayMode: 'inline'
+                launchDisplayMode: 'inline',
+                availableTasksVisibility: true
             }
         };
         const res1 = mockRes();
@@ -225,7 +226,8 @@ async function runTests() {
                 providerKey: TEST_PROVIDER_KEY,
                 parentTabId: 'available_jobs',
                 displayName: 'Available Jobs Network',
-                launchDisplayMode: 'modal'
+                launchDisplayMode: 'modal',
+                availableTasksVisibility: true
             }
         };
         const res3 = mockRes();
@@ -248,6 +250,7 @@ async function runTests() {
             subTabId: 'sub_enabled_1',
             displayName: 'Enabled SubTab Offer',
             placementEnabled: true,
+            availableTasksVisibility: true,
             launchDisplayMode: 'inline'
         });
         createdPlacementIds.push(pSub1._id);
@@ -259,6 +262,7 @@ async function runTests() {
             subTabId: 'sub_disabled_2',
             displayName: 'Disabled SubTab Offer',
             placementEnabled: true,
+            availableTasksVisibility: true,
             launchDisplayMode: 'modal'
         });
         createdPlacementIds.push(pSub2._id);
@@ -293,6 +297,7 @@ async function runTests() {
             subTabId: '',
             displayName: 'Zero SubTab Placement',
             placementEnabled: true,
+            availableTasksVisibility: true,
             launchDisplayMode: 'inline'
         });
         createdPlacementIds.push(pEmpty._id);
@@ -315,6 +320,7 @@ async function runTests() {
             subTabId: 'sub_under_disabled',
             displayName: 'Placement Under Disabled Parent',
             placementEnabled: true,
+            availableTasksVisibility: true,
             launchDisplayMode: 'modal'
         });
         createdPlacementIds.push(pDisabled._id);
@@ -414,6 +420,7 @@ async function runTests() {
             subTabId: '',
             displayName: `${RUN_ID} Torox Restriction Check`,
             placementEnabled: true,
+            availableTasksVisibility: true,
             launchDisplayMode: 'modal'
         });
         createdPlacementIds.push(toroxPlacement._id);

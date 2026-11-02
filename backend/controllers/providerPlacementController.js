@@ -80,6 +80,7 @@ export const getAvailablePlacements = async (req, res) => {
         const placements = await ProviderPlacement.find({
             parentTabId,
             placementEnabled: true,
+            availableTasksVisibility: true,
             $or: [
                 { subTabId: '' },
                 { subTabId: { $in: activeSubTabIds } }
@@ -174,7 +175,7 @@ export const launchProviderPlacement = async (req, res) => {
         }
 
         const placement = await ProviderPlacement.findById(placementId);
-        if (!placement || placement.placementEnabled !== true) {
+        if (!placement || placement.placementEnabled !== true || placement.availableTasksVisibility !== true) {
             return res.status(400).json({ success: false, error: 'Placement is currently disabled or unavailable' });
         }
 
@@ -449,6 +450,8 @@ export const createAdminPlacement = async (req, res) => {
             allowedCountries: Array.isArray(allowedCountries) ? allowedCountries.map(c => String(c).trim().toUpperCase()).filter(Boolean) : [],
             excludedCountries: Array.isArray(excludedCountries) ? excludedCountries.map(c => String(c).trim().toUpperCase()).filter(Boolean) : [],
             rolloutPercentage: rolloutPercentage !== undefined ? rolloutNum : 100,
+            offerwallVisibility: Boolean(req.body.offerwallVisibility),
+            availableTasksVisibility: Boolean(req.body.availableTasksVisibility),
             launchDisplayMode: ['inline', 'modal'].includes(launchDisplayMode) ? launchDisplayMode : 'modal'
         };
 
@@ -494,7 +497,7 @@ export const updateAdminPlacement = async (req, res) => {
             'displayName', 'descriptionOverride', 'badgeOverride', 'displayOrder',
             'placementEnabled', 'targetingMode', 'selectedUserIds', 'testUserIds',
             'allowedCountries', 'excludedCountries', 'rolloutPercentage', 'rolloutSalt',
-            'launchDisplayMode', 'subTabId'
+            'launchDisplayMode', 'subTabId', 'offerwallVisibility', 'availableTasksVisibility'
         ];
 
         const updates = {};
