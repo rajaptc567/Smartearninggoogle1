@@ -2402,43 +2402,22 @@ export const simulatePostback = async (req, res) => {
  */
 export const getTheoremReachEntryUrl = async (req, res) => {
     try {
+        const userId = req.user?.id || req.user?._id?.toString();
+        if (!userId) {
+            return res.status(401).json({ success: false, error: 'Authenticated user session is required' });
+        }
+
         const provider = await OfferwallProvider.findOne({ providerKey: 'theoremreach' });
         if (!provider || !provider.enabled) {
             return res.status(404).json({ success: false, error: 'Provider not found or disabled' });
         }
-        
-        if (!provider.apiKey || !provider.appId || !provider.secretKey) {
-            return res.status(400).json({ success: false, error: 'TheoremReach credentials (apiKey, appId, secretKey) are missing or incomplete' });
+
+        const trResult = constructTheoremReachEntryUrl(provider, userId);
+        if (trResult.error || !trResult.url) {
+            return res.status(400).json({ success: false, error: trResult.error || 'Failed to generate TheoremReach entry URL' });
         }
-        
-        const transaction_id = crypto.randomUUID();
-        const params = {
-            api_key: provider.apiKey,
-            user_id: req.user.id,
-            transaction_id: transaction_id,
-            currency_name_plural: 'points',
-            exchange_rate: provider.exchangeRateMultiplier || 1.0,
-            partner_id: provider.appId
-        };
-        
-        // Canonical string: full URL (base + query) sorted by parameter name
-        const baseUrl = 'https://theoremreach.com/respondent_entry/secured';
-        const queryString = Object.entries(params)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-            .join('&');
-            
-        const fullUrl = `${baseUrl}?${queryString}`;
-        
-        const hash = crypto.createHmac('sha1', provider.secretKey)
-            .update(fullUrl)
-            .digest('base64')
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_')
-            .replace(/=+$/, '');
-            
-        const url = `${fullUrl}&hash=${hash}`;
-        return res.json({ success: true, url });
+
+        return res.json({ success: true, url: trResult.url });
     } catch (err) {
         console.error('[TheoremReach Entry Error]:', err.message);
         return res.status(500).json({ success: false, error: 'Failed to generate entry URL' });

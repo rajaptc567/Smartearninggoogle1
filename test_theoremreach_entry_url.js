@@ -4,6 +4,7 @@ import {
     constructTheoremReachEntryUrl, 
     getOfferwallProviders, 
     updateOfferwallProvider,
+    getTheoremReachEntryUrl,
     handlePostback 
 } from './backend/controllers/postbackController.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
@@ -24,7 +25,7 @@ async function runTests() {
     OfferwallProvider.findOneAndUpdate = async (filter, update) => {
         const key = filter.providerKey;
         const existing = mockDb.get(key) || { providerKey: key };
-        const merged = { ...existing, ...update.$set };
+        const merged = { ...existing, ...update.$set, toObject() { return { ...this }; } };
         mockDb.set(key, merged);
         return merged;
     };
@@ -47,10 +48,11 @@ async function runTests() {
     await updateOfferwallProvider(updateReq, updateRes);
     assert.equal(updateRes.statusCode, 200);
     assert.equal(updateRes.data.success, true);
-    assert.equal(updateRes.data.data.apiKey, 'th_live_api_key_abc123');
-    assert.equal(updateRes.data.data.appId, 'placement_456');
-    assert.equal(updateRes.data.data.secretKey, 'th_sec_key_xyz789');
-    assert.notEqual(updateRes.data.data.apiKey, updateRes.data.data.secretKey, 'API Key and Secret Key must be distinct');
+    const savedInDb = mockDb.get('theoremreach');
+    assert.equal(savedInDb.apiKey, 'th_live_api_key_abc123');
+    assert.equal(savedInDb.appId, 'placement_456');
+    assert.equal(savedInDb.secretKey, 'th_sec_key_xyz789');
+    assert.notEqual(savedInDb.apiKey, savedInDb.secretKey, 'API Key and Secret Key must be distinct');
     console.log('✓ Passed Test 1: API Key, App ID, and Secret Key stored separately via admin update.\n');
 
     // -------------------------------------------------------------------------
@@ -211,6 +213,54 @@ async function runTests() {
     assert.ok(!hashParam.includes('/'), 'Hash must not contain /');
     assert.ok(!hashParam.includes('='), 'Hash must strip trailing =');
     console.log('✓ Passed Test 6: Entry URL HMAC-SHA1 signature generated over pre-hash URL with URL-safe Base64.\n');
+
+    // -------------------------------------------------------------------------
+    // Test 7: getTheoremReachEntryUrl handler calls constructTheoremReachEntryUrl
+    // -------------------------------------------------------------------------
+    console.log('Test 7: getTheoremReachEntryUrl handler consistency test...');
+    const origFindOne = OfferwallProvider.findOne;
+    OfferwallProvider.findOne = async (filter) => {
+        if (filter.providerKey === 'theoremreach') {
+            return {
+                providerKey: 'theoremreach',
+                name: 'TheoremReach',
+                enabled: true,
+                apiKey: 'api_key_test_777',
+                secretKey: 'sec_key_test_777',
+                requireSignature: true,
+                iframeUrlTemplate: 'https://theoremreach.com/respondent_entry/direct?api_key={apiKey}&user_id={userId}'
+            };
+        }
+        return null;
+    };
+
+    const handlerReq = { user: { id: 'user_offerwall_888' } };
+    const handlerRes = {
+        statusCode: 200,
+        status(code) { this.statusCode = code; return this; },
+        json(data) { this.data = data; return this; }
+    };
+
+    await getTheoremReachEntryUrl(handlerReq, handlerRes);
+    assert.equal(handlerRes.data.success, true);
+    assert.ok(handlerRes.data.url.includes('api_key=api_key_test_777'));
+    assert.ok(handlerRes.data.url.includes('user_id=user_offerwall_888'));
+    assert.ok(handlerRes.data.url.includes('&hash='));
+
+    const directResult = constructTheoremReachEntryUrl({
+        providerKey: 'theoremreach',
+        name: 'TheoremReach',
+        enabled: true,
+        apiKey: 'api_key_test_777',
+        secretKey: 'sec_key_test_777',
+        requireSignature: true,
+        iframeUrlTemplate: 'https://theoremreach.com/respondent_entry/direct?api_key={apiKey}&user_id={userId}'
+    }, 'user_offerwall_888');
+
+    assert.equal(handlerRes.data.url, directResult.url, 'OfferwallHub entry URL must match direct constructTheoremReachEntryUrl output');
+    console.log('✓ Passed Test 7: getTheoremReachEntryUrl handler produces identical URL to constructTheoremReachEntryUrl.\n');
+
+    OfferwallProvider.findOne = origFindOne;
 
     // Restore original methods
     OfferwallProvider.findOneAndUpdate = origFindOneAndUpdate;
