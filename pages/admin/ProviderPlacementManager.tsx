@@ -880,6 +880,17 @@ export const ProviderPlacementManager: React.FC = () => {
                                 </div>
                             </div>
 
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-950 rounded-2xl border border-slate-800">
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                                    <input type="checkbox" checked={editingPlacement.offerwallVisibility} onChange={(e) => setEditingPlacement({...editingPlacement, offerwallVisibility: e.target.checked})} className="rounded accent-amber-500" />
+                                    Offerwall Visibility
+                                </label>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                                    <input type="checkbox" checked={editingPlacement.availableTasksVisibility} onChange={(e) => setEditingPlacement({...editingPlacement, availableTasksVisibility: e.target.checked})} className="rounded accent-amber-500" />
+                                    Available Tasks Visibility
+                                </label>
+                            </div>
+
                             {/* Preview Eligibility Test Box */}
                             <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
                                 <h4 className="text-xs font-black uppercase text-amber-300">Eligibility Preview Test (Zero Balance Mutation)</h4>
