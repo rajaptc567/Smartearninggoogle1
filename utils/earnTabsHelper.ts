@@ -30,12 +30,6 @@ export function getVisibleEarnTabs(
             }
         }
 
-        // Must have at least one enabled sub-tab
-        const activeSubTabs = (tab.subTabs || []).filter(st => st && st.enabled !== false);
-        if (activeSubTabs.length === 0) {
-            return false;
-        }
-
         return true;
     });
 }

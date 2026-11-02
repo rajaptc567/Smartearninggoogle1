@@ -21,9 +21,14 @@ const ProviderPlacementSchema = new mongoose.Schema({
     },
     subTabId: {
         type: String,
-        required: [true, 'Sub-tab ID is required'],
+        default: '',
         trim: true,
         index: true
+    },
+    launchDisplayMode: {
+        type: String,
+        enum: ['inline', 'modal'],
+        default: 'modal'
     },
     displayName: {
         type: String,

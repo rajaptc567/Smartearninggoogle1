@@ -28,11 +28,12 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     const [activeSubTab, setActiveSubTab] = useState<string>('');
     const [launchingPlacementId, setLaunchingPlacementId] = useState<string | null>(null);
 
-    // Active Provider Launch Modal
+    // Active Provider Launch Session
     const [activeLaunchSession, setActiveLaunchSession] = useState<{
         displayName: string;
         launchUrl: string;
         providerKey: string;
+        launchDisplayMode: 'inline' | 'modal';
     } | null>(null);
 
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         loadPlacements();
     }, [activeTabId]);
 
-    // Unique sub-tabs present among returned placements
+    // Unique sub-tabs present among returned placements (excluding parent-level)
     const subTabs = useMemo(() => {
         const map = new Map<string, string>();
         for (const p of placements) {
@@ -70,17 +71,19 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     }, [placements]);
 
     useEffect(() => {
-        if (subTabs.length > 0) {
-            if (!activeSubTab || !subTabs.some(s => s.id === activeSubTab)) {
-                setActiveSubTab(subTabs[0].id);
-            }
-        } else {
+        // If sub-tabs exist and none selected, select first one.
+        // Parent-level placements are always shown if activeSubTab is empty OR if explicitly allowed.
+        if (subTabs.length > 0 && activeSubTab && !subTabs.some(s => s.id === activeSubTab)) {
             setActiveSubTab('');
         }
     }, [subTabs, activeSubTab]);
 
-    const filteredPlacements = useMemo(() => {
-        if (!activeSubTab) return placements;
+    const parentLevelPlacements = useMemo(() => {
+        return placements.filter(p => !p.subTabId);
+    }, [placements]);
+
+    const subTabPlacements = useMemo(() => {
+        if (!activeSubTab) return placements.filter(p => p.subTabId);
         return placements.filter(p => p.subTabId === activeSubTab);
     }, [placements, activeSubTab]);
 
@@ -94,7 +97,8 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
             setActiveLaunchSession({
                 displayName: res.displayName || placement.displayName,
                 launchUrl: res.launchUrl,
-                providerKey: res.providerKey || placement.providerKey
+                providerKey: res.providerKey || placement.providerKey,
+                launchDisplayMode: res.launchDisplayMode || 'modal'
             });
         } catch (err: any) {
             setErrorMessage(err.message || 'Failed to initialize offerwall session. Please try again later.');
@@ -131,8 +135,58 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         return null; // Silent when no active placements configured for this tab
     }
 
+    // INLINE DISPLAY MODE RENDER
+    if (activeLaunchSession && activeLaunchSession.launchDisplayMode === 'inline') {
+        return (
+            <div className={`space-y-4 animate-fade-in ${className}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setActiveLaunchSession(null)}
+                            className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all"
+                            title="Go Back"
+                        >
+                            <CloseIcon className="w-5 h-5" />
+                        </button>
+                        <div>
+                            <h3 className="text-sm font-black text-white">{activeLaunchSession.displayName}</h3>
+                            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
+                                <SparklesIcon className="w-3 h-3" />
+                                <span>Authenticated Server Session Active</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <a
+                            href={activeLaunchSession.launchUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-black uppercase rounded-xl transition-all flex items-center gap-2"
+                        >
+                            <span>Fullscreen</span>
+                            <LaunchIcon className="w-3.5 h-3.5" />
+                        </a>
+                    </div>
+                </div>
+
+                <div className="relative w-full h-[700px] bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                    <iframe
+                        src={activeLaunchSession.launchUrl}
+                        title={activeLaunchSession.displayName}
+                        className="w-full h-full border-0"
+                        allow="fullscreen; camera; microphone"
+                    />
+                </div>
+
+                <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-3 text-[11px] text-slate-400 text-center">
+                    💡 Completed tasks from {activeLaunchSession.displayName} credit automatically to your Task Earnings balance.
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className={`space-y-4 ${className}`}>
+        <div className={`space-y-6 ${className}`}>
             {/* Error Notification */}
             {errorMessage && (
                 <div className="bg-rose-500/20 border border-rose-500/40 text-rose-200 p-4 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg animate-fade-in">
@@ -146,82 +200,71 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
                 </div>
             )}
 
-            {/* Sub-Tab Filter Pills when multiple placement sub-tabs exist */}
-            {subTabs.length > 1 && (
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0">Sub-Tabs:</span>
-                    {subTabs.map(st => (
-                        <button
-                            key={st.id}
-                            onClick={() => setActiveSubTab(st.id)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                                activeSubTab === st.id
-                                    ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
-                                    : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-white'
-                            }`}
-                        >
-                            {st.name}
-                        </button>
-                    ))}
+            {/* Parent-Level Placements Section (Always shown) */}
+            {parentLevelPlacements.length > 0 && (
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                        <div className="h-px flex-1 bg-slate-800/50"></div>
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Premium Offer Networks</span>
+                        <div className="h-px flex-1 bg-slate-800/50"></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {parentLevelPlacements.map(p => (
+                            <PlacementCard 
+                                key={p._id} 
+                                placement={p} 
+                                onLaunch={() => handleLaunchPlacement(p)} 
+                                isLaunching={launchingPlacementId === p._id} 
+                            />
+                        ))}
+                    </div>
                 </div>
             )}
 
-            {/* Placements Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredPlacements.map(p => (
-                    <div
-                        key={p._id}
-                        className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-amber-500/50 transition-all group space-y-4"
-                    >
-                        <div className="space-y-3">
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-2xl">{p.icon || '⚡'}</span>
-                                    <div>
-                                        <h4 className="font-extrabold text-white text-sm line-clamp-1 group-hover:text-amber-300 transition-colors">
-                                            {p.displayName}
-                                        </h4>
-                                        <span className="text-[10px] text-slate-400 font-semibold uppercase">{p.subTabName || p.subTabId}</span>
-                                    </div>
-                                </div>
-
-                                {p.badge && (
-                                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">
-                                        {p.badge}
-                                    </span>
-                                )}
-                            </div>
-
-                            <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                                {p.description || 'Verified offerwall activity. Complete tasks and surveys for automatic wallet credit.'}
-                            </p>
-                        </div>
-
-                        <div className="pt-3 border-t border-slate-800/80 space-y-2">
+            {/* Sub-Tab Filter Pills */}
+            {subTabs.length > 0 && (
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 px-1">
+                        <button
+                            onClick={() => setActiveSubTab('')}
+                            className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shrink-0 border ${
+                                !activeSubTab
+                                    ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg shadow-amber-500/20'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            All Categories
+                        </button>
+                        {subTabs.map(st => (
                             <button
-                                onClick={() => handleLaunchPlacement(p)}
-                                disabled={launchingPlacementId === p._id}
-                                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 min-h-[40px]"
+                                key={st.id}
+                                onClick={() => setActiveSubTab(st.id)}
+                                className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shrink-0 border ${
+                                    activeSubTab === st.id
+                                        ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg shadow-amber-500/20'
+                                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                                }`}
                             >
-                                {launchingPlacementId === p._id ? (
-                                    <>
-                                        <RefreshIcon className="w-4 h-4 animate-spin" />
-                                        <span>Initializing Session...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span>Launch {p.displayName}</span>
-                                        <LaunchIcon className="w-4 h-4" />
-                                    </>
-                                )}
+                                {st.name}
                             </button>
-                        </div>
+                        ))}
                     </div>
-                ))}
-            </div>
 
-            {/* PROVIDER LAUNCH MODAL */}
-            {activeLaunchSession && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {subTabPlacements.map(p => (
+                            <PlacementCard 
+                                key={p._id} 
+                                placement={p} 
+                                onLaunch={() => handleLaunchPlacement(p)} 
+                                isLaunching={launchingPlacementId === p._id} 
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DISPLAY MODE RENDER */}
+            {activeLaunchSession && activeLaunchSession.launchDisplayMode === 'modal' && (
                 <Modal
                     isOpen={true}
                     onClose={() => setActiveLaunchSession(null)}
@@ -263,5 +306,61 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         </div>
     );
 };
+
+interface PlacementCardProps {
+    placement: ProviderPlacement;
+    onLaunch: () => void;
+    isLaunching: boolean;
+}
+
+const PlacementCard: React.FC<PlacementCardProps> = ({ placement: p, onLaunch, isLaunching }) => (
+    <div
+        className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between hover:border-amber-500/50 transition-all group space-y-4"
+    >
+        <div className="space-y-3">
+            <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <span className="text-2xl">{p.icon || '⚡'}</span>
+                    <div>
+                        <h4 className="font-extrabold text-white text-sm line-clamp-1 group-hover:text-amber-300 transition-colors">
+                            {p.displayName}
+                        </h4>
+                        <span className="text-[10px] text-slate-400 font-semibold uppercase">{p.subTabName || p.subTabId || 'Direct Access'}</span>
+                    </div>
+                </div>
+
+                {p.badge && (
+                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                        {p.badge}
+                    </span>
+                )}
+            </div>
+
+            <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                {p.description || 'Verified offerwall activity. Complete tasks and surveys for automatic wallet credit.'}
+            </p>
+        </div>
+
+        <div className="pt-3 border-t border-slate-800/80 space-y-2">
+            <button
+                onClick={onLaunch}
+                disabled={isLaunching}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 min-h-[40px]"
+            >
+                {isLaunching ? (
+                    <>
+                        <RefreshIcon className="w-4 h-4 animate-spin" />
+                        <span>Initializing...</span>
+                    </>
+                ) : (
+                    <>
+                        <span>Launch {p.displayName}</span>
+                        <LaunchIcon className="w-4 h-4" />
+                    </>
+                )}
+            </button>
+        </div>
+    </div>
+);
 
 export default ProviderPlacementPanel;

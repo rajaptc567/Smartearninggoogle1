@@ -33,8 +33,9 @@ export const ProviderPlacementManager: React.FC = () => {
 
     // New Placement Form State
     const [selectedProviderKey, setSelectedProviderKey] = useState<string>('');
-    const [parentTabId, setParentTabId] = useState<string>('other_tasks');
+    const [parentTabId, setParentTabId] = useState<string>('available_jobs');
     const [subTabId, setSubTabId] = useState<string>('');
+    const [launchDisplayMode, setLaunchDisplayMode] = useState<'inline' | 'modal'>('modal');
     const [displayName, setDisplayName] = useState<string>('');
     const [descriptionOverride, setDescriptionOverride] = useState<string>('');
     const [badgeOverride, setBadgeOverride] = useState<string>('');
@@ -55,33 +56,35 @@ export const ProviderPlacementManager: React.FC = () => {
     const customEarnTabs = state.settings?.customEarnTabs || [];
 
     const availableMainTabs = useMemo(() => {
-        if (Array.isArray(customEarnTabs) && customEarnTabs.length > 0) {
-            return customEarnTabs;
+        const tabs = [];
+        
+        // Always include Built-in Available Jobs
+        tabs.push({
+            id: 'available_jobs',
+            title: 'Available Jobs (Built-in)',
+            enabled: true,
+            subTabs: []
+        });
+
+        if (Array.isArray(customEarnTabs)) {
+            tabs.push(...customEarnTabs);
         }
-        return [
-            {
-                id: 'other_tasks',
-                title: 'Other Tasks & External Gigs',
-                enabled: true,
-                subTabs: [
-                    { id: 'cpx_research', name: 'CPX Research', enabled: true },
-                    { id: 'theoremreach', name: 'TheoremReach', enabled: true },
-                    { id: 'torox', name: 'Torox', enabled: true },
-                    { id: 'monlix', name: 'Monlix', enabled: true },
-                    { id: 'revlum', name: 'Revlum', enabled: true }
-                ]
-            }
-        ];
+
+        return tabs;
     }, [customEarnTabs]);
 
     const availableSubTabs = useMemo(() => {
         const found = availableMainTabs.find(t => t.id === parentTabId);
-        return Array.isArray(found?.subTabs) ? found!.subTabs : [];
+        const subs = Array.isArray(found?.subTabs) ? [...found!.subTabs] : [];
+        
+        // Add "No Sub-Tab" option
+        return [{ id: '', name: 'Main Tab — No Sub-Tab', enabled: true }, ...subs];
     }, [availableMainTabs, parentTabId]);
 
     useEffect(() => {
-        if (availableSubTabs.length > 0 && (!subTabId || !availableSubTabs.some(s => s.id === subTabId))) {
-            setSubTabId(availableSubTabs[0].id);
+        // Reset subTabId if it's no longer valid for the selected parent
+        if (availableSubTabs.length > 0 && !availableSubTabs.some(s => s.id === subTabId)) {
+            setSubTabId('');
         }
     }, [availableSubTabs, subTabId]);
 
@@ -144,6 +147,7 @@ export const ProviderPlacementManager: React.FC = () => {
                 providerKey: selectedProviderKey,
                 parentTabId,
                 subTabId,
+                launchDisplayMode,
                 displayName,
                 descriptionOverride,
                 badgeOverride,
@@ -216,7 +220,9 @@ export const ProviderPlacementManager: React.FC = () => {
                 testUserIds: editingPlacement.testUserIds,
                 allowedCountries: editingPlacement.allowedCountries,
                 excludedCountries: editingPlacement.excludedCountries,
-                rolloutPercentage: editingPlacement.rolloutPercentage
+                rolloutPercentage: editingPlacement.rolloutPercentage,
+                launchDisplayMode: editingPlacement.launchDisplayMode,
+                subTabId: editingPlacement.subTabId
             });
 
             setSuccessMessage(`Placement '${updated.displayName}' updated successfully.`);
@@ -368,7 +374,11 @@ export const ProviderPlacementManager: React.FC = () => {
                                                 </div>
                                                 <div className="flex justify-between text-slate-400">
                                                     <span>Sub-Tab:</span>
-                                                    <span className="text-indigo-300 font-bold">{p.subTabId}</span>
+                                                    <span className="text-indigo-300 font-bold">{p.subTabId || 'None (Parent-Level)'}</span>
+                                                </div>
+                                                <div className="flex justify-between text-slate-400">
+                                                    <span>Display Mode:</span>
+                                                    <span className="text-sky-300 font-bold uppercase">{p.launchDisplayMode || 'modal'}</span>
                                                 </div>
                                                 <div className="flex justify-between text-slate-400">
                                                     <span>Order Weight:</span>
@@ -468,7 +478,7 @@ export const ProviderPlacementManager: React.FC = () => {
                                 >
                                     {availableMainTabs.map(t => (
                                         <option key={t.id} value={t.id}>
-                                            {t.title} ({t.id})
+                                            {t.title} ({t.id}) {t.enabled ? '🟢' : '🔴'}
                                         </option>
                                     ))}
                                 </select>
@@ -482,16 +492,45 @@ export const ProviderPlacementManager: React.FC = () => {
                                     value={subTabId}
                                     onChange={(e) => setSubTabId(e.target.value)}
                                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
-                                    required
                                 >
                                     {availableSubTabs.map(st => (
                                         <option key={st.id} value={st.id}>
-                                            {st.name} ({st.id})
+                                            {st.name} {st.id ? `(${st.id})` : ''} {st.enabled ? '🟢' : '🔴'}
                                         </option>
                                     ))}
                                 </select>
                             </div>
 
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">How should this provider open?</label>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setLaunchDisplayMode('inline')}
+                                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                                            launchDisplayMode === 'inline' 
+                                                ? 'bg-amber-500 border-amber-400 text-slate-950' 
+                                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                                        }`}
+                                    >
+                                        Inline (Same Page)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLaunchDisplayMode('modal')}
+                                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                                            launchDisplayMode === 'modal' 
+                                                ? 'bg-amber-500 border-amber-400 text-slate-950' 
+                                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                                        }`}
+                                    >
+                                        Modal (Overlay)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Display Title Override</label>
                                 <input
@@ -502,9 +541,7 @@ export const ProviderPlacementManager: React.FC = () => {
                                     required
                                 />
                             </div>
-                        </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Badge Override</label>
                                 <input
@@ -515,16 +552,16 @@ export const ProviderPlacementManager: React.FC = () => {
                                     className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
                                 />
                             </div>
+                        </div>
 
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Order Weight (Ascending)</label>
-                                <input
-                                    type="number"
-                                    value={displayOrder}
-                                    onChange={(e) => setDisplayOrder(Number(e.target.value))}
-                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
-                                />
-                            </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Order Weight (Ascending)</label>
+                            <input
+                                type="number"
+                                value={displayOrder}
+                                onChange={(e) => setDisplayOrder(Number(e.target.value))}
+                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
+                            />
                         </div>
 
                         <div>
@@ -705,7 +742,7 @@ export const ProviderPlacementManager: React.FC = () => {
                             <div className="flex items-center justify-between p-4 bg-slate-950 rounded-2xl border border-slate-800">
                                 <div>
                                     <span className="text-xs font-black uppercase text-white">Enable Placement</span>
-                                    <p className="text-[11px] text-slate-400">Make visible to eligible workers under {editingPlacement.parentTabId} / {editingPlacement.subTabId}</p>
+                                    <p className="text-[11px] text-slate-400">Make visible to eligible workers under {editingPlacement.parentTabId} {editingPlacement.subTabId ? `/ ${editingPlacement.subTabId}` : ''}</p>
                                 </div>
                                 <input
                                     type="checkbox"
@@ -713,6 +750,51 @@ export const ProviderPlacementManager: React.FC = () => {
                                     onChange={(e) => setEditingPlacement({ ...editingPlacement, placementEnabled: e.target.checked })}
                                     className="w-5 h-5 rounded accent-amber-500"
                                 />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Sub-Tab Destination</label>
+                                    <select
+                                        value={editingPlacement.subTabId || ''}
+                                        onChange={(e) => setEditingPlacement({ ...editingPlacement, subTabId: e.target.value })}
+                                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
+                                    >
+                                        {availableSubTabs.map(st => (
+                                            <option key={st.id} value={st.id}>
+                                                {st.name} {st.id ? `(${st.id})` : ''} {st.enabled ? '🟢' : '🔴'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Display Mode</label>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingPlacement({ ...editingPlacement, launchDisplayMode: 'inline' })}
+                                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                                                editingPlacement.launchDisplayMode === 'inline' 
+                                                    ? 'bg-amber-500 border-amber-400 text-slate-950' 
+                                                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                                            }`}
+                                        >
+                                            Inline
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingPlacement({ ...editingPlacement, launchDisplayMode: 'modal' })}
+                                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                                                editingPlacement.launchDisplayMode === 'modal' 
+                                                    ? 'bg-amber-500 border-amber-400 text-slate-950' 
+                                                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                                            }`}
+                                        >
+                                            Modal
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

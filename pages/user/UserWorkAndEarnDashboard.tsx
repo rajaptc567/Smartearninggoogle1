@@ -2345,7 +2345,9 @@ const UserWorkAndEarnDashboard: React.FC = () => {
 
             {/* TAB 1: AVAILABLE JOBS */}
             {dashboardTab === 'available_jobs' && (
-                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl sm:rounded-3xl p-3 sm:p-5 md:p-6 shadow-xl space-y-3 sm:space-y-4">
+                <div className="space-y-4">
+                    <ProviderPlacementPanel activeTabId={dashboardTab} />
+
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-800 pb-3 sm:pb-4">
                         <div className="flex items-start sm:items-center gap-2 sm:gap-2.5">
                             <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">

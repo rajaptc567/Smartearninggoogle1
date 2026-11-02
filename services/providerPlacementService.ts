@@ -5,8 +5,9 @@ export interface ProviderPlacement {
     providerKey: string;
     placementEnabled: boolean;
     parentTabId: string;
-    subTabId: string;
+    subTabId?: string;
     subTabName?: string;
+    launchDisplayMode: 'inline' | 'modal';
     displayName: string;
     descriptionOverride?: string;
     badgeOverride?: string;
@@ -67,7 +68,7 @@ export interface LaunchPlacementResponse {
     launchUrl: string;
     displayName: string;
     providerKey: string;
-    displayMode?: 'embed' | 'modal' | 'redirect' | 'card_list';
+    launchDisplayMode: 'inline' | 'modal';
 }
 
 const API_BASE = '/api/v1/provider-placements';

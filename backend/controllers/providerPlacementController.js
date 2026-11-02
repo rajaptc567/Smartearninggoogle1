@@ -51,7 +51,11 @@ export const getAvailablePlacements = async (req, res) => {
         // 1. Verify Parent Tab Enabled in Admin Settings
         const settings = await Setting.getSettings();
         const customTabs = Array.isArray(settings.customEarnTabs) ? settings.customEarnTabs : [];
-        const targetMainTab = customTabs.find(t => t.id === parentTabId || (parentTabId === 'other_tasks' && t.id === 'other_tasks'));
+        
+        // Include built-in available_jobs in the search
+        const targetMainTab = parentTabId === 'available_jobs' 
+            ? { id: 'available_jobs', enabled: true, subTabs: [] }
+            : customTabs.find(t => t.id === parentTabId || (parentTabId === 'other_tasks' && t.id === 'other_tasks'));
 
         if (!targetMainTab || targetMainTab.enabled === false) {
             return res.status(200).json({ success: true, count: 0, data: [] });
@@ -71,15 +75,15 @@ export const getAvailablePlacements = async (req, res) => {
             : [];
         const activeSubTabIds = activeSubTabs.map(st => st.id);
 
-        if (activeSubTabIds.length === 0) {
-            return res.status(200).json({ success: true, count: 0, data: [] });
-        }
-
         // 2. Fetch Placements where placementEnabled = true for this parent tab
+        // Support parent-level placements (subTabId is empty or not in active list but parent is enabled)
         const placements = await ProviderPlacement.find({
             parentTabId,
             placementEnabled: true,
-            subTabId: { $in: activeSubTabIds }
+            $or: [
+                { subTabId: '' },
+                { subTabId: { $in: activeSubTabIds } }
+            ]
         }).lean();
 
         if (placements.length === 0) {
@@ -177,7 +181,11 @@ export const launchProviderPlacement = async (req, res) => {
         // 1. Check Settings Tab Availability
         const settings = await Setting.getSettings();
         const customTabs = Array.isArray(settings.customEarnTabs) ? settings.customEarnTabs : [];
-        const mainTab = customTabs.find(t => t.id === placement.parentTabId || (placement.parentTabId === 'other_tasks' && t.id === 'other_tasks'));
+        
+        const mainTab = placement.parentTabId === 'available_jobs'
+            ? { id: 'available_jobs', enabled: true, subTabs: [] }
+            : customTabs.find(t => t.id === placement.parentTabId || (placement.parentTabId === 'other_tasks' && t.id === 'other_tasks'));
+
         if (!mainTab || mainTab.enabled === false) {
             return res.status(400).json({ success: false, error: 'Parent tab is disabled in system settings' });
         }
@@ -189,9 +197,12 @@ export const launchProviderPlacement = async (req, res) => {
             }
         }
 
-        const subTab = Array.isArray(mainTab.subTabs) ? mainTab.subTabs.find(st => st.id === placement.subTabId) : null;
-        if (!subTab || subTab.enabled === false) {
-            return res.status(400).json({ success: false, error: 'Sub-tab is disabled in system settings' });
+        // Only validate sub-tab if it was configured for this placement
+        if (placement.subTabId) {
+            const subTab = Array.isArray(mainTab.subTabs) ? mainTab.subTabs.find(st => st.id === placement.subTabId) : null;
+            if (!subTab || subTab.enabled === false) {
+                return res.status(400).json({ success: false, error: 'Sub-tab is disabled in system settings' });
+            }
         }
 
         // 2. Re-evaluate Worker Eligibility
@@ -306,7 +317,8 @@ export const launchProviderPlacement = async (req, res) => {
             success: true,
             launchUrl,
             displayName: placement.displayName || provider.name,
-            providerKey: placement.providerKey
+            providerKey: placement.providerKey,
+            launchDisplayMode: placement.launchDisplayMode || 'modal'
         });
     } catch (err) {
         console.error('[launchProviderPlacement Error]:', err.message);
@@ -380,13 +392,14 @@ export const createAdminPlacement = async (req, res) => {
             testUserIds,
             allowedCountries,
             excludedCountries,
-            rolloutPercentage
+            rolloutPercentage,
+            launchDisplayMode
         } = req.body;
 
-        if (!providerKey || !parentTabId || !subTabId || !displayName) {
+        if (!providerKey || !parentTabId || !displayName) {
             return res.status(400).json({
                 success: false,
-                error: 'providerKey, parentTabId, subTabId, and displayName are required fields'
+                error: 'providerKey, parentTabId, and displayName are required fields'
             });
         }
 
@@ -399,14 +412,20 @@ export const createAdminPlacement = async (req, res) => {
         // Verify parent tab & sub-tab exist in settings
         const settings = await Setting.getSettings();
         const customTabs = Array.isArray(settings.customEarnTabs) ? settings.customEarnTabs : [];
-        const mainTab = customTabs.find(t => t.id === parentTabId);
+        
+        const mainTab = parentTabId === 'available_jobs'
+            ? { id: 'available_jobs', enabled: true, subTabs: [] }
+            : customTabs.find(t => t.id === parentTabId);
+
         if (!mainTab) {
             return res.status(400).json({ success: false, error: `Parent tab '${parentTabId}' is not configured in settings` });
         }
 
-        const subTab = Array.isArray(mainTab.subTabs) ? mainTab.subTabs.find(st => st.id === subTabId) : null;
-        if (!subTab) {
-            return res.status(400).json({ success: false, error: `Sub-tab '${subTabId}' does not exist under parent tab '${parentTabId}'` });
+        if (subTabId) {
+            const subTab = Array.isArray(mainTab.subTabs) ? mainTab.subTabs.find(st => st.id === subTabId) : null;
+            if (!subTab) {
+                return res.status(400).json({ success: false, error: `Sub-tab '${subTabId}' does not exist under parent tab '${parentTabId}'` });
+            }
         }
 
         // Validate rolloutPercentage is finite and within range
@@ -418,7 +437,7 @@ export const createAdminPlacement = async (req, res) => {
         const newPlacementData = {
             providerKey: String(providerKey).toLowerCase().trim(),
             parentTabId: String(parentTabId).trim(),
-            subTabId: String(subTabId).trim(),
+            subTabId: subTabId ? String(subTabId).trim() : '',
             displayName: String(displayName).trim(),
             descriptionOverride: descriptionOverride ? String(descriptionOverride).trim() : '',
             badgeOverride: badgeOverride ? String(badgeOverride).trim() : '',
@@ -429,7 +448,8 @@ export const createAdminPlacement = async (req, res) => {
             testUserIds: Array.isArray(testUserIds) ? testUserIds.filter(id => mongoose.isValidObjectId(id)) : [],
             allowedCountries: Array.isArray(allowedCountries) ? allowedCountries.map(c => String(c).trim().toUpperCase()).filter(Boolean) : [],
             excludedCountries: Array.isArray(excludedCountries) ? excludedCountries.map(c => String(c).trim().toUpperCase()).filter(Boolean) : [],
-            rolloutPercentage: rolloutPercentage !== undefined ? rolloutNum : 100
+            rolloutPercentage: rolloutPercentage !== undefined ? rolloutNum : 100,
+            launchDisplayMode: ['inline', 'modal'].includes(launchDisplayMode) ? launchDisplayMode : 'modal'
         };
 
         const created = await ProviderPlacement.create(newPlacementData);
@@ -473,7 +493,8 @@ export const updateAdminPlacement = async (req, res) => {
         const allowedFields = [
             'displayName', 'descriptionOverride', 'badgeOverride', 'displayOrder',
             'placementEnabled', 'targetingMode', 'selectedUserIds', 'testUserIds',
-            'allowedCountries', 'excludedCountries', 'rolloutPercentage', 'rolloutSalt'
+            'allowedCountries', 'excludedCountries', 'rolloutPercentage', 'rolloutSalt',
+            'launchDisplayMode', 'subTabId'
         ];
 
         const updates = {};
