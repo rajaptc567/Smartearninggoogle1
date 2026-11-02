@@ -235,28 +235,11 @@ export const launchProviderPlacement = async (req, res) => {
                 return res.status(400).json({ success: false, error: cpxResult.error || 'CPX Research configuration incomplete' });
             }
         } else if (placement.providerKey === 'torox') {
-            if (!provider.appId || !provider.secretKey) {
-                return res.status(400).json({ success: false, error: 'Torox credentials not fully configured in admin panel' });
-            }
-            try {
-                const toroxRes = await fetch('https://api.wall.torox.io/v1/user-session', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        pub_id: provider.appId.trim(),
-                        secret: provider.secretKey.trim(),
-                        user_id: user._id.toString()
-                    })
-                });
-                const toroxData = await toroxRes.json();
-                if (toroxRes.ok && toroxData && toroxData.ok === true && toroxData.wall_url) {
-                    launchUrl = toroxData.wall_url;
-                } else {
-                    return res.status(502).json({ success: false, error: toroxData.message || toroxData.error || 'Torox session initialization failed' });
-                }
-            } catch (toroxErr) {
-                return res.status(502).json({ success: false, error: 'Network error connecting to Torox session API' });
-            }
+            // Torox fails closed in the new placement system until secure reuse of existing session flow is implemented.
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Torox launch is currently restricted for this placement. Please use the main Offerwall page.' 
+            });
         } else {
             // Generic provider URL construction
             if (!provider.iframeUrlTemplate) {
