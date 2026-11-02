@@ -220,6 +220,14 @@ export const launchProviderPlacement = async (req, res) => {
         // 4. Generate Validated Provider Session
         let launchUrl = '';
 
+        // Verification Checks (Email / WhatsApp)
+        if (settings.emailVerificationRequired === true && !user.isEmailVerified) {
+            return res.status(403).json({ success: false, error: 'Email verification is required to launch this provider' });
+        }
+        if (settings.whatsappVerificationRequired === true && !user.isWhatsappVerified) {
+            return res.status(403).json({ success: false, error: 'WhatsApp verification is required to launch this provider' });
+        }
+
         if (placement.providerKey === 'theoremreach') {
             const trResult = constructTheoremReachEntryUrl(provider, user._id.toString());
             if (trResult.url) {
@@ -256,6 +264,37 @@ export const launchProviderPlacement = async (req, res) => {
 
         if (!launchUrl) {
             return res.status(400).json({ success: false, error: 'Failed to construct provider launch URL' });
+        }
+
+        // Strict URL Validation: Must be HTTPS and from a trusted provider domain
+        try {
+            const parsedUrl = new URL(launchUrl);
+            if (parsedUrl.protocol !== 'https:') {
+                return res.status(403).json({ success: false, error: 'Insecure launch URL rejected. HTTPS is mandatory.' });
+            }
+
+            const trustedHosts = [
+                'offers.cpx-research.com',
+                'cpx-research.com',
+                'theoremreach.com',
+                'wannads.com',
+                'monlix.com',
+                'lootably.com',
+                'bitlabs.ai',
+                'revlum.com'
+            ];
+
+            const host = parsedUrl.hostname.toLowerCase();
+            const isTrusted = trustedHosts.some(trusted => host === trusted || host.endsWith('.' + trusted));
+            
+            if (!isTrusted) {
+                return res.status(403).json({ 
+                    success: false, 
+                    error: `Untrusted provider domain (${host}) rejected for dynamic placement launch.` 
+                });
+            }
+        } catch (err) {
+            return res.status(400).json({ success: false, error: 'Malformed launch URL detected' });
         }
 
         return res.status(200).json({
@@ -365,6 +404,12 @@ export const createAdminPlacement = async (req, res) => {
             return res.status(400).json({ success: false, error: `Sub-tab '${subTabId}' does not exist under parent tab '${parentTabId}'` });
         }
 
+        // Validate rolloutPercentage is finite and within range
+        const rolloutNum = Number(rolloutPercentage);
+        if (rolloutPercentage !== undefined && (!Number.isFinite(rolloutNum) || rolloutNum < 0 || rolloutNum > 100)) {
+            return res.status(400).json({ success: false, error: 'Rollout percentage must be a finite number between 0 and 100' });
+        }
+
         const newPlacementData = {
             providerKey: String(providerKey).toLowerCase().trim(),
             parentTabId: String(parentTabId).trim(),
@@ -379,7 +424,7 @@ export const createAdminPlacement = async (req, res) => {
             testUserIds: Array.isArray(testUserIds) ? testUserIds.filter(id => mongoose.isValidObjectId(id)) : [],
             allowedCountries: Array.isArray(allowedCountries) ? allowedCountries.map(c => String(c).trim().toUpperCase()).filter(Boolean) : [],
             excludedCountries: Array.isArray(excludedCountries) ? excludedCountries.map(c => String(c).trim().toUpperCase()).filter(Boolean) : [],
-            rolloutPercentage: rolloutPercentage !== undefined ? Math.min(100, Math.max(0, Number(rolloutPercentage))) : 100
+            rolloutPercentage: rolloutPercentage !== undefined ? rolloutNum : 100
         };
 
         const created = await ProviderPlacement.create(newPlacementData);
@@ -430,7 +475,11 @@ export const updateAdminPlacement = async (req, res) => {
         for (const field of allowedFields) {
             if (req.body[field] !== undefined) {
                 if (field === 'rolloutPercentage') {
-                    updates.rolloutPercentage = Math.min(100, Math.max(0, Number(req.body.rolloutPercentage)));
+                    const rolloutNum = Number(req.body.rolloutPercentage);
+                    if (!Number.isFinite(rolloutNum) || rolloutNum < 0 || rolloutNum > 100) {
+                        return res.status(400).json({ success: false, error: 'Rollout percentage must be a finite number between 0 and 100' });
+                    }
+                    updates.rolloutPercentage = rolloutNum;
                 } else if (field === 'allowedCountries' || field === 'excludedCountries') {
                     updates[field] = Array.isArray(req.body[field])
                         ? req.body[field].map(c => String(c).trim().toUpperCase()).filter(Boolean)
