@@ -2182,7 +2182,12 @@ export const updateOfferwallProvider = async (req, res) => {
             return res.status(404).json({ success: false, error: `Provider '${providerKey}' not found` });
         }
 
-        res.status(200).json({ success: true, data: provider });
+        const responseData = provider.toObject();
+        if (responseData.apiKey) responseData.apiKey = '••••••••';
+        if (responseData.secretKey) responseData.secretKey = '••••••••';
+        if (responseData.postbackKey) responseData.postbackKey = '••••••••';
+
+        res.status(200).json({ success: true, data: responseData });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
