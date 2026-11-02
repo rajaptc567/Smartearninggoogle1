@@ -57,7 +57,7 @@ export const getAvailablePlacements = async (req, res) => {
             ? { id: 'available_jobs', enabled: true, subTabs: [] }
             : customTabs.find(t => t.id === parentTabId || (parentTabId === 'other_tasks' && t.id === 'other_tasks'));
 
-        if (!targetMainTab || targetMainTab.enabled === false) {
+        if (!targetMainTab || targetMainTab.enabled === false || targetMainTab.isHiddenInNav === true) {
             return res.status(200).json({ success: true, count: 0, data: [] });
         }
 
@@ -71,7 +71,7 @@ export const getAvailablePlacements = async (req, res) => {
 
         // Build active sub-tabs map
         const activeSubTabs = Array.isArray(targetMainTab.subTabs)
-            ? targetMainTab.subTabs.filter(st => st && st.enabled !== false)
+            ? targetMainTab.subTabs.filter(st => st && st.enabled !== false && st.isHiddenInNav !== true)
             : [];
         const activeSubTabIds = activeSubTabs.map(st => st.id);
 
@@ -203,8 +203,8 @@ export const launchProviderPlacement = async (req, res) => {
         // Only validate sub-tab if it was configured for this placement
         if (placement.subTabId) {
             const subTab = Array.isArray(mainTab.subTabs) ? mainTab.subTabs.find(st => st.id === placement.subTabId) : null;
-            if (!subTab || subTab.enabled === false) {
-                return res.status(400).json({ success: false, error: 'Sub-tab is disabled in system settings' });
+            if (!subTab || subTab.enabled === false || subTab.isHiddenInNav === true) {
+                return res.status(400).json({ success: false, error: 'Sub-tab is disabled or hidden in system settings' });
             }
         }
 

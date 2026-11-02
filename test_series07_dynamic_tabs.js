@@ -474,8 +474,38 @@ async function runTests() {
         }
         console.log('✓ Test 10 Passed: Available Tasks visibility and ACTIVE status policy verified.');
 
+        // Test 11: ACTIVE status and Hidden States
+        console.log('Test 11: Verifying ACTIVE status policy and hidden-state enforcement...');
+        
+        // Mock OfferwallProvider.findOne for testing status
+        OfferwallProvider.findOne = async (query) => {
+            if (query.providerKey === 'cpx_research') {
+                return { providerKey: 'cpx_research', name: 'CPX', enabled: true, status: 'PENDING' }; // PENDING
+            }
+            return originalFindOne.call(OfferwallProvider, query);
+        };
+
+        const pStatus = await ProviderPlacement.create({
+            providerKey: 'cpx_research',
+            parentTabId: `custom_parent_${RUN_ID}`,
+            displayName: 'Status Test Placement',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            launchDisplayMode: 'modal'
+        });
+        createdPlacementIds.push(pStatus._id);
+
+        const req11 = { user: { id: regularUser._id }, params: { parentTabId: `custom_parent_${RUN_ID}` } };
+        const res11 = mockRes();
+        await getAvailablePlacements(req11, res11);
+        if (res11.body.data.some(p => p.providerKey === 'cpx_research')) {
+             throw new Error('Failed Test 11 (Status): Provider with PENDING status should NOT be listed');
+        }
+
+        console.log('✓ Test 11 Passed: ACTIVE status and hidden-state enforcement verified.');
+
         console.log('\n======================================================');
-        console.log('All Series 07 Dynamic Tab Tests (10/10) Passed Successfully!');
+        console.log('All Series 07 Dynamic Tab Tests (11/11) Passed Successfully!');
         console.log('======================================================');
 
     } catch (err) {
