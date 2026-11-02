@@ -35,6 +35,7 @@ import userTaskRoutes from './routes/userTaskRoutes.js';
 import bulkPopupRoutes from './routes/bulkPopupRoutes.js';
 import postbackRoutes from './routes/postbackRoutes.js';
 import adminSurveyTemplateRoutes from './routes/adminSurveyTemplateRoutes.js';
+import providerPlacementRoutes from './routes/providerPlacementRoutes.js';
 import { seedVerifiedNetworks } from './controllers/postbackController.js';
 
 // Import password reset actions directly for backward compatibility
@@ -277,6 +278,7 @@ app.use('/api/v1/user-tasks', userTaskRoutes);
 app.use('/api/v1/admin-survey-templates', adminSurveyTemplateRoutes);
 app.use('/api/v1/bulk-popups', bulkPopupRoutes);
 app.use('/api/v1/postbacks', postbackRoutes);
+app.use('/api/v1/provider-placements', providerPlacementRoutes);
 
 // Explicit 404 handler for unmatched API routes (Named wildcard compatible with Express 5 / path-to-regexp)
 app.all('/api/*path', (req, res) => {

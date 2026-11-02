@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
 import { getHeaders } from '../../services/api';
+import { ProviderPlacementManager } from './ProviderPlacementManager';
 
 interface OfferwallProvider {
     _id: string;
@@ -75,7 +76,7 @@ export const AdminOfferwalls: React.FC = () => {
 
     const [providers, setProviders] = useState<OfferwallProvider[]>([]);
     const [logs, setLogs] = useState<PostbackLog[]>([]);
-    const [activeTab, setActiveTab] = useState<'networks' | 'logs' | 'simulator' | 'matrix'>('networks');
+    const [activeTab, setActiveTab] = useState<'networks' | 'logs' | 'simulator' | 'matrix' | 'placements'>('networks');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [editingProvider, setEditingProvider] = useState<OfferwallProvider | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -294,7 +295,22 @@ export const AdminOfferwalls: React.FC = () => {
                 >
                     🧪 Webhook Simulator & Test Bench
                 </button>
+                <button
+                    onClick={() => setActiveTab('placements')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                        activeTab === 'placements'
+                            ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30 font-extrabold'
+                            : 'text-amber-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                >
+                    📍 Provider Placement Manager
+                </button>
             </div>
+
+            {/* TAB 5: PROVIDER PLACEMENT MANAGER */}
+            {activeTab === 'placements' && (
+                <ProviderPlacementManager />
+            )}
 
             {/* TAB 1: NETWORKS CONFIGURATION */}
             {activeTab === 'networks' && (
