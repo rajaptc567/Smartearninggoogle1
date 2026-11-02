@@ -157,6 +157,9 @@ export const AdminOfferwalls: React.FC = () => {
             if (payload.apiKey !== undefined && (!payload.apiKey.trim() || payload.apiKey.trim() === '••••••••' || /^•+$/.test(payload.apiKey.trim()))) {
                 delete payload.apiKey;
             }
+            if (payload.postbackKey !== undefined && (!payload.postbackKey.trim() || payload.postbackKey.trim() === '••••••••' || /^•+$/.test(payload.postbackKey.trim()))) {
+                delete payload.postbackKey;
+            }
 
             const res = await fetch(`/api/v1/postbacks/providers/${editingProvider.providerKey}`, {
                 method: 'PUT',

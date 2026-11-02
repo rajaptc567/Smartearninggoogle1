@@ -2126,6 +2126,14 @@ export const updateOfferwallProvider = async (req, res) => {
                 sanitizedUpdates.apiKey = trimmedApiKey;
             }
         }
+        if (sanitizedUpdates.postbackKey !== undefined) {
+            const trimmedPostback = String(sanitizedUpdates.postbackKey).trim();
+            if (!trimmedPostback || trimmedPostback === '••••••••' || /^•+$/.test(trimmedPostback)) {
+                delete sanitizedUpdates.postbackKey;
+            } else {
+                sanitizedUpdates.postbackKey = trimmedPostback;
+            }
+        }
 
         if (sanitizedUpdates.customConfig !== undefined && typeof sanitizedUpdates.customConfig === 'object') {
             const existing = await OfferwallProvider.findOne({ providerKey: providerKey.toLowerCase() });
