@@ -83,6 +83,8 @@ export const getAvailablePlacements = async (req, res) => {
             availableTasksVisibility: true,
             $or: [
                 { subTabId: '' },
+                { subTabId: null },
+                { subTabId: { $exists: false } },
                 { subTabId: { $in: activeSubTabIds } }
             ]
         }).lean();
@@ -96,7 +98,7 @@ export const getAvailablePlacements = async (req, res) => {
         const providers = await OfferwallProvider.find({
             providerKey: { $in: providerKeys },
             enabled: true,
-            status: { $nin: ['DISABLED', 'SUSPENDED', 'NOT_STARTED'] }
+            status: 'ACTIVE'
         }).select('providerKey name category group status enabled badge icon description').lean();
 
         const providerMap = new Map(providers.map(p => [p.providerKey, p]));
@@ -217,12 +219,8 @@ export const launchProviderPlacement = async (req, res) => {
 
         // 3. Verify Operational OfferwallProvider State
         const provider = await OfferwallProvider.findOne({ providerKey: placement.providerKey });
-        if (!provider || provider.enabled !== true) {
-            return res.status(400).json({ success: false, error: 'Offerwall provider is operationally disabled' });
-        }
-
-        if (provider.status !== 'ACTIVE') {
-            return res.status(400).json({ success: false, error: `Provider is currently unavailable (Status: ${provider.status})` });
+        if (!provider || provider.enabled !== true || provider.status !== 'ACTIVE') {
+            return res.status(400).json({ success: false, error: 'Offerwall provider is operationally disabled or not active' });
         }
 
         // 4. Generate Validated Provider Session

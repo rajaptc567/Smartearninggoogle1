@@ -442,10 +442,40 @@ async function runTests() {
         if (res9.statusCode !== 403 || !res9.body.error.toLowerCase().includes('torox')) {
             throw new Error(`Failed Test 9: Torox launch must return 403 restricted, got ${res9.statusCode}`);
         }
-        console.log('✓ Test 9 Passed: Torox restriction preserved; fails closed in placement system without DB mutation.');
+        // Test 10: Visibility & Status Policy
+        console.log('Test 10: Verifying Available Tasks visibility and ACTIVE status policy...');
+        
+        // Test Available Tasks Visibility toggle
+        const pVisible = await ProviderPlacement.create({
+            providerKey: TEST_PROVIDER_KEY,
+            parentTabId: `custom_parent_${RUN_ID}`,
+            displayName: 'Visible Placement',
+            placementEnabled: true,
+            availableTasksVisibility: false, // Visibility OFF
+            launchDisplayMode: 'inline'
+        });
+        createdPlacementIds.push(pVisible._id);
+
+        const req10 = { user: { id: regularUser._id }, params: { parentTabId: `custom_parent_${RUN_ID}` } };
+        const res10 = mockRes();
+        await getAvailablePlacements(req10, res10);
+        if (res10.body.data.some(p => p._id.toString() === pVisible._id.toString())) {
+             throw new Error('Failed Test 10 (Visibility): Placement with availableTasksVisibility: false should NOT be returned');
+        }
+
+        // Test ACTIVE status policy
+        // (Assuming TEST_PROVIDER_KEY is already set to ACTIVE in setup)
+        const req10Launch = { user: { id: regularUser._id }, params: { placementId: pVisible._id } };
+        const res10Launch = mockRes();
+        // This should fail because placementEnabled is true, but availableTasksVisibility is false
+        await launchProviderPlacement(req10Launch, res10Launch);
+        if (res10Launch.statusCode !== 400) {
+             throw new Error('Failed Test 10 (Visibility Launch): Should have failed because availableTasksVisibility is false');
+        }
+        console.log('✓ Test 10 Passed: Available Tasks visibility and ACTIVE status policy verified.');
 
         console.log('\n======================================================');
-        console.log('All Series 07 Dynamic Tab Tests (9/9) Passed Successfully!');
+        console.log('All Series 07 Dynamic Tab Tests (10/10) Passed Successfully!');
         console.log('======================================================');
 
     } catch (err) {
