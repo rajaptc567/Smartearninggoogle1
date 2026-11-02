@@ -2002,7 +2002,14 @@ export const getOfferwallProviders = async (req, res) => {
 
         if (isAdmin) {
             const providers = await OfferwallProvider.find().sort({ category: 1, name: 1 });
-            return res.status(200).json({ success: true, count: providers.length, data: providers });
+            const masked = providers.map(p => {
+                const obj = p.toObject();
+                if (obj.apiKey) obj.apiKey = '••••••••';
+                if (obj.secretKey) obj.secretKey = '••••••••';
+                if (obj.postbackKey) obj.postbackKey = '••••••••';
+                return obj;
+            });
+            return res.status(200).json({ success: true, count: masked.length, data: masked });
         }
 
         // Public / Worker View: Only enabled, non-disabled, non-suspended providers with SAFE projection
