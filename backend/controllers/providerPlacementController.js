@@ -514,6 +514,37 @@ export const updateAdminPlacement = async (req, res) => {
                     updates[field] = Array.isArray(req.body[field])
                         ? req.body[field].filter(id => mongoose.isValidObjectId(id))
                         : [];
+                } else if (field === 'subTabId') {
+                    const candidateSubTabId = req.body.subTabId !== undefined && req.body.subTabId !== null
+                        ? String(req.body.subTabId).trim()
+                        : '';
+                    if (candidateSubTabId !== '') {
+                        const settings = await Setting.getSettings();
+                        const customTabs = Array.isArray(settings.customEarnTabs) ? settings.customEarnTabs : [];
+                        const parentTab = existing.parentTabId === 'available_jobs'
+                            ? { id: 'available_jobs', enabled: true, subTabs: [] }
+                            : customTabs.find(t => t.id === existing.parentTabId);
+
+                        if (!parentTab) {
+                            return res.status(400).json({
+                                success: false,
+                                error: `Parent tab '${existing.parentTabId}' is not configured in settings`
+                            });
+                        }
+
+                        const subTabExists = Array.isArray(parentTab.subTabs) && parentTab.subTabs.some(st => st && st.id === candidateSubTabId);
+                        if (!subTabExists) {
+                            return res.status(400).json({
+                                success: false,
+                                error: `Sub-tab '${candidateSubTabId}' does not exist under parent tab '${existing.parentTabId}'`
+                            });
+                        }
+                    }
+                    updates.subTabId = candidateSubTabId;
+                } else if (field === 'launchDisplayMode') {
+                    updates.launchDisplayMode = ['inline', 'modal'].includes(req.body.launchDisplayMode)
+                        ? req.body.launchDisplayMode
+                        : 'modal';
                 } else {
                     updates[field] = req.body[field];
                 }
@@ -533,6 +564,12 @@ export const updateAdminPlacement = async (req, res) => {
 
         return res.status(200).json({ success: true, data: updated });
     } catch (err) {
+        if (err.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                error: 'A placement for this provider already exists in the selected parent tab and sub-tab location'
+            });
+        }
         return res.status(400).json({ success: false, error: err.message });
     }
 };

@@ -81,6 +81,26 @@ export const ProviderPlacementManager: React.FC = () => {
         return [{ id: '', name: 'Main Tab — No Sub-Tab', enabled: true }, ...subs];
     }, [availableMainTabs, parentTabId]);
 
+    const editAvailableSubTabs = useMemo(() => {
+        if (!editingPlacement) return [];
+        const found = availableMainTabs.find(t => t.id === editingPlacement.parentTabId);
+        const subs = Array.isArray(found?.subTabs) ? [...found!.subTabs] : [];
+        
+        // Base list with Main Tab — No Sub-Tab first
+        const list = [{ id: '', name: 'Main Tab — No Sub-Tab', enabled: true }, ...subs];
+
+        // Ensure currently stored subTabId is preserved even if it was unlisted/legacy
+        if (editingPlacement.subTabId && !list.some(s => s.id === editingPlacement.subTabId)) {
+            list.push({
+                id: editingPlacement.subTabId,
+                name: `${editingPlacement.subTabId} (Current)`,
+                enabled: false
+            });
+        }
+
+        return list;
+    }, [availableMainTabs, editingPlacement?.parentTabId, editingPlacement?.subTabId]);
+
     useEffect(() => {
         // Reset subTabId if it's no longer valid for the selected parent
         if (availableSubTabs.length > 0 && !availableSubTabs.some(s => s.id === subTabId)) {
@@ -760,7 +780,7 @@ export const ProviderPlacementManager: React.FC = () => {
                                         onChange={(e) => setEditingPlacement({ ...editingPlacement, subTabId: e.target.value })}
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
                                     >
-                                        {availableSubTabs.map(st => (
+                                        {editAvailableSubTabs.map(st => (
                                             <option key={st.id} value={st.id}>
                                                 {st.name} {st.id ? `(${st.id})` : ''} {st.enabled ? '🟢' : '🔴'}
                                             </option>

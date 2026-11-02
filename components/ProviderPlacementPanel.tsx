@@ -39,6 +39,24 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [fetchError, setFetchError] = useState<string | null>(null);
 
+    // Iframe embed loading & timeout state
+    const [iframeLoaded, setIframeLoaded] = useState<boolean>(false);
+    const [iframeTimedOut, setIframeTimedOut] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (!activeLaunchSession) {
+            setIframeLoaded(false);
+            setIframeTimedOut(false);
+            return;
+        }
+        setIframeLoaded(false);
+        setIframeTimedOut(false);
+        const timer = setTimeout(() => {
+            setIframeTimedOut(true);
+        }, 10000);
+        return () => clearTimeout(timer);
+    }, [activeLaunchSession?.launchUrl]);
+
     const loadPlacements = async () => {
         if (!activeTabId) return;
         setIsLoading(true);
@@ -170,11 +188,50 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
                 </div>
 
                 <div className="relative w-full h-[700px] bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                    {!iframeLoaded && !iframeTimedOut && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/60 pointer-events-none z-0">
+                            <RefreshIcon className="w-6 h-6 animate-spin text-amber-400" />
+                            <span className="text-xs text-slate-400 mt-2 font-medium">Connecting to provider...</span>
+                        </div>
+                    )}
+
+                    {iframeTimedOut && !iframeLoaded && (
+                        <div className="absolute inset-0 z-10 bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in">
+                            <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl">
+                                <AlertIcon className="w-8 h-8" />
+                            </div>
+                            <div className="max-w-md space-y-2">
+                                <h4 className="text-sm font-black text-white">Embed Loading Notice</h4>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    The offerwall session did not finish loading within the expected time. Some external providers may restrict embedded display in frames.
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                                <button
+                                    onClick={() => setActiveLaunchSession(null)}
+                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-all"
+                                >
+                                    Return to Placements
+                                </button>
+                                <a
+                                    href={activeLaunchSession.launchUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase rounded-xl transition-all flex items-center gap-1.5"
+                                >
+                                    <span>Open in New Tab</span>
+                                    <LaunchIcon className="w-3.5 h-3.5" />
+                                </a>
+                            </div>
+                        </div>
+                    )}
+
                     <iframe
                         src={activeLaunchSession.launchUrl}
                         title={activeLaunchSession.displayName}
                         className="w-full h-full border-0"
                         allow="fullscreen; camera; microphone"
+                        onLoad={() => setIframeLoaded(true)}
                     />
                 </div>
 
@@ -289,11 +346,50 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
 
                         {/* Iframe View */}
                         <div className="relative w-full h-[600px] bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-inner">
+                            {!iframeLoaded && !iframeTimedOut && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/60 pointer-events-none z-0">
+                                    <RefreshIcon className="w-6 h-6 animate-spin text-amber-400" />
+                                    <span className="text-xs text-slate-400 mt-2 font-medium">Connecting to provider...</span>
+                                </div>
+                            )}
+
+                            {iframeTimedOut && !iframeLoaded && (
+                                <div className="absolute inset-0 z-10 bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in">
+                                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl">
+                                        <AlertIcon className="w-8 h-8" />
+                                    </div>
+                                    <div className="max-w-md space-y-2">
+                                        <h4 className="text-sm font-black text-white">Embed Loading Notice</h4>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            The offerwall session did not finish loading within the expected time. Some external providers may restrict embedded display in frames.
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                                        <button
+                                            onClick={() => setActiveLaunchSession(null)}
+                                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-all"
+                                        >
+                                            Return to Placements
+                                        </button>
+                                        <a
+                                            href={activeLaunchSession.launchUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase rounded-xl transition-all flex items-center gap-1.5"
+                                        >
+                                            <span>Open in New Tab</span>
+                                            <LaunchIcon className="w-3.5 h-3.5" />
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
+
                             <iframe
                                 src={activeLaunchSession.launchUrl}
                                 title={activeLaunchSession.displayName}
                                 className="w-full h-full border-0"
                                 allow="fullscreen; camera; microphone"
+                                onLoad={() => setIframeLoaded(true)}
                             />
                         </div>
 
