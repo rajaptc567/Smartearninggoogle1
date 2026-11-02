@@ -46,6 +46,8 @@ export const ProviderPlacementManager: React.FC = () => {
     const [allowedCountriesInput, setAllowedCountriesInput] = useState<string>('');
     const [excludedCountriesInput, setExcludedCountriesInput] = useState<string>('');
     const [rolloutPercentage, setRolloutPercentage] = useState<number>(100);
+    const [offerwallVisibility, setOfferwallVisibility] = useState<boolean>(false);
+    const [availableTasksVisibility, setAvailableTasksVisibility] = useState<boolean>(false);
 
     // Eligibility Preview State
     const [previewUserId, setPreviewUserId] = useState<string>('');
@@ -178,7 +180,9 @@ export const ProviderPlacementManager: React.FC = () => {
                 testUserIds,
                 allowedCountries,
                 excludedCountries,
-                rolloutPercentage
+                rolloutPercentage,
+                offerwallVisibility,
+                availableTasksVisibility
             });
 
             setSuccessMessage(`✅ Placement created for '${created.displayName}' (Default State: OFF).`);
@@ -242,7 +246,9 @@ export const ProviderPlacementManager: React.FC = () => {
                 excludedCountries: editingPlacement.excludedCountries,
                 rolloutPercentage: editingPlacement.rolloutPercentage,
                 launchDisplayMode: editingPlacement.launchDisplayMode,
-                subTabId: editingPlacement.subTabId
+                subTabId: editingPlacement.subTabId,
+                offerwallVisibility: editingPlacement.offerwallVisibility,
+                availableTasksVisibility: editingPlacement.availableTasksVisibility
             });
 
             setSuccessMessage(`Placement '${updated.displayName}' updated successfully.`);
@@ -624,6 +630,16 @@ export const ProviderPlacementManager: React.FC = () => {
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold font-mono text-emerald-400"
                                     />
                                 </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                                    <input type="checkbox" checked={offerwallVisibility} onChange={(e) => setOfferwallVisibility(e.target.checked)} className="rounded accent-amber-500" />
+                                    Offerwall Visibility
+                                </label>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                                    <input type="checkbox" checked={availableTasksVisibility} onChange={(e) => setAvailableTasksVisibility(e.target.checked)} className="rounded accent-amber-500" />
+                                    Available Tasks Visibility
+                                </label>
                             </div>
 
                             {/* User Selection Dropdown when selected_users or test_users is active */}

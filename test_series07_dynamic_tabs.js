@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import ProviderPlacement from './backend/models/ProviderPlacement.js';
+import ProviderPlacementAuditLog from './backend/models/ProviderPlacementAuditLog.js';
 import User from './backend/models/User.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
 import Setting from './backend/models/Setting.js';
@@ -52,10 +53,20 @@ function validateTestDatabaseIsolation() {
 
     // Check if the target database matches known production patterns or the primary MONGO_URI
     const forbiddenProdNames = ['smartearning_db', 'smartearning', 'production', 'prod', 'smartexn_prod', 'smartexn'];
-
+    
+    // Additional host/cluster isolation check
     if (process.env.MONGO_URI) {
         try {
             const prodParsed = new URL(process.env.MONGO_URI);
+            const prodHost = prodParsed.hostname;
+            const testHost = new URL(testUri).hostname;
+            if (prodHost === testHost) {
+                 console.error('\n======================================================================');
+                 console.error('FATAL: TEST_MONGO_URI targets the same host/cluster as MONGO_URI.');
+                 console.error('======================================================================\n');
+                 process.exit(1);
+            }
+            
             const prodDbName = (prodParsed.pathname || '').replace(/^\//, '').split('?')[0];
             if (prodDbName) {
                 forbiddenProdNames.push(prodDbName.toLowerCase());
@@ -450,8 +461,9 @@ async function runTests() {
 
             // Delete ONLY records specifically created during this test run
             if (createdPlacementIds.length > 0) {
+                await ProviderPlacementAuditLog.deleteMany({ placementId: { $in: createdPlacementIds } });
                 const delPlacements = await ProviderPlacement.deleteMany({ _id: { $in: createdPlacementIds } });
-                console.log(`✓ Cleaned up ${delPlacements.deletedCount} test-owned placements.`);
+                console.log(`✓ Cleaned up ${delPlacements.deletedCount} test-owned placements and their audit logs.`);
             }
             if (createdUserIds.length > 0) {
                 const delUsers = await User.deleteMany({ _id: { $in: createdUserIds } });

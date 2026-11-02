@@ -221,12 +221,8 @@ export const launchProviderPlacement = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Offerwall provider is operationally disabled' });
         }
 
-        if (['DISABLED', 'SUSPENDED', 'NOT_STARTED'].includes(provider.status)) {
+        if (provider.status !== 'ACTIVE') {
             return res.status(400).json({ success: false, error: `Provider is currently unavailable (Status: ${provider.status})` });
-        }
-
-        if (placement.providerKey === 'cpx_research' && provider.status !== 'ACTIVE') {
-            return res.status(400).json({ success: false, error: 'CPX Research requires active provider verification' });
         }
 
         // 4. Generate Validated Provider Session

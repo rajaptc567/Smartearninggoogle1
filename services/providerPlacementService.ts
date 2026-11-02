@@ -19,6 +19,8 @@ export interface ProviderPlacement {
     excludedCountries?: string[];
     rolloutPercentage: number;
     rolloutSalt?: string;
+    offerwallVisibility: boolean;
+    availableTasksVisibility: boolean;
     providerInfo?: {
         name: string;
         category: string;
