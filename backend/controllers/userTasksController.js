@@ -195,6 +195,25 @@ const executeWithOptionalTransaction = async (workFn) => {
     }
 };
 
+const toSafeUser = (userDoc) => {
+    if (!userDoc) return null;
+    const raw = typeof userDoc.toObject === 'function' ? userDoc.toObject() : { ...userDoc };
+    delete raw.password;
+    delete raw.salt;
+    delete raw.passwordResetToken;
+    delete raw.passwordResetOtp;
+    delete raw.passwordResetExpires;
+    delete raw.emailVerificationOtpHash;
+    delete raw.whatsappVerificationOtpHash;
+    delete raw.emailVerificationExpires;
+    delete raw.emailVerificationTokenHash;
+    delete raw.emailVerificationTokenExpires;
+    delete raw.whatsappVerificationTokenHash;
+    delete raw.whatsappVerificationTokenExpires;
+    delete raw.__v;
+    return raw;
+};
+
 const toWorkerSafeUserTask = (task, meta = {}) => {
     if (!task) return task;
     const safeTask = {};
@@ -1206,7 +1225,8 @@ export const createUserTask = async (req, res) => {
                     });
                 }
                 const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
-                return res.status(200).json({ success: true, data: { task: existingTask, user, settings: latestSettings, transaction: existingTx } });
+                const freshUser = (await User.findById(effectiveUserId)) || user;
+                return res.status(200).json({ success: true, data: { task: existingTask, user: toSafeUser(freshUser), settings: latestSettings, transaction: existingTx } });
             }
         }
 
@@ -1277,10 +1297,11 @@ export const createUserTask = async (req, res) => {
             let sourceFromTaskEarnings = 0;
             let sourceFromRefunds = 0;
             let deductedFromTaskWallet = false;
+            let userInTx = user;
 
             if (!isCreatedByAdmin) {
                 // Re-fetch user in transaction to ensure balance is strictly accurate and locked
-                const userInTx = await User.findById(user._id).session(session || null);
+                userInTx = await User.findById(user._id).session(session || null);
                 if (!userInTx) {
                     throw new Error('User not found.');
                 }
@@ -1537,7 +1558,7 @@ export const createUserTask = async (req, res) => {
                 }], session ? { session } : {});
             }
 
-            return { task, transaction: tx };
+            return { task, transaction: tx, user: userInTx };
         });
 
         if (txResult.collision) {
@@ -1586,12 +1607,13 @@ export const createUserTask = async (req, res) => {
             }
             global.appDataVersion = Date.now();
             const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
+            const freshUser = (await User.findById(effectiveUserId)) || user;
             return res.status(200).json({
                 success: true,
                 message: 'Campaign already created (idempotency key matched).',
                 data: {
                     task: txResult.task || {},
-                    user,
+                    user: toSafeUser(freshUser),
                     settings: latestSettings,
                     transaction: txResult.transaction
                 }
@@ -1666,7 +1688,8 @@ export const createUserTask = async (req, res) => {
 
         global.appDataVersion = Date.now();
         const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
-        res.status(201).json({ success: true, data: { task: createdTask, user, settings: latestSettings } });
+        const persistedUser = (await User.findById(effectiveUserId)) || txResult.user || user;
+        res.status(201).json({ success: true, data: { task: createdTask, user: toSafeUser(persistedUser), settings: latestSettings } });
     } catch (err) {
         if (createdTransaction) {
             try {
@@ -1723,12 +1746,13 @@ export const createUserTask = async (req, res) => {
                     });
                 }
                 const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
+                const freshUser = (await User.findById(effectiveUserId)) || user;
                 return res.status(200).json({
                     success: true,
                     message: 'Campaign already created (idempotent concurrent resolution).',
                     data: {
                         task: existingTask,
-                        user,
+                        user: toSafeUser(freshUser),
                         settings: latestSettings,
                         transaction: existingTx
                     }
