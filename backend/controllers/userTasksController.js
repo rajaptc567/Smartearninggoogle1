@@ -407,18 +407,22 @@ const claimTaskCompletionSlot = async (taskId, workerId, allowRecompletion = fal
                         try {
                             const adminUsers = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
                             const alertSubject = 'Survey Campaign Low Balance Warning';
-                            const alertMessage = `Survey campaign "${updatedTask.title}" has reached a low balance of $${updatedTask.campaignAvailableBalanceUSD.toFixed(2)} USD (at/below ${thresholdPercent}% of $${totalFunded.toFixed(2)} USD total budget). Please add campaign funds to keep it running.`;
+                            const alertMessage = `Survey campaign "${updatedTask.title}" (#${updatedTask._id}) has reached a low balance of $${updatedTask.campaignAvailableBalanceUSD.toFixed(2)} USD (at/below ${thresholdPercent}% of $${totalFunded.toFixed(2)} USD total budget). Please add campaign funds to keep it running.`;
                             
                             let deliveredCount = 0;
-                            const titleRegex = (updatedTask.title || '').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+                            let hasFailure = false;
+                            const taskIdStr = String(updatedTask._id);
+
                             for (const admin of adminUsers) {
                                 try {
                                     const existingAlert = await Notification.findOne({
                                         userId: admin._id,
                                         subject: alertSubject,
-                                        message: { $regex: titleRegex }
+                                        message: { $regex: taskIdStr }
                                     });
-                                    if (!existingAlert) {
+                                    if (existingAlert) {
+                                        deliveredCount++;
+                                    } else {
                                         await Notification.create({
                                             userId: admin._id,
                                             senderType: 'System',
@@ -426,14 +430,15 @@ const claimTaskCompletionSlot = async (taskId, workerId, allowRecompletion = fal
                                             message: alertMessage,
                                             read: false
                                         });
+                                        deliveredCount++;
                                     }
-                                    deliveredCount++;
                                 } catch (createErr) {
+                                    hasFailure = true;
                                     console.error(`Warning: Failed to create low balance alert for user ${admin._id}:`, createErr.message);
                                 }
                             }
 
-                            if (deliveredCount > 0) {
+                            if (adminUsers.length > 0 && deliveredCount === adminUsers.length && !hasFailure) {
                                 await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { lowBalanceWarningSent: true } });
                                 updatedTask.lowBalanceWarningSent = true;
                             }

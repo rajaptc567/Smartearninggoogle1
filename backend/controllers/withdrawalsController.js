@@ -453,6 +453,7 @@ export const createWithdrawal = async (req, res) => {
             for (const admin of adminUsers) {
                 const existingAlert = await Notification.findOne({
                     userId: admin._id,
+                    subject: 'New Withdrawal Request',
                     message: { $regex: String(withdrawal._id) }
                 });
                 if (!existingAlert) {
