@@ -48,6 +48,7 @@ export const ProviderPlacementManager: React.FC = () => {
     const [rolloutPercentage, setRolloutPercentage] = useState<number>(100);
     const [offerwallVisibility, setOfferwallVisibility] = useState<boolean>(false);
     const [availableTasksVisibility, setAvailableTasksVisibility] = useState<boolean>(false);
+    const [trustedLaunchDomainsInput, setTrustedLaunchDomainsInput] = useState<string>('');
 
     // Eligibility Preview State
     const [previewUserId, setPreviewUserId] = useState<string>('');
@@ -162,7 +163,12 @@ export const ProviderPlacementManager: React.FC = () => {
 
             const excludedCountries = excludedCountriesInput
                 .split(',')
-                .map(s => s.trim().toUpperCase())
+                .map(s => s.trim().toLowerCase())
+                .filter(Boolean);
+
+            const trustedLaunchDomains = trustedLaunchDomainsInput
+                .split(',')
+                .map(s => s.trim().toLowerCase())
                 .filter(Boolean);
 
             const created = await createAdminPlacement({
@@ -182,7 +188,8 @@ export const ProviderPlacementManager: React.FC = () => {
                 excludedCountries,
                 rolloutPercentage,
                 offerwallVisibility,
-                availableTasksVisibility
+                availableTasksVisibility,
+                trustedLaunchDomains
             });
 
             setSuccessMessage(`✅ Placement created for '${created.displayName}' (Default State: OFF).`);
@@ -248,7 +255,8 @@ export const ProviderPlacementManager: React.FC = () => {
                 launchDisplayMode: editingPlacement.launchDisplayMode,
                 subTabId: editingPlacement.subTabId,
                 offerwallVisibility: editingPlacement.offerwallVisibility,
-                availableTasksVisibility: editingPlacement.availableTasksVisibility
+                availableTasksVisibility: editingPlacement.availableTasksVisibility,
+                trustedLaunchDomains: editingPlacement.trustedLaunchDomains
             });
 
             setSuccessMessage(`Placement '${updated.displayName}' updated successfully.`);
@@ -691,6 +699,18 @@ export const ProviderPlacementManager: React.FC = () => {
                                     />
                                 </div>
                             </div>
+
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Trusted Launch Domains (Comma-separated)</label>
+                                <input
+                                    type="text"
+                                    value={trustedLaunchDomainsInput}
+                                    onChange={(e) => setTrustedLaunchDomainsInput(e.target.value)}
+                                    placeholder="e.g. offerwall.com, surveys.net"
+                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold font-mono text-amber-400"
+                                />
+                                <p className="text-[10px] text-slate-400 mt-1">Required for domain-restricted launch validation. Use apex domains (e.g. "google.com" covers "maps.google.com").</p>
+                            </div>
                         </div>
 
                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
@@ -889,6 +909,21 @@ export const ProviderPlacementManager: React.FC = () => {
                                     <input type="checkbox" checked={editingPlacement.availableTasksVisibility || false} onChange={(e) => setEditingPlacement({...editingPlacement, availableTasksVisibility: e.target.checked})} className="rounded accent-amber-500" />
                                     Available Tasks Visibility
                                 </label>
+                            </div>
+
+                            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800">
+                                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Trusted Launch Domains (Comma-separated)</label>
+                                <input
+                                    type="text"
+                                    value={editingPlacement.trustedLaunchDomains?.join(', ') || ''}
+                                    onChange={(e) => {
+                                        const domains = e.target.value.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+                                        setEditingPlacement({ ...editingPlacement, trustedLaunchDomains: domains });
+                                    }}
+                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold font-mono text-amber-400"
+                                    placeholder="e.g. site1.com, site2.org"
+                                />
+                                <p className="text-[10px] text-slate-400 mt-1">Specify additional domains trusted to host this provider's content.</p>
                             </div>
 
                             {/* Preview Eligibility Test Box */}

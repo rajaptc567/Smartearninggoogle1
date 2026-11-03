@@ -21,6 +21,7 @@ export interface ProviderPlacement {
     rolloutSalt?: string;
     offerwallVisibility: boolean;
     availableTasksVisibility: boolean;
+    trustedLaunchDomains?: string[];
     providerInfo?: {
         name: string;
         category: string;

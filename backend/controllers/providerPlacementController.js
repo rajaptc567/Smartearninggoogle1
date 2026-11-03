@@ -296,7 +296,9 @@ export const launchProviderPlacement = async (req, res) => {
             ];
 
             const host = parsedUrl.hostname.toLowerCase();
-            const isTrusted = trustedHosts.some(trusted => host === trusted || host.endsWith('.' + trusted));
+            const placementTrusted = Array.isArray(placement.trustedLaunchDomains) ? placement.trustedLaunchDomains : [];
+            const allTrusted = [...trustedHosts, ...placementTrusted];
+            const isTrusted = allTrusted.some(trusted => host === trusted || host.endsWith('.' + trusted));
             
             if (!isTrusted) {
                 return res.status(403).json({ 
@@ -446,7 +448,8 @@ export const createAdminPlacement = async (req, res) => {
             rolloutPercentage: rolloutPercentage !== undefined ? rolloutNum : 100,
             offerwallVisibility: Boolean(req.body.offerwallVisibility),
             availableTasksVisibility: Boolean(req.body.availableTasksVisibility),
-            launchDisplayMode: ['inline', 'modal'].includes(launchDisplayMode) ? launchDisplayMode : 'modal'
+            launchDisplayMode: ['inline', 'modal'].includes(launchDisplayMode) ? launchDisplayMode : 'modal',
+            trustedLaunchDomains: Array.isArray(req.body.trustedLaunchDomains) ? req.body.trustedLaunchDomains.map(d => String(d).trim().toLowerCase()).filter(Boolean) : []
         };
 
         const created = await ProviderPlacement.create(newPlacementData);
@@ -491,7 +494,8 @@ export const updateAdminPlacement = async (req, res) => {
             'displayName', 'descriptionOverride', 'badgeOverride', 'displayOrder',
             'placementEnabled', 'targetingMode', 'selectedUserIds', 'testUserIds',
             'allowedCountries', 'excludedCountries', 'rolloutPercentage', 'rolloutSalt',
-            'launchDisplayMode', 'subTabId', 'offerwallVisibility', 'availableTasksVisibility'
+            'launchDisplayMode', 'subTabId', 'offerwallVisibility', 'availableTasksVisibility',
+            'trustedLaunchDomains'
         ];
 
         const updates = {};
@@ -510,6 +514,10 @@ export const updateAdminPlacement = async (req, res) => {
                 } else if (field === 'selectedUserIds' || field === 'testUserIds') {
                     updates[field] = Array.isArray(req.body[field])
                         ? req.body[field].filter(id => mongoose.isValidObjectId(id))
+                        : [];
+                } else if (field === 'trustedLaunchDomains') {
+                    updates[field] = Array.isArray(req.body[field])
+                        ? req.body[field].map(d => String(d).trim().toLowerCase()).filter(Boolean)
                         : [];
                 } else if (field === 'subTabId') {
                     const candidateSubTabId = req.body.subTabId !== undefined && req.body.subTabId !== null

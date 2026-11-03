@@ -31,7 +31,7 @@ export const UserDisputes: React.FC = () => {
     const [selectedModuleFilter, setSelectedModuleFilter] = useState<'All' | 'Work & Earn' | 'Investment' | 'Finance'>(
         isWorkAndEarnContext ? 'Work & Earn' : 'All'
     );
-    const [statusFilter, setStatusFilter] = useState<'All' | 'Open' | 'Processing' | 'Resolved' | 'Rejected'>('All');
+    const [statusFilter, setStatusFilter] = useState<'All' | 'Open' | 'Processing' | 'Resolved' | 'Closed'>('All');
     const [searchQuery, setSearchQuery] = useState('');
 
     // Creation Modal State
@@ -162,7 +162,7 @@ export const UserDisputes: React.FC = () => {
         } else if (moduleType === 'Investment') {
             // Return user's active/past investments or deposits
             if (disputeCategory.includes('Deposit') || disputeCategory.includes('Withdrawal')) {
-                return deposits.filter(d => d.userId === currentUser._id).map(d => ({
+                return deposits.filter(d => d.userId === currentUser._id && d.status === 'Rejected').map(d => ({
                     id: d._id,
                     label: `Deposit $${d.amount} ${d.currency} - ${new Date(d.date).toLocaleDateString()} (${d.status})`
                 }));
@@ -174,7 +174,7 @@ export const UserDisputes: React.FC = () => {
                         label: `Investment Plan: "${inv.planName}" - Invested $${inv.amount} (Daily ROI: ${inv.dailyReturn || inv.profitRate}%) - [${inv.status || 'Active'}]`
                     }));
                 }
-                return deposits.filter(d => d.userId === currentUser._id).map(d => ({
+                return deposits.filter(d => d.userId === currentUser._id && d.status === 'Rejected').map(d => ({
                     id: d._id,
                     label: `Deposit $${d.amount} ${d.currency} - ${new Date(d.date).toLocaleDateString()} (${d.status})`
                 }));
@@ -188,7 +188,7 @@ export const UserDisputes: React.FC = () => {
                 }));
             }
             return [
-                ...deposits.filter(d => d.userId === currentUser._id).map(d => ({ id: d._id, label: `Deposit $${d.amount} ${d.currency} (${d.status})` })),
+                ...deposits.filter(d => d.userId === currentUser._id && d.status === 'Rejected').map(d => ({ id: d._id, label: `Deposit $${d.amount} ${d.currency} (${d.status})` })),
                 ...withdrawals.filter(w => w.userId === currentUser._id).map(w => ({ id: w._id, label: `Withdrawal $${w.amount} ${w.currency} (${w.status})` }))
             ];
         }
@@ -376,7 +376,7 @@ export const UserDisputes: React.FC = () => {
                         <option value="Open">Open</option>
                         <option value="Processing">Under Review</option>
                         <option value="Resolved">Resolved</option>
-                        <option value="Rejected">Rejected</option>
+                        <option value="Closed">Closed</option>
                     </select>
                 </div>
             </div>

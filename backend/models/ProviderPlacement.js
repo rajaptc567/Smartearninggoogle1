@@ -89,7 +89,12 @@ const ProviderPlacementSchema = new mongoose.Schema({
     rolloutSalt: {
         type: String,
         default: () => randomBytes(8).toString('hex')
-    }
+    },
+    trustedLaunchDomains: [{
+        type: String,
+        trim: true,
+        lowercase: true
+    }]
 }, {
     timestamps: true
 });

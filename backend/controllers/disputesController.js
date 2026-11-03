@@ -33,14 +33,13 @@ export const createDispute = async (req, res) => {
         const loggedInUserId = req.user.id;
         const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
 
-        // Override/enforce authenticated user ID if non-admin
-        if (!isAdmin) {
-            disputeData.userId = loggedInUserId;
-        }
+        // MANDATORY: Derive identities and roles from req.user, never trust req.body for these.
+        disputeData.userId = loggedInUserId;
+        disputeData.userName = req.user.username || 'Member';
 
-        const user = await User.findById(disputeData.userId);
+        const user = await User.findById(loggedInUserId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-        disputeData.userName = user.username || disputeData.userName || 'Member';
+        disputeData.userName = user.username || 'Member';
 
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.dispute)) {
             return res.status(403).json({ success: false, error: 'Restricted.' });
@@ -149,7 +148,9 @@ export const updateDispute = async (req, res) => {
         }
 
         if (newMessage || req.file) {
-            const messageData = { sender: sender || 'Admin', message: newMessage || '' };
+            // AUTH: Derive sender from authenticated role, never trust req.body.sender
+            const senderRole = (req.user.role === 'admin' || req.user.role === 'super_admin') ? 'Admin' : 'User';
+            const messageData = { sender: senderRole, message: newMessage || '' };
 
             // NEW: CLOUDINARY FOR CHAT ATTACHMENTS
             if (req.file) {
@@ -169,6 +170,10 @@ export const updateDispute = async (req, res) => {
         }
 
         if (status && status !== dispute.status) {
+            // AUTH: Only admins can change dispute status via this route.
+            if (!isAdmin) {
+                return res.status(403).json({ success: false, error: 'Access denied: Only admins can change dispute status.' });
+            }
             dispute.status = status;
             dispute.messages.push({ sender: 'System', message: `Status: ${status}` });
             dispute.userUnread = true;
@@ -192,7 +197,7 @@ export const markAsRead = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot update other users disputes.' });
         }
 
-        if (role === 'admin') dispute.adminUnread = false;
+        if (isAdmin) dispute.adminUnread = false;
         else dispute.userUnread = false;
         await dispute.save();
         res.status(200).json({ success: true, data: dispute });
