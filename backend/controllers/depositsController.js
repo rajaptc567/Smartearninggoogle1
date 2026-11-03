@@ -134,6 +134,29 @@ export const createDeposit = async (req, res) => {
             message: `Your deposit request #${deposit._id} is pending review.`
         });
 
+        // In-app notifications for admin and super_admin recipients with deduplication
+        try {
+            const adminUsers = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
+            const alertMsg = `New deposit request #${deposit._id} (${deposit.amount} ${deposit.currency || 'USD'}) from @${user.username || 'user'} is pending review.`;
+            for (const admin of adminUsers) {
+                const existingAlert = await Notification.findOne({
+                    userId: admin._id,
+                    message: { $regex: String(deposit._id) }
+                });
+                if (!existingAlert) {
+                    await Notification.create({
+                        userId: admin._id,
+                        senderType: 'System',
+                        subject: 'New Deposit Request',
+                        message: alertMsg,
+                        read: false
+                    });
+                }
+            }
+        } catch (adminAlertErr) {
+            console.error('Failed to create admin deposit alerts:', adminAlertErr);
+        }
+
         try {
             const depositVars = {
                 amount: deposit.amount.toFixed(2),

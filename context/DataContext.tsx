@@ -467,19 +467,33 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
                 const serverVersion = await getDataVersion();
                 
-                if (lastVersionRef.current === 0) {
-                    lastVersionRef.current = serverVersion;
+                // Distinguish actual version from a failed request (never silently return 0 on network error)
+                if (serverVersion === null) {
+                    if (doForce) {
+                        pendingForceRef.current = true;
+                    }
+                    return;
                 }
 
-                if (doForce || serverVersion > lastVersionRef.current) {
-                    lastVersionRef.current = serverVersion;
-                    
+                const isInitialSync = lastVersionRef.current === 0;
+
+                if (doForce || isInitialSync || serverVersion > lastVersionRef.current) {
                     // Silent background fetch using Promise.allSettled to eliminate UI flicker
                     const results = await Promise.allSettled([
                         getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
                         getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
                     ]);
                     
+                    const hasFailures = results.some(r => r.status === 'rejected');
+
+                    // Do not advance lastVersionRef before required data fetches succeed
+                    if (!hasFailures) {
+                        lastVersionRef.current = serverVersion;
+                    } else {
+                        // Track failed endpoints and schedule safe retry without wiping existing data
+                        pendingForceRef.current = true;
+                    }
+
                     const getValue = (idx: number, fallback: any) => 
                         (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
 

@@ -6,17 +6,17 @@ import { getNotifications, markAsRead, createNotification, markPopupShown, updat
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['user', 'admin']), getNotifications)
-    .post(authorize(['admin']), createNotification); // Admin send message
+    .get(authorize(['user', 'admin', 'super_admin']), getNotifications)
+    .post(authorize(['admin', 'super_admin']), createNotification); // Admin send message
 
 router.route('/bulk-delete')
-    .post(authorize(['admin']), bulkDeleteNotifications);
+    .post(authorize(['admin', 'super_admin']), bulkDeleteNotifications);
 
 router.route('/:id')
-    .put(authorize(['user', 'admin']), updateNotification) // For marking single as read
-    .delete(authorize(['user', 'admin']), deleteNotification); // Allow user to delete
+    .put(authorize(['user', 'admin', 'super_admin']), updateNotification) // For marking single as read
+    .delete(authorize(['user', 'admin', 'super_admin']), deleteNotification); // Allow user to delete
 
-router.route('/read/:userId').put(authorize(['user', 'admin']), markAsRead);
-router.route('/popup-shown/:id').put(authorize(['user', 'admin']), markPopupShown);
+router.route('/read/:userId').put(authorize(['user', 'admin', 'super_admin']), markAsRead);
+router.route('/popup-shown/:id').put(authorize(['user', 'admin', 'super_admin']), markPopupShown);
 
 export default router;

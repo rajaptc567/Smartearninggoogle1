@@ -84,13 +84,16 @@ const handleResponse = async (response: Response) => {
 };
 
 // --- [Sync API Functions] ---
-export const getDataVersion = async (): Promise<number> => {
+export const getDataVersion = async (): Promise<number | null> => {
     try {
         const response = await fetch(`${API_BASE_URL}/settings/version`);
         const result = await handleResponse(response);
-        return result.version;
+        if (result && typeof result.version === 'number') {
+            return result.version;
+        }
+        return null;
     } catch (e) {
-        return 0; 
+        return null; 
     }
 };
 

@@ -135,6 +135,11 @@ export const createDispute = async (req, res) => {
         sendTemplateNotification({ userId: dispute.userId, templateKey: 'dispute_opened_email', variables: dispVars });
         sendTemplateNotification({ userId: dispute.userId, templateKey: 'dispute_opened_whatsapp', variables: dispVars });
 
+        if (mongoose.connection?.readyState === 1) {
+            await Setting.bumpVersion();
+        }
+        req?.app?.get('io')?.emit('DATA_CHANGED');
+
         res.status(201).json({ success: true, data: dispute });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -185,6 +190,10 @@ export const updateDispute = async (req, res) => {
         }
         
         await dispute.save();
+        if (mongoose.connection?.readyState === 1) {
+            await Setting.bumpVersion();
+        }
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(200).json({ success: true, data: dispute });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -205,6 +214,10 @@ export const markAsRead = async (req, res) => {
         if (isAdmin) dispute.adminUnread = false;
         else dispute.userUnread = false;
         await dispute.save();
+        if (mongoose.connection?.readyState === 1) {
+            await Setting.bumpVersion();
+        }
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(200).json({ success: true, data: dispute });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -503,6 +516,10 @@ export const resolveDisputeVerdict = async (req, res) => {
 
         await dispute.save();
         global.appDataVersion = Date.now();
+        if (mongoose.connection?.readyState === 1) {
+            await Setting.bumpVersion();
+        }
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(200).json({ success: true, data: dispute });
     } catch (err) {
         console.error("resolveDisputeVerdict error:", err);

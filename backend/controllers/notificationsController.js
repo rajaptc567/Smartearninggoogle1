@@ -7,14 +7,11 @@ import { sendAutomatedMessage } from '../utils/automation.js';
 // @route   GET /api/v1/notifications
 export const getNotifications = async (req, res) => {
     try {
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
-        const query = isAdmin ? {} : { userId: req.user?.id };
-
-        if (!isAdmin && !req.user?.id) {
+        if (!req.user?.id) {
             return res.status(200).json({ success: true, count: 0, data: [] });
         }
 
-        const notifications = await Notification.find(query).sort({ date: -1 });
+        const notifications = await Notification.find({ userId: req.user.id }).sort({ date: -1 });
         res.status(200).json({ success: true, count: notifications.length, data: notifications });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -191,13 +188,16 @@ export const createNotification = async (req, res) => {
 // @route   PUT /api/v1/notifications/read/:userId
 export const markAsRead = async (req, res) => {
     try {
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin && String(req.params.userId) !== String(req.user?.id)) {
+            return res.status(403).json({ success: false, error: 'Not authorized to update notifications for another user' });
+        }
+
         await Notification.updateMany(
             { userId: req.params.userId, read: false },
             { $set: { read: true } }
         );
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
-        const query = isAdmin ? {} : { userId: req.user?.id };
-        const updatedNotifications = await Notification.find(query).sort({ date: -1 });
+        const updatedNotifications = await Notification.find({ userId: req.user?.id }).sort({ date: -1 });
         res.status(200).json({ success: true, data: updatedNotifications });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -208,12 +208,19 @@ export const markAsRead = async (req, res) => {
 // @route   PUT /api/v1/notifications/:id
 export const updateNotification = async (req, res) => {
     try {
+        const existing = await Notification.findById(req.params.id);
+        if (!existing) return res.status(404).json({ success: false, error: "Notification not found" });
+
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin && String(existing.userId) !== String(req.user?.id)) {
+            return res.status(403).json({ success: false, error: "Not authorized to update this notification" });
+        }
+
         const notification = await Notification.findByIdAndUpdate(
             req.params.id,
             req.body,
             { new: true }
         );
-        if (!notification) return res.status(404).json({ success: false, error: "Notification not found" });
         res.status(200).json({ success: true, data: notification });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -224,8 +231,15 @@ export const updateNotification = async (req, res) => {
 // @route   DELETE /api/v1/notifications/:id
 export const deleteNotification = async (req, res) => {
     try {
-        const notification = await Notification.findByIdAndDelete(req.params.id);
-        if (!notification) return res.status(404).json({ success: false, error: "Notification not found" });
+        const existing = await Notification.findById(req.params.id);
+        if (!existing) return res.status(404).json({ success: false, error: "Notification not found" });
+
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin && String(existing.userId) !== String(req.user?.id)) {
+            return res.status(403).json({ success: false, error: "Not authorized to delete this notification" });
+        }
+
+        await Notification.findByIdAndDelete(req.params.id);
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -240,8 +254,10 @@ export const bulkDeleteNotifications = async (req, res) => {
         if (!ids || !Array.isArray(ids)) {
             return res.status(400).json({ success: false, error: "Invalid or missing notification IDs" });
         }
-        await Notification.deleteMany({ _id: { $in: ids } });
-        res.status(200).json({ success: true, message: `${ids.length} notifications deleted successfully.` });
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        const deleteQuery = isAdmin ? { _id: { $in: ids } } : { _id: { $in: ids }, userId: req.user?.id };
+        const result = await Notification.deleteMany(deleteQuery);
+        res.status(200).json({ success: true, message: `${result.deletedCount ?? ids.length} notifications deleted successfully.` });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -251,17 +267,18 @@ export const bulkDeleteNotifications = async (req, res) => {
 // @route   PUT /api/v1/notifications/popup-shown/:id
 export const markPopupShown = async (req, res) => {
     try {
-        const notification = await Notification.findByIdAndUpdate(
-            req.params.id,
-            { popupShown: true },
-            { new: true }
-        );
-        if(!notification) return res.status(404).json({ success: false, error: "Notification not found" });
+        const existing = await Notification.findById(req.params.id);
+        if(!existing) return res.status(404).json({ success: false, error: "Notification not found" });
         
-        // Return updated list for frontend sync
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
-        const query = isAdmin ? {} : { userId: req.user?.id };
-        const notifications = await Notification.find(query).sort({ date: -1 });
+        if (!isAdmin && String(existing.userId) !== String(req.user?.id)) {
+            return res.status(403).json({ success: false, error: "Not authorized to modify this notification" });
+        }
+
+        existing.popupShown = true;
+        await existing.save();
+
+        const notifications = await Notification.find({ userId: req.user?.id }).sort({ date: -1 });
         res.status(200).json({ success: true, data: notifications });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

@@ -20,6 +20,18 @@ import {
 // Centralized admin role check
 const isUserAdmin = (user) => Boolean(user && (user.role === 'admin' || user.role === 'super_admin'));
 
+const triggerRealtimeUpdate = async (req) => {
+    try {
+        global.appDataVersion = Date.now();
+        if (mongoose.connection?.readyState === 1) {
+            await Setting.bumpVersion();
+        }
+        req?.app?.get('io')?.emit('DATA_CHANGED');
+    } catch (e) {
+        console.error('Failed to trigger realtime update:', e);
+    }
+};
+
 /**
  * Safely resolves and reconciles any unresolved Dispute documents associated with a submission
  * (by disputeId, submissionId, or referenceId) to status 'Resolved' and verdict 'ReleaseToWorker'.
@@ -1687,6 +1699,7 @@ export const createUserTask = async (req, res) => {
         }
 
         global.appDataVersion = Date.now();
+        await triggerRealtimeUpdate(req);
         const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
         const persistedUser = (await User.findById(effectiveUserId)) || txResult.user || user;
         res.status(201).json({ success: true, data: { task: createdTask, user: toSafeUser(persistedUser), settings: latestSettings } });
@@ -1991,6 +2004,7 @@ export const updateUserTaskStatus = async (req, res) => {
                 } catch (_) {}
 
                 global.appDataVersion = Date.now();
+                await triggerRealtimeUpdate(req);
                 return res.status(200).json({ success: true, message: 'Campaign resubmitted for review successfully.', data: result });
             } catch (err) {
                 return res.status(400).json({ success: false, error: err.message });
@@ -2070,6 +2084,7 @@ export const updateUserTaskStatus = async (req, res) => {
                 }
                 const freshTask = await UserTask.findById(task._id);
                 global.appDataVersion = Date.now();
+                await triggerRealtimeUpdate(req);
                 return res.status(200).json({ success: true, message: 'Campaign updated successfully.', data: freshTask || task });
             }
 
@@ -2238,6 +2253,7 @@ export const updateUserTaskStatus = async (req, res) => {
                     // DO NOT call task.save() or overwrite database state with stale document!
                     const freshTask = await UserTask.findById(task._id);
                     global.appDataVersion = Date.now();
+                    await triggerRealtimeUpdate(req);
                     return res.status(200).json({ success: true, message: 'Campaign updated successfully.', data: freshTask || task });
                 }
             }
@@ -2279,6 +2295,7 @@ export const updateUserTaskStatus = async (req, res) => {
             }
 
             global.appDataVersion = Date.now();
+            await triggerRealtimeUpdate(req);
             return res.status(200).json({ success: true, message: 'Campaign updated successfully.', data: updatedTask || task });
         }
 
@@ -2584,6 +2601,7 @@ export const updateUserTaskStatus = async (req, res) => {
         }
 
         global.appDataVersion = Date.now();
+        await triggerRealtimeUpdate(req);
         const successMsg = requestedStatus === 'On Hold'
             ? 'Campaign paused successfully.'
             : (oldStatus === 'On Hold' ? 'Campaign resumed successfully.' : 'Campaign updated successfully.');
@@ -2961,6 +2979,7 @@ export const deleteUserTask = async (req, res) => {
 
         await UserTask.findByIdAndDelete(req.params.id);
         global.appDataVersion = Date.now();
+        await triggerRealtimeUpdate(req);
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         try {
@@ -3061,6 +3080,7 @@ export const renewUserTask = async (req, res) => {
         await task.save();
 
         global.appDataVersion = Date.now();
+        await triggerRealtimeUpdate(req);
         res.status(200).json({ success: true, data: { task, user } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -4601,6 +4621,7 @@ export const submitUserTaskProof = async (req, res) => {
 
 
         global.appDataVersion = Date.now();
+        await triggerRealtimeUpdate(req);
         res.status(201).json({ success: true, data: submission });
     } catch (err) {
         if (err.code === 11000 || (err.name === 'MongoServerError' && err.code === 11000)) {
@@ -5068,6 +5089,7 @@ export const updateSubmissionStatus = async (req, res) => {
         }
 
         global.appDataVersion = Date.now();
+        await triggerRealtimeUpdate(req);
         res.status(200).json({ success: true, data: targetSubmission, task: task || null });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -5089,6 +5111,7 @@ export const deleteSubmission = async (req, res) => {
 
         await UserTaskSubmission.findByIdAndDelete(req.params.subId);
         global.appDataVersion = Date.now();
+        await triggerRealtimeUpdate(req);
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -6472,6 +6495,7 @@ export const resumeAdminCampaign = async (req, res) => {
             details: 'Campaign manually resumed by administrator.'
         });
         await task.save();
+        await triggerRealtimeUpdate(req);
 
         return res.status(200).json({ success: true, message: `Campaign "${task.title}" has been resumed.`, task });
     } catch (err) {
@@ -6502,6 +6526,7 @@ export const pauseAdminCampaign = async (req, res) => {
             details: 'Campaign manually paused by administrator.'
         });
         await task.save();
+        await triggerRealtimeUpdate(req);
 
         return res.status(200).json({ success: true, message: `Campaign "${task.title}" has been paused.`, task });
     } catch (err) {
@@ -6689,6 +6714,7 @@ export const archiveAdminCampaign = async (req, res) => {
             details: 'Campaign safely archived/deactivated by administrator. Worker earnings, submissions, and history preserved.'
         });
         await task.save();
+        await triggerRealtimeUpdate(req);
 
         return res.status(200).json({
             success: true,
