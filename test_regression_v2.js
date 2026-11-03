@@ -47,6 +47,23 @@ function fail(name, err) {
 }
 
 // =========================================================================
+// SUITE 0: UserTask Schema Validation
+// =========================================================================
+function runSchemaTests() {
+    console.log('--- SUITE 0: UserTask Schema Validation ---');
+    try {
+        const path = UserTask.schema.path('reviewClaimedAt');
+        assert.ok(path, 'reviewClaimedAt must exist on UserTask schema');
+        assert.equal(path.instance, 'Date', 'reviewClaimedAt must be Date type');
+        assert.equal(path.defaultValue, null, 'reviewClaimedAt default must be null');
+        pass('Test 0A: Schema Integrity — reviewClaimedAt Date field (default null) is defined in UserTask schema');
+    } catch (err) {
+        fail('Suite 0: UserTask Schema Validation', err);
+    }
+    console.log();
+}
+
+// =========================================================================
 // SUITE 1: Campaign One-Time Review Concurrency & Financial Consistency
 // =========================================================================
 async function runCampaignConcurrencyTests() {
@@ -406,26 +423,63 @@ async function runCampaignConcurrencyTests() {
         pass('Test 1F: Fail Closed — Controller refuses financial mutations when transactions cannot start');
 
         // -----------------------------------------------------------------
-        // Test 1G: Interrupted Claim Recovery
+        // Test 1G: Permanent One-Time Protection (Prevent Historical Double Deduction)
         // -----------------------------------------------------------------
         resetData();
-        // Simulate a task that was left in an interrupted claim state:
-        // status is Rejected, resubmittedForReview is true, reviewClaimedAt is expired (> 60s ago),
-        // and NO completed financial transaction exists in ledger.
-        const staleClaimTask = mockTasks.get(taskId);
-        staleClaimTask.resubmittedForReview = true;
-        staleClaimTask.reviewClaimedAt = new Date(Date.now() - 120000); // 2 minutes ago
+        // Simulate a campaign with resubmittedForReview: true that was rejected again
+        const previouslyResubmittedTask = mockTasks.get(taskId);
+        previouslyResubmittedTask.status = 'Rejected';
+        previouslyResubmittedTask.resubmittedForReview = true;
+        previouslyResubmittedTask.reviewClaimedAt = new Date(Date.now() - 3600000); // 1 hour ago
 
-        const resRecover = makeRes();
-        await updateUserTaskStatus(makeReq(), resRecover);
+        // Older ledger transaction has NO campaignId:
+        mockTransactions.push({
+            _id: 'tx_old_without_campaign_id',
+            userId: userId,
+            type: 'Task Budget Deduction',
+            description: 'Resubmitted User Task For Review: Video Watch Campaign',
+            amount: -11.00
+            // Notice: campaignId is omitted, simulating older historical transaction
+        });
 
-        assert.equal(resRecover.statusCode, 200, 'Interrupted claim must be safely recoverable after lease expiry');
-        assert.equal(resRecover.data.success, true);
-        const userRecovered = mockUsers.get(userId);
-        assert.equal(userRecovered.taskWalletBalance, 4.00, 'Wallet deducted exactly once upon recovery');
-        assert.equal(mockTasks.get(taskId).status, 'Pending', 'Task successfully transitioned to Pending upon recovery');
-        assert.equal(mockTransactions.length, 1, 'Exactly one transaction ledger created');
-        pass('Test 1G: Interrupted Claim Recovery — Stale claim without committed transaction recovered safely');
+        const resDoubleSubmit = makeRes();
+        await updateUserTaskStatus(makeReq(), resDoubleSubmit);
+
+        assert.equal(resDoubleSubmit.statusCode, 400, 'Must reject resubmission when resubmittedForReview is already true');
+        assert.equal(resDoubleSubmit.data.success, false);
+        assert.ok(
+            resDoubleSubmit.data.error.includes('already used its one-time review') ||
+            resDoubleSubmit.data.error.includes('administrative reconciliation'),
+            'Must return error indicating one-time review used or administrative reconciliation required'
+        );
+
+        const userAfterDouble = mockUsers.get(userId);
+        assert.equal(userAfterDouble.taskWalletBalance, 15.00, 'No wallet balance must be deducted for already-used review');
+        assert.equal(userAfterDouble.walletBalance, 25.00, 'Main wallet must remain untouched');
+        assert.equal(mockTransactions.length, 1, 'No new transaction ledger record must be created');
+        assert.equal(mockTasks.get(taskId).status, 'Rejected', 'Task must remain in Rejected status');
+        assert.equal(mockTasks.get(taskId).resubmittedForReview, true, 'resubmittedForReview flag must remain true permanently');
+        pass('Test 1G: Permanent Protection — Campaign with resubmittedForReview: true cannot be charged again, even without campaignId in older transaction');
+
+        // -----------------------------------------------------------------
+        // Test 1H: Valid First Review on resubmittedForReview: false succeeds
+        // -----------------------------------------------------------------
+        resetData();
+        // Verify resubmittedForReview: false completes its first valid review
+        const freshTask = mockTasks.get(taskId);
+        assert.equal(freshTask.resubmittedForReview, false);
+
+        const resFirstReview = makeRes();
+        await updateUserTaskStatus(makeReq(), resFirstReview);
+
+        assert.equal(resFirstReview.statusCode, 200, 'First valid review request must succeed');
+        assert.equal(resFirstReview.data.success, true);
+        assert.equal(mockUsers.get(userId).taskWalletBalance, 4.00, 'Wallet deducted exactly once for first review');
+        assert.equal(mockTasks.get(taskId).status, 'Pending', 'Task transitions to Pending');
+        assert.equal(mockTasks.get(taskId).resubmittedForReview, true, 'resubmittedForReview set to true');
+        assert.ok(mockTasks.get(taskId).reviewClaimedAt, 'reviewClaimedAt timestamp is recorded');
+        assert.equal(mockTransactions.length, 1, 'Exactly one ledger transaction created');
+        pass('Test 1H: First Valid Review — Campaign with resubmittedForReview: false completes review successfully');
 
     } catch (err) {
         fail('Suite 1: Campaign Review Concurrency', err);
@@ -743,6 +797,7 @@ async function runDisputeIntegrityTests() {
 // RUN ALL SUITES
 // =========================================================================
 async function main() {
+    runSchemaTests();
     await runCampaignConcurrencyTests();
     await runTrustedDomainTests();
     await runDisputeIntegrityTests();

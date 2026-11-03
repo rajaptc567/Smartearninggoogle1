@@ -184,6 +184,10 @@ const UserTaskSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    reviewClaimedAt: {
+        type: Date,
+        default: null
+    },
     userReviewMessage: {
         type: String,
         default: ''

@@ -1788,47 +1788,21 @@ export const updateUserTaskStatus = async (req, res) => {
                         throw new Error('Only rejected campaigns can be submitted for review.');
                     }
 
-                    // Check if this campaign has already completed a one-time review in the past
+                    // Permanent One-Time Protection:
+                    // Treat resubmittedForReview === true as a permanent one-time indicator.
+                    // If the flag is already true, reject another resubmission without deducting any wallet balance.
                     if (existingCheck.resubmittedForReview === true) {
-                        const completedTx = await Transaction.findOne({
-                            campaignId: existingCheck._id,
-                            type: 'Task Budget Deduction',
-                            description: { $regex: /Resubmitted User Task For Review/i }
-                        }).session(session);
-
-                        if (completedTx) {
-                            throw new Error('This campaign has already been submitted for a one-time review.');
-                        }
-
-                        // If resubmittedForReview is true but no completed financial transaction exists:
-                        // This indicates an interrupted operation from a previous server crash or aborted session.
-                        // Check if an in-progress operation is currently holding the claim lease (< 60s).
-                        const inFlightLeaseMs = 60 * 1000;
-                        if (existingCheck.reviewClaimedAt && (Date.now() - new Date(existingCheck.reviewClaimedAt).getTime() < inFlightLeaseMs)) {
-                            throw new Error('Campaign review is currently being processed. Please wait a moment.');
-                        }
+                        throw new Error('This campaign has already used its one-time review. If you believe this is an error, administrative reconciliation is required.');
                     }
 
                     // 1. ATOMIC LOCK: Claim the task resubmission slot atomically within the transaction session.
-                    // Recovers any interrupted claims whose lease expired without a completed transaction.
+                    // Strictly requires resubmittedForReview to be false ($ne: true).
                     const claimTime = new Date();
-                    const leaseCutoff = new Date(Date.now() - 60000);
-
                     const t = await UserTask.findOneAndUpdate(
                         { 
                             _id: req.params.id, 
                             status: 'Rejected', 
-                            $or: [
-                                { resubmittedForReview: { $ne: true } },
-                                {
-                                    resubmittedForReview: true,
-                                    $or: [
-                                        { reviewClaimedAt: { $lt: leaseCutoff } },
-                                        { reviewClaimedAt: { $exists: false } },
-                                        { reviewClaimedAt: null }
-                                    ]
-                                }
-                            ]
+                            resubmittedForReview: { $ne: true }
                         },
                         { 
                             $set: { 
