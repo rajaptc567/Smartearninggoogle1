@@ -406,15 +406,23 @@ const claimTaskCompletionSlot = async (taskId, workerId, allowRecompletion = fal
                         await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { lowBalanceWarningSent: true } });
                         updatedTask.lowBalanceWarningSent = true;
 
-                        // Create administrative notification
-                        await Notification.create({
-                            title: 'Survey Campaign Low Balance Warning',
-                            message: `Survey campaign "${updatedTask.title}" has reached a low balance of $${updatedTask.campaignAvailableBalanceUSD.toFixed(2)} USD (at/below ${thresholdPercent}% of $${totalFunded.toFixed(2)} USD total budget). Please add campaign funds to keep it running.`,
-                            type: 'system_alert',
-                            targetRole: 'admin',
-                            category: 'campaign',
-                            relatedId: updatedTask._id
-                        }).catch(() => {});
+                        // Create administrative notification for admin and super_admin recipients
+                        try {
+                            const adminUsers = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
+                            const alertSubject = 'Survey Campaign Low Balance Warning';
+                            const alertMessage = `Survey campaign "${updatedTask.title}" has reached a low balance of $${updatedTask.campaignAvailableBalanceUSD.toFixed(2)} USD (at/below ${thresholdPercent}% of $${totalFunded.toFixed(2)} USD total budget). Please add campaign funds to keep it running.`;
+                            for (const admin of adminUsers) {
+                                await Notification.create({
+                                    userId: admin._id,
+                                    senderType: 'System',
+                                    subject: alertSubject,
+                                    message: alertMessage,
+                                    read: false
+                                }).catch(() => {});
+                            }
+                        } catch (notifErr) {
+                            console.error('Warning: Low balance notification error:', notifErr.message);
+                        }
                     } catch (notifErr) {
                         console.error('Warning: Low balance notification error:', notifErr.message);
                     }
