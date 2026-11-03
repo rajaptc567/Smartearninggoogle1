@@ -32,8 +32,19 @@ const DisputeSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['Deposit', 'Withdrawal', 'Transfer', 'UserTask'],
+        enum: ['Deposit', 'Withdrawal', 'Transfer', 'UserTask', 'Investment', 'Task', 'Other'],
         required: true,
+    },
+    moduleName: {
+        type: String,
+    },
+    category: {
+        type: String,
+    },
+    urgency: {
+        type: String,
+        enum: ['Low', 'Medium', 'High', 'Urgent'],
+        default: 'Medium',
     },
     referenceId: {
         type: String,

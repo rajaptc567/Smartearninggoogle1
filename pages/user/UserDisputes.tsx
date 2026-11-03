@@ -217,8 +217,30 @@ export const UserDisputes: React.FC = () => {
 
         const formData = new FormData();
         formData.append('userId', currentUser._id);
-        formData.append('userName', currentUser.username);
-        formData.append('type', moduleType === 'Work & Earn' ? 'Task' : moduleType === 'Investment' ? 'Investment' : 'Deposit');
+        let calculatedType = 'Other';
+        if (moduleType === 'Work & Earn') {
+            calculatedType = 'UserTask';
+        } else if (moduleType === 'Investment') {
+            if (disputeCategory.includes('Deposit') || deposits.some(d => String(d._id) === String(finalRefId))) {
+                calculatedType = 'Deposit';
+            } else if (disputeCategory.includes('Withdrawal') || withdrawals.some(w => String(w._id) === String(finalRefId))) {
+                calculatedType = 'Withdrawal';
+            } else {
+                calculatedType = 'Investment';
+            }
+        } else {
+            if (withdrawals.some(w => String(w._id) === String(finalRefId)) || disputeCategory.includes('Withdrawal')) {
+                calculatedType = 'Withdrawal';
+            } else if (transfers.some(t => String(t._id) === String(finalRefId)) || disputeCategory.includes('Transfer') || disputeCategory.includes('P2P')) {
+                calculatedType = 'Transfer';
+            } else if (deposits.some(d => String(d._id) === String(finalRefId)) || disputeCategory.includes('Deposit')) {
+                calculatedType = 'Deposit';
+            } else {
+                calculatedType = 'Other';
+            }
+        }
+
+        formData.append('type', calculatedType);
         formData.append('moduleName', moduleType);
         formData.append('category', disputeCategory);
         formData.append('urgency', urgency);

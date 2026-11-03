@@ -300,6 +300,18 @@ export const updateDeposit = async (req, res) => {
                 { $or: [{ depositId: deposit._id }, { description: { $regex: deposit._id } }] },
                 { $set: { status: 'Rejected', depositId: deposit._id } }
             );
+
+            try {
+                const rejectReason = adminNotes ? ` Reason: ${adminNotes}` : '';
+                await Notification.create({
+                    userId: deposit.userId,
+                    subject: 'Deposit Request Rejected ❌',
+                    message: `Your deposit request #${deposit._id} of ${deposit.amount} ${deposit.currency} was reviewed and rejected by Admin.${rejectReason}`,
+                    senderType: 'System'
+                });
+            } catch (notifErr) {
+                console.error('Failed to create in-app deposit rejection notification:', notifErr);
+            }
             
             // Send dynamic templated notification in the background
             const variables = {

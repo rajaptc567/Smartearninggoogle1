@@ -1,5 +1,7 @@
 
+import mongoose from 'mongoose';
 import Dispute from '../models/Dispute.js';
+import Deposit from '../models/Deposit.js';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import UserTask from '../models/UserTask.js';
@@ -28,22 +30,66 @@ export const getDisputes = async (req, res) => {
 export const createDispute = async (req, res) => {
     try {
         const disputeData = { ...req.body };
-        const user = await User.findById(disputeData.userId);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
         const loggedInUserId = req.user.id;
-        const requestedUserId = disputeData.userId;
         const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
 
-        if (!isAdmin && String(loggedInUserId) !== String(requestedUserId)) {
-            return res.status(403).json({ success: false, error: 'Access denied: Cannot submit dispute on behalf of other users.' });
+        // Override/enforce authenticated user ID if non-admin
+        if (!isAdmin) {
+            disputeData.userId = loggedInUserId;
         }
+
+        const user = await User.findById(disputeData.userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+        disputeData.userName = user.username || disputeData.userName || 'Member';
 
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.dispute)) {
             return res.status(403).json({ success: false, error: 'Restricted.' });
         }
 
-        // NEW: CLOUDINARY FOR INITIAL PROOF
+        // DEPOSIT DISPUTE VALIDATION & DUPLICATE PREVENTION
+        const isDepositDispute = disputeData.type === 'Deposit' || 
+            (disputeData.category && disputeData.category.toLowerCase().includes('deposit'));
+
+        if (isDepositDispute) {
+            // Require valid Deposit ID and reject placeholders such as N/A or OTHER-MISSED-ISSUE
+            if (!disputeData.referenceId || disputeData.referenceId === 'N/A' || disputeData.referenceId === 'OTHER-MISSED-ISSUE' || !mongoose.Types.ObjectId.isValid(disputeData.referenceId)) {
+                return res.status(400).json({ success: false, error: 'A valid referenced Deposit ID is required for Deposit disputes.' });
+            }
+
+            const deposit = await Deposit.findById(disputeData.referenceId);
+            if (!deposit) {
+                return res.status(404).json({ success: false, error: 'Referenced Deposit not found.' });
+            }
+
+            // Ownership check
+            if (!isAdmin && String(deposit.userId) !== String(loggedInUserId)) {
+                return res.status(403).json({ success: false, error: 'Access denied: You can only dispute your own deposits.' });
+            }
+
+            // Status check: Deposit must actually be rejected
+            if (deposit.status !== 'Rejected') {
+                return res.status(400).json({ success: false, error: 'Only rejected deposits can be disputed.' });
+            }
+
+            // Duplicate prevention: check for existing active dispute on this deposit
+            const existingDispute = await Dispute.findOne({
+                type: 'Deposit',
+                referenceId: String(deposit._id),
+                status: { $in: ['Open', 'Processing'] }
+            });
+            if (existingDispute) {
+                return res.status(409).json({ success: false, error: 'An active dispute already exists for this deposit.' });
+            }
+
+            disputeData.type = 'Deposit';
+        }
+
+        // Standardize 'Task' type to 'UserTask' if supplied
+        if (disputeData.type === 'Task') {
+            disputeData.type = 'UserTask';
+        }
+
+        // CLOUDINARY FOR INITIAL PROOF
         if (req.file) {
             try {
                 disputeData.proofUrl = await uploadStream(req.file.buffer, 'disputes');
@@ -57,6 +103,22 @@ export const createDispute = async (req, res) => {
 
         const dispute = await Dispute.create(disputeData);
         await Notification.create({ userId: dispute.userId, message: `Dispute #${dispute._id} submitted.` });
+
+        // ADMIN NOTIFICATION FOR DISPUTE CREATION
+        try {
+            const adminUsers = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
+            const adminMessage = `New ${dispute.type || 'Deposit'} Dispute #${dispute._id} opened by @${user.username} for Ref #${dispute.referenceId}.`;
+            for (const admin of adminUsers) {
+                await Notification.create({
+                    userId: admin._id,
+                    subject: `⚠️ New ${dispute.type || 'Deposit'} Dispute Ticket #${dispute._id}`,
+                    message: adminMessage,
+                    senderType: 'System'
+                });
+            }
+        } catch (adminNotifErr) {
+            console.error('[Admin Dispute Notification Warning]:', adminNotifErr.message);
+        }
         
         const dispVars = {
             disputeId: String(dispute._id),
