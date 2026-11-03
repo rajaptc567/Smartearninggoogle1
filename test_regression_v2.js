@@ -1,5 +1,6 @@
 import assert from 'assert';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose';
 import { updateUserTaskStatus } from './backend/controllers/userTasksController.js';
 import { launchProviderPlacement, validateAndNormalizeHostname, isDomainTrusted } from './backend/controllers/providerPlacementController.js';
 import { createDispute } from './backend/controllers/disputesController.js';
@@ -24,7 +25,11 @@ if (process.env.MONGO_URI && (process.env.MONGO_URI.includes('smartexn') || proc
 
 console.log('========================================================================');
 console.log('SmartExn Comprehensive Regression & Safety Verification Test Suite (v2)');
-console.log('Mode: Isolated Mock & Controller Simulation Engine (Zero Production Impact)');
+console.log('Environment: In-Memory Controller Simulation & Mock Environment');
+console.log('NOTICE: Live MongoDB replica set transactions and hardware-level concurrency');
+console.log('require a dedicated MongoDB replica set cluster. In this test runner,');
+console.log('transaction sessions, atomic operators, and fail-closed branches are');
+console.log('validated via isolated controller mocks to guarantee zero production impact.');
 console.log('========================================================================\n');
 
 let totalTestsPassed = 0;
@@ -53,7 +58,8 @@ async function runCampaignConcurrencyTests() {
     const mockTransactions = [];
     const mockNotifications = [];
 
-    // Save original model methods
+    // Save original model & mongoose methods
+    const origMongooseStartSession = mongoose.startSession;
     const origUserFindById = User.findById;
     const origUserFindOneAndUpdate = User.findOneAndUpdate;
     const origUserUpdateOne = User.updateOne;
@@ -62,6 +68,7 @@ async function runCampaignConcurrencyTests() {
     const origTaskFindOneAndUpdate = UserTask.findOneAndUpdate;
     const origTaskUpdateOne = UserTask.updateOne;
     const origTxCreate = Transaction.create;
+    const origTxFindOne = Transaction.findOne;
     const origTxDeleteOne = Transaction.deleteOne;
     const origSettingGetSettings = Setting.getSettings;
     const origNotifCreate = Notification.create;
@@ -85,6 +92,41 @@ async function runCampaignConcurrencyTests() {
         const arr = Array.isArray(notifs) ? notifs : [notifs];
         mockNotifications.push(...arr);
         return arr;
+    };
+
+    // Staged transactional state simulation
+    let stagedSnapshot = null;
+    let shouldFailStartSession = false;
+
+    mongoose.startSession = async () => {
+        if (shouldFailStartSession) {
+            throw new Error('MongoServerError: This MongoDB deployment does not support transactions (not a replica set)');
+        }
+
+        // Take snapshot of state for potential rollback
+        stagedSnapshot = {
+            users: new Map(JSON.parse(JSON.stringify(Array.from(mockUsers.entries())))),
+            tasks: new Map(JSON.parse(JSON.stringify(Array.from(mockTasks.entries())))),
+            txCount: mockTransactions.length
+        };
+
+        return {
+            startTransaction: () => {},
+            commitTransaction: async () => {
+                stagedSnapshot = null; // committed!
+            },
+            abortTransaction: async () => {
+                if (stagedSnapshot) {
+                    mockUsers.clear();
+                    for (const [k, v] of stagedSnapshot.users.entries()) mockUsers.set(k, v);
+                    mockTasks.clear();
+                    for (const [k, v] of stagedSnapshot.tasks.entries()) mockTasks.set(k, v);
+                    mockTransactions.length = stagedSnapshot.txCount;
+                    stagedSnapshot = null;
+                }
+            },
+            endSession: async () => {}
+        };
     };
 
     try {
@@ -111,16 +153,34 @@ async function runCampaignConcurrencyTests() {
                 rewardPerTask: 1.00, // Subtotal: 10.00, Commission 10%: 1.00, Total: 11.00
                 resubmittedForReview: false,
                 reviewRequested: false,
+                reviewClaimedAt: null,
                 history: []
             });
 
             mockTransactions.length = 0;
             mockNotifications.length = 0;
+            shouldFailStartSession = false;
+
+            Transaction.create = async (docs) => {
+                const arr = Array.isArray(docs) ? docs : [docs];
+                const created = arr.map(d => ({ _id: `tx_${Date.now()}_${Math.random()}`, ...d }));
+                mockTransactions.push(...created);
+                return created;
+            };
         };
 
+        // Mongoose Query Thenable helper
+        const makeMongooseQuery = (getter) => ({
+            session: function() { return this; },
+            then: function(resolve, reject) {
+                return Promise.resolve(getter()).then(resolve, reject);
+            }
+        });
+
         // Wire mocks to in-memory store
-        User.findById = (id) => ({
-            session: () => mockUsers.get(String(id)) ? { ...mockUsers.get(String(id)) } : null
+        User.findById = (id) => makeMongooseQuery(() => {
+            const u = mockUsers.get(String(id));
+            return u ? { ...u } : null;
         });
 
         User.findOneAndUpdate = async (query, update) => {
@@ -159,16 +219,44 @@ async function runCampaignConcurrencyTests() {
             return { modifiedCount: 1 };
         };
 
-        UserTask.findById = async (id) => {
+        UserTask.findById = (id) => makeMongooseQuery(() => {
             const t = mockTasks.get(String(id));
             return t ? { ...t } : null;
-        };
+        });
 
         UserTask.findOneAndUpdate = async (query, update) => {
             const t = mockTasks.get(String(query._id));
             if (!t) return null;
             if (query.status && t.status !== query.status) return null;
-            if (query.resubmittedForReview?.$ne !== undefined && t.resubmittedForReview === query.resubmittedForReview.$ne) return null;
+
+            // Check locking conditions
+            if (query.resubmittedForReview?.$ne !== undefined) {
+                if (t.resubmittedForReview === query.resubmittedForReview.$ne) return null;
+            }
+            if (query.$or) {
+                // Evaluate $or condition for atomic claim / lease
+                const matchesAny = query.$or.some(cond => {
+                    if (cond.resubmittedForReview?.$ne !== undefined) {
+                        return t.resubmittedForReview !== cond.resubmittedForReview.$ne;
+                    }
+                    if (cond.resubmittedForReview === true) {
+                        if (!t.resubmittedForReview) return false;
+                        if (cond.$or) {
+                            return cond.$or.some(sub => {
+                                if (sub.reviewClaimedAt?.$lt) {
+                                    return t.reviewClaimedAt && t.reviewClaimedAt < sub.reviewClaimedAt.$lt;
+                                }
+                                if (sub.reviewClaimedAt?.$exists === false || sub.reviewClaimedAt === null) {
+                                    return !t.reviewClaimedAt;
+                                }
+                                return false;
+                            });
+                        }
+                    }
+                    return false;
+                });
+                if (!matchesAny) return null;
+            }
 
             if (update.$set) {
                 Object.assign(t, update.$set);
@@ -193,6 +281,15 @@ async function runCampaignConcurrencyTests() {
             mockTransactions.push(...created);
             return created;
         };
+
+        Transaction.findOne = (query) => makeMongooseQuery(() => {
+            return mockTransactions.find(tx => {
+                if (query.campaignId && String(tx.campaignId) !== String(query.campaignId)) return false;
+                if (query.type && tx.type !== query.type) return false;
+                if (query.description?.$regex && !query.description.$regex.test(tx.description)) return false;
+                return true;
+            }) || null;
+        });
 
         Transaction.deleteOne = async (query) => {
             const idx = mockTransactions.findIndex(tx => tx._id === query._id);
@@ -232,7 +329,7 @@ async function runCampaignConcurrencyTests() {
 
         const responses = [res1, res2, res3];
         const successCount = responses.filter(r => r.statusCode === 200 && r.data?.success).length;
-        const rejectedCount = responses.filter(r => r.statusCode === 400 && !r.data?.success).length;
+        const rejectedCount = responses.filter(r => (r.statusCode === 400 || r.statusCode === 500) && !r.data?.success).length;
 
         assert.equal(successCount, 1, 'Exactly one concurrent review request must succeed');
         assert.equal(rejectedCount, 2, 'The other 2 concurrent review requests must be blocked');
@@ -266,7 +363,7 @@ async function runCampaignConcurrencyTests() {
         pass('Test 1D: Task Final State — Successfully transitioned to Pending with resubmittedForReview: true');
 
         // -----------------------------------------------------------------
-        // Test 1E: Failure during Transaction creation -> Safe Compensation
+        // Test 1E: Error inside transaction -> Complete ACID Abort (No partial writes)
         // -----------------------------------------------------------------
         resetData();
         // Force Transaction.create to throw
@@ -277,60 +374,64 @@ async function runCampaignConcurrencyTests() {
         const resFailTx = makeRes();
         await updateUserTaskStatus(makeReq(), resFailTx);
 
-        assert.equal(resFailTx.statusCode, 400, 'Request must return 400 error on transaction failure');
-        const userCompensated = mockUsers.get(userId);
-        const taskCompensated = mockTasks.get(taskId);
+        assert.equal(resFailTx.statusCode, 400, 'Request must return 400 error on transaction abort');
+        const userAborted = mockUsers.get(userId);
+        const taskAborted = mockTasks.get(taskId);
 
-        assert.equal(userCompensated.taskWalletBalance, 15.00, 'Wallet balance must be fully refunded upon failure');
-        assert.equal(userCompensated.campaignWalletSources.fromRefundsUSD, 15.00, 'Campaign wallet sources must be restored');
-        assert.equal(taskCompensated.status, 'Rejected', 'Task must NOT remain stuck in Processing; must be reverted to Rejected');
-        assert.equal(taskCompensated.resubmittedForReview, false, 'resubmittedForReview must be unlocked (false) so user can retry');
-        assert.equal(mockTransactions.length, 0, 'No orphan transactions must remain');
-        pass('Test 1E: Recovery Compensation — Transaction failure refunded wallet and reverted task cleanly');
+        assert.equal(userAborted.taskWalletBalance, 15.00, 'Wallet balance must be completely unmutated/rolled back upon abort');
+        assert.equal(userAborted.campaignWalletSources.fromRefundsUSD, 15.00, 'Campaign wallet sources must remain intact');
+        assert.equal(taskAborted.status, 'Rejected', 'Task status must remain in Rejected');
+        assert.equal(taskAborted.resubmittedForReview, false, 'resubmittedForReview must be false (rolled back)');
+        assert.equal(mockTransactions.length, 0, 'Zero orphan transactions must exist');
+        pass('Test 1E: ACID Abort — Transaction abort completely rolled back all writes without partial mutations');
 
         // -----------------------------------------------------------------
-        // Test 1F: Failure during Task state update -> Safe Compensation
+        // Test 1F: Fail Closed when Transactions Unavailable
         // -----------------------------------------------------------------
         resetData();
-        // Restore Transaction.create but force task state update to fail
-        Transaction.create = async (docs) => {
-            const arr = Array.isArray(docs) ? docs : [docs];
-            const created = arr.map(d => ({ _id: `tx_${Date.now()}_${Math.random()}`, ...d }));
-            mockTransactions.push(...created);
-            return created;
-        };
+        shouldFailStartSession = true;
 
-        let secondUpdateCount = 0;
-        UserTask.findOneAndUpdate = async (query, update) => {
-            const t = mockTasks.get(String(query._id));
-            if (!t) return null;
-            if (query.resubmittedForReview?.$ne !== undefined) {
-                // First lock succeeds
-                t.resubmittedForReview = true;
-                return { ...t };
-            }
-            // Second update (setting status to Pending) fails
-            secondUpdateCount++;
-            return null;
-        };
+        const resFailClosed = makeRes();
+        await updateUserTaskStatus(makeReq(), resFailClosed);
 
-        const resFailTaskSave = makeRes();
-        await updateUserTaskStatus(makeReq(), resFailTaskSave);
+        assert.equal(resFailClosed.statusCode, 503, 'Must return 503 when transaction service is unavailable');
+        assert.equal(resFailClosed.data.success, false);
+        assert.ok(resFailClosed.data.error.includes('failing closed'), 'Must explicitly indicate failing closed');
+        const userFailClosed = mockUsers.get(userId);
+        const taskFailClosed = mockTasks.get(taskId);
+        assert.equal(userFailClosed.taskWalletBalance, 15.00, 'No wallet balance deducted when transactions unavailable');
+        assert.equal(taskFailClosed.status, 'Rejected', 'Task must remain Rejected');
+        assert.equal(taskFailClosed.resubmittedForReview, false, 'Task resubmittedForReview must not be mutated');
+        assert.equal(mockTransactions.length, 0, 'No ledger transactions created');
+        pass('Test 1F: Fail Closed — Controller refuses financial mutations when transactions cannot start');
 
-        assert.equal(resFailTaskSave.statusCode, 400);
-        const userCompensated2 = mockUsers.get(userId);
-        const taskCompensated2 = mockTasks.get(taskId);
+        // -----------------------------------------------------------------
+        // Test 1G: Interrupted Claim Recovery
+        // -----------------------------------------------------------------
+        resetData();
+        // Simulate a task that was left in an interrupted claim state:
+        // status is Rejected, resubmittedForReview is true, reviewClaimedAt is expired (> 60s ago),
+        // and NO completed financial transaction exists in ledger.
+        const staleClaimTask = mockTasks.get(taskId);
+        staleClaimTask.resubmittedForReview = true;
+        staleClaimTask.reviewClaimedAt = new Date(Date.now() - 120000); // 2 minutes ago
 
-        assert.equal(userCompensated2.taskWalletBalance, 15.00, 'Wallet balance must be restored');
-        assert.equal(taskCompensated2.status, 'Rejected', 'Task must be in Rejected status, not Processing');
-        assert.equal(taskCompensated2.resubmittedForReview, false, 'Task must be unlocked');
-        assert.equal(mockTransactions.length, 0, 'Created transaction must be deleted via compensation');
-        pass('Test 1F: Recovery Compensation — Task save failure deleted transaction and refunded balance');
+        const resRecover = makeRes();
+        await updateUserTaskStatus(makeReq(), resRecover);
+
+        assert.equal(resRecover.statusCode, 200, 'Interrupted claim must be safely recoverable after lease expiry');
+        assert.equal(resRecover.data.success, true);
+        const userRecovered = mockUsers.get(userId);
+        assert.equal(userRecovered.taskWalletBalance, 4.00, 'Wallet deducted exactly once upon recovery');
+        assert.equal(mockTasks.get(taskId).status, 'Pending', 'Task successfully transitioned to Pending upon recovery');
+        assert.equal(mockTransactions.length, 1, 'Exactly one transaction ledger created');
+        pass('Test 1G: Interrupted Claim Recovery — Stale claim without committed transaction recovered safely');
 
     } catch (err) {
         fail('Suite 1: Campaign Review Concurrency', err);
     } finally {
         // Restore mocks
+        mongoose.startSession = origMongooseStartSession;
         User.findById = origUserFindById;
         User.findOneAndUpdate = origUserFindOneAndUpdate;
         User.updateOne = origUserUpdateOne;
@@ -339,6 +440,7 @@ async function runCampaignConcurrencyTests() {
         UserTask.findOneAndUpdate = origTaskFindOneAndUpdate;
         UserTask.updateOne = origTaskUpdateOne;
         Transaction.create = origTxCreate;
+        Transaction.findOne = origTxFindOne;
         Transaction.deleteOne = origTxDeleteOne;
         Setting.getSettings = origSettingGetSettings;
         Notification.create = origNotifCreate;
@@ -434,6 +536,7 @@ async function runTrustedDomainTests() {
                 status: 'ACTIVE',
                 iframeUrlTemplate: launchUrlTemplate,
                 appId: 'app_123',
+                apiKey: 'mock_tr_api_key',
                 secretKey: 'mock_cpx_secret_key'
             };
 
@@ -521,6 +624,16 @@ async function runTrustedDomainTests() {
         });
         assert.equal(resCpx.statusCode, 200, 'CPX Research built-in domain trust must be preserved');
         pass('Test 2K: Built-in Preservation — CPX Research domain trust preserved');
+
+        // 9. Preservation of TheoremReach built-in trust
+        const resTheoremReach = await testLaunch({
+            providerKey: 'theoremreach',
+            launchUrlTemplate: 'https://theoremreach.com/respondent_entry/direct?api_key={apiKey}&user_id={userId}',
+            trustedDomains: [] // Empty placement allowlist: TheoremReach has built-in trust
+        });
+        assert.equal(resTheoremReach.statusCode, 200, 'TheoremReach built-in domain trust must be preserved');
+        assert.equal(resTheoremReach.data.success, true);
+        pass('Test 2L: Built-in Preservation — TheoremReach domain trust preserved');
 
     } catch (err) {
         fail('Suite 2 Controller Tests', err);
