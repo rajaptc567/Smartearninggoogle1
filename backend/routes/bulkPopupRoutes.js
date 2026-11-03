@@ -10,11 +10,11 @@ import {
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['admin']), getBulkPopups)
-    .post(authorize(['admin']), createBulkPopup);
+    .get(authorize(['admin', 'super_admin']), getBulkPopups)
+    .post(authorize(['admin', 'super_admin']), createBulkPopup);
 
 router.route('/:id')
-    .put(authorize(['admin']), updateBulkPopup)
-    .delete(authorize(['admin']), deleteBulkPopup);
+    .put(authorize(['admin', 'super_admin']), updateBulkPopup)
+    .delete(authorize(['admin', 'super_admin']), deleteBulkPopup);
 
 export default router;

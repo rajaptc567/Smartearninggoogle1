@@ -32,10 +32,10 @@ router.get('/public', getPublicPaymentMethods);
 
 router.route('/')
     .get(getPaymentMethods) // Publicly accessible to show logos on homepage
-    .post(authorize(['admin']), cpUpload, createPaymentMethod);
+    .post(authorize(['admin', 'super_admin']), cpUpload, createPaymentMethod);
 
 router.route('/:id')
-    .put(authorize(['admin']), cpUpload, updatePaymentMethod)
-    .delete(authorize(['admin']), deletePaymentMethod);
+    .put(authorize(['admin', 'super_admin']), cpUpload, updatePaymentMethod)
+    .delete(authorize(['admin', 'super_admin']), deletePaymentMethod);
 
 export default router;

@@ -39,36 +39,36 @@ const upload = multer({
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['user', 'admin']), getUserTasks)
-    .post(taskActionLimiter, authorize(['user', 'admin']), createUserTask);
+    .get(authorize(['user', 'admin', 'super_admin']), getUserTasks)
+    .post(taskActionLimiter, authorize(['user', 'admin', 'super_admin']), createUserTask);
 
 router.route('/submissions')
-    .get(authorize(['user', 'admin']), getUserTaskSubmissions);
+    .get(authorize(['user', 'admin', 'super_admin']), getUserTaskSubmissions);
 
 router.route('/submissions/:subId')
-    .put(authorize(['user', 'admin']), updateSubmissionStatus)
-    .delete(authorize(['user', 'admin']), deleteSubmission);
+    .put(authorize(['user', 'admin', 'super_admin']), updateSubmissionStatus)
+    .delete(authorize(['user', 'admin', 'super_admin']), deleteSubmission);
 
 router.route('/submissions/:subId/dispute')
-    .post(taskActionLimiter, upload.single('proof'), authorize(['user', 'admin']), openTaskDispute);
+    .post(taskActionLimiter, upload.single('proof'), authorize(['user', 'admin', 'super_admin']), openTaskDispute);
 
 router.route('/:id/submit-proof')
-    .post(taskActionLimiter, authorize(['user', 'admin']), submitUserTaskProof);
+    .post(taskActionLimiter, authorize(['user', 'admin', 'super_admin']), submitUserTaskProof);
 
 router.route('/convert')
-    .post(taskActionLimiter, authorize(['user', 'admin']), convertUserCurrency);
+    .post(taskActionLimiter, authorize(['user', 'admin', 'super_admin']), convertUserCurrency);
 
 router.route('/convert-task-wallet')
-    .post(taskActionLimiter, authorize(['user', 'admin']), convertTaskWalletBalance);
+    .post(taskActionLimiter, authorize(['user', 'admin', 'super_admin']), convertTaskWalletBalance);
 
 router.route('/transfer-investment-to-task')
-    .post(taskActionLimiter, authorize(['user', 'admin']), transferInvestmentToTaskWallet);
+    .post(taskActionLimiter, authorize(['user', 'admin', 'super_admin']), transferInvestmentToTaskWallet);
 
 router.route('/transfer-task-earnings-to-campaign')
-    .post(taskActionLimiter, authorize(['user', 'admin']), transferTaskEarningsToCampaignWallet);
+    .post(taskActionLimiter, authorize(['user', 'admin', 'super_admin']), transferTaskEarningsToCampaignWallet);
 
 router.route('/transfer-wallet-to-campaign')
-    .post(taskActionLimiter, authorize(['user', 'admin']), transferWalletToCampaign);
+    .post(taskActionLimiter, authorize(['user', 'admin', 'super_admin']), transferWalletToCampaign);
 
 router.route('/admin-reset-data')
     .post(authorize(['admin', 'super_admin']), resetWorkAndEarnData);
@@ -77,7 +77,7 @@ router.route('/simulate-reward')
     .post(authorize(['admin', 'super_admin']), simulateTaskReward);
 
 router.route('/:id/survey-analytics')
-    .get(authorize(['user', 'admin']), getSurveyCampaignAnalytics);
+    .get(authorize(['user', 'admin', 'super_admin']), getSurveyCampaignAnalytics);
 
 router.route('/:id/audience-progress')
     .get(authorize(['admin', 'super_admin']), getTaskAudienceProgress);
@@ -95,13 +95,13 @@ router.route('/:id/archive-campaign')
     .post(taskActionLimiter, authorize(['admin', 'super_admin']), archiveAdminCampaign);
 
 router.route('/mandatory-requirements')
-    .get(authorize(['user', 'admin']), getPendingMandatoryRequirements);
+    .get(authorize(['user', 'admin', 'super_admin']), getPendingMandatoryRequirements);
 
 router.route('/:id')
-    .put(authorize(['user', 'admin']), updateUserTaskStatus)
-    .delete(authorize(['user', 'admin']), deleteUserTask);
+    .put(authorize(['user', 'admin', 'super_admin']), updateUserTaskStatus)
+    .delete(authorize(['user', 'admin', 'super_admin']), deleteUserTask);
 
 router.route('/:id/renew')
-    .post(taskActionLimiter, authorize(['user', 'admin']), renewUserTask);
+    .post(taskActionLimiter, authorize(['user', 'admin', 'super_admin']), renewUserTask);
 
 export default router;

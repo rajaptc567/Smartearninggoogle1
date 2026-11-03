@@ -20,12 +20,12 @@ const upload = multer({
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['user', 'admin']), getDeposits)
-    .post(upload.single('receipt'), authorize(['user', 'admin']), financeLimiter, createDeposit);
+    .get(authorize(['user', 'admin', 'super_admin']), getDeposits)
+    .post(upload.single('receipt'), authorize(['user', 'admin', 'super_admin']), financeLimiter, createDeposit);
 
 router.route('/:id')
-    .get(authorize(['user', 'admin']), getDeposit)
-    .put(authorize(['admin']), updateDeposit)
-    .delete(authorize(['admin']), deleteDeposit);
+    .get(authorize(['user', 'admin', 'super_admin']), getDeposit)
+    .put(authorize(['admin', 'super_admin']), updateDeposit)
+    .delete(authorize(['admin', 'super_admin']), deleteDeposit);
 
 export default router;

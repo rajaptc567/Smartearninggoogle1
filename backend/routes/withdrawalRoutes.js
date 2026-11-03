@@ -13,12 +13,12 @@ import {
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['user', 'admin']), getWithdrawals)
-    .post(authorize(['user', 'admin']), financeLimiter, createWithdrawal);
+    .get(authorize(['user', 'admin', 'super_admin']), getWithdrawals)
+    .post(authorize(['user', 'admin', 'super_admin']), financeLimiter, createWithdrawal);
 
 router.route('/:id')
-    .get(authorize(['user', 'admin']), getWithdrawal)
-    .put(authorize(['admin']), updateWithdrawal)
-    .delete(authorize(['admin']), deleteWithdrawal);
+    .get(authorize(['user', 'admin', 'super_admin']), getWithdrawal)
+    .put(authorize(['admin', 'super_admin']), updateWithdrawal)
+    .delete(authorize(['admin', 'super_admin']), deleteWithdrawal);
 
 export default router;

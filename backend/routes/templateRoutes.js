@@ -16,33 +16,33 @@ import {
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['admin']), getTemplates);
+    .get(authorize(['admin', 'super_admin']), getTemplates);
 
 router.route('/reset')
-    .post(authorize(['admin']), resetTemplates);
+    .post(authorize(['admin', 'super_admin']), resetTemplates);
 
 router.route('/bulk')
-    .put(authorize(['admin']), bulkUpdateTemplates);
+    .put(authorize(['admin', 'super_admin']), bulkUpdateTemplates);
 
 router.route('/history')
-    .get(authorize(['admin']), getTemplatesHistory);
+    .get(authorize(['admin', 'super_admin']), getTemplatesHistory);
 
 router.route('/history/:id/resend')
-    .post(authorize(['admin']), resendTemplateLog);
+    .post(authorize(['admin', 'super_admin']), resendTemplateLog);
 
 router.route('/history/bulk-delete')
-    .post(authorize(['admin']), deleteTemplatesHistoryBulk);
+    .post(authorize(['admin', 'super_admin']), deleteTemplatesHistoryBulk);
 
 router.route('/manual-send')
-    .post(authorize(['admin']), manualSendTemplate);
+    .post(authorize(['admin', 'super_admin']), manualSendTemplate);
 
 router.route('/audience/count')
-    .post(authorize(['admin']), getAudienceEstimate);
+    .post(authorize(['admin', 'super_admin']), getAudienceEstimate);
 
 router.route('/audience/users')
-    .post(authorize(['admin']), getAudienceList);
+    .post(authorize(['admin', 'super_admin']), getAudienceList);
 
 router.route('/:key')
-    .put(authorize(['admin']), updateTemplate);
+    .put(authorize(['admin', 'super_admin']), updateTemplate);
 
 export default router;

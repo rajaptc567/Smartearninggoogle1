@@ -11,10 +11,10 @@ import {
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['user', 'admin']), getTransfers)
-    .post(authorize(['user', 'admin']), financeLimiter, createTransfer);
+    .get(authorize(['user', 'admin', 'super_admin']), getTransfers)
+    .post(authorize(['user', 'admin', 'super_admin']), financeLimiter, createTransfer);
 
 router.route('/:id')
-    .put(authorize(['admin']), updateTransfer);
+    .put(authorize(['admin', 'super_admin']), updateTransfer);
 
 export default router;

@@ -21,16 +21,16 @@ const upload = multer({
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['user', 'admin']), getTasks)
-    .post(authorize(['admin']), createTask);
+    .get(authorize(['user', 'admin', 'super_admin']), getTasks)
+    .post(authorize(['admin', 'super_admin']), createTask);
 
-router.get('/pending-verifications', authorize(['admin']), getPendingVerifications);
-router.put('/verify/:userId/:taskId', authorize(['admin']), verifyTaskSubmission);
+router.get('/pending-verifications', authorize(['admin', 'super_admin']), getPendingVerifications);
+router.put('/verify/:userId/:taskId', authorize(['admin', 'super_admin']), verifyTaskSubmission);
 
 router.route('/:id')
-    .put(authorize(['admin']), updateTask)
-    .delete(authorize(['admin']), deleteTask);
+    .put(authorize(['admin', 'super_admin']), updateTask)
+    .delete(authorize(['admin', 'super_admin']), deleteTask);
 
-router.post('/:id/complete', upload.single('proof'), authorize(['user', 'admin']), completeTask);
+router.post('/:id/complete', upload.single('proof'), authorize(['user', 'admin', 'super_admin']), completeTask);
 
 export default router;

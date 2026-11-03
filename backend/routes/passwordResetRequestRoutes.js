@@ -9,10 +9,10 @@ import {
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['admin']), getPasswordResetRequests);
+    .get(authorize(['admin', 'super_admin']), getPasswordResetRequests);
 
 router.route('/:id')
-    .put(authorize(['admin']), updatePasswordResetRequest)
-    .delete(authorize(['admin']), deletePasswordResetRequest);
+    .put(authorize(['admin', 'super_admin']), updatePasswordResetRequest)
+    .delete(authorize(['admin', 'super_admin']), deletePasswordResetRequest);
 
 export default router;

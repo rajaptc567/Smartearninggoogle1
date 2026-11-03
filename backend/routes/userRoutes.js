@@ -31,8 +31,8 @@ const router = express.Router();
 // Verification routes (Publicly accessible, controller enforces security)
 router.post('/verify-email', verificationLimiter, verifyEmailCode);
 router.post('/verify-whatsapp', verificationLimiter, verifyWhatsappCode);
-router.post('/resend-email', authorize(['user', 'admin']), verificationLimiter, resendEmailCode);
-router.post('/resend-whatsapp', authorize(['user', 'admin']), verificationLimiter, resendWhatsappCode);
+router.post('/resend-email', authorize(['user', 'admin', 'super_admin']), verificationLimiter, resendEmailCode);
+router.post('/resend-whatsapp', authorize(['user', 'admin', 'super_admin']), verificationLimiter, resendWhatsappCode);
 
 // Public/Auth routes with rate limiting
 router.post('/login', authLimiter, loginUser);
@@ -46,21 +46,21 @@ router.route('/')
     .post(authLimiter, createUser); // Registration protection
 
 // User-Specific actions
-router.post('/:id/purchase-plan', authorize(['user', 'admin']), purchasePlan);
+router.post('/:id/purchase-plan', authorize(['user', 'admin', 'super_admin']), purchasePlan);
 
 // Admin-Only actions
-router.post('/send-custom-message', authorize(['admin']), sendCustomAdminMessage);
-router.put('/bulk-restrictions', authorize(['admin']), bulkUpdateRestrictions);
-router.post('/bulk-dummy', authorize(['admin']), createBulkDummyUsers);
-router.delete('/bulk', authorize(['admin']), bulkDeleteUsers);
+router.post('/send-custom-message', authorize(['admin', 'super_admin']), sendCustomAdminMessage);
+router.put('/bulk-restrictions', authorize(['admin', 'super_admin']), bulkUpdateRestrictions);
+router.post('/bulk-dummy', authorize(['admin', 'super_admin']), createBulkDummyUsers);
+router.delete('/bulk', authorize(['admin', 'super_admin']), bulkDeleteUsers);
 
 router.route('/:id')
-    .get(authorize(['user', 'admin']), getUser)
-    .put(authorize(['user', 'admin']), updateUser)
-    .delete(authorize(['admin']), deleteUser);
+    .get(authorize(['user', 'admin', 'super_admin']), getUser)
+    .put(authorize(['user', 'admin', 'super_admin']), updateUser)
+    .delete(authorize(['admin', 'super_admin']), deleteUser);
 
-router.post('/:id/adjust-wallet', authorize(['admin']), adjustWallet);
-router.post('/:id/activate-plan', authorize(['admin']), adminActivatePlan);
-router.post('/:id/admin-reset-password', authorize(['admin']), adminInitiatePasswordReset);
+router.post('/:id/adjust-wallet', authorize(['admin', 'super_admin']), adjustWallet);
+router.post('/:id/activate-plan', authorize(['admin', 'super_admin']), adminActivatePlan);
+router.post('/:id/admin-reset-password', authorize(['admin', 'super_admin']), adminInitiatePasswordReset);
 
 export default router;

@@ -12,10 +12,10 @@ const router = express.Router();
 
 router.route('/')
     .get(getRules)
-    .post(authorize(['admin']), createRule);
+    .post(authorize(['admin', 'super_admin']), createRule);
 
 router.route('/:id')
-    .put(authorize(['admin']), updateRule)
-    .delete(authorize(['admin']), deleteRule);
+    .put(authorize(['admin', 'super_admin']), updateRule)
+    .delete(authorize(['admin', 'super_admin']), deleteRule);
 
 export default router;
