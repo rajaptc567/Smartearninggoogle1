@@ -1783,25 +1783,61 @@ export const updateUserTaskStatus = async (req, res) => {
             let deductionInUserCurr = totalAmountUSD * (rates[userCurr] || 1);
             deductionInUserCurr = Number(deductionInUserCurr.toFixed(2));
 
-            if (user.walletBalance < deductionInUserCurr) {
+            let deductedFromTaskWallet = false;
+            let transactionAmount = -deductionInUserCurr;
+            let transactionCurrency = userCurr;
+
+            // Check funding following campaign creation wallet priority: Task Wallet first, then Main Wallet
+            if ((user.taskWalletBalance || 0) >= totalAmountUSD) {
+                const curSources = user.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                let remainingToDeduct = totalAmountUSD;
+
+                const deductRefunds = Math.min(curSources.fromRefundsUSD || 0, remainingToDeduct);
+                const sourceFromRefunds = deductRefunds;
+                remainingToDeduct = Number((remainingToDeduct - deductRefunds).toFixed(2));
+
+                const deductInv = Math.min(curSources.fromInvestmentUSD || 0, remainingToDeduct);
+                const sourceFromInvestment = deductInv;
+                remainingToDeduct = Number((remainingToDeduct - deductInv).toFixed(2));
+
+                const deductEarn = Math.min(curSources.fromTaskEarningsUSD || 0, remainingToDeduct);
+                const sourceFromTaskEarnings = deductEarn;
+                remainingToDeduct = Number((remainingToDeduct - deductEarn).toFixed(2));
+
+                let finalSourceInv = sourceFromInvestment;
+                if (remainingToDeduct > 0) {
+                    finalSourceInv = Number((sourceFromInvestment + remainingToDeduct).toFixed(2));
+                }
+
+                user.campaignWalletSources = {
+                    fromInvestmentUSD: Math.max(0, Number(((curSources.fromInvestmentUSD || 0) - finalSourceInv).toFixed(2))),
+                    fromTaskEarningsUSD: Math.max(0, Number(((curSources.fromTaskEarningsUSD || 0) - sourceFromTaskEarnings).toFixed(2))),
+                    fromRefundsUSD: Math.max(0, Number(((curSources.fromRefundsUSD || 0) - sourceFromRefunds).toFixed(2)))
+                };
+
+                user.taskWalletBalance = Number(((user.taskWalletBalance || 0) - totalAmountUSD).toFixed(2));
+                deductedFromTaskWallet = true;
+                transactionAmount = -totalAmountUSD;
+                transactionCurrency = 'USD';
+            } else if ((user.walletBalance || 0) >= deductionInUserCurr) {
+                user.walletBalance = Number(((user.walletBalance || 0) - deductionInUserCurr).toFixed(2));
+            } else {
                 return res.status(400).json({ 
                     success: false, 
-                    error: `Insufficient wallet balance to re-submit campaign. Required: ${deductionInUserCurr} ${userCurr} (${totalAmountUSD} USD: ${totalBudget} Budget + ${baseFeeCharged} Base Fee), Available: ${user.walletBalance} ${userCurr}` 
+                    error: `Insufficient wallet balance to re-submit campaign. Required: $${totalAmountUSD} USD (${deductionInUserCurr} ${userCurr}), Available Task Wallet: $${(user.taskWalletBalance || 0).toFixed(2)} USD, Available Main Wallet: ${user.walletBalance || 0} ${userCurr}` 
                 });
             }
 
-            // Deduct from wallet
-            user.walletBalance = Number((user.walletBalance - deductionInUserCurr).toFixed(2));
             await user.save();
 
             // Create budget deduction transaction
             await Transaction.create({
                 userId: user._id,
                 userName: user.username,
-                currency: userCurr,
+                currency: transactionCurrency,
                 type: 'Task Budget Deduction',
-                amount: -deductionInUserCurr,
-                description: `Resubmitted User Task For Review (USD): ${task.title} (Budget + Base Fee of ${baseFeeCharged} USD)`,
+                amount: transactionAmount,
+                description: `Resubmitted User Task For Review (${transactionCurrency}): ${task.title} (Budget + Base Fee of ${baseFeeCharged} USD)`,
                 status: 'Approved'
             });
 
