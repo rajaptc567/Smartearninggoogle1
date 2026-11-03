@@ -8,6 +8,51 @@ import { evaluatePlacementEligibility } from '../utils/providerPlacementEligibil
 import { constructTheoremReachEntryUrl, constructCpxEntryUrl } from './postbackController.js';
 
 /**
+ * Validates and normalizes a hostname entry.
+ * Strictly accepts valid hostnames only (RFC 1123 / RFC 952).
+ * Rejects schemes (http://, https://), paths (/...), credentials (user@...),
+ * ports (:8080), whitespace, wildcards (*), malformed labels, or invalid formats.
+ *
+ * @param {string} domain 
+ * @returns {string|null} Normalized lowercase hostname, or null if invalid.
+ */
+export const validateAndNormalizeHostname = (domain) => {
+    if (typeof domain !== 'string') return null;
+    const trimmed = domain.trim().toLowerCase();
+    if (!trimmed || trimmed.length > 253) return null;
+
+    // Reject whitespace, schemes, paths, query, hash, credentials, ports, wildcards
+    if (/[\s/:?#@*]/.test(trimmed)) return null;
+
+    // Must be composed of labels separated by dots (at least 2 labels e.g. domain.tld)
+    const labels = trimmed.split('.');
+    if (labels.length < 2) return null;
+
+    for (const label of labels) {
+        if (!label || label.length > 63) return null;
+        // Each label must be alphanumeric with hyphens in between, cannot start or end with hyphen
+        if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) {
+            return null;
+        }
+    }
+
+    return trimmed;
+};
+
+/**
+ * Checks whether a launch hostname exactly matches or is a legitimate subdomain of a trusted domain.
+ * Prevents suffix spoofing (e.g., trusted.com.evil.com does NOT match trusted.com).
+ *
+ * @param {string} launchHost
+ * @param {string} trustedDomain
+ * @returns {boolean}
+ */
+export const isDomainTrusted = (launchHost, trustedDomain) => {
+    if (!launchHost || !trustedDomain) return false;
+    return launchHost === trustedDomain || launchHost.endsWith('.' + trustedDomain);
+};
+
+/**
  * Helper to record audit log entries explicitly for admin mutations
  */
 const recordAuditLog = async (placementId, adminUser, action, changes) => {
@@ -284,44 +329,42 @@ export const launchProviderPlacement = async (req, res) => {
                 return res.status(403).json({ success: false, error: 'Launch URL with embedded credentials rejected for security.' });
             }
 
-            const host = parsedUrl.hostname.toLowerCase().trim();
-            const placementTrusted = Array.isArray(placement.trustedLaunchDomains) 
-                ? placement.trustedLaunchDomains.map(d => d.toLowerCase().trim()).filter(Boolean) 
-                : [];
-            
+            const launchHost = parsedUrl.hostname.toLowerCase().trim();
+            if (!launchHost) {
+                return res.status(400).json({ success: false, error: 'Malformed launch URL hostname' });
+            }
+
             let isTrusted = false;
             
             // System level trust for built-in providers with custom handlers
             if (placement.providerKey === 'cpx_research') {
                 const cpxDomains = ['offers.cpx-research.com', 'cpx-research.com'];
-                isTrusted = cpxDomains.some(d => host === d || host.endsWith('.' + d));
+                isTrusted = cpxDomains.some(d => isDomainTrusted(launchHost, d));
             } else if (placement.providerKey === 'theoremreach') {
                 const trDomains = ['theoremreach.com'];
-                isTrusted = trDomains.some(d => host === d || host.endsWith('.' + d));
+                isTrusted = trDomains.some(d => isDomainTrusted(launchHost, d));
             }
 
             // Generic providers MUST have their host in the placement-level allowlist
             if (!isTrusted) {
-                if (placementTrusted.length === 0) {
-                    return res.status(403).json({ success: false, error: 'Launch rejected: No trusted domains configured for this placement.' });
+                const validConfiguredDomains = Array.isArray(placement.trustedLaunchDomains) 
+                    ? placement.trustedLaunchDomains.map(validateAndNormalizeHostname).filter(Boolean) 
+                    : [];
+
+                if (validConfiguredDomains.length === 0) {
+                    return res.status(403).json({ 
+                        success: false, 
+                        error: 'Launch rejected: No trusted domains configured for this placement.' 
+                    });
                 }
-                isTrusted = placementTrusted.some(trusted => host === trusted || host.endsWith('.' + trusted));
+                isTrusted = validConfiguredDomains.some(trusted => isDomainTrusted(launchHost, trusted));
             }
             
             if (!isTrusted) {
                 return res.status(403).json({ 
                     success: false, 
-                    error: `Launch rejected: Domain '${host}' is not in the trusted allowlist for this placement.` 
+                    error: `Launch rejected: Domain '${launchHost}' is not in the trusted allowlist for this placement.` 
                 });
-            }
-
-            // For generic providers, ensure no path/credentials in construction (sanitization check)
-            if (placement.providerKey !== 'cpx_research' && placement.providerKey !== 'theoremreach') {
-                if (parsedUrl.pathname !== '/' && parsedUrl.pathname !== '') {
-                    // Note: This check assumes the template doesn't include a path. 
-                    // If some generic providers NEED paths, this might need adjustment, 
-                    // but the prompt says "valid hostname only, no paths".
-                }
             }
         } catch (err) {
             return res.status(400).json({ success: false, error: 'Malformed launch URL detected' });
@@ -448,6 +491,25 @@ export const createAdminPlacement = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Rollout percentage must be a finite number between 0 and 100' });
         }
 
+        let normalizedTrustedDomains = [];
+        if (req.body.trustedLaunchDomains !== undefined) {
+            if (!Array.isArray(req.body.trustedLaunchDomains)) {
+                return res.status(400).json({ success: false, error: 'trustedLaunchDomains must be an array of hostnames' });
+            }
+            for (const d of req.body.trustedLaunchDomains) {
+                const validated = validateAndNormalizeHostname(d);
+                if (!validated) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Invalid trusted launch domain '${d}'. Must be a valid hostname without schemes, paths, credentials, ports, whitespace, or wildcards.`
+                    });
+                }
+                if (!normalizedTrustedDomains.includes(validated)) {
+                    normalizedTrustedDomains.push(validated);
+                }
+            }
+        }
+
         const newPlacementData = {
             providerKey: String(providerKey).toLowerCase().trim(),
             parentTabId: String(parentTabId).trim(),
@@ -465,13 +527,7 @@ export const createAdminPlacement = async (req, res) => {
             rolloutPercentage: rolloutPercentage !== undefined ? rolloutNum : 100,
             availableTasksVisibility: Boolean(req.body.availableTasksVisibility),
             launchDisplayMode: ['inline', 'modal'].includes(launchDisplayMode) ? launchDisplayMode : 'modal',
-            trustedLaunchDomains: Array.isArray(req.body.trustedLaunchDomains) 
-                ? req.body.trustedLaunchDomains.map(d => {
-                    const clean = String(d).trim().toLowerCase();
-                    if (!clean || clean.includes('/') || clean.includes(':') || clean.includes('@')) return null;
-                    return clean;
-                }).filter(Boolean) 
-                : []
+            trustedLaunchDomains: normalizedTrustedDomains
         };
 
         const created = await ProviderPlacement.create(newPlacementData);
@@ -538,13 +594,23 @@ export const updateAdminPlacement = async (req, res) => {
                         ? req.body[field].filter(id => mongoose.isValidObjectId(id))
                         : [];
                 } else if (field === 'trustedLaunchDomains') {
-                    updates[field] = Array.isArray(req.body[field])
-                        ? req.body[field].map(d => {
-                            const clean = String(d).trim().toLowerCase();
-                            if (!clean || clean.includes('/') || clean.includes(':') || clean.includes('@')) return null;
-                            return clean;
-                        }).filter(Boolean)
-                        : [];
+                    if (!Array.isArray(req.body[field])) {
+                        return res.status(400).json({ success: false, error: 'trustedLaunchDomains must be an array of hostnames' });
+                    }
+                    const validatedList = [];
+                    for (const d of req.body[field]) {
+                        const validated = validateAndNormalizeHostname(d);
+                        if (!validated) {
+                            return res.status(400).json({
+                                success: false,
+                                error: `Invalid trusted launch domain '${d}'. Must be a valid hostname without schemes, paths, credentials, ports, whitespace, or wildcards.`
+                            });
+                        }
+                        if (!validatedList.includes(validated)) {
+                            validatedList.push(validated);
+                        }
+                    }
+                    updates[field] = validatedList;
                 } else if (field === 'subTabId') {
                     const candidateSubTabId = req.body.subTabId !== undefined && req.body.subTabId !== null
                         ? String(req.body.subTabId).trim()

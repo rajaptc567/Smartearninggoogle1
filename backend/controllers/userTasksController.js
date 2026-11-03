@@ -1758,8 +1758,8 @@ export const updateUserTaskStatus = async (req, res) => {
         if (reviewRequested === true) {
             try {
                 const result = await executeWithOptionalTransaction(async (session) => {
-                    // 1. ATOMIC LOCK: Claim the task resubmission slot.
-                    // This findOneAndUpdate ensures that ONLY ONE concurrent request can proceed.
+                    // 1. ATOMIC LOCK: Claim the task resubmission slot atomically.
+                    // Only a rejected task that hasn't been resubmitted can be claimed.
                     const t = await UserTask.findOneAndUpdate(
                         { 
                             _id: req.params.id, 
@@ -1768,123 +1768,198 @@ export const updateUserTaskStatus = async (req, res) => {
                         },
                         { 
                             $set: { 
-                                resubmittedForReview: true,
-                                status: 'Processing' // Interim status while deducting funds
+                                resubmittedForReview: true 
                             }
                         },
                         { session, new: true }
                     );
 
                     if (!t) {
-                        // If no document found, it's either not Rejected or already resubmitted.
-                        throw new Error('Campaign cannot be resubmitted. It may already be under review or is not in Rejected status.');
+                        // Check why it failed for informative error message
+                        const existingCheck = await UserTask.findById(req.params.id);
+                        if (!existingCheck) {
+                            throw new Error('Campaign not found.');
+                        }
+                        if (existingCheck.status !== 'Rejected') {
+                            throw new Error('Only rejected campaigns can be submitted for review.');
+                        }
+                        if (existingCheck.resubmittedForReview === true) {
+                            throw new Error('This campaign has already been submitted for a one-time review.');
+                        }
+                        throw new Error('Campaign cannot be resubmitted at this time.');
                     }
 
-                    const u = await User.findById(t.userId).session(session);
-                    if (!u) {
-                        // COMPENSATION: Unlock task if user not found
-                        if (!session) await UserTask.updateOne({ _id: t._id }, { $set: { resubmittedForReview: false, status: 'Rejected' } });
-                        throw new Error('Campaign creator not found.');
-                    }
-
-                    const settings = await Setting.getSettings();
-                    const config = settings.userTaskConfig || { minQuantity: 5, minRewardAmount: 0.10, commissionPercent: 10, campaignFeeEnabled: false, campaignFeeAmount: 1.00 };
-                    
-                    const subtotal = t.targetQuantity * t.rewardPerTask;
-                    const adminCommission = Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
-                    const totalBudget = Number((subtotal + adminCommission).toFixed(2));
-                    const baseFeeCharged = config.campaignFeeEnabled ? (config.campaignFeeAmount || 0) : 0;
-                    const totalAmountUSD = Number((totalBudget + baseFeeCharged).toFixed(2));
-
-                    const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
-                    const userCurr = u.currency || 'USD';
-                    let deductionInUserCurr = Number((totalAmountUSD * (rates[userCurr] || 1)).toFixed(2));
-
-                    let transactionAmount = 0;
-                    let transactionCurrency = '';
+                    let deductionSucceeded = false;
+                    let deductedFromTaskWallet = false;
+                    let createdTxId = null;
+                    let savedSources = null;
                     let finalUser = null;
+                    let totalAmountUSD = 0;
+                    let deductionInUserCurr = 0;
 
-                    // 2. ATOMIC DEDUCTION: Task Wallet Priority
-                    if ((u.taskWalletBalance || 0) >= totalAmountUSD) {
-                        // Deduct from Task Wallet
-                        const curSources = u.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
-                        let rem = totalAmountUSD;
-                        const dRef = Math.min(curSources.fromRefundsUSD || 0, rem); rem = Number((rem - dRef).toFixed(2));
-                        const dInv = Math.min(curSources.fromInvestmentUSD || 0, rem); rem = Number((rem - dInv).toFixed(2));
-                        const dEarn = Math.min(curSources.fromTaskEarningsUSD || 0, rem); rem = Number((rem - dEarn).toFixed(2));
-                        const fInv = rem > 0 ? Number((dInv + rem).toFixed(2)) : dInv;
+                    try {
+                        const u = await User.findById(t.userId).session(session);
+                        if (!u) {
+                            throw new Error('Campaign creator not found.');
+                        }
 
-                        const sourcesUpdate = {
-                            fromInvestmentUSD: Math.max(0, Number(((curSources.fromInvestmentUSD || 0) - fInv).toFixed(2))),
-                            fromTaskEarningsUSD: Math.max(0, Number(((curSources.fromTaskEarningsUSD || 0) - dEarn).toFixed(2))),
-                            fromRefundsUSD: Math.max(0, Number(((curSources.fromRefundsUSD || 0) - dRef).toFixed(2)))
+                        const settings = await Setting.getSettings();
+                        const config = settings.userTaskConfig || { minQuantity: 5, minRewardAmount: 0.10, commissionPercent: 10, campaignFeeEnabled: false, campaignFeeAmount: 1.00 };
+                        
+                        const subtotal = t.targetQuantity * t.rewardPerTask;
+                        const adminCommission = Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
+                        const totalBudget = Number((subtotal + adminCommission).toFixed(2));
+                        const baseFeeCharged = config.campaignFeeEnabled ? (config.campaignFeeAmount || 0) : 0;
+                        totalAmountUSD = Number((totalBudget + baseFeeCharged).toFixed(2));
+
+                        const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
+                        const userCurr = u.currency || 'USD';
+                        deductionInUserCurr = Number((totalAmountUSD * (rates[userCurr] || 1)).toFixed(2));
+
+                        let transactionAmount = 0;
+                        let transactionCurrency = '';
+
+                        // 2. ATOMIC DEDUCTION: Task Wallet Priority, then Main Wallet
+                        if ((u.taskWalletBalance || 0) >= totalAmountUSD) {
+                            // Deduct from Task Wallet
+                            const curSources = u.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                            savedSources = {
+                                fromInvestmentUSD: curSources.fromInvestmentUSD || 0,
+                                fromTaskEarningsUSD: curSources.fromTaskEarningsUSD || 0,
+                                fromRefundsUSD: curSources.fromRefundsUSD || 0
+                            };
+                            let rem = totalAmountUSD;
+                            const dRef = Math.min(curSources.fromRefundsUSD || 0, rem); rem = Number((rem - dRef).toFixed(2));
+                            const dInv = Math.min(curSources.fromInvestmentUSD || 0, rem); rem = Number((rem - dInv).toFixed(2));
+                            const dEarn = Math.min(curSources.fromTaskEarningsUSD || 0, rem); rem = Number((rem - dEarn).toFixed(2));
+                            const fInv = rem > 0 ? Number((dInv + rem).toFixed(2)) : dInv;
+
+                            const sourcesUpdate = {
+                                fromInvestmentUSD: Math.max(0, Number(((curSources.fromInvestmentUSD || 0) - fInv).toFixed(2))),
+                                fromTaskEarningsUSD: Math.max(0, Number(((curSources.fromTaskEarningsUSD || 0) - dEarn).toFixed(2))),
+                                fromRefundsUSD: Math.max(0, Number(((curSources.fromRefundsUSD || 0) - dRef).toFixed(2)))
+                            };
+
+                            finalUser = await User.findOneAndUpdate(
+                                { _id: u._id, taskWalletBalance: { $gte: totalAmountUSD } },
+                                { 
+                                    $inc: { taskWalletBalance: -totalAmountUSD },
+                                    $set: { campaignWalletSources: sourcesUpdate }
+                                },
+                                { session, new: true }
+                            );
+                            deductedFromTaskWallet = true;
+                            transactionAmount = -totalAmountUSD;
+                            transactionCurrency = 'USD';
+                        } else if ((u.walletBalance || 0) >= deductionInUserCurr) {
+                            // Deduct from Main Wallet
+                            finalUser = await User.findOneAndUpdate(
+                                { _id: u._id, walletBalance: { $gte: deductionInUserCurr } },
+                                { $inc: { walletBalance: -deductionInUserCurr } },
+                                { session, new: true }
+                            );
+                            deductedFromTaskWallet = false;
+                            transactionAmount = -deductionInUserCurr;
+                            transactionCurrency = userCurr;
+                        }
+
+                        if (!finalUser) {
+                            throw new Error(`Insufficient wallet balance. Required: $${totalAmountUSD} USD / ${deductionInUserCurr} ${userCurr}`);
+                        }
+
+                        deductionSucceeded = true;
+
+                        // 3. ATOMIC LOGGING: Create Transaction
+                        const [createdTx] = await Transaction.create([{
+                            userId: finalUser._id,
+                            userName: finalUser.username,
+                            currency: transactionCurrency,
+                            type: 'Task Budget Deduction',
+                            amount: transactionAmount,
+                            description: `Resubmitted User Task For Review: ${t.title} (Budget + Base Fee of ${baseFeeCharged} USD)`,
+                            status: 'Approved'
+                        }], session ? { session } : {});
+                        createdTxId = createdTx ? createdTx._id : null;
+
+                        // 4. FINAL STATE: Update Task state to Pending
+                        const historyEntry = {
+                            action: 'Resubmitted For Review',
+                            previousStatus: 'Rejected',
+                            newStatus: 'Pending',
+                            timestamp: new Date(),
+                            performedBy: req.user?.id ? req.user.id.toString() : t.userId.toString(),
+                            details: userReviewMessage || 'Campaign resubmitted for admin review.'
                         };
 
-                        finalUser = await User.findOneAndUpdate(
-                            { _id: u._id, taskWalletBalance: { $gte: totalAmountUSD } },
-                            { 
-                                $inc: { taskWalletBalance: -totalAmountUSD },
-                                $set: { campaignWalletSources: sourcesUpdate }
+                        const updatedTask = await UserTask.findOneAndUpdate(
+                            { _id: t._id },
+                            {
+                                $set: {
+                                    status: 'Pending',
+                                    reviewRequested: true,
+                                    resubmittedForReview: true,
+                                    baseFeeCharged: baseFeeCharged,
+                                    userReviewMessage: userReviewMessage || '',
+                                    adminNotes: ''
+                                },
+                                $push: { history: historyEntry }
                             },
                             { session, new: true }
                         );
-                        transactionAmount = -totalAmountUSD;
-                        transactionCurrency = 'USD';
-                    } else if ((u.walletBalance || 0) >= deductionInUserCurr) {
-                        // Deduct from Main Wallet
-                        finalUser = await User.findOneAndUpdate(
-                            { _id: u._id, walletBalance: { $gte: deductionInUserCurr } },
-                            { $inc: { walletBalance: -deductionInUserCurr } },
-                            { session, new: true }
-                        );
-                        transactionAmount = -deductionInUserCurr;
-                        transactionCurrency = userCurr;
+
+                        if (!updatedTask) {
+                            throw new Error('Failed to update campaign state to Pending.');
+                        }
+
+                        // 5. Creator Notification
+                        try {
+                            await Notification.create([{
+                                userId: finalUser._id,
+                                subject: 'Campaign Resubmitted 🔄',
+                                message: `Your campaign "${t.title}" has been resubmitted for a final one-time review. If approved, it will go live immediately.`,
+                                senderType: 'System'
+                            }], session ? { session } : {});
+                        } catch (notifErr) {
+                            console.error('[Notification Warning]:', notifErr.message);
+                        }
+
+                        return { task: updatedTask, user: finalUser };
+                    } catch (stepErr) {
+                        // COMPENSATION: When MongoDB transactions are not active, roll back any partial mutations
+                        if (!session) {
+                            try {
+                                if (deductionSucceeded && finalUser) {
+                                    if (deductedFromTaskWallet) {
+                                        await User.updateOne(
+                                            { _id: finalUser._id },
+                                            {
+                                                $inc: { taskWalletBalance: totalAmountUSD },
+                                                $set: { campaignWalletSources: savedSources }
+                                            }
+                                        );
+                                    } else {
+                                        await User.updateOne(
+                                            { _id: finalUser._id },
+                                            { $inc: { walletBalance: deductionInUserCurr } }
+                                        );
+                                    }
+                                }
+
+                                if (createdTxId) {
+                                    await Transaction.deleteOne({ _id: createdTxId });
+                                }
+
+                                // Always revert task claim back to clean Rejected state so it is never stuck
+                                await UserTask.updateOne(
+                                    { _id: t._id },
+                                    { $set: { resubmittedForReview: false, status: 'Rejected' } }
+                                );
+                            } catch (compErr) {
+                                console.error('[Critical Compensation Error]:', compErr.message);
+                            }
+                        }
+                        throw stepErr;
                     }
-
-                    if (!finalUser) {
-                        // COMPENSATION: Revert task lock if deduction failed (insufficient funds or concurrent withdrawal)
-                        if (!session) await UserTask.updateOne({ _id: t._id }, { $set: { resubmittedForReview: false, status: 'Rejected' } });
-                        throw new Error(`Insufficient funds. Required: $${totalAmountUSD} USD / ${deductionInUserCurr} ${userCurr}`);
-                    }
-
-                    // 3. ATOMIC LOGGING: Create transaction
-                    await Transaction.create([{
-                        userId: finalUser._id,
-                        userName: finalUser.username,
-                        currency: transactionCurrency,
-                        type: 'Task Budget Deduction',
-                        amount: transactionAmount,
-                        description: `Resubmitted Campaign Review: ${t.title} (Inc. ${baseFeeCharged} USD Fee)`,
-                        status: 'Approved'
-                    }], { session });
-
-                    // 4. FINAL STATE: Set to Pending
-                    t.status = 'Pending';
-                    t.reviewRequested = true;
-                    t.resubmittedForReview = true;
-                    t.baseFeeCharged = baseFeeCharged;
-                    t.userReviewMessage = userReviewMessage || '';
-                    t.adminNotes = '';
-                    if (!t.history) t.history = [];
-                    t.history.push({
-                        action: 'Resubmitted For Review',
-                        previousStatus: 'Rejected',
-                        newStatus: 'Pending',
-                        timestamp: new Date(),
-                        performedBy: req.user?.id || t.userId.toString(),
-                        details: userReviewMessage || 'Campaign resubmitted for admin review.'
-                    });
-
-                    await t.save({ session });
-
-                    await Notification.create([{
-                        userId: finalUser._id,
-                        subject: 'Campaign Resubmitted 🔄',
-                        message: `Your campaign "${t.title}" has been resubmitted for a final one-time review.`,
-                        senderType: 'System'
-                    }], { session });
-
-                    return { task: t, user: finalUser };
                 });
 
                 // Post-process Notifications (Non-critical)

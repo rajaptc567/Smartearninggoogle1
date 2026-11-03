@@ -37,16 +37,14 @@ export const createDispute = async (req, res) => {
         // Allow Admins to explicitly specify a different userId if they are creating a ticket on behalf of a user.
         if (!isAdmin || !disputeData.userId) {
             disputeData.userId = loggedInUserId;
-            disputeData.userName = req.user.username || 'Member';
         }
 
         const user = await User.findById(disputeData.userId);
         if (!user) return res.status(404).json({ success: false, error: 'Target user not found' });
         
-        // Only update userName if it wasn't already derived or provided
-        if (!disputeData.userName) {
-            disputeData.userName = user.username || 'Member';
-        }
+        // CRITICAL INTEGRITY: Always derive userName from the actual target user's database record,
+        // even when an Admin or normal user supplies userName in the request body.
+        disputeData.userName = user.username || 'Member';
 
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.dispute)) {
             return res.status(403).json({ success: false, error: 'Restricted.' });
