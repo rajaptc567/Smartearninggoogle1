@@ -163,7 +163,7 @@ export const ProviderPlacementManager: React.FC = () => {
 
             const excludedCountries = excludedCountriesInput
                 .split(',')
-                .map(s => s.trim().toLowerCase())
+                .map(s => s.trim().toUpperCase())
                 .filter(Boolean);
 
             const trustedLaunchDomains = trustedLaunchDomainsInput

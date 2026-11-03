@@ -30,16 +30,23 @@ export const getDisputes = async (req, res) => {
 export const createDispute = async (req, res) => {
     try {
         const disputeData = { ...req.body };
-        const loggedInUserId = req.user.id;
         const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+        const loggedInUserId = req.user.id;
 
-        // MANDATORY: Derive identities and roles from req.user, never trust req.body for these.
-        disputeData.userId = loggedInUserId;
-        disputeData.userName = req.user.username || 'Member';
+        // AUTH: Derive identities from req.user for workers. 
+        // Allow Admins to explicitly specify a different userId if they are creating a ticket on behalf of a user.
+        if (!isAdmin || !disputeData.userId) {
+            disputeData.userId = loggedInUserId;
+            disputeData.userName = req.user.username || 'Member';
+        }
 
-        const user = await User.findById(loggedInUserId);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-        disputeData.userName = user.username || 'Member';
+        const user = await User.findById(disputeData.userId);
+        if (!user) return res.status(404).json({ success: false, error: 'Target user not found' });
+        
+        // Only update userName if it wasn't already derived or provided
+        if (!disputeData.userName) {
+            disputeData.userName = user.username || 'Member';
+        }
 
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.dispute)) {
             return res.status(403).json({ success: false, error: 'Restricted.' });

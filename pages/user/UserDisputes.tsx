@@ -162,7 +162,8 @@ export const UserDisputes: React.FC = () => {
         } else if (moduleType === 'Investment') {
             // Return user's active/past investments or deposits
             if (disputeCategory.includes('Deposit') || disputeCategory.includes('Withdrawal')) {
-                return deposits.filter(d => d.userId === currentUser._id && d.status === 'Rejected').map(d => ({
+                // For Investment disputes, allow all deposits (original behavior)
+                return deposits.filter(d => d.userId === currentUser._id).map(d => ({
                     id: d._id,
                     label: `Deposit $${d.amount} ${d.currency} - ${new Date(d.date).toLocaleDateString()} (${d.status})`
                 }));
@@ -174,7 +175,7 @@ export const UserDisputes: React.FC = () => {
                         label: `Investment Plan: "${inv.planName}" - Invested $${inv.amount} (Daily ROI: ${inv.dailyReturn || inv.profitRate}%) - [${inv.status || 'Active'}]`
                     }));
                 }
-                return deposits.filter(d => d.userId === currentUser._id && d.status === 'Rejected').map(d => ({
+                return deposits.filter(d => d.userId === currentUser._id).map(d => ({
                     id: d._id,
                     label: `Deposit $${d.amount} ${d.currency} - ${new Date(d.date).toLocaleDateString()} (${d.status})`
                 }));
