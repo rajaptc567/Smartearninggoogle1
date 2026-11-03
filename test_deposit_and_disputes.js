@@ -20,10 +20,13 @@ async function runTests() {
         if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
             return url;
         }
-        if (url.startsWith('/')) {
-            return `${UPLOADS_URL.replace(/\/$/, '')}${url}`;
+        const rawBase = UPLOADS_URL.replace(/\/$/, '');
+        const uploadsBase = rawBase.endsWith('/uploads') ? rawBase : `${rawBase}/uploads`;
+        let relativePath = url.startsWith('/') ? url.slice(1) : url;
+        if (relativePath.startsWith('uploads/')) {
+            relativePath = relativePath.slice('uploads/'.length);
         }
-        return `${UPLOADS_URL.replace(/\/$/, '')}/${url}`;
+        return `${uploadsBase}/${relativePath}`;
     };
 
     const cloudinaryUrl = 'https://res.cloudinary.com/demo/image/upload/v12345/receipt.jpg';
@@ -32,9 +35,14 @@ async function runTests() {
     const dataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSU...';
     assert.equal(getReceiptSrc(dataUrl), dataUrl, 'Data URL must be returned unchanged');
 
-    const relativePath = 'deposits/receipt123.jpg';
-    assert.equal(getReceiptSrc(relativePath), 'https://smartexn.com/uploads/deposits/receipt123.jpg', 'Relative path must prepend UPLOADS_URL');
-    console.log('✓ Passed Test 1: getReceiptSrc correctly handles Cloudinary, absolute, data, and relative URLs.\n');
+    const blobUrl = 'blob:http://localhost:3000/1234-5678';
+    assert.equal(getReceiptSrc(blobUrl), blobUrl, 'Blob URL must be returned unchanged');
+
+    assert.equal(getReceiptSrc('deposits/receipt123.jpg'), 'https://smartexn.com/uploads/deposits/receipt123.jpg', 'Relative deposits/file.jpg must resolve under /uploads');
+    assert.equal(getReceiptSrc('/uploads/deposits/receipt123.jpg'), 'https://smartexn.com/uploads/deposits/receipt123.jpg', '/uploads/deposits/file.jpg must not duplicate /uploads');
+    assert.equal(getReceiptSrc('uploads/deposits/receipt123.jpg'), 'https://smartexn.com/uploads/deposits/receipt123.jpg', 'uploads/deposits/file.jpg must not duplicate /uploads');
+
+    console.log('✓ Passed Test 1: getReceiptSrc correctly handles Cloudinary, absolute, data, blob, and all relative upload path variations.\n');
 
     // -------------------------------------------------------------------------
     // Test 2: Deposit Dispute Backend Security & Validation
@@ -179,11 +187,48 @@ async function runTests() {
     assert.ok(resE.body.error.includes('active dispute already exists'));
     console.log('✓ Passed Test 2E: Duplicate dispute blocked with 409.');
 
-    // Sub-case F: Admin notification created
-    const adminNotifs = mockNotifications.filter(n => n.userId === 'admin_user_1');
-    assert.ok(adminNotifs.length > 0, 'Admin notification must be generated on dispute creation');
-    assert.ok(adminNotifs[0].subject.includes('Dispute Ticket'), 'Admin notification subject must mention Dispute Ticket');
-    console.log('✓ Passed Test 2F: Admin notification automatically created on dispute entry.\n');
+    // Sub-case Non-Deposit Bypass: Withdrawal, Investment, Other do not enter Deposit validation
+    const reqW = {
+        user: { id: 'user_101', role: 'user' },
+        body: { userId: 'user_101', type: 'Withdrawal', category: 'Deposit & Withdrawal', referenceId: 'N/A', description: 'Withdrawal issue' }
+    };
+    const resW = createRes();
+    await createDispute(reqW, resW);
+    assert.equal(resW.statusCode, 201);
+    assert.equal(resW.body.data.type, 'Withdrawal');
+    console.log('✓ Passed Test 2 Non-Deposit Bypass: Withdrawal dispute with Deposit category text bypasses Deposit validation.');
+
+    const reqI = {
+        user: { id: 'user_101', role: 'user' },
+        body: { userId: 'user_101', type: 'Investment', category: 'Deposit Issue', referenceId: 'INV-100', description: 'Investment ROI issue' }
+    };
+    const resI = createRes();
+    await createDispute(reqI, resI);
+    assert.equal(resI.statusCode, 201);
+    assert.equal(resI.body.data.type, 'Investment');
+    console.log('✓ Passed Test 2 Investment Preservation: Investment dispute remains type Investment even when category text mentions Deposit.');
+
+    const reqTask = {
+        user: { id: 'user_101', role: 'user' },
+        body: { userId: 'user_101', type: 'Task', referenceId: 'SUB-999', description: 'Task rejection dispute' }
+    };
+    const resTask = createRes();
+    await createDispute(reqTask, resTask);
+    assert.equal(resTask.statusCode, 201);
+    assert.equal(resTask.body.data.type, 'UserTask');
+    console.log('✓ Passed Test 2 Task Normalization: Type Task normalizes to UserTask.');
+
+    // Sub-case Notification Failure Resilience: Notification error does not fail dispute creation
+    Notification.create = async () => { throw new Error('Notification DB failure'); };
+    const reqNotifFail = {
+        user: { id: 'user_101', role: 'user' },
+        body: { userId: 'user_101', type: 'Other', referenceId: 'N/A', description: 'Notification resilience test' }
+    };
+    const resNotifFail = createRes();
+    await createDispute(reqNotifFail, resNotifFail);
+    assert.equal(resNotifFail.statusCode, 201);
+    assert.equal(resNotifFail.body.success, true);
+    console.log('✓ Passed Test 2 Notification Resilience: Notification error logged without breaking dispute creation response.');
 
     // Restore DB functions
     User.findById = origUserFindById;

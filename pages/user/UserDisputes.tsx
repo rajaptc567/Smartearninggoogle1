@@ -219,15 +219,9 @@ export const UserDisputes: React.FC = () => {
         formData.append('userId', currentUser._id);
         let calculatedType = 'Other';
         if (moduleType === 'Work & Earn') {
-            calculatedType = 'UserTask';
+            calculatedType = 'Task';
         } else if (moduleType === 'Investment') {
-            if (disputeCategory.includes('Deposit') || deposits.some(d => String(d._id) === String(finalRefId))) {
-                calculatedType = 'Deposit';
-            } else if (disputeCategory.includes('Withdrawal') || withdrawals.some(w => String(w._id) === String(finalRefId))) {
-                calculatedType = 'Withdrawal';
-            } else {
-                calculatedType = 'Investment';
-            }
+            calculatedType = 'Investment';
         } else {
             if (withdrawals.some(w => String(w._id) === String(finalRefId)) || disputeCategory.includes('Withdrawal')) {
                 calculatedType = 'Withdrawal';

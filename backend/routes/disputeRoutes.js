@@ -15,16 +15,16 @@ const upload = multer({
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['user', 'admin']), getDisputes)
-    .post(upload.single('proof'), authorize(['user', 'admin']), createDispute);
+    .get(authorize(['user', 'admin', 'super_admin']), getDisputes)
+    .post(upload.single('proof'), authorize(['user', 'admin', 'super_admin']), createDispute);
 
 router.route('/:id')
-    .put(upload.single('file'), authorize(['user', 'admin']), updateDispute); // Add multer for file attachments in chat
+    .put(upload.single('file'), authorize(['user', 'admin', 'super_admin']), updateDispute); // Add multer for file attachments in chat
 
 router.route('/:id/read')
-    .put(authorize(['user', 'admin']), markAsRead);
+    .put(authorize(['user', 'admin', 'super_admin']), markAsRead);
 
 router.route('/:id/resolve')
-    .put(authorize(['admin']), resolveDisputeVerdict);
+    .put(authorize(['admin', 'super_admin']), resolveDisputeVerdict);
 
 export default router;

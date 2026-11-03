@@ -95,12 +95,13 @@ const Deposits: React.FC = () => {
         if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
             return url;
         }
-        const cleanBase = UPLOADS_URL.replace(/\/$/, '');
-        let cleanPath = url.startsWith('/') ? url : `/${url}`;
-        if (cleanBase.endsWith('/uploads') && cleanPath.startsWith('/uploads/')) {
-            cleanPath = cleanPath.replace(/^\/uploads/, '');
+        const rawBase = UPLOADS_URL.replace(/\/$/, '');
+        const uploadsBase = rawBase.endsWith('/uploads') ? rawBase : `${rawBase}/uploads`;
+        let relativePath = url.startsWith('/') ? url.slice(1) : url;
+        if (relativePath.startsWith('uploads/')) {
+            relativePath = relativePath.slice('uploads/'.length);
         }
-        return `${cleanBase}${cleanPath}`;
+        return `${uploadsBase}/${relativePath}`;
     };
 
     const handleViewReceipt = (e: React.MouseEvent, receiptUrl: string) => {

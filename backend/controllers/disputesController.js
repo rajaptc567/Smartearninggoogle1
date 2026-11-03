@@ -47,8 +47,7 @@ export const createDispute = async (req, res) => {
         }
 
         // DEPOSIT DISPUTE VALIDATION & DUPLICATE PREVENTION
-        const isDepositDispute = disputeData.type === 'Deposit' || 
-            (disputeData.category && disputeData.category.toLowerCase().includes('deposit'));
+        const isDepositDispute = disputeData.type === 'Deposit';
 
         if (isDepositDispute) {
             // Require valid Deposit ID and reject placeholders such as N/A or OTHER-MISSED-ISSUE
@@ -102,7 +101,11 @@ export const createDispute = async (req, res) => {
         disputeData.userUnread = false;
 
         const dispute = await Dispute.create(disputeData);
-        await Notification.create({ userId: dispute.userId, message: `Dispute #${dispute._id} submitted.` });
+        try {
+            await Notification.create({ userId: dispute.userId, message: `Dispute #${dispute._id} submitted.` });
+        } catch (notifErr) {
+            console.error('[User Dispute Notification Warning]:', notifErr.message);
+        }
 
         // ADMIN NOTIFICATION FOR DISPUTE CREATION
         try {
