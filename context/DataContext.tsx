@@ -27,6 +27,7 @@ interface AppState {
     disputes: Dispute[];
     currentUser: User | null;
     isLoading: boolean;
+    isSyncing: boolean;
 }
 
 const defaultHomepageContent: HomepageContent = {
@@ -133,6 +134,7 @@ const initialState: AppState = {
     disputes: [],
     currentUser: null,
     isLoading: false,
+    isSyncing: true,
 };
 
 type Action =
@@ -192,7 +194,8 @@ type Action =
     | { type: 'UPDATE_USER_TASK_SUBMISSION'; payload: UserTaskSubmission }
     | { type: 'DELETE_USER_TASK_SUBMISSION'; payload: string }
     | { type: 'SET_CURRENT_USER'; payload: { user: User | null; token?: string } }
-    | { type: 'SET_LOADING'; payload: boolean };
+    | { type: 'SET_LOADING'; payload: boolean }
+    | { type: 'SET_IS_SYNCING'; payload: boolean };
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
@@ -360,6 +363,9 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'SET_LOADING':
             newState = { ...state, isLoading: action.payload };
             break;
+        case 'SET_IS_SYNCING':
+            newState = { ...state, isSyncing: action.payload };
+            break;
 
         default:
             return state;
@@ -460,6 +466,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         }
 
         const syncPromise = (async () => {
+            dispatch({ type: 'SET_IS_SYNCING', payload: true });
             isSyncingRef.current = true;
             try {
                 const doForce = pendingForceRef.current;
@@ -523,6 +530,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 console.error("Flicker-free live sync payload retrieval failed:", err);
             } finally {
                 isSyncingRef.current = false;
+                dispatch({ type: 'SET_IS_SYNCING', payload: false });
                 activeSyncPromiseRef.current = null;
                 if (pendingForceRef.current) {
                     return masterDataSync(false);

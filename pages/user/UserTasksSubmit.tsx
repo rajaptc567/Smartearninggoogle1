@@ -580,17 +580,6 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     const [reviewExplanation, setReviewExplanation] = useState('');
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     const [campaignNotice, setCampaignNotice] = useState<{ type: 'success' | 'info'; text: string; subtext?: string } | null>(null);
-    const [isInitialLoading, setIsInitialLoading] = useState(true);
-
-    useEffect(() => {
-        // Simple heuristic: after initial render and data sync potentially kicks in,
-        // stop "initial loading" after a small delay to allow data to populate.
-        const timer = setTimeout(() => {
-            setIsInitialLoading(false);
-        }, 1500);
-        return () => clearTimeout(timer);
-    }, []);
-
 
     useEffect(() => {
         if (campaignNotice) {
@@ -4303,7 +4292,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
 
-                    {isInitialLoading ? (
+                    {state.isSyncing && userTasks.length === 0 ? (
                         <div className="bg-slate-950/80 rounded-2xl p-10 text-center text-slate-400 shadow-md border border-dashed border-slate-800 space-y-3">
                             <RefreshIcon className="w-8 h-8 animate-spin mx-auto text-amber-500" />
                             <p className="font-bold text-slate-200">Loading latest tasks...</p>
