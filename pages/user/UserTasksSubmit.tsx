@@ -4292,7 +4292,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
 
-                    {state.isSyncing && userTasks.length === 0 ? (
+                    {state.isTasksLoading && userTasks.length === 0 ? (
                         <div className="bg-slate-950/80 rounded-2xl p-10 text-center text-slate-400 shadow-md border border-dashed border-slate-800 space-y-3">
                             <RefreshIcon className="w-8 h-8 animate-spin mx-auto text-amber-500" />
                             <p className="font-bold text-slate-200">Loading latest tasks...</p>

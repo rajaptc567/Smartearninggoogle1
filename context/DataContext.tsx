@@ -28,6 +28,7 @@ interface AppState {
     currentUser: User | null;
     isLoading: boolean;
     isSyncing: boolean;
+    isTasksLoading: boolean;
 }
 
 const defaultHomepageContent: HomepageContent = {
@@ -135,6 +136,7 @@ const initialState: AppState = {
     currentUser: null,
     isLoading: false,
     isSyncing: true,
+    isTasksLoading: true,
 };
 
 type Action =
@@ -195,7 +197,8 @@ type Action =
     | { type: 'DELETE_USER_TASK_SUBMISSION'; payload: string }
     | { type: 'SET_CURRENT_USER'; payload: { user: User | null; token?: string } }
     | { type: 'SET_LOADING'; payload: boolean }
-    | { type: 'SET_IS_SYNCING'; payload: boolean };
+    | { type: 'SET_IS_SYNCING'; payload: boolean }
+    | { type: 'SET_IS_TASKS_LOADING'; payload: boolean };
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
@@ -366,6 +369,9 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'SET_IS_SYNCING':
             newState = { ...state, isSyncing: action.payload };
             break;
+        case 'SET_IS_TASKS_LOADING':
+            newState = { ...state, isTasksLoading: action.payload };
+            break;
 
         default:
             return state;
@@ -492,7 +498,14 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     ]);
                     
                     const hasFailures = results.some(r => r.status === 'rejected');
-
+                    
+                    // Task-specific loading: check if getUserTasks/getTasks failed
+                    const tasksResult = results[14]; // getUserTasks
+                    const tasksSucceeded = tasksResult && tasksResult.status === 'fulfilled';
+                    if (isInitialSync) {
+                        dispatch({ type: 'SET_IS_TASKS_LOADING', payload: !tasksSucceeded });
+                    }
+                    
                     // Do not advance lastVersionRef before required data fetches succeed
                     if (!hasFailures) {
                         lastVersionRef.current = serverVersion;
