@@ -516,10 +516,16 @@ export const resolveDisputeVerdict = async (req, res) => {
 
         await dispute.save();
         global.appDataVersion = Date.now();
-        if (mongoose.connection?.readyState === 1) {
-            await Setting.bumpVersion();
+        
+        try {
+            if (mongoose.connection?.readyState === 1) {
+                await Setting.bumpVersion();
+            }
+            req.app.get('io')?.emit('DATA_CHANGED');
+        } catch (postSaveError) {
+            console.error("Non-critical post-save update failed:", postSaveError);
         }
-        req.app.get('io')?.emit('DATA_CHANGED');
+
         res.status(200).json({ success: true, data: dispute });
     } catch (err) {
         console.error("resolveDisputeVerdict error:", err);

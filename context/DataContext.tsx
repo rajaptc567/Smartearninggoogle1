@@ -456,7 +456,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const activeSyncPromiseRef = useRef<Promise<void> | null>(null);
     const pendingForceRef = useRef<boolean>(false);
 
-    const masterDataSync = useCallback(async (force: boolean = false): Promise<void> => {
+    const masterDataSync = useCallback(async (force: boolean = false, retryCount: number = 0): Promise<void> => {
         if (force) {
             pendingForceRef.current = true;
         }
@@ -480,7 +480,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
                 const serverVersion = await getDataVersion();
                 
-                // Distinguish actual version from a failed request (never silently return 0 on network error)
                 if (serverVersion === null) {
                     if (doForce) {
                         pendingForceRef.current = true;
@@ -491,7 +490,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 const isInitialSync = lastVersionRef.current === 0;
 
                 if (doForce || isInitialSync || serverVersion > lastVersionRef.current) {
-                    // Silent background fetch using Promise.allSettled to eliminate UI flicker
                     const results = await Promise.allSettled([
                         getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
                         getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
@@ -506,11 +504,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                         dispatch({ type: 'SET_IS_TASKS_LOADING', payload: !tasksSucceeded });
                     }
                     
-                    // Do not advance lastVersionRef before required data fetches succeed
                     if (!hasFailures) {
                         lastVersionRef.current = serverVersion;
                     } else {
-                        // Track failed endpoints and schedule safe retry without wiping existing data
                         pendingForceRef.current = true;
                     }
 
@@ -545,8 +541,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 isSyncingRef.current = false;
                 dispatch({ type: 'SET_IS_SYNCING', payload: false });
                 activeSyncPromiseRef.current = null;
-                if (pendingForceRef.current) {
-                    return masterDataSync(false);
+                if (pendingForceRef.current && retryCount < 3) {
+                    const delay = Math.pow(2, retryCount) * 1000;
+                    console.log(`Retrying sync in ${delay}ms (retry ${retryCount + 1}/3)...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return masterDataSync(false, retryCount + 1);
                 }
             }
         })();

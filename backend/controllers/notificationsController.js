@@ -216,9 +216,17 @@ export const updateNotification = async (req, res) => {
             return res.status(403).json({ success: false, error: "Not authorized to update this notification" });
         }
 
+        const { read, popupShown, message, subject, isPopup } = req.body;
+        const updateData = {};
+        if (read !== undefined) updateData.read = read;
+        if (popupShown !== undefined) updateData.popupShown = popupShown;
+        if (message !== undefined) updateData.message = message;
+        if (subject !== undefined) updateData.subject = subject;
+        if (isPopup !== undefined) updateData.isPopup = isPopup;
+
         const notification = await Notification.findByIdAndUpdate(
             req.params.id,
-            req.body,
+            updateData,
             { new: true }
         );
         res.status(200).json({ success: true, data: notification });
