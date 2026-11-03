@@ -403,22 +403,39 @@ const claimTaskCompletionSlot = async (taskId, workerId, allowRecompletion = fal
 
                 if (totalFunded > 0 && updatedTask.campaignAvailableBalanceUSD <= warningThreshold && !updatedTask.lowBalanceWarningSent) {
                     try {
-                        await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { lowBalanceWarningSent: true } });
-                        updatedTask.lowBalanceWarningSent = true;
-
-                        // Create administrative notification for admin and super_admin recipients
+                        // Create administrative notification for admin and super_admin recipients with deduplication
                         try {
                             const adminUsers = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
                             const alertSubject = 'Survey Campaign Low Balance Warning';
                             const alertMessage = `Survey campaign "${updatedTask.title}" has reached a low balance of $${updatedTask.campaignAvailableBalanceUSD.toFixed(2)} USD (at/below ${thresholdPercent}% of $${totalFunded.toFixed(2)} USD total budget). Please add campaign funds to keep it running.`;
+                            
+                            let deliveredCount = 0;
+                            const titleRegex = (updatedTask.title || '').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
                             for (const admin of adminUsers) {
-                                await Notification.create({
-                                    userId: admin._id,
-                                    senderType: 'System',
-                                    subject: alertSubject,
-                                    message: alertMessage,
-                                    read: false
-                                }).catch(() => {});
+                                try {
+                                    const existingAlert = await Notification.findOne({
+                                        userId: admin._id,
+                                        subject: alertSubject,
+                                        message: { $regex: titleRegex }
+                                    });
+                                    if (!existingAlert) {
+                                        await Notification.create({
+                                            userId: admin._id,
+                                            senderType: 'System',
+                                            subject: alertSubject,
+                                            message: alertMessage,
+                                            read: false
+                                        });
+                                    }
+                                    deliveredCount++;
+                                } catch (createErr) {
+                                    console.error(`Warning: Failed to create low balance alert for user ${admin._id}:`, createErr.message);
+                                }
+                            }
+
+                            if (deliveredCount > 0) {
+                                await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { lowBalanceWarningSent: true } });
+                                updatedTask.lowBalanceWarningSent = true;
                             }
                         } catch (notifErr) {
                             console.error('Warning: Low balance notification error:', notifErr.message);

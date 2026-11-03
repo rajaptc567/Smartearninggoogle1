@@ -263,8 +263,18 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 const approvedCount = await Transaction.countDocuments({ userId: uplineUser._id, type: { $in: ['Commission', 'Commission Held'] }, relatedPlanId: { $in: equivIds }, level: 1, status: { $in: ['Approved', 'Held for Upgrade'] } });
                 if (approvedCount === plan.directReferralLimit) {
                     const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
+                    const unameRegex = (uplineUser.username || '').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
                     for (const admin of admins) {
-                        await Notification.create({ userId: admin._id, subject: '⚠️ Slot Limit Reached', message: `User @${uplineUser.username} filled slots for ${plan.name}.`, isPopup: true }).catch(() => {});
+                        try {
+                            const existingAlert = await Notification.findOne({
+                                userId: admin._id,
+                                subject: '⚠️ Slot Limit Reached',
+                                message: { $regex: unameRegex }
+                            });
+                            if (!existingAlert) {
+                                await Notification.create({ userId: admin._id, subject: '⚠️ Slot Limit Reached', message: `User @${uplineUser.username} filled slots for ${plan.name}.`, isPopup: true });
+                            }
+                        } catch (err) {}
                     }
                     await Notification.create({ userId: uplineUser._id, subject: '⚠️ Slot Limit Reached!', message: `Slots for ${plan.name} are now FULL.`, isPopup: true });
                 }
