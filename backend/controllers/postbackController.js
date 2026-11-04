@@ -240,39 +240,28 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
             return { valid: false, error: 'ayeT-Studios query parameters missing for HMAC signature calculation' };
         }
 
-        // Support RFC 3986 and standard URL-encoding according to ayeT documentation
-        const buildQueryString = (mode) => {
-            return sortedKeys.map(k => {
-                const rawVal = queryParams[k] !== undefined && queryParams[k] !== null ? String(queryParams[k]) : '';
-                let encodedVal;
-                if (mode === 'rfc3986') {
-                    encodedVal = encodeURIComponent(rawVal).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
-                } else if (mode === 'rfc1738') {
-                    encodedVal = encodeURIComponent(rawVal).replace(/%20/g, '+');
-                } else {
-                    encodedVal = encodeURIComponent(rawVal);
-                }
-                const encodedKey = encodeURIComponent(k);
-                return `${encodedKey}=${encodedVal}`;
-            }).join('&');
-        };
-
-        const candidates = [
-            buildQueryString('rfc3986'),
-            buildQueryString('standard'),
-            buildQueryString('rfc1738')
-        ];
-
-        let matched = false;
-        for (const candidateStr of candidates) {
-            const expectedHash = crypto.createHmac('sha256', apiKey).update(candidateStr).digest('hex');
-            if (safeTimingCompare(receivedHeader, expectedHash)) {
-                matched = true;
-                break;
+        // Reject ambiguous or malformed parameter structures (arrays, nested objects) rather than silently signing an incorrect string
+        for (const k of sortedKeys) {
+            const val = queryParams[k];
+            if (Array.isArray(val) || (typeof val === 'object' && val !== null)) {
+                return { valid: false, error: `Ambiguous or malformed query parameter '${k}'; failing closed` };
             }
         }
 
-        if (!matched) {
+        // Deterministic canonicalization according to official ayeT-Studios HMAC-SHA256 documentation:
+        // 1. Sort parameter names alphabetically
+        // 2. URL-encode parameter values according to standard query/form encoding (spaces encoded as '+')
+        // 3. Build canonical query string: key=value pairs joined by '&'
+        const canonicalQueryString = sortedKeys.map(k => {
+            const rawVal = queryParams[k] !== undefined && queryParams[k] !== null ? String(queryParams[k]) : '';
+            const encodedKey = encodeURIComponent(k).replace(/%20/g, '+');
+            const encodedVal = encodeURIComponent(rawVal).replace(/%20/g, '+');
+            return `${encodedKey}=${encodedVal}`;
+        }).join('&');
+
+        const expectedHash = crypto.createHmac('sha256', apiKey).update(canonicalQueryString).digest('hex');
+
+        if (!safeTimingCompare(receivedHeader, expectedHash)) {
             return { valid: false, error: 'ayeT-Studios HMAC-SHA256 signature mismatch' };
         }
 
@@ -2415,7 +2404,7 @@ export const updateOfferwallProvider = async (req, res) => {
             return res.status(404).json({ success: false, error: `Provider '${providerKey}' not found` });
         }
 
-        const responseData = (typeof provider.toObject === 'function') ? provider.toObject() : { ...provider };
+        const responseData = provider.toObject();
         if (responseData.apiKey) responseData.apiKey = '••••••••';
         if (responseData.secretKey) responseData.secretKey = '••••••••';
         if (responseData.postbackKey) responseData.postbackKey = '••••••••';

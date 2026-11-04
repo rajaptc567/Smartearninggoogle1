@@ -194,13 +194,13 @@ const createMockRes = () => {
     return res;
 };
 
-// Helper to calculate valid ayeT HMAC-SHA256 signature
+// Helper to calculate valid ayeT HMAC-SHA256 signature using official canonicalization (spaces as '+')
 const signAyetParams = (params, apiKey) => {
     const sortedKeys = Object.keys(params).sort();
     const queryString = sortedKeys.map(k => {
         const val = params[k] !== undefined && params[k] !== null ? String(params[k]) : '';
-        const encodedKey = encodeURIComponent(k);
-        const encodedVal = encodeURIComponent(val).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+        const encodedKey = encodeURIComponent(k).replace(/%20/g, '+');
+        const encodedVal = encodeURIComponent(val).replace(/%20/g, '+');
         return `${encodedKey}=${encodedVal}`;
     }).join('&');
     return crypto.createHmac('sha256', apiKey).update(queryString).digest('hex');
@@ -259,7 +259,7 @@ async function runAyetSuite() {
         }
     };
 
-    console.log('--- TEST GROUP 1: HMAC-SHA256 HEADER VERIFICATION & FAIL-CLOSED GUARDS ---');
+    console.log('--- TEST GROUP 1: HMAC-SHA256 HEADER VERIFICATION & DETERMINISTIC CANONICALIZATION ---');
     {
         db.clear();
         seedAyetProvider();
@@ -320,6 +320,143 @@ async function runAyetSuite() {
         assertTest(resNoApiKey.statusCode === 400, 'Test 3a: Missing API key fails closed with HTTP 400');
         assertTest(resNoApiKey.body === 'INVALID_SIGNATURE', 'Test 3b: Missing API key fails closed');
         db.providers.get('ayetstudios').apiKey = TEST_API_KEY; // restore
+
+        // 3c. Spaces encoded as '+' in query parameter values
+        const queryWithSpaces = {
+            currency_amount: '200',
+            currency_conversion_rate: '1000',
+            external_identifier: TEST_USER_ID,
+            is_chargeback: '0',
+            offer_name: 'Merge Dragons Kingdom',
+            payout_usd: '0.20',
+            transaction_id: 'ayet_tx_spaces_1'
+        };
+        const sigSpacesOfficial = signAyetParams(queryWithSpaces, TEST_API_KEY);
+        const reqSpacesOfficial = {
+            params: { provider: 'ayetstudios' },
+            query: queryWithSpaces,
+            body: {},
+            headers: { 'x-ayetstudios-security-hash': sigSpacesOfficial }
+        };
+        const resSpacesOfficial = createMockRes();
+        await handlePostback(reqSpacesOfficial, resSpacesOfficial);
+        assertTest(resSpacesOfficial.statusCode === 200, 'Test 3c: Official canonicalization with spaces as + accepted');
+        assertTest(db.users.get(TEST_USER_ID).taskEarningsBalance === 10.56, 'Test 3c-2: Wallet credited after spaces as + callback');
+
+        // 3d. Rejection of alternative candidate signatures (RFC 3986 where spaces are '%20')
+        // In RFC 3986, 'Merge Dragons Kingdom' is encoded as 'Merge%20Dragons%20Kingdom'
+        const sortedKeysSpaces = Object.keys(queryWithSpaces).sort();
+        const rfc3986QueryString = sortedKeysSpaces.map(k => {
+            const val = String(queryWithSpaces[k]);
+            return `${encodeURIComponent(k)}=${encodeURIComponent(val)}`;
+        }).join('&');
+        const rfc3986Sig = crypto.createHmac('sha256', TEST_API_KEY).update(rfc3986QueryString).digest('hex');
+
+        // Verify RFC 3986 hash differs from official hash
+        assertTest(rfc3986Sig !== sigSpacesOfficial, 'Test 3d-1: RFC 3986 hash differs from official spaces as + hash');
+
+        // Send callback with RFC 3986 candidate signature -> MUST BE REJECTED!
+        const queryWithSpaces2 = {
+            currency_amount: '200',
+            currency_conversion_rate: '1000',
+            external_identifier: TEST_USER_ID,
+            is_chargeback: '0',
+            offer_name: 'Merge Dragons Kingdom',
+            payout_usd: '0.20',
+            transaction_id: 'ayet_tx_spaces_rfc3986'
+        };
+        const reqRfc3986 = {
+            params: { provider: 'ayetstudios' },
+            query: queryWithSpaces2,
+            body: {},
+            headers: { 'x-ayetstudios-security-hash': rfc3986Sig }
+        };
+        const resRfc3986 = createMockRes();
+        await handlePostback(reqRfc3986, resRfc3986);
+        assertTest(resRfc3986.statusCode === 400, 'Test 3d-2: Alternative candidate RFC 3986 signature strictly rejected');
+        assertTest(resRfc3986.body === 'INVALID_SIGNATURE', 'Test 3d-3: Rejection body is INVALID_SIGNATURE');
+
+        // 3e. Percent-encoded characters in values (e.g. '@', '=', '&', '?')
+        const querySpecialChars = {
+            currency_amount: '150',
+            currency_conversion_rate: '1000',
+            custom_ref: 'abc@domain.com?ref=45&sub=xyz',
+            external_identifier: TEST_USER_ID,
+            is_chargeback: '0',
+            payout_usd: '0.15',
+            transaction_id: 'ayet_tx_special_chars'
+        };
+        const sigSpecialChars = signAyetParams(querySpecialChars, TEST_API_KEY);
+        const reqSpecialChars = {
+            params: { provider: 'ayetstudios' },
+            query: querySpecialChars,
+            body: {},
+            headers: { 'x-ayetstudios-security-hash': sigSpecialChars }
+        };
+        const resSpecialChars = createMockRes();
+        await handlePostback(reqSpecialChars, resSpecialChars);
+        assertTest(resSpecialChars.statusCode === 200, 'Test 3e: Special characters with percent-encoding accepted');
+        assertTest(db.users.get(TEST_USER_ID).taskEarningsBalance === 10.71, 'Test 3e-2: Wallet credited after special chars callback');
+
+        // 3f. Reject ambiguous or array query parameters (e.g. repeated keys or array values)
+        const queryWithArray = {
+            currency_amount: '100',
+            currency_conversion_rate: '1000',
+            external_identifier: TEST_USER_ID,
+            is_chargeback: '0',
+            payout_usd: '0.10',
+            tags: ['tag1', 'tag2'], // Ambiguous array!
+            transaction_id: 'ayet_tx_array_param'
+        };
+        const sigArray = 'any_sig_value';
+        const reqArray = {
+            params: { provider: 'ayetstudios' },
+            query: queryWithArray,
+            body: {},
+            headers: { 'x-ayetstudios-security-hash': sigArray }
+        };
+        const resArray = createMockRes();
+        await handlePostback(reqArray, resArray);
+        assertTest(resArray.statusCode === 400, 'Test 3f-1: Ambiguous array query parameter rejected with HTTP 400');
+        assertTest(resArray.body === 'INVALID_SIGNATURE', 'Test 3f-2: Ambiguous array rejection body is INVALID_SIGNATURE');
+
+        // 3g. Reject nested object query parameters
+        const queryWithObject = {
+            currency_amount: '100',
+            currency_conversion_rate: '1000',
+            external_identifier: TEST_USER_ID,
+            is_chargeback: '0',
+            nested_data: { foo: 'bar' }, // Ambiguous nested object!
+            payout_usd: '0.10',
+            transaction_id: 'ayet_tx_object_param'
+        };
+        const reqObject = {
+            params: { provider: 'ayetstudios' },
+            query: queryWithObject,
+            body: {},
+            headers: { 'x-ayetstudios-security-hash': 'any_sig' }
+        };
+        const resObject = createMockRes();
+        await handlePostback(reqObject, resObject);
+        assertTest(resObject.statusCode === 400, 'Test 3g-1: Ambiguous nested object parameter rejected with HTTP 400');
+        assertTest(resObject.body === 'INVALID_SIGNATURE', 'Test 3g-2: Ambiguous nested object body is INVALID_SIGNATURE');
+
+        // 3h. Security header and route parameter "provider" must not pollute canonical query string
+        const reqWithRouteParam = {
+            headers: { 'x-ayetstudios-security-hash': sigSpacesOfficial },
+            query: {
+                ...queryWithSpaces,
+                provider: 'ayetstudios', // route parameter injected in query
+                'X-Ayetstudios-Security-Hash': sigSpacesOfficial // header sometimes copied in query
+            }
+        };
+        const directVerifyResult = verifySignature(
+            db.providers.get('ayetstudios'),
+            reqWithRouteParam.query,
+            '127.0.0.1',
+            reqWithRouteParam
+        );
+        assertTest(directVerifyResult.valid === true, 'Test 3h: route param provider and security header are excluded from canonical query string');
     }
 
     console.log('\n--- TEST GROUP 2: USER IDENTIFICATION (external_identifier) ---');
