@@ -16,19 +16,25 @@ const router = express.Router();
 
 // Admin auth middleware helper
 const requireAdmin = async (req, res, next) => {
-    if (isAuthorizedAdmin(req.user)) {
-        return next();
+    if (!req.user || !req.user.id) {
+        return res.status(403).json({ success: false, error: 'Admin authorization required' });
     }
 
-    // Database fallback: if authenticated user has stale/missing role in JWT token, verify against User model
-    if (req.user?.id) {
-        try {
-            const dbUser = await User.findById(req.user.id).select('role status');
-            if (dbUser && dbUser.status !== 'Blocked' && isAuthorizedAdmin(dbUser)) {
-                req.user.role = dbUser.role;
-                return next();
-            }
-        } catch (_) {}
+    try {
+        // ALWAYS fetch from DB to verify current account status and role
+        const dbUser = await User.findById(req.user.id).select('role status restrictions');
+        
+        if (!dbUser || dbUser.status === 'Blocked' || dbUser.restrictions?.loginBlocked) {
+            return res.status(403).json({ success: false, error: 'Admin authorization required' });
+        }
+
+        if (isAuthorizedAdmin(dbUser)) {
+            req.user.role = dbUser.role; // Update role to authoritative DB role
+            return next();
+        }
+    } catch (err) {
+        console.error('Database error in requireAdmin:', err);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
     }
 
     return res.status(403).json({ success: false, error: 'Admin authorization required' });
