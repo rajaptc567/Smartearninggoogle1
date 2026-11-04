@@ -206,6 +206,86 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
         return { valid: true };
     }
 
+    // ayeT-Studios must always enforce HMAC-SHA256 signature verification using X-Ayetstudios-Security-Hash
+    // Cannot be bypassed by requireSignature=false, signatureType='none', or IP-only verification
+    if (key === 'ayetstudios') {
+        const apiKey = (provider.apiKey || '').trim();
+        if (!apiKey) {
+            return { valid: false, error: 'ayeT-Studios API key is not configured; failing closed' };
+        }
+
+        const receivedHeader = String(
+            req?.headers?.['x-ayetstudios-security-hash'] ||
+            req?.headers?.['X-Ayetstudios-Security-Hash'] ||
+            (typeof req?.get === 'function' ? req.get('X-Ayetstudios-Security-Hash') : '') ||
+            ''
+        ).trim();
+
+        if (!receivedHeader) {
+            return { valid: false, error: 'X-Ayetstudios-Security-Hash header missing; failing closed' };
+        }
+
+        // Read the actual callback request query parameters
+        const queryParams = (req && req.query && typeof req.query === 'object' && Object.keys(req.query).length > 0)
+            ? { ...req.query }
+            : { ...params };
+
+        // Exclude Express route path params or header names if present
+        delete queryParams.provider;
+        delete queryParams['X-Ayetstudios-Security-Hash'];
+        delete queryParams['x-ayetstudios-security-hash'];
+
+        const sortedKeys = Object.keys(queryParams).sort();
+        if (sortedKeys.length === 0) {
+            return { valid: false, error: 'ayeT-Studios query parameters missing for HMAC signature calculation' };
+        }
+
+        // Support RFC 3986 and standard URL-encoding according to ayeT documentation
+        const buildQueryString = (mode) => {
+            return sortedKeys.map(k => {
+                const rawVal = queryParams[k] !== undefined && queryParams[k] !== null ? String(queryParams[k]) : '';
+                let encodedVal;
+                if (mode === 'rfc3986') {
+                    encodedVal = encodeURIComponent(rawVal).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+                } else if (mode === 'rfc1738') {
+                    encodedVal = encodeURIComponent(rawVal).replace(/%20/g, '+');
+                } else {
+                    encodedVal = encodeURIComponent(rawVal);
+                }
+                const encodedKey = encodeURIComponent(k);
+                return `${encodedKey}=${encodedVal}`;
+            }).join('&');
+        };
+
+        const candidates = [
+            buildQueryString('rfc3986'),
+            buildQueryString('standard'),
+            buildQueryString('rfc1738')
+        ];
+
+        let matched = false;
+        for (const candidateStr of candidates) {
+            const expectedHash = crypto.createHmac('sha256', apiKey).update(candidateStr).digest('hex');
+            if (safeTimingCompare(receivedHeader, expectedHash)) {
+                matched = true;
+                break;
+            }
+        }
+
+        if (!matched) {
+            return { valid: false, error: 'ayeT-Studios HMAC-SHA256 signature mismatch' };
+        }
+
+        if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
+            const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+            if (!ipMatches) {
+                return { valid: false, error: 'Client IP not in whitelist' };
+            }
+        }
+
+        return { valid: true };
+    }
+
     // Fail closed: requireSignature: true with signatureType: 'none' must not pass
     if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
         return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
@@ -498,6 +578,22 @@ const normalizePostbackParams = (providerKey, rawParams) => {
         }
     }
 
+    if (key === 'ayetstudios') {
+        rawUserId = (p.external_identifier !== undefined && p.external_identifier !== null && p.external_identifier !== '')
+            ? String(p.external_identifier).trim()
+            : '';
+        rawTxId = (p.transaction_id !== undefined && p.transaction_id !== null && p.transaction_id !== '')
+            ? String(p.transaction_id).trim()
+            : '';
+        rawAmount = (p.currency_amount !== undefined && p.currency_amount !== null && p.currency_amount !== '')
+            ? p.currency_amount
+            : (p.amount || 0);
+        rawCurrency = p.currency_identifier || p.currency || 'USD';
+        if (p.offer_id || p.campaign_id) {
+            rawOfferId = p.offer_id || p.campaign_id;
+        }
+    }
+
     // Detect Reversal / Chargeback
     let isReversal = false;
     if (key === 'cpx_research') {
@@ -505,6 +601,19 @@ const normalizePostbackParams = (providerKey, rawParams) => {
         // Earning callbacks with negative amounts are malformed payout values, not valid reversals
         if (p.status === '2' || p.status === 2 || p.type === 'reversal' || p.type === 'chargeback') {
             isReversal = true;
+        }
+    } else if (key === 'ayetstudios') {
+        // ayeT-Studios reversal callbacks:
+        // is_chargeback = 1: reversal
+        // is_chargeback = 0: normal conversion
+        // transaction_id with r- prefix: reversal
+        // Negative currency_amount or payout_usd: reversal
+        if (p.is_chargeback === '1' || p.is_chargeback === 1 || p.is_chargeback === true || p.is_chargeback === 'true' ||
+            (rawTxId && String(rawTxId).startsWith('r-')) ||
+            Number(p.currency_amount) < 0 || Number(p.payout_usd) < 0) {
+            isReversal = true;
+        } else if (p.is_chargeback === '0' || p.is_chargeback === 0 || p.is_chargeback === false || p.is_chargeback === 'false') {
+            isReversal = false;
         }
     } else if (
         p.status === '2' || p.status === 2 || 
@@ -1048,6 +1157,97 @@ export const handlePostback = async (req, res) => {
             }
         }
 
+        // ayeT-Studios Amount, Payout & Currency Conversion Validation
+        if (providerKey === 'ayetstudios') {
+            const rawPayout = rawParams.payout_usd;
+            const rawCurrencyAmount = rawParams.currency_amount;
+            const rawRate = rawParams.currency_conversion_rate;
+
+            if (rawPayout === undefined || rawPayout === null || String(rawPayout).trim() === '') {
+                log.status = 'Error';
+                log.errorMessage = 'ayeT-Studios postback missing payout_usd parameter; failing closed';
+                try { await log.save(); } catch (_) {}
+                return res.status(400).send('MISSING_PAYOUT_USD');
+            }
+
+            if (rawCurrencyAmount === undefined || rawCurrencyAmount === null || String(rawCurrencyAmount).trim() === '') {
+                log.status = 'Error';
+                log.errorMessage = 'ayeT-Studios postback missing currency_amount parameter; failing closed';
+                try { await log.save(); } catch (_) {}
+                return res.status(400).send('MISSING_CURRENCY_AMOUNT');
+            }
+
+            const parsedPayout = Number(rawPayout);
+            const parsedCurrencyAmount = Number(rawCurrencyAmount);
+
+            if (isNaN(parsedPayout) || !Number.isFinite(parsedPayout)) {
+                log.status = 'Error';
+                log.errorMessage = `ayeT-Studios postback invalid payout_usd: '${rawPayout}'; failing closed`;
+                try { await log.save(); } catch (_) {}
+                return res.status(400).send('INVALID_PAYOUT_USD');
+            }
+
+            if (isNaN(parsedCurrencyAmount) || !Number.isFinite(parsedCurrencyAmount)) {
+                log.status = 'Error';
+                log.errorMessage = `ayeT-Studios postback invalid currency_amount: '${rawCurrencyAmount}'; failing closed`;
+                try { await log.save(); } catch (_) {}
+                return res.status(400).send('INVALID_CURRENCY_AMOUNT');
+            }
+
+            // Normal conversion amounts must be positive numbers
+            if (!normalized.isReversal) {
+                if (parsedPayout <= 0) {
+                    log.status = 'Error';
+                    log.errorMessage = `ayeT-Studios conversion payout_usd must be positive: '${rawPayout}'; failing closed`;
+                    try { await log.save(); } catch (_) {}
+                    return res.status(400).send('INVALID_PAYOUT_USD');
+                }
+                if (parsedCurrencyAmount <= 0) {
+                    log.status = 'Error';
+                    log.errorMessage = `ayeT-Studios conversion currency_amount must be positive: '${rawCurrencyAmount}'; failing closed`;
+                    try { await log.save(); } catch (_) {}
+                    return res.status(400).send('INVALID_CURRENCY_AMOUNT');
+                }
+            } else {
+                // Reversal amounts must have non-zero magnitude
+                if (Math.abs(parsedPayout) <= 0 || Math.abs(parsedCurrencyAmount) <= 0) {
+                    log.status = 'Error';
+                    log.errorMessage = 'ayeT-Studios reversal requires non-zero payout_usd and currency_amount; failing closed';
+                    try { await log.save(); } catch (_) {}
+                    return res.status(400).send('INVALID_REVERSAL_AMOUNT');
+                }
+            }
+
+            // Validate currency_conversion_rate (required for safe conversion verification)
+            if (rawRate !== undefined && rawRate !== null && String(rawRate).trim() !== '') {
+                const parsedRate = Number(rawRate);
+                if (isNaN(parsedRate) || !Number.isFinite(parsedRate) || parsedRate <= 0) {
+                    log.status = 'Error';
+                    log.errorMessage = `ayeT-Studios invalid currency_conversion_rate: '${rawRate}'; failing closed`;
+                    try { await log.save(); } catch (_) {}
+                    return res.status(400).send('INVALID_CONVERSION_RATE');
+                }
+
+                // Mathematical consistency validation: currency_amount must match payout_usd * currency_conversion_rate
+                const expectedVirtualAmount = Math.abs(parsedPayout) * parsedRate;
+                const actualVirtualAmount = Math.abs(parsedCurrencyAmount);
+                const delta = Math.abs(actualVirtualAmount - expectedVirtualAmount);
+                const maxAllowedDelta = Math.max(0.05, expectedVirtualAmount * 0.01);
+
+                if (delta > maxAllowedDelta) {
+                    log.status = 'Error';
+                    log.errorMessage = `ayeT-Studios inconsistent conversion data: currency_amount (${actualVirtualAmount}) does not match payout_usd (${Math.abs(parsedPayout)}) * rate (${parsedRate}) = ${expectedVirtualAmount}; failing closed`;
+                    try { await log.save(); } catch (_) {}
+                    return res.status(400).send('INCONSISTENT_CONVERSION_DATA');
+                }
+            } else {
+                log.status = 'Error';
+                log.errorMessage = 'ayeT-Studios postback missing currency_conversion_rate parameter; failing closed';
+                try { await log.save(); } catch (_) {}
+                return res.status(400).send('MISSING_CONVERSION_RATE');
+            }
+        }
+
         // P8: Gross / User / Platform Split Calculation
         let grossUSD;
         const absReward = Math.abs(normalized.rawReward);
@@ -1066,6 +1266,9 @@ export const handlePostback = async (req, res) => {
                 const grossVal = Math.abs(Number(rawParams.amount_usd || 0));
                 grossUSD = Number(grossVal.toFixed(4));
             }
+        } else if (providerKey === 'ayetstudios') {
+            // ayeT-Studios payout_usd is the actual publisher revenue/payout in USD
+            grossUSD = Number(Math.abs(Number(rawParams.payout_usd)).toFixed(4));
         } else {
             grossUSD = Number((absReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
         }
@@ -1087,17 +1290,20 @@ export const handlePostback = async (req, res) => {
         log.userRewardUSD = userRewardUSD;
         log.platformRevenueUSD = platformRevenueUSD;
 
-        // Isolate genuine test/debug callbacks (TheoremReach & CPX Research)
+        // Isolate genuine test/debug callbacks (TheoremReach, CPX Research & ayeT-Studios)
         const isDebugCallback = ((providerKey === 'theoremreach') && (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1)) ||
             ((providerKey === 'cpx_research') && (
                 rawParams.test === '1' || rawParams.test === 'true' || rawParams.test === true ||
                 rawParams.is_test === '1' || rawParams.is_test === 'true' || rawParams.is_test === true ||
                 rawParams.debug === '1' || rawParams.debug === 'true' || rawParams.debug === true ||
                 rawParams.status === 'test'
+            )) ||
+            ((providerKey === 'ayetstudios') && (
+                rawParams.is_sandbox === '1' || rawParams.is_sandbox === 1 || rawParams.is_sandbox === 'true' || rawParams.is_sandbox === true
             ));
         if (isDebugCallback) {
             log.status = 'TestCallback';
-            log.errorMessage = `${provider.name || providerKey} test callback with debug/test indicator received; live user balance mutation and transaction record bypassed.`;
+            log.errorMessage = `${provider.name || providerKey} test callback with debug/test/sandbox indicator received; live user balance mutation and transaction record bypassed.`;
             try { await log.save(); } catch (_) {}
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
         }
@@ -1145,13 +1351,25 @@ export const handlePostback = async (req, res) => {
                 // ==========================================
                 // P7: REVERSAL / CHARGEBACK SAFETY LOGIC
                 // ==========================================
-                // Check for duplicate reversal first (both unified and historical keys)
+                // Check for duplicate reversal first (both unified and historical keys, and handle ayeT r- prefix)
+                const baseTxId = (providerKey === 'ayetstudios' && normalized.externalTxId.startsWith('r-'))
+                    ? normalized.externalTxId.slice(2)
+                    : normalized.externalTxId;
+
                 const existingReversal = (await Transaction.findOne({ idempotencyKey: reversalKey }))
                     || (await Transaction.findOne({
                         offerwallProvider: providerKey,
                         externalTransactionId: normalized.externalTxId,
                         type: 'Offerwall Reversal'
-                    }));
+                    }))
+                    || (providerKey === 'ayetstudios' && baseTxId !== normalized.externalTxId && (
+                        (await Transaction.findOne({ idempotencyKey: `${providerKey}_${baseTxId}_reversal` }))
+                        || (await Transaction.findOne({
+                            offerwallProvider: providerKey,
+                            externalTransactionId: baseTxId,
+                            type: 'Offerwall Reversal'
+                        }))
+                    ));
 
                 if (existingReversal) {
                     log.status = 'Duplicate';
@@ -1160,11 +1378,18 @@ export const handlePostback = async (req, res) => {
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
-                const origTx = await Transaction.findOne({
+                let origTx = await Transaction.findOne({
                     offerwallProvider: providerKey,
                     externalTransactionId: normalized.externalTxId,
                     type: 'Offerwall Reward'
                 });
+                if (!origTx && providerKey === 'ayetstudios' && baseTxId !== normalized.externalTxId) {
+                    origTx = await Transaction.findOne({
+                        offerwallProvider: providerKey,
+                        externalTransactionId: baseTxId,
+                        type: 'Offerwall Reward'
+                    });
+                }
 
                 const deductionAmount = origTx ? (origTx.userRewardAmount ?? origTx.amountUSD) : userRewardUSD;
                 const currentEarnings = user.taskEarningsBalance || 0;
@@ -1558,7 +1783,15 @@ export const handlePostback = async (req, res) => {
                         offerwallProvider: providerKey,
                         externalTransactionId: normalized.externalTxId,
                         type: 'Offerwall Reversal'
-                    }));
+                    }))
+                    || (providerKey === 'ayetstudios' && (
+                        (await Transaction.findOne({ idempotencyKey: `${providerKey}_r-${normalized.externalTxId}_reversal` }))
+                        || (await Transaction.findOne({
+                            offerwallProvider: providerKey,
+                            externalTransactionId: `r-${normalized.externalTxId}`,
+                            type: 'Offerwall Reversal'
+                        }))
+                    ));
 
                 if (priorReversal) {
                     log.status = 'PreReversed';
@@ -2182,7 +2415,7 @@ export const updateOfferwallProvider = async (req, res) => {
             return res.status(404).json({ success: false, error: `Provider '${providerKey}' not found` });
         }
 
-        const responseData = provider.toObject();
+        const responseData = (typeof provider.toObject === 'function') ? provider.toObject() : { ...provider };
         if (responseData.apiKey) responseData.apiKey = '••••••••';
         if (responseData.secretKey) responseData.secretKey = '••••••••';
         if (responseData.postbackKey) responseData.postbackKey = '••••••••';
