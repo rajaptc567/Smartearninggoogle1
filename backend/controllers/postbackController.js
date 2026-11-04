@@ -248,16 +248,16 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
             }
         }
 
-        // Deterministic canonicalization according to official ayeT-Studios HMAC-SHA256 documentation:
+        // Deterministic canonicalization according to official ayeT-Studios HMAC-SHA256 documentation using URLSearchParams:
         // 1. Sort parameter names alphabetically
-        // 2. URL-encode parameter values according to standard query/form encoding (spaces encoded as '+')
-        // 3. Build canonical query string: key=value pairs joined by '&'
-        const canonicalQueryString = sortedKeys.map(k => {
+        // 2. Encode keys and values using URLSearchParams serialization (spaces encoded as '+', standard application/x-www-form-urlencoded)
+        // 3. Build canonical query string: searchParams.toString()
+        const searchParams = new URLSearchParams();
+        for (const k of sortedKeys) {
             const rawVal = queryParams[k] !== undefined && queryParams[k] !== null ? String(queryParams[k]) : '';
-            const encodedKey = encodeURIComponent(k).replace(/%20/g, '+');
-            const encodedVal = encodeURIComponent(rawVal).replace(/%20/g, '+');
-            return `${encodedKey}=${encodedVal}`;
-        }).join('&');
+            searchParams.append(k, rawVal);
+        }
+        const canonicalQueryString = searchParams.toString();
 
         const expectedHash = crypto.createHmac('sha256', apiKey).update(canonicalQueryString).digest('hex');
 

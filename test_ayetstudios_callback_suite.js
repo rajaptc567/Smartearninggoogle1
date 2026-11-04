@@ -194,16 +194,15 @@ const createMockRes = () => {
     return res;
 };
 
-// Helper to calculate valid ayeT HMAC-SHA256 signature using official canonicalization (spaces as '+')
+// Helper to calculate valid ayeT HMAC-SHA256 signature using official canonicalization (URLSearchParams with spaces as '+')
 const signAyetParams = (params, apiKey) => {
     const sortedKeys = Object.keys(params).sort();
-    const queryString = sortedKeys.map(k => {
+    const searchParams = new URLSearchParams();
+    for (const k of sortedKeys) {
         const val = params[k] !== undefined && params[k] !== null ? String(params[k]) : '';
-        const encodedKey = encodeURIComponent(k).replace(/%20/g, '+');
-        const encodedVal = encodeURIComponent(val).replace(/%20/g, '+');
-        return `${encodedKey}=${encodedVal}`;
-    }).join('&');
-    return crypto.createHmac('sha256', apiKey).update(queryString).digest('hex');
+        searchParams.append(k, val);
+    }
+    return crypto.createHmac('sha256', apiKey).update(searchParams.toString()).digest('hex');
 };
 
 const TEST_API_KEY = 'ayet_publisher_api_key_xyz987';
@@ -457,6 +456,92 @@ async function runAyetSuite() {
             reqWithRouteParam
         );
         assertTest(directVerifyResult.valid === true, 'Test 3h: route param provider and security header are excluded from canonical query string');
+
+        // 3i. Characters "! ' ( ) *" using URLSearchParams encoding
+        // Note: URLSearchParams encodes ! as %21, ' as %27, ( as %28, ) as %29, * as *, and spaces as +
+        const queryWithPunctuation = {
+            currency_amount: '120',
+            currency_conversion_rate: '1000',
+            external_identifier: TEST_USER_ID,
+            is_chargeback: '0',
+            offer_title: "Level 10! (Free 'Bonus' *Special*)",
+            payout_usd: '0.12',
+            transaction_id: 'ayet_tx_punct_1'
+        };
+        const sigPunctuation = signAyetParams(queryWithPunctuation, TEST_API_KEY);
+        const reqPunctuation = {
+            params: { provider: 'ayetstudios' },
+            query: queryWithPunctuation,
+            body: {},
+            headers: { 'x-ayetstudios-security-hash': sigPunctuation }
+        };
+        const resPunctuation = createMockRes();
+        await handlePostback(reqPunctuation, resPunctuation);
+        assertTest(resPunctuation.statusCode === 200, "Test 3i-1: Characters ! ' ( ) * encoded via URLSearchParams accepted with HTTP 200");
+        assertTest(db.users.get(TEST_USER_ID).taskEarningsBalance === 10.83, "Test 3i-2: Wallet credited after punctuation callback");
+
+        // Verify alternative encoding where ! ' ( ) are unencoded (as standard encodeURIComponent leaves them) is rejected
+        const sortedKeysPunct = Object.keys(queryWithPunctuation).sort();
+        const unencodedPunctQueryString = sortedKeysPunct.map(k => {
+            const rawVal = queryWithPunctuation[k] !== undefined && queryWithPunctuation[k] !== null ? String(queryWithPunctuation[k]) : '';
+            return `${encodeURIComponent(k).replace(/%20/g, '+')}=${encodeURIComponent(rawVal).replace(/%20/g, '+')}`;
+        }).join('&');
+        const unencodedPunctSig = crypto.createHmac('sha256', TEST_API_KEY).update(unencodedPunctQueryString).digest('hex');
+        assertTest(unencodedPunctSig !== sigPunctuation, "Test 3i-3: URLSearchParams encoding differs from encodeURIComponent for ! ' ( )");
+
+        const reqUnencodedPunct = {
+            params: { provider: 'ayetstudios' },
+            query: { ...queryWithPunctuation, transaction_id: 'ayet_tx_punct_2' },
+            body: {},
+            headers: { 'x-ayetstudios-security-hash': unencodedPunctSig }
+        };
+        const resUnencodedPunct = createMockRes();
+        await handlePostback(reqUnencodedPunct, resUnencodedPunct);
+        assertTest(resUnencodedPunct.statusCode === 400, "Test 3i-4: Candidate signature with unencoded ! ' ( ) strictly rejected");
+        assertTest(resUnencodedPunct.body === 'INVALID_SIGNATURE', "Test 3i-5: Rejection body is INVALID_SIGNATURE");
+
+        // 3j. Alphabetical parameter ordering
+        const unorderedQuery = {
+            z_param: 'last',
+            a_param: 'first',
+            m_param: 'middle',
+            currency_amount: '100',
+            currency_conversion_rate: '1000',
+            external_identifier: TEST_USER_ID,
+            is_chargeback: '0',
+            payout_usd: '0.10',
+            transaction_id: 'ayet_tx_ordering_1'
+        };
+        const sigOrdered = signAyetParams(unorderedQuery, TEST_API_KEY);
+        const reqOrdered = {
+            params: { provider: 'ayetstudios' },
+            query: unorderedQuery,
+            body: {},
+            headers: { 'x-ayetstudios-security-hash': sigOrdered }
+        };
+        const resOrdered = createMockRes();
+        await handlePostback(reqOrdered, resOrdered);
+        assertTest(resOrdered.statusCode === 200, "Test 3j-1: Query with parameters out-of-order verified alphabetically");
+        assertTest(db.users.get(TEST_USER_ID).taskEarningsBalance === 10.93, "Test 3j-2: Wallet credited after ordering callback");
+
+        // Verify that signature computed with non-alphabetical parameter order is strictly rejected
+        const spUnordered = new URLSearchParams();
+        for (const k of Object.keys(unorderedQuery)) { // insertion order (z_param first)
+            spUnordered.append(k, String(unorderedQuery[k]));
+        }
+        const sigUnordered = crypto.createHmac('sha256', TEST_API_KEY).update(spUnordered.toString()).digest('hex');
+        assertTest(sigUnordered !== sigOrdered, "Test 3j-3: Non-alphabetical query string hash differs from sorted hash");
+
+        const reqUnordered = {
+            params: { provider: 'ayetstudios' },
+            query: { ...unorderedQuery, transaction_id: 'ayet_tx_ordering_2' },
+            body: {},
+            headers: { 'x-ayetstudios-security-hash': sigUnordered }
+        };
+        const resUnordered = createMockRes();
+        await handlePostback(reqUnordered, resUnordered);
+        assertTest(resUnordered.statusCode === 400, "Test 3j-4: Out-of-order signature rejected with HTTP 400");
+        assertTest(resUnordered.body === 'INVALID_SIGNATURE', "Test 3j-5: Rejection body is INVALID_SIGNATURE");
     }
 
     console.log('\n--- TEST GROUP 2: USER IDENTIFICATION (external_identifier) ---');
