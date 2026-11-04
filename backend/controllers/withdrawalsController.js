@@ -441,10 +441,14 @@ export const createWithdrawal = async (req, res) => {
         withdrawal.relatedTransactionId = transaction._id;
         await withdrawal.save();
 
-        await Notification.create({
-            userId: user._id,
-            message: `Your withdrawal request for ${user.currency}${withdrawal.amount.toFixed(2)} has been submitted for review.`
-        });
+        try {
+            await Notification.create({
+                userId: user._id,
+                message: `Your withdrawal request for ${user.currency}${withdrawal.amount.toFixed(2)} has been submitted for review.`
+            });
+        } catch (userNotifErr) {
+            console.error('Failed to create user in-app notification for withdrawal:', userNotifErr);
+        }
 
         // In-app notifications for admin and super_admin recipients with deduplication
         try {

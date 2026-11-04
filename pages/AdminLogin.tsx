@@ -34,8 +34,7 @@ const AdminLogin: React.FC = () => {
             
             // SECURITY CHECK: Ensure the user is actually an administrator account.
             const isAuthorized = loginResult.data.role === 'admin' || 
-                                 loginResult.data.role === 'super_admin' || 
-                                 loginResult.data.username === 'admin';
+                                 loginResult.data.role === 'super_admin';
             if (!isAuthorized) {
                 setError('Unauthorized access. This area is restricted to administrators.');
                 // Log them out immediately if they aren't admin

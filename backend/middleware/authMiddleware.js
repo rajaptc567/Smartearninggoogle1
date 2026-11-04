@@ -51,35 +51,44 @@ export const authorize = (allowedRoles = []) => {
         }
 
         // 2. Check if user was identified by authMiddleware
-        if (!req.user) {
+        if (!req.user || !req.user.id) {
             return res.status(403).json({
                 success: false,
                 message: 'Unauthorized'
             });
         }
 
-        const role = req.user.role;
-        const isAdmin = role === 'super_admin' || role === 'admin' || role === 'finance' || role === 'support';
+        try {
+            // Centralized DB check: verify current database account state (role, status, restrictions)
+            // Prevents stale JWTs from bypassing role demotions or account blocks
+            const dbUser = await User.findById(req.user.id).select('role status restrictions emailVerified whatsappVerified emailVerificationEnforced whatsappVerificationEnforced').lean();
 
-        // 3. Role Check
-        if (!allowedRoles.includes(role)) {
-            return res.status(403).json({
-                success: false,
-                message: 'Unauthorized'
-            });
-        }
+            if (!dbUser || dbUser.status === 'Blocked' || dbUser.restrictions?.loginBlocked) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Account restricted or blocked.'
+                });
+            }
 
-        // 4. Backend Verification Enforcement for regular users
-        if (!isAdmin && allowedRoles.includes('user')) {
-            const path = req.originalUrl || req.path || '';
-            const isVerificationRoute = path.includes('/verify-email') || path.includes('/verify-whatsapp') || path.includes('/resend-email') || path.includes('/resend-whatsapp');
+            const dbRole = dbUser.role ? String(dbUser.role).trim().toLowerCase() : 'user';
+            req.user.role = dbRole; // Override req.user.role with authoritative DB role
 
-            if (!isVerificationRoute) {
-                try {
-                    const dbUser = await User.findById(req.user.id).select('emailVerified whatsappVerified emailVerificationEnforced whatsappVerificationEnforced status restrictions').lean();
-                    if (!dbUser || dbUser.status === 'Blocked' || dbUser.restrictions?.loginBlocked) {
-                        return res.status(403).json({ success: false, error: 'Account restricted or blocked.' });
-                    }
+            const isAdmin = dbRole === 'super_admin' || dbRole === 'admin' || dbRole === 'finance' || dbRole === 'support';
+
+            // 3. Role Check against authoritative DB role
+            if (!allowedRoles.includes(dbRole)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Unauthorized'
+                });
+            }
+
+            // 4. Backend Verification Enforcement for regular users
+            if (!isAdmin && allowedRoles.includes('user')) {
+                const path = req.originalUrl || req.path || '';
+                const isVerificationRoute = path.includes('/verify-email') || path.includes('/verify-whatsapp') || path.includes('/resend-email') || path.includes('/resend-whatsapp');
+
+                if (!isVerificationRoute) {
                     const settings = await Setting.getSettings();
                     if (!settings || typeof settings.emailVerificationRequired !== 'boolean' || typeof settings.whatsappVerificationRequired !== 'boolean') {
                         return res.status(500).json({ success: false, error: 'Configuration error: Verification settings unavailable or invalid.' });
@@ -96,13 +105,16 @@ export const authorize = (allowedRoles = []) => {
                             needsWhatsappVerification: needsWa
                         });
                     }
-                } catch (err) {
-                    console.error('Backend verification enforcement error:', err);
-                    return res.status(500).json({ success: false, error: 'Internal server error during verification enforcement.' });
                 }
             }
-        }
 
-        next();
+            next();
+        } catch (err) {
+            console.error('Centralized authorization check error:', err);
+            return res.status(500).json({
+                success: false,
+                error: 'Internal server error during authorization verification.'
+            });
+        }
     };
 };

@@ -395,9 +395,8 @@ export const createUser = async (req, res) => {
             if (!sponsorUser) return res.status(400).json({ success: false, error: `Sponsor '${sponsor}' not found.` });
             req.body.sponsor = sponsorUser.username;
         }
-        req.body.currency = country.toLowerCase() === 'pakistan' ? 'PKR' : (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase()) ? 'EUR' : 'USD');
-        req.body.activePlans = [];
-        req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, loginBlocked: false, purchaseBlocked: false };
+        const currency = country.toLowerCase() === 'pakistan' ? 'PKR' : (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase()) ? 'EUR' : 'USD');
+        const sponsorName = sponsorUser ? sponsorUser.username : undefined;
         
         const settings = await Setting.getSettings();
         const consentConfig = settings.signUpConsentConfig || {};
@@ -427,28 +426,6 @@ export const createUser = async (req, res) => {
             return res.status(400).json({ success: false, error: 'WhatsApp marketing consent is required by current platform policy.' });
         }
 
-        // Record Consent State & Audit Timestamps
-        req.body.termsAccepted = Boolean(termsAccepted);
-        if (termsAccepted) {
-            req.body.termsAcceptedAt = new Date();
-            req.body.termsVersion = consentConfig.termsVersion || '1.0';
-        }
-        req.body.privacyPolicyAcknowledged = Boolean(privacyAcknowledged);
-        if (privacyAcknowledged) {
-            req.body.privacyPolicyAcknowledgedAt = new Date();
-            req.body.privacyPolicyVersion = consentConfig.privacyVersion || '1.0';
-        }
-        req.body.emailMarketingConsent = Boolean(emailMarketingConsent);
-        if (emailMarketingConsent) {
-            req.body.emailMarketingConsentAt = new Date();
-            req.body.marketingConsentVersion = consentConfig.marketingVersion || '1.0';
-        }
-        req.body.whatsappMarketingConsent = Boolean(whatsappMarketingConsent);
-        if (whatsappMarketingConsent) {
-            req.body.whatsappMarketingConsentAt = new Date();
-            req.body.marketingConsentVersion = consentConfig.marketingVersion || '1.0';
-        }
-
         let rawEmailToken = null;
         let rawWhatsappToken = null;
         let emailCode = null;
@@ -457,32 +434,79 @@ export const createUser = async (req, res) => {
         if (settings.emailVerificationRequired) {
             emailCode = randomInt(100000, 1000000).toString();
             rawEmailToken = randomBytes(32).toString('hex');
-            req.body.emailVerificationOtpHash = createHash('sha256').update(emailCode).digest('hex');
-            req.body.emailVerificationExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-            req.body.emailVerificationTokenHash = createHash('sha256').update(rawEmailToken).digest('hex');
-            req.body.emailVerificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-            req.body.emailVerified = false;
-            req.body.emailVerificationEnforced = false;
-        } else {
-            req.body.emailVerified = true;
-            req.body.emailVerificationEnforced = false;
         }
 
         if (settings.whatsappVerificationRequired) {
             whatsappCode = randomInt(100000, 1000000).toString();
             rawWhatsappToken = randomBytes(32).toString('hex');
-            req.body.whatsappVerificationOtpHash = createHash('sha256').update(whatsappCode).digest('hex');
-            req.body.whatsappVerificationExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-            req.body.whatsappVerificationTokenHash = createHash('sha256').update(rawWhatsappToken).digest('hex');
-            req.body.whatsappVerificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-            req.body.whatsappVerified = false;
-            req.body.whatsappVerificationEnforced = false;
-        } else {
-            req.body.whatsappVerified = true;
-            req.body.whatsappVerificationEnforced = false;
         }
 
-        const user = await User.create(req.body);
+        // Controlled registration payload - Force role to 'user' and prevent mass assignment
+        const newUserPayload = {
+            fullName,
+            username,
+            email,
+            password,
+            phone,
+            whatsapp: req.body.whatsapp || phone,
+            country,
+            gender: req.body.gender,
+            dateOfBirth: req.body.dateOfBirth,
+            sponsor: sponsorName,
+            currency,
+            role: 'user', // STRICTLY forced server-side
+            walletBalance: 0,
+            taskWalletBalance: 0,
+            taskEarningsBalance: 0,
+            activePlans: [],
+            restrictions: {
+                deposit: false,
+                withdrawal: false,
+                transfer: false,
+                earning: false,
+                dispute: false,
+                excludeFromTicker: false,
+                loginBlocked: false,
+                purchaseBlocked: false
+            },
+            termsAccepted: Boolean(termsAccepted),
+            termsAcceptedAt: termsAccepted ? new Date() : undefined,
+            termsVersion: termsAccepted ? (consentConfig.termsVersion || '1.0') : undefined,
+            privacyPolicyAcknowledged: Boolean(privacyAcknowledged),
+            privacyPolicyAcknowledgedAt: privacyAcknowledged ? new Date() : undefined,
+            privacyPolicyVersion: privacyAcknowledged ? (consentConfig.privacyVersion || '1.0') : undefined,
+            emailMarketingConsent: Boolean(emailMarketingConsent),
+            emailMarketingConsentAt: emailMarketingConsent ? new Date() : undefined,
+            marketingConsentVersion: (emailMarketingConsent || whatsappMarketingConsent) ? (consentConfig.marketingVersion || '1.0') : undefined,
+            whatsappMarketingConsent: Boolean(whatsappMarketingConsent),
+            whatsappMarketingConsentAt: whatsappMarketingConsent ? new Date() : undefined,
+
+            ...(settings.emailVerificationRequired ? {
+                emailVerificationOtpHash: createHash('sha256').update(emailCode).digest('hex'),
+                emailVerificationExpires: new Date(Date.now() + 10 * 60 * 1000),
+                emailVerificationTokenHash: createHash('sha256').update(rawEmailToken).digest('hex'),
+                emailVerificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                emailVerified: false,
+                emailVerificationEnforced: false
+            } : {
+                emailVerified: true,
+                emailVerificationEnforced: false
+            }),
+
+            ...(settings.whatsappVerificationRequired ? {
+                whatsappVerificationOtpHash: createHash('sha256').update(whatsappCode).digest('hex'),
+                whatsappVerificationExpires: new Date(Date.now() + 10 * 60 * 1000),
+                whatsappVerificationTokenHash: createHash('sha256').update(rawWhatsappToken).digest('hex'),
+                whatsappVerificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                whatsappVerified: false,
+                whatsappVerificationEnforced: false
+            } : {
+                whatsappVerified: true,
+                whatsappVerificationEnforced: false
+            })
+        };
+
+        const user = await User.create(newUserPayload);
 
         let emailResult = { attempted: false, success: false, error: null };
         let waResult = { attempted: false, success: false, error: null };

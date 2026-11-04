@@ -15,8 +15,7 @@ const Layout: React.FC = () => {
     // SECURITY CHECK: Ensure user is logged in AND is an authorized administrator.
     const isAdmin = state.currentUser && (
       state.currentUser.role === 'admin' ||
-      state.currentUser.role === 'super_admin' ||
-      state.currentUser.username === 'admin'
+      state.currentUser.role === 'super_admin'
     );
     
     if (!isAdmin) {
@@ -27,8 +26,7 @@ const Layout: React.FC = () => {
   // Prevent rendering if not authorized (avoid flash of content)
   const isAdmin = state.currentUser && (
     state.currentUser.role === 'admin' ||
-    state.currentUser.role === 'super_admin' ||
-    state.currentUser.username === 'admin'
+    state.currentUser.role === 'super_admin'
   );
   
   if (!isAdmin) {
