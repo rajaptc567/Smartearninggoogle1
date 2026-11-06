@@ -143,6 +143,14 @@ export const AdminOfferwalls: React.FC = () => {
         }
     }, [activeTab, logProviderFilter, logStatusFilter]);
 
+    const handleConfigureProvider = (p: OfferwallProvider) => {
+        if (p.providerKey === 'adgem' && (p.exchangeRateMultiplier === null || p.exchangeRateMultiplier === undefined)) {
+            setEditingProvider({ ...p, exchangeRateMultiplier: 100 });
+        } else {
+            setEditingProvider(p);
+        }
+    };
+
     const handleSaveProvider = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingProvider) return;
@@ -150,6 +158,12 @@ export const AdminOfferwalls: React.FC = () => {
         setIsSaving(true);
         try {
             const payload: any = { ...editingProvider };
+            // For AdGem only: ensure 100 is persisted if null, undefined, or missing
+            if (payload.providerKey === 'adgem') {
+                if (payload.exchangeRateMultiplier === null || payload.exchangeRateMultiplier === undefined || isNaN(Number(payload.exchangeRateMultiplier))) {
+                    payload.exchangeRateMultiplier = 100;
+                }
+            }
             // Credential safety: omit empty or masked credentials so existing stored secrets are preserved
             if (payload.secretKey !== undefined && (!payload.secretKey.trim() || payload.secretKey.trim() === '••••••••' || /^•+$/.test(payload.secretKey.trim()))) {
                 delete payload.secretKey;
@@ -415,7 +429,7 @@ export const AdminOfferwalls: React.FC = () => {
                                             <span>{copiedUrl === p.providerKey ? 'Copied URL!' : 'Copy S2S Postback URL'}</span>
                                         </button>
                                         <button
-                                            onClick={() => setEditingProvider(p)}
+                                            onClick={() => handleConfigureProvider(p)}
                                             className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[11px] font-black transition-all"
                                         >
                                             Configure
@@ -895,9 +909,20 @@ export const AdminOfferwalls: React.FC = () => {
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
                                     />
                                     {editingProvider.providerKey === 'adgem' && (
-                                        <p className="text-[10px] text-emerald-400 mt-1">
-                                            SmartExn convention: 100 virtual units = $1.00 USD. Acts as conversion divisor (<code className="font-mono text-emerald-300">reward = amount / 100</code>).
-                                        </p>
+                                        <>
+                                            {Number(editingProvider.exchangeRateMultiplier) !== 100 ? (
+                                                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs mt-2 flex items-start gap-2">
+                                                    <span className="text-sm">⚠️</span>
+                                                    <span>
+                                                        <strong>Warning:</strong> AdGem requires an explicit multiplier of <strong>100</strong> (100 virtual units = $1.00 USD). Currently configured as <strong>{String(editingProvider.exchangeRateMultiplier)}</strong>. The backend postback handler strictly fails closed until set to 100!
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <p className="text-[10px] text-emerald-400 mt-1">
+                                                    SmartExn convention: 100 virtual units = $1.00 USD. Acts as conversion divisor (<code className="font-mono text-emerald-300">reward = amount / 100</code>).
+                                                </p>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </div>

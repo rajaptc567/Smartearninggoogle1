@@ -3971,7 +3971,7 @@ export const handleAdGemPostback = async (req, res) => {
     }
     const conversionId = String(data.conversion_id).trim();
 
-    // Validate player_id
+    // Validate player_id: strictly require exactly 24 lowercase hexadecimal characters
     if (!data.player_id || !String(data.player_id).trim()) {
         return res.status(400).json({
             success: false,
@@ -3979,6 +3979,12 @@ export const handleAdGemPostback = async (req, res) => {
         });
     }
     const playerId = String(data.player_id).trim();
+    if (!/^[0-9a-f]{24}$/.test(playerId)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid player_id format; must be exactly 24 lowercase hexadecimal characters'
+        });
+    }
 
     // 10. Prepare log record
     const sanitizedRawBody = maskSensitiveData(payload);
@@ -4004,26 +4010,17 @@ export const handleAdGemPostback = async (req, res) => {
         signatureStatus: 'Verified'
     });
 
-    // 11. Resolve User (by ObjectId, username, or email)
-    let user = null;
-    if (playerId.match(/^[0-9a-fA-F]{24}$/)) {
-        user = await User.findById(playerId);
-    }
-    if (!user) {
-        user = await User.findOne({ username: playerId });
-    }
-    if (!user) {
-        user = await User.findOne({ email: playerId });
-    }
+    // 11. Resolve User strictly by ObjectId through User.findById(playerId)
+    // Username and email fallbacks are strictly removed for AdGem
+    const user = await User.findById(playerId);
 
     if (!user) {
         log.status = 'UserNotFound';
         log.errorMessage = `User not found for player_id: ${playerId}`;
         try { await log.save(); } catch (_) {}
-        // Acknowledge HTTP 200 without crediting so AdGem doesn't retry indefinitely for an orphaned player_id
-        return res.status(200).json({
-            success: true,
-            message: 'User not found; acknowledged without crediting'
+        return res.status(404).json({
+            success: false,
+            error: 'User not found'
         });
     }
 
@@ -4041,31 +4038,57 @@ export const handleAdGemPostback = async (req, res) => {
         });
     }
 
-    // 13. Handle zero-reward or install event (must acknowledge with 200 without crediting balance)
-    const rawAmount = data.amount;
-    const parsedAmount = Number(rawAmount);
-    const conversionType = String(data.conversion_type || '').toLowerCase().trim();
+    // 13. Handle zero-reward, install, and conversion_type validation
+    const rawConvType = (data.conversion_type !== undefined && data.conversion_type !== null)
+        ? String(data.conversion_type).toLowerCase().trim()
+        : null;
     const trackingType = String(data.tracking_type || '').toLowerCase().trim();
-    const isInstall = conversionType === 'install' || trackingType === 'install' || (!isNaN(parsedAmount) && parsedAmount === 0);
 
-    if (isInstall || parsedAmount === 0) {
+    // Valid install event: acknowledge with HTTP 200 after signature, App ID and approval validation
+    // Zero balance or Transaction mutation
+    const isInstall = rawConvType === 'install' || trackingType === 'install';
+
+    if (isInstall) {
         log.status = 'Processed';
-        log.errorMessage = 'Zero-reward or install conversion acknowledged without crediting balance.';
+        log.errorMessage = 'AdGem install conversion acknowledged without crediting balance.';
         try { await log.save(); } catch (_) {}
         return res.status(200).json({
             success: true,
-            message: 'Install/zero-reward conversion acknowledged'
+            message: 'Install conversion acknowledged'
+        });
+    }
+
+    // Reject unknown conversion_type (must never produce a reward credit)
+    if (rawConvType !== null && rawConvType !== 'reward') {
+        log.status = 'Error';
+        log.errorMessage = `Unknown or unsupported conversion_type: ${rawConvType}`;
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: `Unsupported conversion_type: ${rawConvType}`
         });
     }
 
     // 14. Validate payable reward amount
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    const rawAmount = data.amount;
+    if (rawAmount === undefined || rawAmount === null || String(rawAmount).trim() === '') {
         log.status = 'Error';
-        log.errorMessage = `Invalid or non-positive reward amount: ${rawAmount}`;
+        log.errorMessage = 'Missing reward amount in payable AdGem postback';
         try { await log.save(); } catch (_) {}
         return res.status(400).json({
             success: false,
-            error: 'Invalid or non-positive reward amount'
+            error: 'Missing reward amount'
+        });
+    }
+
+    const parsedAmount = Number(rawAmount);
+    if (!Number.isFinite(parsedAmount)) {
+        log.status = 'Error';
+        log.errorMessage = `Malformed or non-finite reward amount: ${rawAmount}`;
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Malformed reward amount'
         });
     }
 
@@ -4082,9 +4105,42 @@ export const handleAdGemPostback = async (req, res) => {
     }
 
     const parsedPayout = Number(rawPayout);
-    if (!Number.isFinite(parsedPayout) || parsedPayout <= 0) {
+    if (!Number.isFinite(parsedPayout) || parsedPayout < 0) {
         log.status = 'Error';
         log.errorMessage = `Invalid or non-positive gross payout: ${rawPayout}`;
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid or non-positive gross payout'
+        });
+    }
+
+    // conversion_type === "reward" with amount === 0 but payout > 0: reject safely. Do not acknowledge as a successful payable conversion.
+    if (parsedAmount === 0 && parsedPayout > 0) {
+        log.status = 'Error';
+        log.errorMessage = 'Reward conversion has zero amount but positive payout; rejected for safety';
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Zero reward amount with positive payout is invalid'
+        });
+    }
+
+    // amount > 0 with payout === 0: reject safely.
+    if (parsedAmount > 0 && parsedPayout === 0) {
+        log.status = 'Error';
+        log.errorMessage = 'Reward conversion has positive amount but zero payout; rejected for safety';
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Positive reward amount with zero payout is invalid'
+        });
+    }
+
+    // Missing, malformed, negative, or non-finite values must never produce a credit.
+    if (parsedAmount <= 0 || parsedPayout <= 0) {
+        log.status = 'Error';
+        log.errorMessage = `Reward conversion must have positive amount and payout (amount: ${parsedAmount}, payout: ${parsedPayout})`;
         try { await log.save(); } catch (_) {}
         return res.status(400).json({
             success: false,
@@ -4154,11 +4210,31 @@ export const handleAdGemPostback = async (req, res) => {
     log.userRewardUSD = userRewardUSD;
     log.platformRevenueUSD = platformRevenueUSD;
 
-    // 19. Acquire concurrency lock for atomic idempotency
-    const creditKey = `adgem_${conversionId}_credit`;
+    // 19. Multi-Goal Idempotency & Concurrency Lock
+    const goalId = (data.goal_id !== undefined && data.goal_id !== null && String(data.goal_id).trim() !== '')
+        ? String(data.goal_id).trim()
+        : null;
+    const campaignId = (data.campaign_id !== undefined && data.campaign_id !== null && String(data.campaign_id).trim() !== '')
+        ? String(data.campaign_id).trim()
+        : ((data.offer_id !== undefined && data.offer_id !== null && String(data.offer_id).trim() !== '') ? String(data.offer_id).trim() : null);
+
+    // Deterministic, provider-scoped idempotency identity:
+    // If goalId is present:
+    //   - Distinguishes distinct goals under the same conversion_id (Requirement B)
+    //   - Unifies duplicate deliveries of the same goal under the same conversion_id (Requirement A)
+    //   - Unifies duplicate deliveries of the same goal across different conversion_ids for the same user & campaign (Requirement C)
+    // If goalId is absent:
+    //   - Uses conversionId-based idempotency
+    const creditKey = goalId
+        ? `adgem:user:${user._id}:camp:${campaignId || 'all'}:goal:${goalId}:credit`
+        : `adgem_${conversionId}_credit`;
+
+    const externalTxId = goalId ? `${conversionId}_goal_${goalId}` : conversionId;
+    const lockKey = goalId ? `user_${user._id}_camp_${campaignId || 'all'}_goal_${goalId}` : conversionId;
+
     let lockOwnerToken = null;
     try {
-        lockOwnerToken = await acquirePostbackLock('adgem', conversionId);
+        lockOwnerToken = await acquirePostbackLock('adgem', lockKey);
     } catch (lockErr) {
         log.status = 'Error';
         log.errorMessage = `Postback lock acquisition failed: ${lockErr.message}`;
@@ -4174,9 +4250,20 @@ export const handleAdGemPostback = async (req, res) => {
         const existingCredit = (await Transaction.findOne({ idempotencyKey: creditKey }))
             || (await Transaction.findOne({
                 offerwallProvider: 'adgem',
+                externalTransactionId: externalTxId,
+                type: 'Offerwall Reward'
+            }))
+            || (goalId ? await Transaction.findOne({
+                offerwallProvider: 'adgem',
+                userId: user._id,
+                idempotencyKey: creditKey,
+                type: 'Offerwall Reward'
+            }) : null)
+            || (!goalId ? await Transaction.findOne({
+                offerwallProvider: 'adgem',
                 externalTransactionId: conversionId,
                 type: 'Offerwall Reward'
-            }));
+            }) : null);
 
         if (existingCredit) {
             log.status = 'Duplicate';
@@ -4189,10 +4276,14 @@ export const handleAdGemPostback = async (req, res) => {
         }
 
         // Check if pre-reversed
-        const priorReversal = (await Transaction.findOne({ idempotencyKey: `adgem_${conversionId}_reversal` }))
+        const reversalKey = goalId
+            ? `adgem:user:${user._id}:camp:${campaignId || 'all'}:goal:${goalId}:reversal`
+            : `adgem_${conversionId}_reversal`;
+
+        const priorReversal = (await Transaction.findOne({ idempotencyKey: reversalKey }))
             || (await Transaction.findOne({
                 offerwallProvider: 'adgem',
-                externalTransactionId: conversionId,
+                externalTransactionId: externalTxId,
                 type: 'Offerwall Reversal'
             }));
 
@@ -4207,8 +4298,8 @@ export const handleAdGemPostback = async (req, res) => {
         }
 
         // Verify lock ownership before transaction creation
-        if (lockOwnerToken && !(await isLockStillOwned('adgem', conversionId, lockOwnerToken))) {
-            throw new Error(`Lock expired or taken over before transaction creation for adgem:${conversionId}`);
+        if (lockOwnerToken && !(await isLockStillOwned('adgem', lockKey, lockOwnerToken))) {
+            throw new Error(`Lock expired or taken over before transaction creation for adgem:${lockKey}`);
         }
 
         const balanceBefore = user.taskEarningsBalance || 0;
@@ -4264,8 +4355,8 @@ export const handleAdGemPostback = async (req, res) => {
                 sourceWallet: 'External',
                 destinationWallet: 'TaskEarnings',
                 offerwallProvider: 'adgem',
-                externalTransactionId: conversionId,
-                description: `Completed AdGem Offer: ${data.offer_name || data.campaign_id || conversionId}${data.goal_name ? ' - Goal: ' + data.goal_name : (data.goal_id ? ' - Goal ID: ' + data.goal_id : '')}`
+                externalTransactionId: externalTxId,
+                description: `Completed AdGem Offer: ${data.offer_name || campaignId || conversionId}${data.goal_name ? ' - Goal: ' + data.goal_name : (goalId ? ' - Goal ID: ' + goalId : '')}`
             }], { session });
             tx = createdTx;
 
@@ -4352,7 +4443,7 @@ export const handleAdGemPostback = async (req, res) => {
         });
     } finally {
         if (lockOwnerToken) {
-            await releasePostbackLock('adgem', conversionId, lockOwnerToken);
+            await releasePostbackLock('adgem', lockKey, lockOwnerToken);
         }
     }
 };
