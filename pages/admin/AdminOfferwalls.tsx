@@ -884,14 +884,21 @@ export const AdminOfferwalls: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Exchange Multiplier (1 USD = ? User $)</label>
+                                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                                        Exchange Multiplier {editingProvider.providerKey === 'adgem' ? '(AdGem Divisor: 100)' : '(1 USD = ? User $)'}
+                                    </label>
                                     <input
                                         type="number"
                                         step="0.05"
-                                        value={editingProvider.exchangeRateMultiplier || 1.0}
+                                        value={editingProvider.exchangeRateMultiplier ?? (editingProvider.providerKey === 'adgem' ? 100 : 1.0)}
                                         onChange={(e) => setEditingProvider({ ...editingProvider, exchangeRateMultiplier: Number(e.target.value) })}
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
                                     />
+                                    {editingProvider.providerKey === 'adgem' && (
+                                        <p className="text-[10px] text-emerald-400 mt-1">
+                                            SmartExn convention: 100 virtual units = $1.00 USD. Acts as conversion divisor (<code className="font-mono text-emerald-300">reward = amount / 100</code>).
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -924,6 +931,57 @@ export const AdminOfferwalls: React.FC = () => {
                                 />
                                 <p className="text-[10px] text-slate-500 mt-1">Available placeholders: <code className="text-indigo-400">&#123;appId&#125;</code>, <code className="text-indigo-400">&#123;userId&#125;</code></p>
                             </div>
+
+                            {editingProvider.providerKey === 'adgem' && (
+                                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-4">
+                                    <div className="border-b border-slate-800 pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">💎</span>
+                                            <h4 className="text-xs font-black uppercase text-indigo-300 tracking-wider">
+                                                AdGem Dashboard Configuration & Currency Accounting
+                                            </h4>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-1">
+                                            AdGem Web Offerwall & Postback v3 integration specifications and 70/30 accounting rules.
+                                        </p>
+                                    </div>
+
+                                    {/* Accounting Explanation */}
+                                    <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-xs space-y-2">
+                                        <div className="flex items-center gap-2 font-black text-emerald-400">
+                                            <span>📊</span>
+                                            <span>Currency Multiplier & 70/30 Revenue Accounting</span>
+                                        </div>
+                                        <ul className="text-[11px] text-slate-300 space-y-1 list-disc list-inside">
+                                            <li>
+                                                <strong className="text-white">AdGem Dashboard Multiplier:</strong> Set to <code className="text-emerald-300 font-mono">70 Coins per $1</code> gross publisher revenue in your AdGem Publisher Dashboard.
+                                            </li>
+                                            <li>
+                                                <strong className="text-white">Backend Exchange Multiplier:</strong> Must be set to <code className="text-emerald-300 font-mono">100</code> virtual currency units per USD in SmartExn. It acts as the conversion divisor (<code className="text-emerald-300 font-mono">userRewardUSD = data.amount / 100</code>).
+                                            </li>
+                                            <li>
+                                                <strong className="text-white">70/30 Split Example:</strong> If gross publisher revenue (<code className="text-amber-300 font-mono">payout</code>) is $1.50, AdGem calculates <code className="text-emerald-300 font-mono">amount = 105 Coins</code> (1.50 × 70). SmartExn converts this to <code className="text-emerald-300 font-mono">$1.05</code> for the worker (105 / 100 = exactly 70%), retaining <code className="text-indigo-300 font-mono">$0.45</code> (30%) as SmartExn platform revenue.
+                                            </li>
+                                            <li>
+                                                <strong className="text-white">Mode & Shares:</strong> Requires <code className="text-emerald-300 font-mono">provider_managed</code> mode, 70% worker share, and 30% platform share. No secondary deduction is applied in the backend.
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    {/* S2S Callback Reference */}
+                                    <div className="space-y-2">
+                                        <span className="block text-[11px] font-black uppercase text-slate-300">
+                                            AdGem Dedicated Callback URL (HTTP POST)
+                                        </span>
+                                        <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl font-mono text-xs text-indigo-300 select-all break-all">
+                                            https://smartearning-api.onrender.com/api/v1/postbacks/adgem
+                                        </div>
+                                        <p className="text-[10px] text-slate-500">
+                                            AdGem Postback v3 uses HTTP POST with HMAC-SHA256 signature in the <code className="text-indigo-400">Signature</code> header computed over the raw JSON body using your Postback Key.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             {editingProvider.providerKey === 'theoremreach' && (
                                 <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-4">

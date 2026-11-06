@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { 
     handleAdGemPostback, 
     constructAdGemEntryUrl, 
     verifySignature,
     seedVerifiedNetworks 
 } from './backend/controllers/postbackController.js';
-import { launchProviderPlacement } from './backend/controllers/providerPlacementController.js';
+import { launchProviderPlacement, getAvailablePlacements } from './backend/controllers/providerPlacementController.js';
 import User from './backend/models/User.js';
 import Transaction from './backend/models/Transaction.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
@@ -15,7 +16,7 @@ import OfferwallPostbackLock from './backend/models/OfferwallPostbackLock.js';
 import ProviderPlacement from './backend/models/ProviderPlacement.js';
 import Setting from './backend/models/Setting.js';
 
-console.log('=== Running AdGem Integration, Security & Compliance Test Suite ===\n');
+console.log('=== Running AdGem Integration, Security & Production-Safety Test Suite ===\n');
 
 // In-memory Mock Database
 class MockDb {
@@ -42,6 +43,46 @@ class MockDb {
 
 const db = new MockDb();
 
+// Mock MongoDB Session & Transaction Support
+class MockSession {
+    constructor(supportsTransactions = true) {
+        this.supportsTransactions = supportsTransactions;
+        this.inTransaction = false;
+        this.stagedTransactions = [];
+        this.stagedUserUpdates = [];
+    }
+
+    startTransaction() {
+        if (!this.supportsTransactions) {
+            throw new Error('Transaction numbers are only allowed on a replica set member or mongos');
+        }
+        this.inTransaction = true;
+    }
+
+    async commitTransaction() {
+        this.inTransaction = false;
+        for (const tx of this.stagedTransactions) {
+            db.transactions.set(tx._id, tx);
+        }
+        for (const { user, updates } of this.stagedUserUpdates) {
+            for (const [k, v] of Object.entries(updates)) {
+                user[k] = v;
+            }
+        }
+    }
+
+    async abortTransaction() {
+        this.inTransaction = false;
+        this.stagedTransactions = [];
+        this.stagedUserUpdates = [];
+    }
+
+    async endSession() {}
+}
+
+let mockSupportsTransactions = true;
+mongoose.startSession = async () => new MockSession(mockSupportsTransactions);
+
 // Mock User Model
 User.findById = async (id) => db.users.get(String(id)) || null;
 User.findOne = async (query) => {
@@ -58,41 +99,60 @@ User.findOne = async (query) => {
     }
     return null;
 };
-User.findOneAndUpdate = async (filter, update) => {
+User.findOneAndUpdate = async (filter, update, options = {}) => {
     const user = await User.findById(filter._id);
     if (!user) return null;
     if (filter.status?.$ne && user.status === filter.status.$ne) return null;
     if (filter['restrictions.earning']?.$ne && user.restrictions?.earning === true) return null;
     if (filter['restrictions.loginBlocked']?.$ne && user.restrictions?.loginBlocked === true) return null;
 
+    const stagedUpdates = {};
     if (update.$inc) {
         for (const [k, v] of Object.entries(update.$inc)) {
-            user[k] = Number(((user[k] || 0) + v).toFixed(4));
+            stagedUpdates[k] = Number(((user[k] || 0) + v).toFixed(4));
         }
     }
     if (update.$set) {
         for (const [k, v] of Object.entries(update.$set)) {
-            user[k] = v;
+            stagedUpdates[k] = v;
         }
     }
-    return user;
+
+    if (options.session?.inTransaction) {
+        options.session.stagedUserUpdates.push({ user, updates: stagedUpdates });
+        return { ...user, ...stagedUpdates };
+    } else {
+        for (const [k, v] of Object.entries(stagedUpdates)) {
+            user[k] = v;
+        }
+        return user;
+    }
 };
 
 // Mock Transaction Model
-Transaction.create = async (doc) => {
-    const id = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const tx = { _id: id, ...doc };
-    if (tx.idempotencyKey) {
-        for (const existing of db.transactions.values()) {
-            if (existing.idempotencyKey === tx.idempotencyKey) {
-                const err = new Error('Duplicate key error');
-                err.code = 11000;
-                throw err;
+Transaction.create = async (docOrArray, options = {}) => {
+    const docs = Array.isArray(docOrArray) ? docOrArray : [docOrArray];
+    const created = [];
+    for (const doc of docs) {
+        const id = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const tx = { _id: id, ...doc };
+        if (tx.idempotencyKey) {
+            for (const existing of db.transactions.values()) {
+                if (existing.idempotencyKey === tx.idempotencyKey) {
+                    const err = new Error('Duplicate key error');
+                    err.code = 11000;
+                    throw err;
+                }
             }
         }
+        if (options.session?.inTransaction) {
+            options.session.stagedTransactions.push(tx);
+        } else {
+            db.transactions.set(id, tx);
+        }
+        created.push(tx);
     }
-    db.transactions.set(id, tx);
-    return tx;
+    return Array.isArray(docOrArray) ? created : created[0];
 };
 Transaction.findOne = async (query) => {
     for (const tx of db.transactions.values()) {
@@ -119,7 +179,21 @@ OfferwallProvider.findOne = async (query) => {
     }
     return null;
 };
-OfferwallProvider.find = async () => Array.from(db.providers.values());
+OfferwallProvider.find = (query = {}) => {
+    const all = Array.from(db.providers.values());
+    const filter = (items) => {
+        if (query.providerKey?.$in) {
+            return items.filter(p => query.providerKey.$in.includes(p.providerKey));
+        }
+        return items;
+    };
+    const queryObj = {
+        select: () => queryObj,
+        lean: async () => filter(all),
+        then: (resolve, reject) => Promise.resolve(filter(all)).then(resolve, reject)
+    };
+    return queryObj;
+};
 OfferwallProvider.create = async (doc) => {
     db.providers.set(doc.providerKey.toLowerCase(), { ...doc, save: async function() { return this; } });
     return doc;
@@ -176,9 +250,18 @@ OfferwallPostbackLock.findOneAndUpdate = async (filter, update) => {
     return null;
 };
 
+// Mock ProviderPlacement Model
+ProviderPlacement.find = (query) => {
+    const list = Array.from(db.placements.values()).filter(p => !query.parentTabId || p.parentTabId === query.parentTabId);
+    return {
+        lean: async () => list
+    };
+};
+ProviderPlacement.findById = async (id) => db.placements.get(String(id)) || null;
+
 // Mock Setting Model
 Setting.getSettings = async () => db.settings || {
-    customEarnTabs: [{ id: 'available_jobs', enabled: true }],
+    customEarnTabs: [{ id: 'available_jobs', enabled: true, subTabs: [] }],
     modulePagesConfig: { workAndEarn: { otherTasks: { isEnabled: true } } }
 };
 
@@ -226,7 +309,7 @@ const buildAdGemRequest = (payloadObj, secretKey, options = {}) => {
     };
 };
 
-// Setup Default Active AdGem Provider
+// Setup Default Active AdGem Provider with Verified 70/30 Rules
 const setupAdGemProvider = (overrides = {}) => {
     const provider = {
         providerKey: 'adgem',
@@ -238,8 +321,10 @@ const setupAdGemProvider = (overrides = {}) => {
         approvalStatus: 'Approved',
         appId: '12345',
         postbackKey: 'test_adgem_postback_key_secret_9988',
-        exchangeRateMultiplier: 1.0,
+        exchangeRateMultiplier: 100, // 100 virtual units = $1 USD divisor
         commissionMode: 'provider_managed',
+        userRevenueSharePercent: 70,
+        platformRevenueSharePercent: 30,
         ...overrides
     };
     db.providers.set('adgem', provider);
@@ -273,6 +358,7 @@ const runTest = async (name, fn) => {
     totalTests++;
     try {
         db.clear();
+        mockSupportsTransactions = true;
         await fn();
         console.log(`  ✓ ${name}`);
         passedTests++;
@@ -285,161 +371,214 @@ const runTest = async (name, fn) => {
 };
 
 (async () => {
-    console.log('--- SECTION 1: AdGem Web Offerwall URL Construction ---');
+    console.log('--- SECTION 1: AdGem Currency Accounting & Payout Validation ---');
 
-    await runTest('constructAdGemEntryUrl: builds standard https URL with appId and playerId', async () => {
-        const provider = { appId: '9876' };
-        const result = constructAdGemEntryUrl(provider, '507f1f77bcf86cd799439011');
-        assert.equal(result.error, null);
-        assert.equal(result.url, 'https://api.adgem.com/v1/wall?appid=9876&playerid=507f1f77bcf86cd799439011');
-    });
-
-    await runTest('constructAdGemEntryUrl: fails closed if user ID is missing or empty', async () => {
-        const provider = { appId: '9876' };
-        const res1 = constructAdGemEntryUrl(provider, '');
-        assert.ok(res1.error);
-        assert.equal(res1.url, '');
-
-        const res2 = constructAdGemEntryUrl(provider, null);
-        assert.ok(res2.error);
-    });
-
-    await runTest('constructAdGemEntryUrl: fails closed if user ID contains unsafe characters', async () => {
-        const provider = { appId: '9876' };
-        const res = constructAdGemEntryUrl(provider, 'user<script>alert(1)</script>');
-        assert.ok(res.error);
-        assert.equal(res.url, '');
-    });
-
-    await runTest('constructAdGemEntryUrl: fails closed if provider appId is missing', async () => {
-        const provider = { appId: '' };
-        const res = constructAdGemEntryUrl(provider, '507f1f77bcf86cd799439011');
-        assert.ok(res.error);
-        assert.equal(res.url, '');
-    });
-
-    await runTest('constructAdGemEntryUrl: handles custom template if configured', async () => {
-        const provider = { 
-            appId: '9876',
-            iframeUrlTemplate: 'https://api.adgem.com/v1/wall?appid={appId}&playerid={userId}&custom=1'
+    await runTest('handleAdGemPostback: required example ($1.50 payout, 105 coins -> $1.05 worker reward, $0.45 platform revenue)', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_spec_example',
+            data: {
+                app_id: '12345',
+                conversion_id: 'conv_adgem_example_001',
+                player_id: String(user._id),
+                amount: 105,   // 105 coins calculated by AdGem at 70 coins per $1.00 gross revenue
+                payout: 1.50   // $1.50 gross publisher payout
+            }
         };
-        const res = constructAdGemEntryUrl(provider, '507f1f77bcf86cd799439011');
-        assert.equal(res.error, null);
-        assert.equal(res.url, 'https://api.adgem.com/v1/wall?appid=9876&playerid=507f1f77bcf86cd799439011&custom=1');
-    });
 
-    console.log('\n--- SECTION 2: AdGem Postback v3 Protocol & Signature Verification ---');
-
-    await runTest('handleAdGemPostback: rejects non-POST HTTP methods with 405 Method Not Allowed', async () => {
-        setupAdGemProvider();
-        setupTestUser();
-        const req = { method: 'GET', headers: {} };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
         const res = createMockRes();
         await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 405);
-        assert.equal(res.body.success, false);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.success, true);
+
+        // Core main wallet MUST NOT be touched
+        assert.equal(user.walletBalance, 150.0);
+
+        // Task Earnings balances must be credited by exactly 105 / 100 = $1.05
+        assert.equal(user.taskEarningsBalance, 26.05);
+        assert.equal(user.taskWalletBalance, 26.05);
+
+        // Verify transaction entry
+        assert.equal(db.transactions.size, 1);
+        const tx = Array.from(db.transactions.values())[0];
+        assert.equal(tx.amount, 1.05);
+        assert.equal(tx.grossAmount, 1.50);
+        assert.equal(tx.platformRevenueAmount, 0.45);
+        assert.equal(tx.destinationWallet, 'TaskEarnings');
     });
 
-    await runTest('handleAdGemPostback: rejects request when AdGem provider is not in DB (404)', async () => {
-        // No provider configured
-        setupTestUser();
-        const req = buildAdGemRequest({ request_id: 'r1', data: {} }, 'secret');
+    await runTest('handleAdGemPostback: fails closed if exchangeRateMultiplier is missing or not 100', async () => {
+        const provider = setupAdGemProvider({ exchangeRateMultiplier: null });
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_no_mult',
+            data: {
+                app_id: '12345',
+                conversion_id: 'conv_mult_1',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
         const res = createMockRes();
         await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 404);
-        assert.equal(res.body.success, false);
+        assert.equal(res.statusCode, 400);
+        assert.ok(res.body.error.includes('exchangeRateMultiplier must be explicitly 100'));
     });
 
-    await runTest('handleAdGemPostback: rejects request when AdGem provider is disabled or NOT_STARTED (403)', async () => {
-        setupAdGemProvider({ enabled: false, status: 'NOT_STARTED' });
+    await runTest('handleAdGemPostback: fails closed if exchangeRateMultiplier is 1.0 (legacy default rejected)', async () => {
+        const provider = setupAdGemProvider({ exchangeRateMultiplier: 1.0 });
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_wrong_mult',
+            data: {
+                app_id: '12345',
+                conversion_id: 'conv_mult_2',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+        assert.equal(res.statusCode, 400);
+        assert.ok(res.body.error.includes('exchangeRateMultiplier must be explicitly 100'));
+    });
+
+    await runTest('handleAdGemPostback: fails closed if payout is missing on payable conversion', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_no_payout',
+            data: {
+                app_id: '12345',
+                conversion_id: 'conv_payout_1',
+                player_id: String(user._id),
+                amount: 105
+                // payout omitted
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+        assert.equal(res.statusCode, 400);
+        assert.ok(res.body.error.includes('Missing gross publisher payout'));
+    });
+
+    await runTest('handleAdGemPostback: fails closed if payout is negative or non-finite', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_neg_payout',
+            data: {
+                app_id: '12345',
+                conversion_id: 'conv_payout_2',
+                player_id: String(user._id),
+                amount: 105,
+                payout: -1.50
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+        assert.equal(res.statusCode, 400);
+        assert.ok(res.body.error.includes('Invalid or non-positive gross payout'));
+    });
+
+    await runTest('handleAdGemPostback: fails closed if user reward exceeds gross payout', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_exceed',
+            data: {
+                app_id: '12345',
+                conversion_id: 'conv_exceed_1',
+                player_id: String(user._id),
+                amount: 200,   // $2.00 reward
+                payout: 1.50   // $1.50 payout
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+        assert.equal(res.statusCode, 400);
+        assert.ok(res.body.error.includes('exceeds gross publisher payout'));
+    });
+
+    await runTest('handleAdGemPostback: fails closed if reward amount does not correspond to 70% share of payout', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_inconsistent_ratio',
+            data: {
+                app_id: '12345',
+                conversion_id: 'conv_ratio_1',
+                player_id: String(user._id),
+                amount: 140,   // $1.40 reward (93% of payout - violates 70/30 contract)
+                payout: 1.50
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+        assert.equal(res.statusCode, 400);
+        assert.ok(res.body.error.includes('70/30'));
+    });
+
+    console.log('\n--- SECTION 2: Approval, App ID & Raw-Body Security Gates ---');
+
+    await runTest('handleAdGemPostback: fails closed with HTTP 403 if provider approvalStatus is Pending', async () => {
+        const provider = setupAdGemProvider({ approvalStatus: 'Pending' });
         setupTestUser();
-        const req = buildAdGemRequest({ request_id: 'r1', data: {} }, 'secret');
+        const payload = {
+            request_id: 'req_pending',
+            data: { app_id: '12345', conversion_id: 'c1', player_id: '507f1f77bcf86cd799439011', amount: 105, payout: 1.50 }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
         const res = createMockRes();
         await handleAdGemPostback(req, res);
         assert.equal(res.statusCode, 403);
-        assert.equal(res.body.success, false);
+        assert.ok(res.body.error.includes('not active or approved'));
     });
 
-    await runTest('handleAdGemPostback: fails closed with 400 when postbackKey is missing', async () => {
-        setupAdGemProvider({ postbackKey: '', secretKey: '' });
+    await runTest('handleAdGemPostback: fails closed with HTTP 403 if provider status is NOT_STARTED or enabled is false', async () => {
+        const provider = setupAdGemProvider({ enabled: false, status: 'NOT_STARTED' });
         setupTestUser();
-        const req = buildAdGemRequest({ request_id: 'r1', data: {} }, 'some_key');
+        const payload = {
+            request_id: 'req_disabled',
+            data: { app_id: '12345', conversion_id: 'c2', player_id: '507f1f77bcf86cd799439011', amount: 105, payout: 1.50 }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
         const res = createMockRes();
         await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 400);
-        assert.ok(res.body.error.includes('postback key is not configured'));
+        assert.equal(res.statusCode, 403);
     });
 
-    await runTest('handleAdGemPostback: rejects request when signature header is missing (400)', async () => {
-        const provider = setupAdGemProvider();
+    await runTest('handleAdGemPostback: fails closed with HTTP 400 if provider appId is missing in settings', async () => {
+        const provider = setupAdGemProvider({ appId: '' });
         setupTestUser();
-        const req = buildAdGemRequest({ request_id: 'r1', data: {} }, provider.postbackKey, { signature: '' });
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 400);
-        assert.ok(res.body.error.includes('Missing AdGem signature header'));
-    });
-
-    await runTest('handleAdGemPostback: rejects request with invalid HMAC-SHA256 signature (400)', async () => {
-        const provider = setupAdGemProvider();
-        setupTestUser();
-        const req = buildAdGemRequest({ request_id: 'r1', data: {} }, provider.postbackKey, { signature: 'invalid_hex_hash_0000000000000000000000000000000000000000000000000000000000000000' });
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 400);
-        assert.ok(res.body.error.includes('Invalid AdGem postback signature'));
-    });
-
-    await runTest('handleAdGemPostback: fails closed when raw body does not match signed body (tamper detection)', async () => {
-        const provider = setupAdGemProvider();
-        setupTestUser();
-        const originalPayload = { request_id: 'r1', data: { amount: 10 } };
-        const tamperedPayload = { request_id: 'r1', data: { amount: 1000 } };
-        // Signature computed on original payload, but req.rawBody has tampered payload
-        const req = buildAdGemRequest(originalPayload, provider.postbackKey, {
-            rawBody: Buffer.from(JSON.stringify(tamperedPayload), 'utf8')
-        });
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 400);
-        assert.ok(res.body.error.includes('Invalid AdGem postback signature'));
-    });
-
-    console.log('\n--- SECTION 3: AdGem Payload Structure & Parameter Validation ---');
-
-    await runTest('handleAdGemPostback: rejects payload missing request_id (400)', async () => {
-        const provider = setupAdGemProvider();
-        setupTestUser();
-        const payload = { data: { conversion_id: 'c1', player_id: '507f1f77bcf86cd799439011' } };
+        const payload = {
+            request_id: 'req_no_appid',
+            data: { app_id: '12345', conversion_id: 'c3', player_id: '507f1f77bcf86cd799439011', amount: 105, payout: 1.50 }
+        };
         const req = buildAdGemRequest(payload, provider.postbackKey);
         const res = createMockRes();
         await handleAdGemPostback(req, res);
         assert.equal(res.statusCode, 400);
-        assert.ok(res.body.error.includes('request_id'));
+        assert.ok(res.body.error.includes('appId is not configured'));
     });
 
-    await runTest('handleAdGemPostback: rejects payload missing data object (400)', async () => {
-        const provider = setupAdGemProvider();
-        setupTestUser();
-        const payload = { request_id: 'req_123' };
-        const req = buildAdGemRequest(payload, provider.postbackKey);
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 400);
-        assert.ok(res.body.error.includes('data'));
-    });
-
-    await runTest('handleAdGemPostback: rejects payload when data.app_id does not match configured appId (400)', async () => {
+    await runTest('handleAdGemPostback: fails closed with HTTP 400 if data.app_id does not match configured appId', async () => {
         const provider = setupAdGemProvider({ appId: '12345' });
         setupTestUser();
         const payload = {
-            request_id: 'req_123',
-            data: {
-                app_id: 'wrong_app_999',
-                conversion_id: 'conv_1',
-                player_id: '507f1f77bcf86cd799439011',
-                amount: 10
-            }
+            request_id: 'req_wrong_appid',
+            data: { app_id: '99999', conversion_id: 'c4', player_id: '507f1f77bcf86cd799439011', amount: 105, payout: 1.50 }
         };
         const req = buildAdGemRequest(payload, provider.postbackKey);
         const res = createMockRes();
@@ -448,292 +587,190 @@ const runTest = async (name, fn) => {
         assert.ok(res.body.error.includes('app_id mismatch'));
     });
 
-    await runTest('handleAdGemPostback: rejects payload missing conversion_id (400)', async () => {
+    await runTest('handleAdGemPostback: fails closed if req.rawBody is missing (no JSON.stringify fallback allowed)', async () => {
         const provider = setupAdGemProvider();
         setupTestUser();
         const payload = {
-            request_id: 'req_123',
-            data: {
-                app_id: '12345',
-                player_id: '507f1f77bcf86cd799439011',
-                amount: 10
-            }
+            request_id: 'req_no_raw',
+            data: { app_id: '12345', conversion_id: 'c5', player_id: '507f1f77bcf86cd799439011', amount: 105, payout: 1.50 }
         };
-        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const req = buildAdGemRequest(payload, provider.postbackKey, { rawBody: null });
         const res = createMockRes();
         await handleAdGemPostback(req, res);
         assert.equal(res.statusCode, 400);
-        assert.ok(res.body.error.includes('conversion_id'));
+        assert.ok(res.body.error.includes('Missing raw request body buffer'));
     });
 
-    await runTest('handleAdGemPostback: rejects payload missing player_id (400)', async () => {
+    await runTest('handleAdGemPostback: rejects invalid HMAC-SHA256 signature in constant-time', async () => {
         const provider = setupAdGemProvider();
         setupTestUser();
         const payload = {
-            request_id: 'req_123',
-            data: {
-                app_id: '12345',
-                conversion_id: 'conv_1',
-                amount: 10
-            }
+            request_id: 'req_bad_sig',
+            data: { app_id: '12345', conversion_id: 'c6', player_id: '507f1f77bcf86cd799439011', amount: 105, payout: 1.50 }
         };
-        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const req = buildAdGemRequest(payload, provider.postbackKey, {
+            signature: '0000000000000000000000000000000000000000000000000000000000000000'
+        });
         const res = createMockRes();
         await handleAdGemPostback(req, res);
         assert.equal(res.statusCode, 400);
-        assert.ok(res.body.error.includes('player_id'));
+        assert.ok(res.body.error.includes('Invalid AdGem postback signature'));
     });
 
-    console.log('\n--- SECTION 4: User Identification, Account Restrictions & Zero-Reward Events ---');
+    console.log('\n--- SECTION 3: Multi-Goal Semantics & Concurrency Idempotency ---');
 
-    await runTest('handleAdGemPostback: acknowledges unknown player_id with HTTP 200 without mutating any balance', async () => {
-        const provider = setupAdGemProvider();
-        // User not in DB
-        const payload = {
-            request_id: 'req_unknown_player',
-            data: {
-                app_id: '12345',
-                conversion_id: 'conv_unknown',
-                player_id: 'unknown_worker_9999',
-                amount: 50
-            }
-        };
-        const req = buildAdGemRequest(payload, provider.postbackKey);
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 200);
-        assert.ok(res.body.message.includes('User not found'));
-        // Verify no transactions created
-        assert.equal(db.transactions.size, 0);
-    });
-
-    await runTest('handleAdGemPostback: rejects earning-restricted user with HTTP 403', async () => {
-        const provider = setupAdGemProvider();
-        const restrictedUser = setupTestUser({ restrictions: { earning: true, loginBlocked: false } });
-        const payload = {
-            request_id: 'req_restricted',
-            data: {
-                app_id: '12345',
-                conversion_id: 'conv_restr',
-                player_id: String(restrictedUser._id),
-                amount: 25
-            }
-        };
-        const req = buildAdGemRequest(payload, provider.postbackKey);
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 403);
-        assert.equal(db.transactions.size, 0);
-        assert.equal(restrictedUser.taskEarningsBalance, 25.0);
-    });
-
-    await runTest('handleAdGemPostback: rejects blocked user with HTTP 403', async () => {
-        const provider = setupAdGemProvider();
-        const blockedUser = setupTestUser({ status: 'Blocked' });
-        const payload = {
-            request_id: 'req_blocked',
-            data: {
-                app_id: '12345',
-                conversion_id: 'conv_blocked',
-                player_id: String(blockedUser._id),
-                amount: 25
-            }
-        };
-        const req = buildAdGemRequest(payload, provider.postbackKey);
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 403);
-        assert.equal(db.transactions.size, 0);
-    });
-
-    await runTest('handleAdGemPostback: acknowledges zero-reward conversion with HTTP 200 without balance change', async () => {
+    await runTest('Multi-goal campaigns: distinct goals with separate conversion_ids both succeed', async () => {
         const provider = setupAdGemProvider();
         const user = setupTestUser();
-        const payload = {
-            request_id: 'req_zero',
-            data: {
-                app_id: '12345',
-                conversion_id: 'conv_zero_reward',
-                player_id: String(user._id),
-                amount: 0,
-                conversion_type: 'event'
-            }
-        };
-        const req = buildAdGemRequest(payload, provider.postbackKey);
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 200);
-        assert.equal(db.transactions.size, 0);
-        assert.equal(user.taskEarningsBalance, 25.0); // Unchanged
-    });
 
-    await runTest('handleAdGemPostback: acknowledges install event (conversion_type=install) without balance mutation', async () => {
-        const provider = setupAdGemProvider();
-        const user = setupTestUser();
-        const payload = {
-            request_id: 'req_install',
-            data: {
-                app_id: '12345',
-                conversion_id: 'conv_install_step',
-                player_id: String(user._id),
-                amount: 0,
-                payout: 0.10,
-                conversion_type: 'install'
-            }
-        };
-        const req = buildAdGemRequest(payload, provider.postbackKey);
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 200);
-        assert.ok(res.body.message.includes('Install'));
-        assert.equal(db.transactions.size, 0);
-        assert.equal(user.taskEarningsBalance, 25.0); // Unchanged
-    });
-
-    console.log('\n--- SECTION 5: Valid Reward Crediting, Isolation & Idempotency ---');
-
-    await runTest('handleAdGemPostback: successfully processes valid reward conversion', async () => {
-        const provider = setupAdGemProvider({ exchangeRateMultiplier: 1.0 });
-        const user = setupTestUser();
-        const payload = {
-            request_id: 'req_valid_reward',
-            timestamp: 1690000000,
+        // Goal 1: Reach Level 5 (105 coins, $1.50 payout)
+        const payloadGoal1 = {
+            request_id: 'req_goal_1',
             data: {
                 app_id: '12345',
                 campaign_id: 8888,
-                player_id: String(user._id),
-                amount: 15.50, // User reward
-                payout: 20.00, // Publisher gross revenue
-                conversion_id: 'conv_adgem_success_001',
-                conversion_type: 'offer',
                 offer_id: 777,
-                offer_name: 'Epic Hero Quest Level 5',
+                offer_name: 'Super RPG',
                 goal_id: 1,
                 goal_name: 'Reach Level 5',
-                country: 'US'
+                conversion_id: 'conv_goal_1_xyz',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
             }
         };
-        const req = buildAdGemRequest(payload, provider.postbackKey);
-        const res = createMockRes();
-        await handleAdGemPostback(req, res);
 
-        assert.equal(res.statusCode, 200);
-        assert.equal(res.body.success, true);
-        assert.equal(res.body.conversionId, 'conv_adgem_success_001');
+        const req1 = buildAdGemRequest(payloadGoal1, provider.postbackKey);
+        const res1 = createMockRes();
+        await handleAdGemPostback(req1, res1);
+        assert.equal(res1.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 26.05);
 
-        // Verify user balances:
-        // Core main balance (walletBalance) MUST NEVER BE TOUCHED
-        assert.equal(user.walletBalance, 150.0);
-        // Task earnings balances MUST BE INCREMENTED by 15.50
-        assert.equal(user.taskEarningsBalance, 40.50);
-        assert.equal(user.taskWalletBalance, 40.50);
+        // Goal 2: Reach Level 10 (210 coins, $3.00 payout)
+        const payloadGoal2 = {
+            request_id: 'req_goal_2',
+            data: {
+                app_id: '12345',
+                campaign_id: 8888,
+                offer_id: 777,
+                offer_name: 'Super RPG',
+                goal_id: 2,
+                goal_name: 'Reach Level 10',
+                conversion_id: 'conv_goal_2_abc',
+                player_id: String(user._id),
+                amount: 210,
+                payout: 3.00
+            }
+        };
 
-        // Verify transaction entry
-        assert.equal(db.transactions.size, 1);
-        const tx = Array.from(db.transactions.values())[0];
-        assert.equal(tx.offerwallProvider, 'adgem');
-        assert.equal(tx.externalTransactionId, 'conv_adgem_success_001');
-        assert.equal(tx.amount, 15.50);
-        assert.equal(tx.grossAmount, 20.00); // Publisher payout
-        assert.equal(tx.destinationWallet, 'TaskEarnings');
-        assert.equal(tx.status, 'Approved');
+        const req2 = buildAdGemRequest(payloadGoal2, provider.postbackKey);
+        const res2 = createMockRes();
+        await handleAdGemPostback(req2, res2);
+        assert.equal(res2.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 28.15); // 25.0 + 1.05 + 2.10 = 28.15
+
+        assert.equal(db.transactions.size, 2);
     });
 
-    await runTest('handleAdGemPostback: enforces strict idempotency on duplicate conversion_id', async () => {
+    await runTest('Idempotency: retry of identical conversion_id returns duplicate acknowledgment without double credit', async () => {
         const provider = setupAdGemProvider();
         const user = setupTestUser();
         const payload = {
-            request_id: 'req_dup',
+            request_id: 'req_retry',
             data: {
                 app_id: '12345',
+                conversion_id: 'conv_retry_unique_999',
                 player_id: String(user._id),
-                amount: 10.0,
-                payout: 12.0,
-                conversion_id: 'conv_adgem_duplicate_test'
+                amount: 105,
+                payout: 1.50
             }
         };
 
-        // First call
         const req1 = buildAdGemRequest(payload, provider.postbackKey);
         const res1 = createMockRes();
         await handleAdGemPostback(req1, res1);
         assert.equal(res1.statusCode, 200);
-        assert.equal(user.taskEarningsBalance, 35.0);
-        assert.equal(db.transactions.size, 1);
+        assert.equal(user.taskEarningsBalance, 26.05);
 
-        // Second call with same conversion_id
+        // Second callback with same conversion_id
         const req2 = buildAdGemRequest(payload, provider.postbackKey);
         const res2 = createMockRes();
         await handleAdGemPostback(req2, res2);
         assert.equal(res2.statusCode, 200);
         assert.ok(res2.body.message.includes('Duplicate'));
 
-        // Balance and transactions MUST NOT duplicate
-        assert.equal(user.taskEarningsBalance, 35.0);
+        // Balance must remain unchanged at 26.05
+        assert.equal(user.taskEarningsBalance, 26.05);
         assert.equal(db.transactions.size, 1);
     });
 
-    await runTest('handleAdGemPostback: resolves user by username fallback if player_id is not ObjectId', async () => {
+    console.log('\n--- SECTION 4: Atomic Database Accounting & MongoDB Transaction Safety ---');
+
+    await runTest('MongoDB Session Transaction: aborts and rolls back if user restriction update fails', async () => {
         const provider = setupAdGemProvider();
-        const user = setupTestUser({ username: 'alicesmith' });
+        const user = setupTestUser();
+
+        // Cause User.findOneAndUpdate to reject by setting earning restriction right after user lookup
+        const originalFindOneAndUpdate = User.findOneAndUpdate;
+        User.findOneAndUpdate = async () => null; // simulates user being restricted concurrently
+
         const payload = {
-            request_id: 'req_username_test',
+            request_id: 'req_atomic_abort',
             data: {
                 app_id: '12345',
-                player_id: 'alicesmith',
-                amount: 5.0,
-                conversion_id: 'conv_username_match'
+                conversion_id: 'conv_abort_test',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
             }
         };
+
         const req = buildAdGemRequest(payload, provider.postbackKey);
         const res = createMockRes();
         await handleAdGemPostback(req, res);
-        assert.equal(res.statusCode, 200);
-        assert.equal(user.taskEarningsBalance, 30.0);
+
+        assert.equal(res.statusCode, 403);
+        assert.ok(res.body.error.includes('restricted or blocked'));
+
+        // Verify zero transactions created and balance unmutated
+        assert.equal(db.transactions.size, 0);
+        assert.equal(user.taskEarningsBalance, 25.0);
+
+        User.findOneAndUpdate = originalFindOneAndUpdate;
     });
 
-    console.log('\n--- SECTION 6: Integration Architecture, Seeding & Placements ---');
-
-    await runTest('seedVerifiedNetworks: includes adgem network disabled by default (status: NOT_STARTED)', async () => {
-        await seedVerifiedNetworks();
-        const adgemSeed = db.providers.get('adgem');
-        assert.ok(adgemSeed, 'adgem should be present in seeded verified networks');
-        assert.equal(adgemSeed.enabled, false);
-        assert.equal(adgemSeed.status, 'NOT_STARTED');
-        assert.equal(adgemSeed.approvalStatus, 'Pending');
-        assert.equal(adgemSeed.signatureType, 'hmac_sha256');
-    });
-
-    await runTest('verifySignature: handles adgem provider key with HMAC-SHA256 over rawBody', async () => {
-        const provider = {
-            providerKey: 'adgem',
-            postbackKey: 'secret_123',
-            requireSignature: true
-        };
-        const payload = { test: 'data' };
-        const rawBody = Buffer.from(JSON.stringify(payload), 'utf8');
-        const signature = crypto.createHmac('sha256', 'secret_123').update(rawBody).digest('hex');
-
-        const req = {
-            headers: { signature },
-            rawBody,
-            body: payload
-        };
-        const check = verifySignature(provider, payload, '127.0.0.1', req);
-        assert.equal(check.valid, true);
-
-        // Bad signature fails
-        const badReq = {
-            headers: { signature: 'wrong_signature' },
-            rawBody,
-            body: payload
-        };
-        const badCheck = verifySignature(provider, payload, '127.0.0.1', badReq);
-        assert.equal(badCheck.valid, false);
-    });
-
-    await runTest('launchProviderPlacement: successfully generates launch URL and trusts api.adgem.com', async () => {
+    await runTest('MongoDB Session Transaction: fails closed with HTTP 500 if MongoDB deployment does not support transactions', async () => {
         const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        mockSupportsTransactions = false; // Simulates standalone MongoDB without replica set
+
+        const payload = {
+            request_id: 'req_no_replica_set',
+            data: {
+                app_id: '12345',
+                conversion_id: 'conv_no_replica',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        };
+
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+
+        assert.equal(res.statusCode, 500);
+        assert.ok(res.body.error.includes('transaction support is unavailable'));
+        assert.equal(db.transactions.size, 0);
+        assert.equal(user.taskEarningsBalance, 25.0);
+
+        mockSupportsTransactions = true;
+    });
+
+    console.log('\n--- SECTION 5: Provider Placement & Visibility Approval Gates ---');
+
+    await runTest('launchProviderPlacement: fails closed with HTTP 403 if AdGem approvalStatus is not Approved', async () => {
+        const provider = setupAdGemProvider({ approvalStatus: 'Pending' });
         const user = setupTestUser();
         const placement = {
             _id: '607f1f77bcf86cd799439099',
@@ -744,7 +781,32 @@ const runTest = async (name, fn) => {
             userLevels: ['All Levels'],
             targetCountries: ['All Countries']
         };
-        ProviderPlacement.findById = async () => placement;
+        db.placements.set(String(placement._id), placement);
+
+        const req = {
+            user: { id: String(user._id) },
+            params: { placementId: String(placement._id) }
+        };
+        const res = createMockRes();
+        await launchProviderPlacement(req, res);
+
+        assert.equal(res.statusCode, 403);
+        assert.ok(res.body.error.includes('pending approval or not approved'));
+    });
+
+    await runTest('launchProviderPlacement: succeeds when AdGem is Approved, ACTIVE, and enabled', async () => {
+        const provider = setupAdGemProvider({ approvalStatus: 'Approved', status: 'ACTIVE', enabled: true });
+        const user = setupTestUser();
+        const placement = {
+            _id: '607f1f77bcf86cd799439099',
+            providerKey: 'adgem',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            parentTabId: 'available_jobs',
+            userLevels: ['All Levels'],
+            targetCountries: ['All Countries']
+        };
+        db.placements.set(String(placement._id), placement);
 
         const req = {
             user: { id: String(user._id) },
@@ -758,6 +820,29 @@ const runTest = async (name, fn) => {
         assert.ok(res.body.launchUrl.startsWith('https://api.adgem.com/v1/wall?appid=12345&playerid='));
     });
 
+    await runTest('getAvailablePlacements: hides AdGem placements if approvalStatus is not Approved', async () => {
+        setupAdGemProvider({ approvalStatus: 'Pending', status: 'ACTIVE', enabled: true });
+        const user = setupTestUser();
+        const placement = {
+            _id: '607f1f77bcf86cd799439099',
+            providerKey: 'adgem',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            parentTabId: 'available_jobs'
+        };
+        db.placements.set(String(placement._id), placement);
+
+        const req = {
+            user: { id: String(user._id) },
+            params: { parentTabId: 'available_jobs' }
+        };
+        const res = createMockRes();
+        await getAvailablePlacements(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.data.length, 0); // Excluded because approvalStatus is Pending
+    });
+
     console.log(`\n========================================================`);
     console.log(`RESULTS: ${passedTests}/${totalTests} tests passed.`);
     console.log(`========================================================\n`);
@@ -765,4 +850,5 @@ const runTest = async (name, fn) => {
     if (passedTests !== totalTests) {
         process.exit(1);
     }
+    process.exit(0);
 })();

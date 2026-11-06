@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import crypto from 'crypto';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -278,7 +279,7 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
     // AdGem must always enforce HMAC-SHA256 signature verification over exact raw request body using Postback Key
     // Cannot be bypassed by requireSignature=false, signatureType='none', or IP-only verification
     if (key === 'adgem') {
-        const secret = (provider.postbackKey || provider.secretKey || '').trim();
+        const secret = (provider.postbackKey || '').trim();
         if (!secret) {
             return { valid: false, error: 'AdGem postback key is not configured; failing closed' };
         }
@@ -295,17 +296,10 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
         if (!received) {
             return { valid: false, error: 'AdGem signature missing' };
         }
-        let rawBuffer = null;
-        if (req?.rawBody !== undefined && req?.rawBody !== null) {
-            rawBuffer = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(String(req.rawBody));
-        } else if (typeof req?.body === 'string') {
-            rawBuffer = Buffer.from(req.body);
-        } else if (req?.body && typeof req?.body === 'object') {
-            rawBuffer = Buffer.from(JSON.stringify(req.body));
-        }
-        if (!rawBuffer || rawBuffer.length === 0) {
+        if (!req?.rawBody || (Buffer.isBuffer(req.rawBody) && req.rawBody.length === 0) || (typeof req.rawBody === 'string' && !req.rawBody.trim())) {
             return { valid: false, error: 'AdGem raw request body missing' };
         }
+        const rawBuffer = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(String(req.rawBody), 'utf8');
         const expected = crypto.createHmac('sha256', secret).update(rawBuffer).digest('hex');
         if (!safeTimingCompare(expected, received)) {
             return { valid: false, error: 'AdGem HMAC-SHA256 signature mismatch' };
@@ -2348,6 +2342,9 @@ export const getOfferwallProviders = async (req, res) => {
             if (p.providerKey === 'cpx_research') {
                 return p.enabled === true && p.status === 'ACTIVE';
             }
+            if (p.providerKey === 'adgem') {
+                return p.enabled === true && p.status === 'ACTIVE' && p.approvalStatus === 'Approved';
+            }
             return true;
         });
 
@@ -2898,6 +2895,10 @@ export const seedVerifiedNetworks = async () => {
             status: 'NOT_STARTED',
             approvalStatus: 'Pending',
             integrationStatus: 'Not Started',
+            exchangeRateMultiplier: 100,
+            commissionMode: 'provider_managed',
+            userRevenueSharePercent: 70,
+            platformRevenueSharePercent: 30,
             iframeUrlTemplate: 'https://api.adgem.com/v1/wall?appid={appId}&playerid={userId}',
             signatureType: 'hmac_sha256',
             requireSignature: true,
@@ -2906,7 +2907,7 @@ export const seedVerifiedNetworks = async () => {
             badge: 'Web Postback v3',
             icon: '💎',
             description: 'Premium gaming and rewarded app offerwall with high eCPM and instant S2S postback verification.',
-            complianceNotes: 'HMAC-SHA256 signature verification over raw request body using Postback Key.'
+            complianceNotes: 'HMAC-SHA256 signature verification over raw request body using Postback Key. 100 virtual currency units = $1 USD. AdGem multiplier: 70 Coins per $1.'
         },
         {
             providerKey: 'torox',
@@ -3835,16 +3836,25 @@ export const handleAdGemPostback = async (req, res) => {
         });
     }
 
-    // 3. Provider active state check
-    if (!provider.enabled || provider.status === 'DISABLED' || provider.status === 'SUSPENDED' || provider.status === 'NOT_STARTED') {
+    // 3. Approval and active state check: require enabled === true, status === 'ACTIVE', approvalStatus === 'Approved'
+    if (provider.enabled !== true || provider.status !== 'ACTIVE' || provider.approvalStatus !== 'Approved') {
         return res.status(403).json({
             success: false,
-            error: 'AdGem provider is currently disabled or not active'
+            error: 'AdGem provider is not active or approved'
         });
     }
 
-    // 4. Validate postback key configuration
-    const secret = (provider.postbackKey || provider.secretKey || '').trim();
+    // 4. Require non-empty configured provider.appId
+    const configuredAppId = (provider.appId || '').trim();
+    if (!configuredAppId) {
+        return res.status(400).json({
+            success: false,
+            error: 'AdGem appId is not configured in provider settings; failing closed'
+        });
+    }
+
+    // 5. Validate postback key configuration: use ONLY provider.postbackKey, do not substitute another credential
+    const secret = (provider.postbackKey || '').trim();
     if (!secret) {
         return res.status(400).json({
             success: false,
@@ -3852,7 +3862,7 @@ export const handleAdGemPostback = async (req, res) => {
         });
     }
 
-    // 5. Signature header check
+    // 6. Signature header check
     const receivedSig = String(
         req.headers?.['signature'] ||
         req.headers?.['Signature'] ||
@@ -3869,24 +3879,17 @@ export const handleAdGemPostback = async (req, res) => {
         });
     }
 
-    // 6. Extract exact raw request body buffer
-    let rawBuffer = null;
-    if (req.rawBody !== undefined && req.rawBody !== null) {
-        rawBuffer = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(String(req.rawBody));
-    } else if (typeof req.body === 'string') {
-        rawBuffer = Buffer.from(req.body);
-    } else if (req.body && typeof req.body === 'object') {
-        rawBuffer = Buffer.from(JSON.stringify(req.body));
-    }
-
-    if (!rawBuffer || rawBuffer.length === 0) {
+    // 7. Extract exact raw request body buffer (strictly require req.rawBody, do NOT reconstruct via JSON.stringify)
+    if (!req.rawBody || (Buffer.isBuffer(req.rawBody) && req.rawBody.length === 0) || (typeof req.rawBody === 'string' && !req.rawBody.trim())) {
         return res.status(400).json({
             success: false,
-            error: 'Missing or empty request body'
+            error: 'Missing raw request body buffer; cannot verify AdGem HMAC-SHA256 signature'
         });
     }
 
-    // 7. Verify HMAC-SHA256 signature in constant time
+    const rawBuffer = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(String(req.rawBody), 'utf8');
+
+    // 8. Verify HMAC-SHA256 signature in constant time
     const computedSig = crypto.createHmac('sha256', secret).update(rawBuffer).digest('hex');
     if (!safeTimingCompare(computedSig, receivedSig)) {
         try {
@@ -3922,7 +3925,7 @@ export const handleAdGemPostback = async (req, res) => {
         }
     }
 
-    // 8. Parse and validate JSON payload structure
+    // 9. Parse and validate JSON payload structure
     let payload = req.body;
     if (!payload || typeof payload !== 'object') {
         try {
@@ -3951,12 +3954,11 @@ export const handleAdGemPostback = async (req, res) => {
 
     const data = payload.data;
 
-    // Validate app_id matches configured provider appId if configured
-    const configuredAppId = (provider.appId || '').trim();
-    if (configuredAppId && String(data.app_id).trim() !== configuredAppId) {
+    // Require exact equality between configured appId and data.app_id
+    if (data.app_id === undefined || data.app_id === null || String(data.app_id).trim() === '' || String(data.app_id).trim() !== configuredAppId) {
         return res.status(400).json({
             success: false,
-            error: 'AdGem app_id mismatch'
+            error: 'AdGem app_id mismatch or missing'
         });
     }
 
@@ -3978,7 +3980,7 @@ export const handleAdGemPostback = async (req, res) => {
     }
     const playerId = String(data.player_id).trim();
 
-    // 9. Prepare log record
+    // 10. Prepare log record
     const sanitizedRawBody = maskSensitiveData(payload);
     const log = new OfferwallPostbackLog({
         provider: 'adgem',
@@ -4002,7 +4004,7 @@ export const handleAdGemPostback = async (req, res) => {
         signatureStatus: 'Verified'
     });
 
-    // 10. Resolve User (by ObjectId, username, or email)
+    // 11. Resolve User (by ObjectId, username, or email)
     let user = null;
     if (playerId.match(/^[0-9a-fA-F]{24}$/)) {
         user = await User.findById(playerId);
@@ -4028,7 +4030,7 @@ export const handleAdGemPostback = async (req, res) => {
     log.userId = user._id;
     log.username = user.username;
 
-    // 11. Check account restrictions
+    // 12. Check account restrictions
     if (user.status === 'Blocked' || user.restrictions?.earning === true || user.restrictions?.loginBlocked === true) {
         log.status = 'UserRestricted';
         log.errorMessage = 'User account is Blocked or earning-restricted; credit rejected.';
@@ -4039,7 +4041,7 @@ export const handleAdGemPostback = async (req, res) => {
         });
     }
 
-    // 12. Handle zero-reward or install event (must acknowledge with 200 without crediting balance)
+    // 13. Handle zero-reward or install event (must acknowledge with 200 without crediting balance)
     const rawAmount = data.amount;
     const parsedAmount = Number(rawAmount);
     const conversionType = String(data.conversion_type || '').toLowerCase().trim();
@@ -4056,37 +4058,103 @@ export const handleAdGemPostback = async (req, res) => {
         });
     }
 
-    // 13. Validate reward amount
-    if (isNaN(parsedAmount) || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    // 14. Validate payable reward amount
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
         log.status = 'Error';
-        log.errorMessage = `Invalid reward amount: ${rawAmount}`;
+        log.errorMessage = `Invalid or non-positive reward amount: ${rawAmount}`;
         try { await log.save(); } catch (_) {}
         return res.status(400).json({
             success: false,
-            error: 'Invalid reward amount'
+            error: 'Invalid or non-positive reward amount'
         });
     }
 
-    // 14. Calculate rewards (user reward vs publisher revenue)
-    const multiplier = (typeof provider.exchangeRateMultiplier === 'number' && provider.exchangeRateMultiplier > 0)
-        ? provider.exchangeRateMultiplier
-        : 1.0;
-    const userRewardUSD = Number((parsedAmount * multiplier).toFixed(4));
-
+    // 15. Validate payable gross publisher payout
     const rawPayout = data.payout;
-    const parsedPayout = (rawPayout !== undefined && rawPayout !== null && !isNaN(Number(rawPayout)) && Number(rawPayout) >= 0)
-        ? Number(Number(rawPayout).toFixed(4))
-        : 0;
-    // Payout is publisher revenue from AdGem; never credit payout as user reward
-    const grossUSD = parsedPayout > 0 ? parsedPayout : userRewardUSD;
-    const platformRevenueUSD = Number(Math.max(0, grossUSD - userRewardUSD).toFixed(4));
+    if (rawPayout === undefined || rawPayout === null || String(rawPayout).trim() === '') {
+        log.status = 'Error';
+        log.errorMessage = 'Missing gross publisher payout in payable AdGem postback';
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Missing gross publisher payout'
+        });
+    }
+
+    const parsedPayout = Number(rawPayout);
+    if (!Number.isFinite(parsedPayout) || parsedPayout <= 0) {
+        log.status = 'Error';
+        log.errorMessage = `Invalid or non-positive gross payout: ${rawPayout}`;
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid or non-positive gross payout'
+        });
+    }
+
+    // 16. Require explicit exchangeRateMultiplier of exactly 100
+    const multiplier = Number(provider.exchangeRateMultiplier);
+    if (!Number.isFinite(multiplier) || multiplier !== 100) {
+        log.status = 'Error';
+        log.errorMessage = `AdGem exchangeRateMultiplier must be explicitly configured as 100 (got ${provider.exchangeRateMultiplier})`;
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'AdGem exchangeRateMultiplier must be explicitly 100 (100 virtual units = $1 USD)'
+        });
+    }
+
+    // 17. Require commissionMode === 'provider_managed' and 70/30 revenue share configuration
+    const commMode = String(provider.commissionMode || '').toLowerCase();
+    const userShare = Number(provider.userRevenueSharePercent);
+    const platformShare = Number(provider.platformRevenueSharePercent);
+    if (commMode !== 'provider_managed' || userShare !== 70 || platformShare !== 30) {
+        log.status = 'Error';
+        log.errorMessage = 'AdGem requires provider_managed commission mode and 70/30 revenue share configuration';
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'AdGem requires provider_managed commission mode and 70/30 revenue share configuration'
+        });
+    }
+
+    // 18. Calculate user reward: userRewardUSD = data.amount / provider.exchangeRateMultiplier
+    // AdGem multiplier (70 Coins per $1) already calculates 70% worker reward; do NOT apply another 70% deduction.
+    const userRewardUSD = Number((parsedAmount / multiplier).toFixed(4));
+    const grossUSD = Number(parsedPayout.toFixed(4));
+
+    // Never credit more than the gross payout
+    if (userRewardUSD > grossUSD) {
+        log.status = 'Error';
+        log.errorMessage = `User reward ($${userRewardUSD}) exceeds gross publisher payout ($${grossUSD})`;
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'User reward exceeds gross publisher payout'
+        });
+    }
+
+    // Verify user reward corresponds to 70% share of gross payout (allowing small currency rounding tolerance)
+    const expectedUserReward = grossUSD * 0.70;
+    const roundingTolerance = Math.max(0.02, grossUSD * 0.01);
+    if (Math.abs(userRewardUSD - expectedUserReward) > roundingTolerance) {
+        log.status = 'Error';
+        log.errorMessage = `User reward ($${userRewardUSD}) does not correspond to 70% of gross payout ($${grossUSD})`;
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Reward amount does not correspond to configured 70/30 revenue split'
+        });
+    }
+
+    const platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
 
     log.rewardUSD = userRewardUSD;
     log.grossAmountUSD = grossUSD;
     log.userRewardUSD = userRewardUSD;
     log.platformRevenueUSD = platformRevenueUSD;
 
-    // 15. Acquire concurrency lock for atomic idempotency
+    // 19. Acquire concurrency lock for atomic idempotency
     const creditKey = `adgem_${conversionId}_credit`;
     let lockOwnerToken = null;
     try {
@@ -4146,9 +4214,40 @@ export const handleAdGemPostback = async (req, res) => {
         const balanceBefore = user.taskEarningsBalance || 0;
         const balanceAfter = Number((balanceBefore + userRewardUSD).toFixed(4));
 
+        // 20. Atomic Database Accounting with MongoDB Session Transactions
+        let session = null;
+        try {
+            session = await mongoose.startSession();
+        } catch (sessionErr) {
+            console.error('[AdGem Transaction Safety] MongoDB session creation failed:', sessionErr.message);
+            log.status = 'Error';
+            log.errorMessage = `MongoDB session creation failed: ${sessionErr.message}. Transactions required for AdGem.`;
+            try { await log.save(); } catch (_) {}
+            return res.status(500).json({
+                success: false,
+                error: 'Database transaction support is unavailable; failing closed for safety.'
+            });
+        }
+
+        let transactionStarted = false;
+        try {
+            session.startTransaction();
+            transactionStarted = true;
+        } catch (startErr) {
+            console.error('[AdGem Transaction Safety] MongoDB startTransaction failed:', startErr.message);
+            await session.endSession().catch(() => {});
+            log.status = 'Error';
+            log.errorMessage = `MongoDB startTransaction failed: ${startErr.message}. Standalone MongoDB deployments without replica set do not support transactions.`;
+            try { await log.save(); } catch (_) {}
+            return res.status(500).json({
+                success: false,
+                error: 'Database transaction support is unavailable; failing closed for safety.'
+            });
+        }
+
         let tx;
         try {
-            tx = await Transaction.create({
+            const [createdTx] = await Transaction.create([{
                 idempotencyKey: creditKey,
                 type: 'Offerwall Reward',
                 userId: user._id,
@@ -4166,31 +4265,12 @@ export const handleAdGemPostback = async (req, res) => {
                 destinationWallet: 'TaskEarnings',
                 offerwallProvider: 'adgem',
                 externalTransactionId: conversionId,
-                description: `Completed AdGem Offer: ${data.offer_name || data.goal_name || data.campaign_id || conversionId}`
-            });
-        } catch (txErr) {
-            if (txErr.code === 11000) {
-                log.status = 'Duplicate';
-                log.errorMessage = 'Duplicate transaction key caught by database constraint';
-                try { await log.save(); } catch (_) {}
-                return res.status(200).json({
-                    success: true,
-                    message: 'Duplicate conversion already processed'
-                });
-            }
-            throw txErr;
-        }
+                description: `Completed AdGem Offer: ${data.offer_name || data.campaign_id || conversionId}${data.goal_name ? ' - Goal: ' + data.goal_name : (data.goal_id ? ' - Goal ID: ' + data.goal_id : '')}`
+            }], { session });
+            tx = createdTx;
 
-        // Verify lock ownership before balance update
-        if (lockOwnerToken && !(await isLockStillOwned('adgem', conversionId, lockOwnerToken))) {
-            await Transaction.deleteOne({ _id: tx._id }).catch(() => {});
-            throw new Error(`Lock expired or taken over before balance update for adgem:${conversionId}`);
-        }
-
-        // Atomically increment Task Earnings balance while verifying user is not restricted
-        let updatedUser = null;
-        try {
-            updatedUser = await User.findOneAndUpdate(
+            // Atomically increment Task Earnings balance while verifying user is not restricted
+            const updatedUser = await User.findOneAndUpdate(
                 {
                     _id: user._id,
                     status: { $ne: 'Blocked' },
@@ -4203,22 +4283,47 @@ export const handleAdGemPostback = async (req, res) => {
                         taskWalletBalance: userRewardUSD
                     }
                 },
-                { new: true }
+                { new: true, session }
             );
-        } catch (balanceErr) {
-            await Transaction.deleteOne({ _id: tx._id }).catch(() => {});
-            throw balanceErr;
-        }
 
-        if (!updatedUser) {
-            await Transaction.deleteOne({ _id: tx._id }).catch(() => {});
-            log.status = 'UserRestricted';
-            log.errorMessage = 'User was restricted when balance update was attempted';
-            try { await log.save(); } catch (_) {}
-            return res.status(403).json({
-                success: false,
-                error: 'User account is restricted or blocked'
-            });
+            if (!updatedUser) {
+                await session.abortTransaction();
+                log.status = 'UserRestricted';
+                log.errorMessage = 'User was restricted when balance update was attempted; session aborted';
+                try { await log.save(); } catch (_) {}
+                return res.status(403).json({
+                    success: false,
+                    error: 'User account is restricted or blocked'
+                });
+            }
+
+            await session.commitTransaction();
+        } catch (txErr) {
+            if (transactionStarted) {
+                await session.abortTransaction().catch(() => {});
+            }
+            const errMsg = String(txErr.message || '');
+            if (errMsg.includes('replica set') || errMsg.includes('Transaction numbers') || errMsg.includes('standalone')) {
+                log.status = 'Error';
+                log.errorMessage = `Deployment requirement not met: MongoDB transaction unsupported (${errMsg})`;
+                try { await log.save(); } catch (_) {}
+                return res.status(500).json({
+                    success: false,
+                    error: 'MongoDB deployment does not support transactions; failing closed.'
+                });
+            }
+            if (txErr.code === 11000) {
+                log.status = 'Duplicate';
+                log.errorMessage = 'Duplicate transaction key caught by database constraint';
+                try { await log.save(); } catch (_) {}
+                return res.status(200).json({
+                    success: true,
+                    message: 'Duplicate conversion already processed'
+                });
+            }
+            throw txErr;
+        } finally {
+            await session.endSession().catch(() => {});
         }
 
         // Send worker notification (isolated, non-blocking)

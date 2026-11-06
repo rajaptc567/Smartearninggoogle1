@@ -144,7 +144,7 @@ export const getAvailablePlacements = async (req, res) => {
             providerKey: { $in: providerKeys },
             enabled: true,
             status: 'ACTIVE'
-        }).select('providerKey name category group status enabled badge icon description').lean();
+        }).select('providerKey name category group status enabled approvalStatus badge icon description').lean();
 
         const providerMap = new Map(providers.map(p => [p.providerKey, p]));
 
@@ -158,6 +158,11 @@ export const getAvailablePlacements = async (req, res) => {
 
             // CPX Research special ACTIVE operational status requirement
             if (placement.providerKey === 'cpx_research' && provider.status !== 'ACTIVE') {
+                continue;
+            }
+
+            // AdGem special ACTIVE and Approved operational status requirement
+            if (placement.providerKey === 'adgem' && (provider.status !== 'ACTIVE' || provider.approvalStatus !== 'Approved')) {
                 continue;
             }
 
@@ -266,6 +271,9 @@ export const launchProviderPlacement = async (req, res) => {
         const provider = await OfferwallProvider.findOne({ providerKey: placement.providerKey });
         if (!provider || provider.enabled !== true || provider.status !== 'ACTIVE') {
             return res.status(400).json({ success: false, error: 'Offerwall provider is operationally disabled or not active' });
+        }
+        if (placement.providerKey === 'adgem' && provider.approvalStatus !== 'Approved') {
+            return res.status(403).json({ success: false, error: 'AdGem provider is pending approval or not approved' });
         }
 
         // 4. Generate Validated Provider Session
