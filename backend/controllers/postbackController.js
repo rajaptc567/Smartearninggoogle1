@@ -4038,17 +4038,24 @@ export const handleAdGemPostback = async (req, res) => {
         });
     }
 
-    // 13. Handle zero-reward, install, and conversion_type validation
-    const rawConvType = (data.conversion_type !== undefined && data.conversion_type !== null)
-        ? String(data.conversion_type).toLowerCase().trim()
-        : null;
-    const trackingType = String(data.tracking_type || '').toLowerCase().trim();
+    // 13. Strict conversion_type validation according to AdGem Postbacks v3 specification
+    // conversion_type: strictly 'reward' or 'install'. Missing or unknown values must reject safely.
+    // tracking_type: campaign category (e.g. CPI, CPE, CPA, CPC, Market Research) preserved only as metadata.
+    if (data.conversion_type === undefined || data.conversion_type === null || String(data.conversion_type).trim() === '') {
+        log.status = 'Error';
+        log.errorMessage = 'Missing conversion_type in AdGem postback payload';
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Missing conversion_type'
+        });
+    }
 
-    // Valid install event: acknowledge with HTTP 200 after signature, App ID and approval validation
+    const conversionType = String(data.conversion_type).toLowerCase().trim();
+
+    // A. Valid install event: acknowledge with HTTP 200 after signature, App ID and approval validation
     // Zero balance or Transaction mutation
-    const isInstall = rawConvType === 'install' || trackingType === 'install';
-
-    if (isInstall) {
+    if (conversionType === 'install') {
         log.status = 'Processed';
         log.errorMessage = 'AdGem install conversion acknowledged without crediting balance.';
         try { await log.save(); } catch (_) {}
@@ -4058,14 +4065,14 @@ export const handleAdGemPostback = async (req, res) => {
         });
     }
 
-    // Reject unknown conversion_type (must never produce a reward credit)
-    if (rawConvType !== null && rawConvType !== 'reward') {
+    // D. Reject any unknown conversion_type (must be strictly 'reward' or 'install')
+    if (conversionType !== 'reward') {
         log.status = 'Error';
-        log.errorMessage = `Unknown or unsupported conversion_type: ${rawConvType}`;
+        log.errorMessage = `Unknown or unsupported conversion_type: ${conversionType}`;
         try { await log.save(); } catch (_) {}
         return res.status(400).json({
             success: false,
-            error: `Unsupported conversion_type: ${rawConvType}`
+            error: `Unsupported conversion_type: ${conversionType}`
         });
     }
 
@@ -4210,27 +4217,34 @@ export const handleAdGemPostback = async (req, res) => {
     log.userRewardUSD = userRewardUSD;
     log.platformRevenueUSD = platformRevenueUSD;
 
-    // 19. Multi-Goal Idempotency & Concurrency Lock
+    // 19. Offer-Version Aware Multi-Goal Idempotency & Concurrency Lock
     const goalId = (data.goal_id !== undefined && data.goal_id !== null && String(data.goal_id).trim() !== '')
         ? String(data.goal_id).trim()
         : null;
     const campaignId = (data.campaign_id !== undefined && data.campaign_id !== null && String(data.campaign_id).trim() !== '')
         ? String(data.campaign_id).trim()
-        : ((data.offer_id !== undefined && data.offer_id !== null && String(data.offer_id).trim() !== '') ? String(data.offer_id).trim() : null);
+        : null;
+    const offerId = (data.offer_id !== undefined && data.offer_id !== null && String(data.offer_id).trim() !== '')
+        ? String(data.offer_id).trim()
+        : null;
 
     // Deterministic, provider-scoped idempotency identity:
-    // If goalId is present:
-    //   - Distinguishes distinct goals under the same conversion_id (Requirement B)
-    //   - Unifies duplicate deliveries of the same goal under the same conversion_id (Requirement A)
-    //   - Unifies duplicate deliveries of the same goal across different conversion_ids for the same user & campaign (Requirement C)
-    // If goalId is absent:
-    //   - Uses conversionId-based idempotency
+    // - Incorporates user ID, campaign_id, offer_id (offer version), and goal_id
+    // - If offer_id is absent, uses documented fallback identity preserving campaign-level behavior
+    // - If goal_id is absent, uses conversionId-based idempotency
     const creditKey = goalId
-        ? `adgem:user:${user._id}:camp:${campaignId || 'all'}:goal:${goalId}:credit`
+        ? (offerId
+            ? `adgem:user:${user._id}:camp:${campaignId || 'all'}:offer:${offerId}:goal:${goalId}:credit`
+            : `adgem:user:${user._id}:camp:${campaignId || 'all'}:offer:none:goal:${goalId}:credit`)
         : `adgem_${conversionId}_credit`;
 
-    const externalTxId = goalId ? `${conversionId}_goal_${goalId}` : conversionId;
-    const lockKey = goalId ? `user_${user._id}_camp_${campaignId || 'all'}_goal_${goalId}` : conversionId;
+    const externalTxId = goalId 
+        ? `${conversionId}_offer_${offerId || 'none'}_goal_${goalId}` 
+        : conversionId;
+
+    const lockKey = goalId 
+        ? `user_${user._id}_camp_${campaignId || 'all'}_offer_${offerId || 'none'}_goal_${goalId}` 
+        : conversionId;
 
     let lockOwnerToken = null;
     try {
@@ -4277,7 +4291,9 @@ export const handleAdGemPostback = async (req, res) => {
 
         // Check if pre-reversed
         const reversalKey = goalId
-            ? `adgem:user:${user._id}:camp:${campaignId || 'all'}:goal:${goalId}:reversal`
+            ? (offerId
+                ? `adgem:user:${user._id}:camp:${campaignId || 'all'}:offer:${offerId}:goal:${goalId}:reversal`
+                : `adgem:user:${user._id}:camp:${campaignId || 'all'}:offer:none:goal:${goalId}:reversal`)
             : `adgem_${conversionId}_reversal`;
 
         const priorReversal = (await Transaction.findOne({ idempotencyKey: reversalKey }))
@@ -4356,7 +4372,7 @@ export const handleAdGemPostback = async (req, res) => {
                 destinationWallet: 'TaskEarnings',
                 offerwallProvider: 'adgem',
                 externalTransactionId: externalTxId,
-                description: `Completed AdGem Offer: ${data.offer_name || campaignId || conversionId}${data.goal_name ? ' - Goal: ' + data.goal_name : (goalId ? ' - Goal ID: ' + goalId : '')}`
+                description: `Completed AdGem Offer: ${data.offer_name || campaignId || offerId || conversionId}${offerId ? ' (Offer ID: ' + offerId + ')' : ''}${data.goal_name ? ' - Goal: ' + data.goal_name : (goalId ? ' - Goal ID: ' + goalId : '')}`
             }], { session });
             tx = createdTx;
 

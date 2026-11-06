@@ -392,6 +392,7 @@ const runTest = async (name, fn) => {
         const payload = {
             request_id: 'req_spec_example',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 conversion_id: 'conv_adgem_example_001',
                 player_id: String(user._id),
@@ -429,6 +430,7 @@ const runTest = async (name, fn) => {
         const payload = {
             request_id: 'req_no_mult',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 conversion_id: 'conv_mult_1',
                 player_id: String(user._id),
@@ -449,6 +451,7 @@ const runTest = async (name, fn) => {
         const payload = {
             request_id: 'req_wrong_mult',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 conversion_id: 'conv_mult_2',
                 player_id: String(user._id),
@@ -469,6 +472,7 @@ const runTest = async (name, fn) => {
         const payload = {
             request_id: 'req_no_payout',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 conversion_id: 'conv_payout_1',
                 player_id: String(user._id),
@@ -489,6 +493,7 @@ const runTest = async (name, fn) => {
         const payload = {
             request_id: 'req_neg_payout',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 conversion_id: 'conv_payout_2',
                 player_id: String(user._id),
@@ -509,6 +514,7 @@ const runTest = async (name, fn) => {
         const payload = {
             request_id: 'req_exceed',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 conversion_id: 'conv_exceed_1',
                 player_id: String(user._id),
@@ -529,6 +535,7 @@ const runTest = async (name, fn) => {
         const payload = {
             request_id: 'req_inconsistent_ratio',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 conversion_id: 'conv_ratio_1',
                 player_id: String(user._id),
@@ -568,6 +575,119 @@ const runTest = async (name, fn) => {
         assert.equal(user.taskEarningsBalance, 25.0);
         assert.equal(user.taskWalletBalance, 25.0);
         assert.equal(user.walletBalance, 150.0);
+        assert.equal(db.transactions.size, 0);
+    });
+
+    await runTest('handleAdGemPostback: conversion_type === "install" with tracking_type === "CPI" acknowledges without crediting', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_cpi_install',
+            data: {
+                app_id: '12345',
+                conversion_type: 'install',
+                tracking_type: 'CPI',
+                conversion_id: 'conv_cpi_inst_001',
+                player_id: String(user._id),
+                amount: 0,
+                payout: 0
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.success, true);
+        assert.ok(res.body.message.includes('Install conversion acknowledged'));
+
+        // Balance remains unchanged, zero transactions created
+        assert.equal(user.taskEarningsBalance, 25.0);
+        assert.equal(user.taskWalletBalance, 25.0);
+        assert.equal(user.walletBalance, 150.0);
+        assert.equal(db.transactions.size, 0);
+    });
+
+    await runTest('handleAdGemPostback: conversion_type === "reward" with tracking_type === "CPI" receives normal reward processing', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_cpi_reward',
+            data: {
+                app_id: '12345',
+                conversion_type: 'reward',
+                tracking_type: 'CPI',
+                conversion_id: 'conv_cpi_rew_001',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.success, true);
+
+        // Core main wallet MUST NOT be touched
+        assert.equal(user.walletBalance, 150.0);
+
+        // Task Earnings balances must be credited by exactly 105 / 100 = $1.05
+        assert.equal(user.taskEarningsBalance, 26.05);
+        assert.equal(user.taskWalletBalance, 26.05);
+
+        // Transaction created
+        assert.equal(db.transactions.size, 1);
+        const tx = Array.from(db.transactions.values())[0];
+        assert.equal(tx.amount, 1.05);
+        assert.equal(tx.grossAmount, 1.50);
+        assert.equal(tx.platformRevenueAmount, 0.45);
+    });
+
+    await runTest('handleAdGemPostback: missing conversion_type fails closed with HTTP 400', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        const payload = {
+            request_id: 'req_missing_conv_type',
+            data: {
+                app_id: '12345',
+                // conversion_type omitted
+                conversion_id: 'conv_missing_type_001',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+        assert.equal(res.statusCode, 400);
+        assert.ok(res.body.error.includes('Missing conversion_type'));
+        assert.equal(user.taskEarningsBalance, 25.0);
+        assert.equal(db.transactions.size, 0);
+    });
+
+    await runTest('handleAdGemPostback: tracking_type cannot bypass payable reward checks', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+        // tracking_type='CPI', conversion_type='reward', but payout is missing
+        const payload = {
+            request_id: 'req_cpi_bypass_fail',
+            data: {
+                app_id: '12345',
+                conversion_type: 'reward',
+                tracking_type: 'CPI',
+                conversion_id: 'conv_cpi_bypass_001',
+                player_id: String(user._id),
+                amount: 105
+                // payout omitted
+            }
+        };
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+        assert.equal(res.statusCode, 400);
+        assert.ok(res.body.error.includes('Missing gross publisher payout'));
+        assert.equal(user.taskEarningsBalance, 25.0);
         assert.equal(db.transactions.size, 0);
     });
 
@@ -797,6 +917,7 @@ const runTest = async (name, fn) => {
         const payloadGoal1 = {
             request_id: 'req_goal_1',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 campaign_id: 8888,
                 offer_id: 777,
@@ -820,6 +941,7 @@ const runTest = async (name, fn) => {
         const payloadGoal2 = {
             request_id: 'req_goal_2',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 campaign_id: 8888,
                 offer_id: 777,
@@ -842,14 +964,16 @@ const runTest = async (name, fn) => {
         assert.equal(db.transactions.size, 2);
     });
 
-    await runTest('TASK 3 - Requirement A: Same conversion_id + same goal_id delivered twice -> exactly 1 credit, second duplicate', async () => {
+    await runTest('TASK 2 - Requirement 2.A: Same conversion_id + same goal_id + same offer_id delivered twice -> exactly 1 credit, second duplicate', async () => {
         const provider = setupAdGemProvider();
         const user = setupTestUser();
         const payload = {
             request_id: 'req_a_1',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 campaign_id: 7777,
+                offer_id: 101,
                 goal_id: 1,
                 conversion_id: 'conv_same_both',
                 player_id: String(user._id),
@@ -865,7 +989,7 @@ const runTest = async (name, fn) => {
         assert.equal(user.taskEarningsBalance, 26.05);
         assert.equal(db.transactions.size, 1);
 
-        // Second delivery of same conversion_id + same goal_id
+        // Second delivery of same conversion_id + same goal_id + same offer_id
         const req2 = buildAdGemRequest(payload, provider.postbackKey);
         const res2 = createMockRes();
         await handleAdGemPostback(req2, res2);
@@ -875,12 +999,14 @@ const runTest = async (name, fn) => {
         assert.equal(db.transactions.size, 1);
     });
 
-    await runTest('TASK 3 - Requirement B: Same conversion_id + different goal_id -> each goal credited independently and only once', async () => {
+    await runTest('TASK 2 - Requirement 2.B: Same campaign_id + same offer_id + different goal_id -> each goal credited independently and once', async () => {
         const provider = setupAdGemProvider();
         const user = setupTestUser();
         const basePayload = {
+            conversion_type: 'reward',
             app_id: '12345',
             campaign_id: 7777,
+            offer_id: 101,
             conversion_id: 'conv_shared_multigoal',
             player_id: String(user._id)
         };
@@ -932,16 +1058,65 @@ const runTest = async (name, fn) => {
         assert.equal(db.transactions.size, 2);
     });
 
-    await runTest('TASK 3 - Requirement C: Different conversion_id + same goal_id -> prevents duplicate credit', async () => {
+    await runTest('TASK 2 - Requirement 2.C: Same campaign_id + different offer_id + same goal_id -> different offer versions credit independently', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+
+        // Offer version A (offer_id: 101), Goal 1
+        const reqA = buildAdGemRequest({
+            request_id: 'req_c_offA',
+            data: {
+                conversion_type: 'reward',
+                app_id: '12345',
+                campaign_id: 7777,
+                offer_id: 101,
+                goal_id: 1,
+                conversion_id: 'conv_offA_g1',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        }, provider.postbackKey);
+        const resA = createMockRes();
+        await handleAdGemPostback(reqA, resA);
+        assert.equal(resA.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 26.05);
+        assert.equal(db.transactions.size, 1);
+
+        // Offer version B (offer_id: 202), SAME Goal 1
+        const reqB = buildAdGemRequest({
+            request_id: 'req_c_offB',
+            data: {
+                conversion_type: 'reward',
+                app_id: '12345',
+                campaign_id: 7777,
+                offer_id: 202,
+                goal_id: 1,
+                conversion_id: 'conv_offB_g1',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        }, provider.postbackKey);
+        const resB = createMockRes();
+        await handleAdGemPostback(reqB, resB);
+        assert.equal(resB.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 27.10); // 26.05 + 1.05 = 27.10
+        assert.equal(db.transactions.size, 2);
+    });
+
+    await runTest('TASK 2 - Requirement 2.D: Same offer + same goal + different conversion_id -> follows goal-level duplicate protection', async () => {
         const provider = setupAdGemProvider();
         const user = setupTestUser();
 
         // First callback for Goal 1 with conversion_id 'conv_alpha'
         const req1 = buildAdGemRequest({
-            request_id: 'req_c_1',
+            request_id: 'req_d_1',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 campaign_id: 7777,
+                offer_id: 101,
                 goal_id: 1,
                 conversion_id: 'conv_alpha',
                 player_id: String(user._id),
@@ -957,10 +1132,12 @@ const runTest = async (name, fn) => {
 
         // Second callback for the SAME Goal 1 but with different conversion_id 'conv_beta'
         const req2 = buildAdGemRequest({
-            request_id: 'req_c_2',
+            request_id: 'req_d_2',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 campaign_id: 7777,
+                offer_id: 101,
                 goal_id: 1,
                 conversion_id: 'conv_beta',
                 player_id: String(user._id),
@@ -978,14 +1155,16 @@ const runTest = async (name, fn) => {
         assert.equal(db.transactions.size, 1);
     });
 
-    await runTest('TASK 5: Real Concurrency: Promise.all simultaneous duplicate callbacks credit exactly once', async () => {
+    await runTest('TASK 2 - Requirement 2.E: Real Concurrency: Promise.all simultaneous duplicate callbacks credit exactly once', async () => {
         const provider = setupAdGemProvider();
         const user = setupTestUser();
         const payload = {
             request_id: 'req_concurrent_race',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 campaign_id: 9999,
+                offer_id: 555,
                 offer_name: 'Race Offer',
                 goal_id: 10,
                 goal_name: 'Finish Tutorial',
@@ -1022,6 +1201,44 @@ const runTest = async (name, fn) => {
         assert.equal(user.walletBalance, 150.0);
     });
 
+    await runTest('TASK 2 - Requirement 2.F: Absent offer_id fallback preserves campaign-level behavior cleanly', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser();
+
+        // Callback with NO offer_id
+        const payload = {
+            request_id: 'req_no_offer_id',
+            data: {
+                conversion_type: 'reward',
+                app_id: '12345',
+                campaign_id: 8888,
+                // offer_id omitted
+                goal_id: 1,
+                goal_name: 'Fallback Goal',
+                conversion_id: 'conv_fallback_001',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        };
+
+        const req1 = buildAdGemRequest(payload, provider.postbackKey);
+        const res1 = createMockRes();
+        await handleAdGemPostback(req1, res1);
+        assert.equal(res1.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 26.05);
+        assert.equal(db.transactions.size, 1);
+
+        // Second delivery without offer_id
+        const req2 = buildAdGemRequest(payload, provider.postbackKey);
+        const res2 = createMockRes();
+        await handleAdGemPostback(req2, res2);
+        assert.equal(res2.statusCode, 200);
+        assert.ok(res2.body.message.includes('Duplicate'));
+        assert.equal(user.taskEarningsBalance, 26.05);
+        assert.equal(db.transactions.size, 1);
+    });
+
     console.log('\n--- SECTION 4: Atomic Database Accounting & MongoDB Transaction Safety ---');
 
     await runTest('MongoDB Session Transaction: aborts and rolls back if user restriction update fails', async () => {
@@ -1035,6 +1252,7 @@ const runTest = async (name, fn) => {
         const payload = {
             request_id: 'req_atomic_abort',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 conversion_id: 'conv_abort_test',
                 player_id: String(user._id),
@@ -1065,6 +1283,7 @@ const runTest = async (name, fn) => {
         const payload = {
             request_id: 'req_no_replica_set',
             data: {
+                conversion_type: 'reward',
                 app_id: '12345',
                 conversion_id: 'conv_no_replica',
                 player_id: String(user._id),
