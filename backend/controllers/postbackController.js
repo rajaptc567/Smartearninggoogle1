@@ -275,6 +275,50 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
         return { valid: true };
     }
 
+    // AdGem must always enforce HMAC-SHA256 signature verification over exact raw request body using Postback Key
+    // Cannot be bypassed by requireSignature=false, signatureType='none', or IP-only verification
+    if (key === 'adgem') {
+        const secret = (provider.postbackKey || provider.secretKey || '').trim();
+        if (!secret) {
+            return { valid: false, error: 'AdGem postback key is not configured; failing closed' };
+        }
+        const received = String(
+            req?.headers?.['signature'] ||
+            req?.headers?.['Signature'] ||
+            req?.headers?.['x-adgem-signature'] ||
+            req?.headers?.['x-signature'] ||
+            (typeof req?.get === 'function' ? (req.get('Signature') || req.get('signature') || req.get('x-adgem-signature') || req.get('x-signature')) : '') ||
+            params.signature ||
+            params.sig ||
+            ''
+        ).trim();
+        if (!received) {
+            return { valid: false, error: 'AdGem signature missing' };
+        }
+        let rawBuffer = null;
+        if (req?.rawBody !== undefined && req?.rawBody !== null) {
+            rawBuffer = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(String(req.rawBody));
+        } else if (typeof req?.body === 'string') {
+            rawBuffer = Buffer.from(req.body);
+        } else if (req?.body && typeof req?.body === 'object') {
+            rawBuffer = Buffer.from(JSON.stringify(req.body));
+        }
+        if (!rawBuffer || rawBuffer.length === 0) {
+            return { valid: false, error: 'AdGem raw request body missing' };
+        }
+        const expected = crypto.createHmac('sha256', secret).update(rawBuffer).digest('hex');
+        if (!safeTimingCompare(expected, received)) {
+            return { valid: false, error: 'AdGem HMAC-SHA256 signature mismatch' };
+        }
+        if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
+            const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+            if (!ipMatches) {
+                return { valid: false, error: 'Client IP not in whitelist' };
+            }
+        }
+        return { valid: true };
+    }
+
     // Fail closed: requireSignature: true with signatureType: 'none' must not pass
     if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
         return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
@@ -2218,6 +2262,62 @@ export const constructCpxEntryUrl = (provider, userId) => {
     return { url, error: null };
 };
 
+/**
+ * Constructs a secure, validated AdGem Web Offerwall URL according to official AdGem Web Offerwall specifications.
+ * 
+ * Official AdGem Web Offerwall URL structure:
+ * https://api.adgem.com/v1/wall?appid=YOUR_APP_ID&playerid=USER_ID
+ * 
+ * 1. playerid: Unique user identifier (e.g. MongoDB ObjectId or alphanumeric username). Max 255 chars.
+ * 2. appid: Dedicated AdGem App ID.
+ * 3. Fails closed with descriptive error if App ID or User ID is missing or invalid.
+ */
+export const constructAdGemEntryUrl = (provider, userId) => {
+    if (!userId) {
+        return { url: '', error: 'Authenticated user session is required to launch AdGem.' };
+    }
+
+    const rawPlayerId = String(userId).trim();
+    if (!rawPlayerId) {
+        return { url: '', error: 'Authenticated user identifier is required to launch AdGem.' };
+    }
+
+    if (!/^[a-zA-Z0-9_-]{1,255}$/.test(rawPlayerId)) {
+        return { url: '', error: 'Invalid user identifier format for AdGem.' };
+    }
+
+    const appId = (provider.appId || '').trim();
+    if (!appId) {
+        return {
+            url: '',
+            error: 'AdGem App ID is not configured. Please configure App ID in the Admin Panel.'
+        };
+    }
+
+    let template = (provider.iframeUrlTemplate || '').trim();
+    if (!template) {
+        template = 'https://api.adgem.com/v1/wall?appid={appId}&playerid={userId}';
+    }
+
+    let url = template
+        .replace(/\{appId\}/g, encodeURIComponent(appId))
+        .replace(/\{appid\}/g, encodeURIComponent(appId))
+        .replace(/\{userId\}/g, encodeURIComponent(rawPlayerId))
+        .replace(/\{user_id\}/g, encodeURIComponent(rawPlayerId))
+        .replace(/\{playerid\}/g, encodeURIComponent(rawPlayerId))
+        .replace(/\{playerId\}/g, encodeURIComponent(rawPlayerId));
+
+    const unparsedMacros = url.match(/\{[a-zA-Z0-9_]+\}/g);
+    if (unparsedMacros && unparsedMacros.length > 0) {
+        return {
+            url: '',
+            error: `Missing configuration for entry URL macro(s): ${unparsedMacros.join(', ')}. Please update provider settings in the Admin Panel.`
+        };
+    }
+
+    return { url, error: null };
+};
+
 export const getOfferwallProviders = async (req, res) => {
     try {
         const isAdmin = isAuthorizedAdmin(req.user);
@@ -2273,6 +2373,18 @@ export const getOfferwallProviders = async (req, res) => {
                     } else {
                         obj.iframeUrl = '';
                         obj.configurationError = cpxResult.error;
+                    }
+                } else {
+                    obj.iframeUrl = '';
+                }
+            } else if (p.providerKey === 'adgem') {
+                if (req.user?.id) {
+                    const adgemResult = constructAdGemEntryUrl(p, req.user.id);
+                    if (adgemResult.url) {
+                        obj.iframeUrl = adgemResult.url;
+                    } else {
+                        obj.iframeUrl = '';
+                        obj.configurationError = adgemResult.error;
                     }
                 } else {
                     obj.iframeUrl = '';
@@ -2777,6 +2889,25 @@ export const seedVerifiedNetworks = async () => {
         // ==========================================
         // GROUP A: Multi-Task / Offerwall Networks
         // ==========================================
+        {
+            providerKey: 'adgem',
+            name: 'AdGem',
+            category: 'offerwall',
+            group: 'Group A: Multi-Task / Offerwall',
+            enabled: false,
+            status: 'NOT_STARTED',
+            approvalStatus: 'Pending',
+            integrationStatus: 'Not Started',
+            iframeUrlTemplate: 'https://api.adgem.com/v1/wall?appid={appId}&playerid={userId}',
+            signatureType: 'hmac_sha256',
+            requireSignature: true,
+            technicalReadinessScore: 100,
+            approvalLikelihoodScore: 'High',
+            badge: 'Web Postback v3',
+            icon: '💎',
+            description: 'Premium gaming and rewarded app offerwall with high eCPM and instant S2S postback verification.',
+            complianceNotes: 'HMAC-SHA256 signature verification over raw request body using Postback Key.'
+        },
         {
             providerKey: 'torox',
             name: 'Torox (formerly OfferToro)',
@@ -3668,5 +3799,455 @@ export const handleTheoremReachEventWebhook = async (req, res) => {
         }
         console.error('[TheoremReach Webhook Error]:', err.message);
         return res.status(500).json({ success: false, error: err.message, retryable: true });
+    }
+};
+
+/**
+ * Dedicated AdGem Postback v3 Handler according to official AdGem Web Offerwall & Postback v3 specifications.
+ * 
+ * Requirements:
+ * 1. HTTP POST method mandatory.
+ * 2. HMAC-SHA256 signature verification over exact original raw request body using AdGem Postback Key.
+ * 3. Constant-time signature comparison using safeTimingCompare.
+ * 4. Fails closed on missing credentials, invalid signatures, malformed payloads, or restricted accounts.
+ * 5. Separates user reward (amount) from publisher revenue (payout).
+ * 6. Safely acknowledges zero-reward install events without balance mutation.
+ * 7. Strictly credits Task Earnings balance (taskEarningsBalance and taskWalletBalance) - never core walletBalance.
+ * 8. Strict concurrency control using OfferwallPostbackLock and atomic database idempotency.
+ */
+export const handleAdGemPostback = async (req, res) => {
+    // 1. Enforce HTTP POST
+    if (req.method !== 'POST') {
+        return res.status(405).json({
+            success: false,
+            error: 'Method Not Allowed. AdGem postbacks must be HTTP POST.'
+        });
+    }
+
+    const clientIp = getClientIp(req);
+
+    // 2. Fetch AdGem provider configuration
+    const provider = await OfferwallProvider.findOne({ providerKey: 'adgem' });
+    if (!provider) {
+        return res.status(404).json({
+            success: false,
+            error: 'AdGem provider not configured'
+        });
+    }
+
+    // 3. Provider active state check
+    if (!provider.enabled || provider.status === 'DISABLED' || provider.status === 'SUSPENDED' || provider.status === 'NOT_STARTED') {
+        return res.status(403).json({
+            success: false,
+            error: 'AdGem provider is currently disabled or not active'
+        });
+    }
+
+    // 4. Validate postback key configuration
+    const secret = (provider.postbackKey || provider.secretKey || '').trim();
+    if (!secret) {
+        return res.status(400).json({
+            success: false,
+            error: 'AdGem postback key is not configured; failing closed'
+        });
+    }
+
+    // 5. Signature header check
+    const receivedSig = String(
+        req.headers?.['signature'] ||
+        req.headers?.['Signature'] ||
+        req.headers?.['x-adgem-signature'] ||
+        req.headers?.['x-signature'] ||
+        (typeof req.get === 'function' ? (req.get('Signature') || req.get('signature') || req.get('x-adgem-signature') || req.get('x-signature')) : '') ||
+        ''
+    ).trim();
+
+    if (!receivedSig) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing AdGem signature header'
+        });
+    }
+
+    // 6. Extract exact raw request body buffer
+    let rawBuffer = null;
+    if (req.rawBody !== undefined && req.rawBody !== null) {
+        rawBuffer = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(String(req.rawBody));
+    } else if (typeof req.body === 'string') {
+        rawBuffer = Buffer.from(req.body);
+    } else if (req.body && typeof req.body === 'object') {
+        rawBuffer = Buffer.from(JSON.stringify(req.body));
+    }
+
+    if (!rawBuffer || rawBuffer.length === 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing or empty request body'
+        });
+    }
+
+    // 7. Verify HMAC-SHA256 signature in constant time
+    const computedSig = crypto.createHmac('sha256', secret).update(rawBuffer).digest('hex');
+    if (!safeTimingCompare(computedSig, receivedSig)) {
+        try {
+            await OfferwallPostbackLog.create({
+                provider: 'adgem',
+                externalTxId: 'unknown',
+                rewardUSD: 0,
+                rawReward: 0,
+                rawCurrency: 'USD',
+                status: 'InvalidSignature',
+                clientIp,
+                queryParams: maskSensitiveData(req.query),
+                rawBody: maskSensitiveData(req.body),
+                signature: '***REDACTED***',
+                signatureStatus: 'Invalid',
+                errorMessage: 'AdGem HMAC-SHA256 signature mismatch'
+            });
+        } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid AdGem postback signature'
+        });
+    }
+
+    // Optional IP allowlist check
+    if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
+        const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+        if (!ipMatches) {
+            return res.status(403).json({
+                success: false,
+                error: 'Client IP not in whitelist'
+            });
+        }
+    }
+
+    // 8. Parse and validate JSON payload structure
+    let payload = req.body;
+    if (!payload || typeof payload !== 'object') {
+        try {
+            payload = JSON.parse(rawBuffer.toString('utf8'));
+        } catch {
+            return res.status(400).json({
+                success: false,
+                error: 'Malformed JSON payload'
+            });
+        }
+    }
+
+    if (!payload.request_id || typeof payload.request_id !== 'string' || !payload.request_id.trim()) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing or invalid request_id'
+        });
+    }
+
+    if (!payload.data || typeof payload.data !== 'object' || Array.isArray(payload.data)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing or invalid data object'
+        });
+    }
+
+    const data = payload.data;
+
+    // Validate app_id matches configured provider appId if configured
+    const configuredAppId = (provider.appId || '').trim();
+    if (configuredAppId && String(data.app_id).trim() !== configuredAppId) {
+        return res.status(400).json({
+            success: false,
+            error: 'AdGem app_id mismatch'
+        });
+    }
+
+    // Validate conversion_id
+    if (!data.conversion_id || !String(data.conversion_id).trim()) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing conversion_id'
+        });
+    }
+    const conversionId = String(data.conversion_id).trim();
+
+    // Validate player_id
+    if (!data.player_id || !String(data.player_id).trim()) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing player_id'
+        });
+    }
+    const playerId = String(data.player_id).trim();
+
+    // 9. Prepare log record
+    const sanitizedRawBody = maskSensitiveData(payload);
+    const log = new OfferwallPostbackLog({
+        provider: 'adgem',
+        externalTxId: conversionId,
+        username: playerId,
+        rewardUSD: 0,
+        rawReward: Number(data.amount) || 0,
+        rawCurrency: 'USD',
+        offerId: String(data.offer_id || data.campaign_id || '').trim(),
+        offerName: String(data.offer_name || data.goal_name || 'AdGem Offer').trim(),
+        isReversal: false,
+        clientIp,
+        queryParams: maskSensitiveData(req.query),
+        rawBody: sanitizedRawBody,
+        rawHeaders: {
+            'user-agent': req.headers?.['user-agent'],
+            'content-type': req.headers?.['content-type'],
+            'signature': '***REDACTED***'
+        },
+        signature: '***REDACTED***',
+        signatureStatus: 'Verified'
+    });
+
+    // 10. Resolve User (by ObjectId, username, or email)
+    let user = null;
+    if (playerId.match(/^[0-9a-fA-F]{24}$/)) {
+        user = await User.findById(playerId);
+    }
+    if (!user) {
+        user = await User.findOne({ username: playerId });
+    }
+    if (!user) {
+        user = await User.findOne({ email: playerId });
+    }
+
+    if (!user) {
+        log.status = 'UserNotFound';
+        log.errorMessage = `User not found for player_id: ${playerId}`;
+        try { await log.save(); } catch (_) {}
+        // Acknowledge HTTP 200 without crediting so AdGem doesn't retry indefinitely for an orphaned player_id
+        return res.status(200).json({
+            success: true,
+            message: 'User not found; acknowledged without crediting'
+        });
+    }
+
+    log.userId = user._id;
+    log.username = user.username;
+
+    // 11. Check account restrictions
+    if (user.status === 'Blocked' || user.restrictions?.earning === true || user.restrictions?.loginBlocked === true) {
+        log.status = 'UserRestricted';
+        log.errorMessage = 'User account is Blocked or earning-restricted; credit rejected.';
+        try { await log.save(); } catch (_) {}
+        return res.status(403).json({
+            success: false,
+            error: 'User account is restricted or blocked'
+        });
+    }
+
+    // 12. Handle zero-reward or install event (must acknowledge with 200 without crediting balance)
+    const rawAmount = data.amount;
+    const parsedAmount = Number(rawAmount);
+    const conversionType = String(data.conversion_type || '').toLowerCase().trim();
+    const trackingType = String(data.tracking_type || '').toLowerCase().trim();
+    const isInstall = conversionType === 'install' || trackingType === 'install' || (!isNaN(parsedAmount) && parsedAmount === 0);
+
+    if (isInstall || parsedAmount === 0) {
+        log.status = 'Processed';
+        log.errorMessage = 'Zero-reward or install conversion acknowledged without crediting balance.';
+        try { await log.save(); } catch (_) {}
+        return res.status(200).json({
+            success: true,
+            message: 'Install/zero-reward conversion acknowledged'
+        });
+    }
+
+    // 13. Validate reward amount
+    if (isNaN(parsedAmount) || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        log.status = 'Error';
+        log.errorMessage = `Invalid reward amount: ${rawAmount}`;
+        try { await log.save(); } catch (_) {}
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid reward amount'
+        });
+    }
+
+    // 14. Calculate rewards (user reward vs publisher revenue)
+    const multiplier = (typeof provider.exchangeRateMultiplier === 'number' && provider.exchangeRateMultiplier > 0)
+        ? provider.exchangeRateMultiplier
+        : 1.0;
+    const userRewardUSD = Number((parsedAmount * multiplier).toFixed(4));
+
+    const rawPayout = data.payout;
+    const parsedPayout = (rawPayout !== undefined && rawPayout !== null && !isNaN(Number(rawPayout)) && Number(rawPayout) >= 0)
+        ? Number(Number(rawPayout).toFixed(4))
+        : 0;
+    // Payout is publisher revenue from AdGem; never credit payout as user reward
+    const grossUSD = parsedPayout > 0 ? parsedPayout : userRewardUSD;
+    const platformRevenueUSD = Number(Math.max(0, grossUSD - userRewardUSD).toFixed(4));
+
+    log.rewardUSD = userRewardUSD;
+    log.grossAmountUSD = grossUSD;
+    log.userRewardUSD = userRewardUSD;
+    log.platformRevenueUSD = platformRevenueUSD;
+
+    // 15. Acquire concurrency lock for atomic idempotency
+    const creditKey = `adgem_${conversionId}_credit`;
+    let lockOwnerToken = null;
+    try {
+        lockOwnerToken = await acquirePostbackLock('adgem', conversionId);
+    } catch (lockErr) {
+        log.status = 'Error';
+        log.errorMessage = `Postback lock acquisition failed: ${lockErr.message}`;
+        try { await log.save(); } catch (_) {}
+        return res.status(409).json({
+            success: false,
+            error: 'Concurrent postback in progress'
+        });
+    }
+
+    try {
+        // Idempotency check: verify if this credit was already recorded
+        const existingCredit = (await Transaction.findOne({ idempotencyKey: creditKey }))
+            || (await Transaction.findOne({
+                offerwallProvider: 'adgem',
+                externalTransactionId: conversionId,
+                type: 'Offerwall Reward'
+            }));
+
+        if (existingCredit) {
+            log.status = 'Duplicate';
+            log.errorMessage = 'Duplicate credit transaction detected';
+            try { await log.save(); } catch (_) {}
+            return res.status(200).json({
+                success: true,
+                message: 'Duplicate conversion already processed'
+            });
+        }
+
+        // Check if pre-reversed
+        const priorReversal = (await Transaction.findOne({ idempotencyKey: `adgem_${conversionId}_reversal` }))
+            || (await Transaction.findOne({
+                offerwallProvider: 'adgem',
+                externalTransactionId: conversionId,
+                type: 'Offerwall Reversal'
+            }));
+
+        if (priorReversal) {
+            log.status = 'PreReversed';
+            log.errorMessage = 'Credit received after pre-existing reversal; balance mutation bypassed safely.';
+            try { await log.save(); } catch (_) {}
+            return res.status(200).json({
+                success: true,
+                message: 'Conversion pre-reversed'
+            });
+        }
+
+        // Verify lock ownership before transaction creation
+        if (lockOwnerToken && !(await isLockStillOwned('adgem', conversionId, lockOwnerToken))) {
+            throw new Error(`Lock expired or taken over before transaction creation for adgem:${conversionId}`);
+        }
+
+        const balanceBefore = user.taskEarningsBalance || 0;
+        const balanceAfter = Number((balanceBefore + userRewardUSD).toFixed(4));
+
+        let tx;
+        try {
+            tx = await Transaction.create({
+                idempotencyKey: creditKey,
+                type: 'Offerwall Reward',
+                userId: user._id,
+                userName: user.username,
+                currency: 'USD',
+                amount: userRewardUSD,
+                amountUSD: userRewardUSD,
+                grossAmount: grossUSD,
+                userRewardAmount: userRewardUSD,
+                platformRevenueAmount: platformRevenueUSD,
+                balanceBefore,
+                balanceAfter,
+                status: 'Approved',
+                sourceWallet: 'External',
+                destinationWallet: 'TaskEarnings',
+                offerwallProvider: 'adgem',
+                externalTransactionId: conversionId,
+                description: `Completed AdGem Offer: ${data.offer_name || data.goal_name || data.campaign_id || conversionId}`
+            });
+        } catch (txErr) {
+            if (txErr.code === 11000) {
+                log.status = 'Duplicate';
+                log.errorMessage = 'Duplicate transaction key caught by database constraint';
+                try { await log.save(); } catch (_) {}
+                return res.status(200).json({
+                    success: true,
+                    message: 'Duplicate conversion already processed'
+                });
+            }
+            throw txErr;
+        }
+
+        // Verify lock ownership before balance update
+        if (lockOwnerToken && !(await isLockStillOwned('adgem', conversionId, lockOwnerToken))) {
+            await Transaction.deleteOne({ _id: tx._id }).catch(() => {});
+            throw new Error(`Lock expired or taken over before balance update for adgem:${conversionId}`);
+        }
+
+        // Atomically increment Task Earnings balance while verifying user is not restricted
+        let updatedUser = null;
+        try {
+            updatedUser = await User.findOneAndUpdate(
+                {
+                    _id: user._id,
+                    status: { $ne: 'Blocked' },
+                    'restrictions.earning': { $ne: true },
+                    'restrictions.loginBlocked': { $ne: true }
+                },
+                {
+                    $inc: {
+                        taskEarningsBalance: userRewardUSD,
+                        taskWalletBalance: userRewardUSD
+                    }
+                },
+                { new: true }
+            );
+        } catch (balanceErr) {
+            await Transaction.deleteOne({ _id: tx._id }).catch(() => {});
+            throw balanceErr;
+        }
+
+        if (!updatedUser) {
+            await Transaction.deleteOne({ _id: tx._id }).catch(() => {});
+            log.status = 'UserRestricted';
+            log.errorMessage = 'User was restricted when balance update was attempted';
+            try { await log.save(); } catch (_) {}
+            return res.status(403).json({
+                success: false,
+                error: 'User account is restricted or blocked'
+            });
+        }
+
+        // Send worker notification (isolated, non-blocking)
+        try {
+            await Notification.create({
+                userId: user._id,
+                subject: 'Offerwall Reward Credited! 🎁',
+                message: `You earned $${userRewardUSD.toFixed(2)} from AdGem (${data.offer_name || 'Offer'}). Credited to your Task Earnings balance.`,
+                senderType: 'System'
+            });
+        } catch (_) {}
+
+        // Emit real-time synchronization if Socket.IO is initialized
+        try {
+            const io = req.app?.get('io');
+            if (io) io.emit('DATA_CHANGED');
+        } catch (_) {}
+
+        log.status = 'Processed';
+        try { await log.save(); } catch (_) {}
+
+        return res.status(200).json({
+            success: true,
+            message: 'AdGem postback processed successfully',
+            conversionId
+        });
+    } finally {
+        if (lockOwnerToken) {
+            await releasePostbackLock('adgem', conversionId, lockOwnerToken);
+        }
     }
 };

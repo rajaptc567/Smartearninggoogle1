@@ -184,7 +184,15 @@ app.use((req, res, next) => {
 });
 
 // Body parser middleware
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ 
+    limit: '50mb',
+    verify: (req, res, buf) => {
+        const url = req.originalUrl || req.url || '';
+        if (url.includes('/postbacks/adgem')) {
+            req.rawBody = buf;
+        }
+    }
+}));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Passive Authentication Layer

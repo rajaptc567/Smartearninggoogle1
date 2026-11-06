@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import { 
     handlePostback, 
     handleTheoremReachEventWebhook,
+    handleAdGemPostback,
     getOfferwallProviders, 
     updateOfferwallProvider, 
     getOfferwallLogs, 
@@ -66,6 +67,10 @@ router.post('/simulate', requireAdmin, simulatePostback);
 router.post('/theoremreach/events', handleTheoremReachEventWebhook);
 router.all('/theoremreach/events', handleTheoremReachEventWebhook);
 router.post('/events', handleTheoremReachEventWebhook);
+
+// Dedicated Inbound AdGem v3 Postback Webhook Endpoint
+router.post('/adgem', handleAdGemPostback);
+router.all('/adgem', handleAdGemPostback);
 
 // Generic & Network-Specific Postback Webhook Endpoints (supports both GET and POST)
 router.all('/:provider', handlePostback);

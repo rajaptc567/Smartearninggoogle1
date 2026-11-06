@@ -5,7 +5,7 @@ import OfferwallProvider from '../models/OfferwallProvider.js';
 import User from '../models/User.js';
 import Setting from '../models/Setting.js';
 import { evaluatePlacementEligibility } from '../utils/providerPlacementEligibility.js';
-import { constructTheoremReachEntryUrl, constructCpxEntryUrl } from './postbackController.js';
+import { constructTheoremReachEntryUrl, constructCpxEntryUrl, constructAdGemEntryUrl } from './postbackController.js';
 
 /**
  * Validates and normalizes a hostname entry.
@@ -293,6 +293,13 @@ export const launchProviderPlacement = async (req, res) => {
             } else {
                 return res.status(400).json({ success: false, error: cpxResult.error || 'CPX Research configuration incomplete' });
             }
+        } else if (placement.providerKey === 'adgem') {
+            const adgemResult = constructAdGemEntryUrl(provider, user._id.toString());
+            if (adgemResult.url) {
+                launchUrl = adgemResult.url;
+            } else {
+                return res.status(400).json({ success: false, error: adgemResult.error || 'AdGem configuration incomplete' });
+            }
         } else if (placement.providerKey === 'torox') {
             // Torox fails closed in the new placement system until secure reuse of existing session flow is implemented.
             return res.status(403).json({ 
@@ -343,6 +350,9 @@ export const launchProviderPlacement = async (req, res) => {
             } else if (placement.providerKey === 'theoremreach') {
                 const trDomains = ['theoremreach.com'];
                 isTrusted = trDomains.some(d => isDomainTrusted(launchHost, d));
+            } else if (placement.providerKey === 'adgem') {
+                const adgemDomains = ['api.adgem.com', 'adgem.com'];
+                isTrusted = adgemDomains.some(d => isDomainTrusted(launchHost, d));
             }
 
             // Generic providers MUST have their host in the placement-level allowlist
