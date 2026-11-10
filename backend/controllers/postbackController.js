@@ -4684,43 +4684,61 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
         });
     }
 
-    // 13. Event Identifier, Deterministic Fingerprint, and Safe Event Ordering
+    // 13. Official Event Identification & Deterministic Fingerprint
+    // Official AdGem contract documents `data.created_at` and `timestamp`.
+    // It does NOT provide a dedicated event ID field (no payload.id or data.event_id).
     const isBanned = eventType === 'player.banned';
     const banReason = String(data.ban_reason || (isBanned ? 'Banned by AdGem' : 'Unbanned by AdGem')).trim();
 
     // Determine event timestamp if provided by official payload (data.created_at or payload.timestamp)
     let eventTime = null;
-    if (data.created_at && !isNaN(new Date(data.created_at).getTime())) {
-        eventTime = new Date(data.created_at);
-    } else if (payload.timestamp && !isNaN(new Date(payload.timestamp).getTime())) {
-        eventTime = new Date(payload.timestamp);
+    const rawTime = data.created_at || payload.timestamp;
+    if (rawTime && (typeof rawTime === 'string' || typeof rawTime === 'number')) {
+        const parsed = new Date(rawTime);
+        if (!isNaN(parsed.getTime())) {
+            eventTime = parsed;
+        }
     }
 
-    // Use official event ID if provided, otherwise compute deterministic fingerprint
-    const officialEventId = payload.id || payload.event_id || data.id || data.event_id;
-    const rawEventId = officialEventId ? String(officialEventId).trim() : '';
-    const deterministicFingerprint = crypto
-        .createHash('sha256')
-        .update(`${playerId}:${eventType}:${data.app_id}:${data.created_at || payload.timestamp || ''}:${banReason}`)
-        .digest('hex');
+    const eventTimestampStr = eventTime ? eventTime.toISOString() : '';
+    let eventKey;
+    let lockKey;
 
-    const eventKey = rawEventId ? `evt_${rawEventId}` : `evt_fp_${deterministicFingerprint}`;
+    if (eventTimestampStr) {
+        // When timestamp is provided by official AdGem payload, the event is uniquely identifiable across time
+        const fingerprint = crypto
+            .createHash('sha256')
+            .update(`${playerId}:${eventType}:${data.app_id}:${eventTimestampStr}:${banReason}`)
+            .digest('hex');
+        eventKey = `evt_fp_${fingerprint}`;
+        lockKey = eventKey;
+    } else {
+        // LIMITATION: Official AdGem payload lacks both created_at and timestamp.
+        // Timeless events cannot be uniquely identified across time without risking collision
+        // with future legitimate events. We serialize on player lock and deduplicate only within
+        // the active retry window if player is already in requested state.
+        lockKey = `player_${playerId}`;
+        eventKey = `evt_timeless_${playerId}_${eventType}_${Date.now()}`;
+    }
 
     // 14. Acquire atomic distributed lock to handle concurrent deliveries safely
     let lockOwnerToken = null;
     try {
-        lockOwnerToken = await acquirePostbackLock('adgem_event', eventKey, 3000, 15000);
+        lockOwnerToken = await acquirePostbackLock('adgem_event', lockKey, 3000, 15000);
     } catch (lockErr) {
-        // If lock acquisition timed out, check if another worker already finished processing this eventKey
-        const checkLog = await OfferwallPostbackLog.findOne({ provider: 'adgem', externalTxId: eventKey });
-        if (checkLog) {
-            return res.status(200).json({
-                success: true,
-                duplicate: true,
-                message: `AdGem player event '${eventType}' already processed (duplicate delivery acknowledged)`,
-                playerId,
-                adgemSuspended: user.adgemSuspended === true
-            });
+        // If lock acquisition timed out, check if another worker already finished processing this exact eventKey
+        if (eventTimestampStr) {
+            const checkLog = await OfferwallPostbackLog.findOne({ provider: 'adgem', externalTxId: eventKey });
+            if (checkLog) {
+                return res.status(200).json({
+                    success: true,
+                    applied: false,
+                    duplicate: true,
+                    message: `AdGem player event '${eventType}' already processed (duplicate delivery acknowledged)`,
+                    playerId,
+                    adgemSuspended: user.adgemSuspended === true
+                });
+            }
         }
         return res.status(409).json({
             success: false,
@@ -4729,16 +4747,40 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
     }
 
     try {
-        // Double-check under lock: duplicate delivery check
-        const existingLog = await OfferwallPostbackLog.findOne({ provider: 'adgem', externalTxId: eventKey });
-        if (existingLog) {
-            return res.status(200).json({
-                success: true,
-                duplicate: true,
-                message: `AdGem player event '${eventType}' already processed (duplicate delivery acknowledged)`,
-                playerId,
-                adgemSuspended: user.adgemSuspended === true
-            });
+        // Double-check under lock: duplicate delivery checks
+        if (eventTimestampStr) {
+            const existingLog = await OfferwallPostbackLog.findOne({ provider: 'adgem', externalTxId: eventKey });
+            if (existingLog) {
+                return res.status(200).json({
+                    success: true,
+                    applied: false,
+                    duplicate: true,
+                    message: `AdGem player event '${eventType}' already processed (duplicate delivery acknowledged)`,
+                    playerId,
+                    adgemSuspended: user.adgemSuspended === true
+                });
+            }
+        } else {
+            // Timeless event duplicate check: if user is ALREADY in the requested state
+            // AND an event of the same type was recorded within the active retry window (10 minutes)
+            if (user.adgemSuspended === isBanned) {
+                const recentLog = await OfferwallPostbackLog.findOne({
+                    provider: 'adgem',
+                    userId: user._id,
+                    status: isBanned ? 'PlayerSuspended' : 'PlayerUnsuspended',
+                    receivedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) }
+                });
+                if (recentLog) {
+                    return res.status(200).json({
+                        success: true,
+                        applied: false,
+                        duplicate: true,
+                        message: `AdGem player event '${eventType}' already processed (duplicate retry acknowledged)`,
+                        playerId,
+                        adgemSuspended: user.adgemSuspended === true
+                    });
+                }
+            }
         }
 
         // Event Ordering Guard: older events cannot overwrite a newer accepted player state
@@ -4766,11 +4808,17 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
 
             return res.status(200).json({
                 success: true,
-                ignored: true,
+                applied: false,
+                skipped: true,
                 reason: 'Older event ignored; newer player state already accepted',
                 playerId,
                 adgemSuspended: user.adgemSuspended === true
             });
+        }
+
+        // Verify lock ownership is still valid before applying database changes
+        if (lockOwnerToken && !(await isLockStillOwned('adgem_event', lockKey, lockOwnerToken))) {
+            throw new Error(`Lock expired or taken over before applying player state change: adgem_event:${lockKey}`);
         }
 
         // 15. Apply provider-specific suspension/unsuspension atomically
@@ -4792,18 +4840,47 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
             $or: [
                 { adgemLastEventAt: { $exists: false } },
                 { adgemLastEventAt: null },
-                ...(eventTime ? [{ adgemLastEventAt: { $lte: eventTime } }] : [])
+                { adgemLastEventAt: { $lte: effectiveEventTime } }
             ]
+        };
+
+        // Capture previous state for rollback if audit log creation fails
+        const previousState = {
+            adgemSuspended: user.adgemSuspended,
+            restrictionsAdgemSuspended: user.restrictions?.adgemSuspended || false,
+            adgemSuspensionReason: user.adgemSuspensionReason || '',
+            adgemSuspendedAt: user.adgemSuspendedAt || null,
+            adgemLastEventAt: user.adgemLastEventAt || null
         };
 
         const updatedUser = await User.findOneAndUpdate(updateFilter, { $set: updateFields }, { new: true });
 
-        // If another newer event was committed concurrently between lookup and update, skip state change
-        if (!updatedUser && eventTime) {
+        // NEVER report false success if updatedUser was not updated in the database
+        if (!updatedUser) {
+            try {
+                await OfferwallPostbackLog.create({
+                    provider: 'adgem',
+                    externalTxId: `unapplied_${eventKey}_${Date.now()}`,
+                    username: user.username || playerId,
+                    userId: user._id,
+                    rewardUSD: 0,
+                    rawReward: 0,
+                    rawCurrency: 'USD',
+                    status: 'Skipped',
+                    clientIp,
+                    queryParams: maskSensitiveData(req.query),
+                    rawBody: maskSensitiveData(payload),
+                    errorMessage: `AdGem player event '${eventType}' not applied: atomic condition failed (newer event already recorded or concurrent update)`,
+                    signature: '***REDACTED***',
+                    signatureStatus: 'Verified'
+                });
+            } catch (_) {}
+
             return res.status(200).json({
                 success: true,
-                ignored: true,
-                reason: 'Concurrent newer event already processed',
+                applied: false,
+                skipped: true,
+                message: 'Event not applied: user state could not be updated (concurrent or newer state exists)',
                 playerId,
                 adgemSuspended: user.adgemSuspended === true
             });
@@ -4829,11 +4906,31 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
                 signatureStatus: 'Verified'
             });
         } catch (logErr) {
-            console.error('[AdGem Webhook Audit Log Error]: Failed to create OfferwallPostbackLog:', logErr);
+            console.error('[AdGem Webhook Audit Log Error]: Failed to create OfferwallPostbackLog; reverting user state:', logErr);
+            // Compensating rollback: Revert user state to guarantee audit trail consistency
+            try {
+                await User.findByIdAndUpdate(user._id, {
+                    $set: {
+                        adgemSuspended: previousState.adgemSuspended,
+                        'restrictions.adgemSuspended': previousState.restrictionsAdgemSuspended,
+                        adgemSuspensionReason: previousState.adgemSuspensionReason,
+                        adgemSuspendedAt: previousState.adgemSuspendedAt,
+                        adgemLastEventAt: previousState.adgemLastEventAt
+                    }
+                });
+            } catch (revertErr) {
+                console.error('[AdGem Webhook Critical Rollback Error]: Failed to revert user state after audit log error:', revertErr);
+            }
+
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to record required audit log for AdGem player event; player state update reverted'
+            });
         }
 
         return res.status(200).json({
             success: true,
+            applied: true,
             message: `AdGem player event '${eventType}' processed successfully`,
             playerId,
             adgemSuspended: isBanned,
@@ -4842,7 +4939,7 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
         });
     } finally {
         if (lockOwnerToken) {
-            await releasePostbackLock('adgem_event', eventKey, lockOwnerToken);
+            await releasePostbackLock('adgem_event', lockKey, lockOwnerToken);
         }
     }
 };
