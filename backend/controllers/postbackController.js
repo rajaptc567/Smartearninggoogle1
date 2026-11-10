@@ -2348,6 +2348,13 @@ export const getOfferwallProviders = async (req, res) => {
             return true;
         });
 
+        let currentUser = null;
+        if (req.user?.id) {
+            try {
+                currentUser = await User.findById(req.user.id).select('adgemSuspended restrictions');
+            } catch (_) {}
+        }
+
         const sanitized = visibleProviders.map(p => {
             const obj = p.toObject();
             if (p.providerKey === 'theoremreach') {
@@ -2376,12 +2383,18 @@ export const getOfferwallProviders = async (req, res) => {
                 }
             } else if (p.providerKey === 'adgem') {
                 if (req.user?.id) {
-                    const adgemResult = constructAdGemEntryUrl(p, req.user.id);
-                    if (adgemResult.url) {
-                        obj.iframeUrl = adgemResult.url;
-                    } else {
+                    if (currentUser?.adgemSuspended === true || currentUser?.restrictions?.adgemSuspended === true) {
                         obj.iframeUrl = '';
-                        obj.configurationError = adgemResult.error;
+                        obj.suspended = true;
+                        obj.configurationError = 'User is suspended from AdGem offers';
+                    } else {
+                        const adgemResult = constructAdGemEntryUrl(p, req.user.id);
+                        if (adgemResult.url) {
+                            obj.iframeUrl = adgemResult.url;
+                        } else {
+                            obj.iframeUrl = '';
+                            obj.configurationError = adgemResult.error;
+                        }
                     }
                 } else {
                     obj.iframeUrl = '';
@@ -3817,6 +3830,15 @@ export const handleTheoremReachEventWebhook = async (req, res) => {
  * 8. Strict concurrency control using OfferwallPostbackLock and atomic database idempotency.
  */
 export const handleAdGemPostback = async (req, res) => {
+    // 0. Delegate to player webhook if payload is a player suspension event
+    let initialPayload = req.body;
+    if (!initialPayload && req.rawBody) {
+        try { initialPayload = JSON.parse(req.rawBody.toString('utf8')); } catch (_) {}
+    }
+    if (initialPayload && (initialPayload.type === 'player.banned' || initialPayload.type === 'player.unbanned')) {
+        return handleAdGemPlayerWebhook(req, res);
+    }
+
     // 1. Enforce HTTP POST
     if (req.method !== 'POST') {
         return res.status(405).json({
@@ -4035,6 +4057,17 @@ export const handleAdGemPostback = async (req, res) => {
         return res.status(403).json({
             success: false,
             error: 'User account is restricted or blocked'
+        });
+    }
+
+    // AdGem-specific player suspension check
+    if (user.adgemSuspended === true || user.restrictions?.adgemSuspended === true) {
+        log.status = 'UserRestricted';
+        log.errorMessage = 'User is suspended from AdGem offers; credit rejected.';
+        try { await log.save(); } catch (_) {}
+        return res.status(403).json({
+            success: false,
+            error: 'User is suspended from AdGem offers'
         });
     }
 
@@ -4376,13 +4409,15 @@ export const handleAdGemPostback = async (req, res) => {
             }], { session });
             tx = createdTx;
 
-            // Atomically increment Task Earnings balance while verifying user is not restricted
+            // Atomically increment Task Earnings balance while verifying user is not restricted or AdGem-suspended
             const updatedUser = await User.findOneAndUpdate(
                 {
                     _id: user._id,
                     status: { $ne: 'Blocked' },
                     'restrictions.earning': { $ne: true },
-                    'restrictions.loginBlocked': { $ne: true }
+                    'restrictions.loginBlocked': { $ne: true },
+                    adgemSuspended: { $ne: true },
+                    'restrictions.adgemSuspended': { $ne: true }
                 },
                 {
                     $inc: {
@@ -4462,4 +4497,214 @@ export const handleAdGemPostback = async (req, res) => {
             await releasePostbackLock('adgem', lockKey, lockOwnerToken);
         }
     }
+};
+
+/**
+ * Dedicated Inbound AdGem Suspended Player Webhook Handler
+ * 
+ * Official AdGem Player Events:
+ * - "player.banned": Suspends only that user's AdGem access
+ * - "player.unbanned": Restores only that user's AdGem access
+ * 
+ * Safeguards:
+ * 1. HMAC-SHA256 signature verification over exact raw request body buffer using ADGEM_WEBHOOK_SECRET.
+ * 2. Constant-time signature comparison using safeTimingCompare.
+ * 3. Dedicated environment variable ADGEM_WEBHOOK_SECRET (never confused with reward postbackKey).
+ * 4. Validates expected AdGem App ID ("34014" or configured provider.appId).
+ * 5. Strictly requires 24 lowercase hex player_id and maps to User.findById.
+ * 6. Idempotent state storage without modifying global account status (status, earning, withdrawal).
+ * 7. Rejection of malformed, unauthentic, or incomplete payloads.
+ */
+export const handleAdGemPlayerWebhook = async (req, res) => {
+    // 1. Health-check / ping support for GET requests
+    if (req.method === 'GET') {
+        return res.status(200).json({ status: 'OK', service: 'AdGem Player Webhook Receiver' });
+    }
+
+    // 2. Enforce HTTP POST
+    if (req.method !== 'POST') {
+        return res.status(405).json({
+            success: false,
+            error: 'Method Not Allowed. AdGem webhooks must be HTTP POST.'
+        });
+    }
+
+    const clientIp = getClientIp(req);
+
+    // 3. Retrieve dedicated ADGEM_WEBHOOK_SECRET from environment
+    const webhookSecret = (process.env.ADGEM_WEBHOOK_SECRET || '').trim();
+    if (!webhookSecret) {
+        console.error('[AdGem Webhook Error]: ADGEM_WEBHOOK_SECRET environment variable is not configured');
+        return res.status(500).json({
+            success: false,
+            error: 'AdGem webhook secret is not configured'
+        });
+    }
+
+    // 4. Extract signature header
+    const receivedSig = String(
+        req.headers?.['signature'] ||
+        req.headers?.['Signature'] ||
+        req.headers?.['x-adgem-signature'] ||
+        req.headers?.['x-signature'] ||
+        (typeof req.get === 'function' ? (req.get('Signature') || req.get('signature') || req.get('x-adgem-signature') || req.get('x-signature')) : '') ||
+        ''
+    ).trim();
+
+    if (!receivedSig) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing AdGem webhook signature header'
+        });
+    }
+
+    // 5. Extract exact raw request body buffer
+    if (!req.rawBody || (Buffer.isBuffer(req.rawBody) && req.rawBody.length === 0) || (typeof req.rawBody === 'string' && !req.rawBody.trim())) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing raw request body buffer; cannot verify AdGem HMAC-SHA256 signature'
+        });
+    }
+
+    const rawBuffer = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(String(req.rawBody), 'utf8');
+
+    // 6. Verify HMAC-SHA256 signature in constant time
+    const computedSig = crypto.createHmac('sha256', webhookSecret).update(rawBuffer).digest('hex');
+    if (!safeTimingCompare(computedSig, receivedSig)) {
+        try {
+            await OfferwallPostbackLog.create({
+                provider: 'adgem',
+                externalTxId: 'webhook_invalid_sig',
+                rewardUSD: 0,
+                rawReward: 0,
+                rawCurrency: 'USD',
+                status: 'InvalidSignature',
+                clientIp,
+                queryParams: maskSensitiveData(req.query),
+                rawBody: maskSensitiveData(req.body),
+                signature: '***REDACTED***',
+                signatureStatus: 'Invalid',
+                errorMessage: 'AdGem webhook HMAC-SHA256 signature mismatch'
+            });
+        } catch (_) {}
+
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid AdGem webhook signature'
+        });
+    }
+
+    // 7. Parse and validate JSON payload
+    let payload = req.body;
+    if (!payload || typeof payload !== 'object') {
+        try {
+            payload = JSON.parse(rawBuffer.toString('utf8'));
+        } catch {
+            return res.status(400).json({
+                success: false,
+                error: 'Malformed JSON payload'
+            });
+        }
+    }
+
+    // 8. Validate Event Type (only 'player.banned' and 'player.unbanned' supported)
+    const eventType = String(payload.type || payload.event || '').trim();
+    if (eventType !== 'player.banned' && eventType !== 'player.unbanned') {
+        return res.status(400).json({
+            success: false,
+            error: `Unsupported or missing event type: ${eventType || 'undefined'}`
+        });
+    }
+
+    // 9. Validate data object
+    if (!payload.data || typeof payload.data !== 'object' || Array.isArray(payload.data)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing or invalid data object'
+        });
+    }
+
+    const data = payload.data;
+
+    // 10. Validate App ID
+    // Expected App ID: "34014" or configured provider.appId if present
+    const provider = await OfferwallProvider.findOne({ providerKey: 'adgem' });
+    const expectedAppId = (provider?.appId && String(provider.appId).trim()) 
+        ? String(provider.appId).trim() 
+        : '34014';
+
+    if (data.app_id === undefined || data.app_id === null || String(data.app_id).trim() === '' || String(data.app_id).trim() !== expectedAppId) {
+        return res.status(400).json({
+            success: false,
+            error: `AdGem app_id mismatch or missing. Expected: ${expectedAppId}`
+        });
+    }
+
+    // 11. Validate player_id: strictly 24 lowercase hex characters
+    if (!data.player_id || !String(data.player_id).trim()) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing player_id'
+        });
+    }
+
+    const playerId = String(data.player_id).trim();
+    if (!/^[0-9a-f]{24}$/.test(playerId)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid player_id format; must be exactly 24 lowercase hexadecimal characters'
+        });
+    }
+
+    // 12. Resolve User strictly by ObjectId
+    const user = await User.findById(playerId);
+    if (!user) {
+        return res.status(404).json({
+            success: false,
+            error: 'User not found'
+        });
+    }
+
+    // 13. Idempotently apply provider-specific suspension/unsuspension
+    // CRITICAL: Do NOT modify user.status ('Active', 'Blocked', etc.)
+    // CRITICAL: Do NOT set user.restrictions.earning = true or withdrawal = true
+    const isBanned = eventType === 'player.banned';
+    const banReason = String(data.ban_reason || (isBanned ? 'Banned by AdGem' : 'Unbanned by AdGem')).trim();
+    const eventTime = data.created_at ? new Date(data.created_at) : (payload.timestamp ? new Date(payload.timestamp) : new Date());
+
+    const updateFields = {
+        adgemSuspended: isBanned,
+        'restrictions.adgemSuspended': isBanned,
+        adgemSuspensionReason: banReason,
+        ...(isBanned ? { adgemSuspendedAt: eventTime } : {})
+    };
+
+    await User.findByIdAndUpdate(user._id, { $set: updateFields });
+
+    // Optional durable log
+    try {
+        await OfferwallPostbackLog.create({
+            provider: 'adgem',
+            externalTxId: `webhook_${eventType}_${playerId}_${Date.now()}`,
+            username: user.username || playerId,
+            userId: user._id,
+            rewardUSD: 0,
+            rawReward: 0,
+            rawCurrency: 'USD',
+            status: isBanned ? 'UserRestricted' : 'Processed',
+            clientIp,
+            queryParams: maskSensitiveData(req.query),
+            rawBody: maskSensitiveData(payload),
+            errorMessage: `AdGem player event '${eventType}': ${banReason}`,
+            signature: '***REDACTED***',
+            signatureStatus: 'Verified'
+        });
+    } catch (_) {}
+
+    return res.status(200).json({
+        success: true,
+        message: `AdGem player event '${eventType}' processed successfully`,
+        playerId,
+        adgemSuspended: isBanned
+    });
 };

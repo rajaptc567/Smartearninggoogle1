@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { 
     handleAdGemPostback, 
+    handleAdGemPlayerWebhook,
     constructAdGemEntryUrl, 
     verifySignature,
     seedVerifiedNetworks 
@@ -115,6 +116,8 @@ User.findOneAndUpdate = async (filter, update, options = {}) => {
     if (filter.status?.$ne && user.status === filter.status.$ne) return null;
     if (filter['restrictions.earning']?.$ne && user.restrictions?.earning === true) return null;
     if (filter['restrictions.loginBlocked']?.$ne && user.restrictions?.loginBlocked === true) return null;
+    if (filter.adgemSuspended?.$ne && user.adgemSuspended === filter.adgemSuspended.$ne) return null;
+    if (filter['restrictions.adgemSuspended']?.$ne && user.restrictions?.adgemSuspended === filter['restrictions.adgemSuspended'].$ne) return null;
 
     const stagedUpdates = {};
     if (update.$inc) {
@@ -124,7 +127,19 @@ User.findOneAndUpdate = async (filter, update, options = {}) => {
     }
     if (update.$set) {
         for (const [k, v] of Object.entries(update.$set)) {
-            stagedUpdates[k] = v;
+            if (k.includes('.')) {
+                const parts = k.split('.');
+                let current = user;
+                for (let i = 0; i < parts.length - 1; i++) {
+                    if (!current[parts[i]]) current[parts[i]] = {};
+                    current = current[parts[i]];
+                }
+                current[parts[parts.length - 1]] = v;
+                stagedUpdates[k] = v;
+            } else {
+                user[k] = v;
+                stagedUpdates[k] = v;
+            }
         }
     }
 
@@ -132,11 +147,11 @@ User.findOneAndUpdate = async (filter, update, options = {}) => {
         options.session.stagedUserUpdates.push({ user, updates: stagedUpdates });
         return { ...user, ...stagedUpdates };
     } else {
-        for (const [k, v] of Object.entries(stagedUpdates)) {
-            user[k] = v;
-        }
         return user;
     }
+};
+User.findByIdAndUpdate = async (id, update, options = {}) => {
+    return User.findOneAndUpdate({ _id: id }, update, options);
 };
 
 // Mock Transaction Model
@@ -354,14 +369,41 @@ const setupTestUser = (overrides = {}) => {
         walletBalance: 150.0, // Core main balance (MUST NEVER BE MUTATED)
         taskEarningsBalance: 25.0, // Work & Earn balance (MUST BE MUTATED)
         taskWalletBalance: 25.0, // Display mirror (MUST BE MUTATED)
+        adgemSuspended: false,
+        ...overrides,
         restrictions: {
             earning: false,
-            loginBlocked: false
-        },
-        ...overrides
+            withdrawal: false,
+            loginBlocked: false,
+            adgemSuspended: false,
+            ...(overrides.restrictions || {})
+        }
     };
     db.users.set(String(user._id), user);
     return user;
+};
+
+// Helper: Build Valid Signed AdGem Webhook Request
+const buildAdGemWebhookRequest = (payloadObj, secretKey, options = {}) => {
+    const rawBodyBuffer = Buffer.from(JSON.stringify(payloadObj), 'utf8');
+    const signature = crypto.createHmac('sha256', secretKey).update(rawBodyBuffer).digest('hex');
+
+    const headers = {
+        'content-type': 'application/json',
+        'signature': options.signature !== undefined ? options.signature : signature,
+        ...options.headers
+    };
+
+    return {
+        method: options.method || 'POST',
+        headers,
+        rawBody: options.rawBody !== undefined ? options.rawBody : rawBodyBuffer,
+        body: options.body !== undefined ? options.body : payloadObj,
+        query: options.query || {},
+        get(headerName) {
+            return this.headers[headerName.toLowerCase()];
+        }
+    };
 };
 
 let passedTests = 0;
@@ -1378,6 +1420,426 @@ const runTest = async (name, fn) => {
 
         assert.equal(res.statusCode, 200);
         assert.equal(res.body.data.length, 0); // Excluded because approvalStatus is Pending
+    });
+
+    console.log('\n--- SECTION 6: AdGem Suspended Player Webhooks & Isolation Tests ---');
+
+    const TEST_WEBHOOK_SECRET = 'test_adgem_webhook_secret_key_8899';
+
+    await runTest('handleAdGemPlayerWebhook: valid player.banned event suspends player AdGem access', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser();
+        const payload = {
+            type: 'player.banned',
+            timestamp: '2026-11-09T10:00:00.000Z',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'fraudulent multiple device usage',
+                created_at: '2026-11-09T10:00:00.000Z'
+            }
+        };
+
+        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.success, true);
+        assert.equal(res.body.adgemSuspended, true);
+
+        // Verify AdGem suspension is set
+        assert.equal(user.adgemSuspended, true);
+        assert.equal(user.restrictions.adgemSuspended, true);
+        assert.equal(user.adgemSuspensionReason, 'fraudulent multiple device usage');
+
+        // CRITICAL ISOLATION: Global account status must NOT be modified
+        assert.equal(user.status, 'Active');
+        assert.equal(user.restrictions.earning, false);
+        assert.equal(user.restrictions.withdrawal, false);
+        assert.equal(user.walletBalance, 150.0);
+        assert.equal(user.taskEarningsBalance, 25.0);
+    });
+
+    await runTest('handleAdGemPlayerWebhook: valid player.unbanned event restores player AdGem access', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser({
+            adgemSuspended: true,
+            restrictions: { earning: false, loginBlocked: false, adgemSuspended: true }
+        });
+        const payload = {
+            type: 'player.unbanned',
+            timestamp: '2026-11-09T11:00:00.000Z',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'reviewed and cleared by support',
+                created_at: '2026-11-09T11:00:00.000Z'
+            }
+        };
+
+        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.success, true);
+        assert.equal(res.body.adgemSuspended, false);
+
+        // Verify AdGem suspension is cleared
+        assert.equal(user.adgemSuspended, false);
+        assert.equal(user.restrictions.adgemSuspended, false);
+        assert.equal(user.adgemSuspensionReason, 'reviewed and cleared by support');
+
+        // Global account status untouched
+        assert.equal(user.status, 'Active');
+        assert.equal(user.restrictions.earning, false);
+        assert.equal(user.restrictions.withdrawal, false);
+    });
+
+    await runTest('handleAdGemPlayerWebhook: fails closed if signature is missing or invalid', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser();
+        const payload = {
+            type: 'player.banned',
+            timestamp: '2026-11-09T10:00:00.000Z',
+            data: { player_id: String(user._id), app_id: 34014, ban_reason: 'test' }
+        };
+
+        // 1. Missing signature header
+        const reqNoSig = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET, { signature: '' });
+        const resNoSig = createMockRes();
+        await handleAdGemPlayerWebhook(reqNoSig, resNoSig);
+        assert.equal(resNoSig.statusCode, 400);
+        assert.ok(resNoSig.body.error.includes('Missing AdGem webhook signature header'));
+        assert.equal(user.adgemSuspended, false);
+
+        // 2. Tampered / invalid signature
+        const reqBadSig = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET, {
+            signature: '0000000000000000000000000000000000000000000000000000000000000000'
+        });
+        const resBadSig = createMockRes();
+        await handleAdGemPlayerWebhook(reqBadSig, resBadSig);
+        assert.equal(resBadSig.statusCode, 400);
+        assert.ok(resBadSig.body.error.includes('Invalid AdGem webhook signature'));
+        assert.equal(user.adgemSuspended, false);
+    });
+
+    await runTest('handleAdGemPlayerWebhook: fails closed with HTTP 500 if ADGEM_WEBHOOK_SECRET is unconfigured', async () => {
+        delete process.env.ADGEM_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser();
+        const payload = {
+            type: 'player.banned',
+            data: { player_id: String(user._id), app_id: 34014, ban_reason: 'test' }
+        };
+
+        const req = buildAdGemWebhookRequest(payload, 'any_secret');
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+        assert.equal(res.statusCode, 500);
+        assert.ok(res.body.error.includes('webhook secret is not configured'));
+        assert.equal(user.adgemSuspended, false);
+
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+    });
+
+    await runTest('handleAdGemPlayerWebhook: fails closed if App ID does not match expected App ID ("34014")', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser();
+        const payload = {
+            type: 'player.banned',
+            data: { player_id: String(user._id), app_id: 99999, ban_reason: 'test' }
+        };
+
+        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+        assert.equal(res.statusCode, 400);
+        assert.ok(res.body.error.includes('app_id mismatch or missing'));
+        assert.equal(user.adgemSuspended, false);
+    });
+
+    await runTest('handleAdGemPlayerWebhook: strictly requires 24 lowercase hex player_id', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        setupTestUser();
+
+        // 1. Missing player_id
+        const payloadNoId = {
+            type: 'player.banned',
+            data: { app_id: 34014, ban_reason: 'test' }
+        };
+        const req1 = buildAdGemWebhookRequest(payloadNoId, TEST_WEBHOOK_SECRET);
+        const res1 = createMockRes();
+        await handleAdGemPlayerWebhook(req1, res1);
+        assert.equal(res1.statusCode, 400);
+        assert.ok(res1.body.error.includes('Missing player_id'));
+
+        // 2. Non-hex username
+        const payloadUser = {
+            type: 'player.banned',
+            data: { player_id: 'worker_alice', app_id: 34014, ban_reason: 'test' }
+        };
+        const req2 = buildAdGemWebhookRequest(payloadUser, TEST_WEBHOOK_SECRET);
+        const res2 = createMockRes();
+        await handleAdGemPlayerWebhook(req2, res2);
+        assert.equal(res2.statusCode, 400);
+        assert.ok(res2.body.error.includes('24 lowercase hexadecimal characters'));
+    });
+
+    await runTest('handleAdGemPlayerWebhook: returns 404 if player_id is valid hex but does not exist in SmartExn', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        setupTestUser();
+
+        const payload = {
+            type: 'player.banned',
+            data: { player_id: '000000000000000000000000', app_id: 34014, ban_reason: 'test' }
+        };
+        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+        assert.equal(res.statusCode, 404);
+        assert.equal(res.body.success, false);
+    });
+
+    await runTest('handleAdGemPlayerWebhook: rejects unsupported event types and malformed payloads', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser();
+
+        // 1. Unsupported event type
+        const payloadBadType = {
+            type: 'player.deleted',
+            data: { player_id: String(user._id), app_id: 34014 }
+        };
+        const req1 = buildAdGemWebhookRequest(payloadBadType, TEST_WEBHOOK_SECRET);
+        const res1 = createMockRes();
+        await handleAdGemPlayerWebhook(req1, res1);
+        assert.equal(res1.statusCode, 400);
+        assert.ok(res1.body.error.includes('Unsupported or missing event type'));
+
+        // 2. Missing data object
+        const payloadNoData = {
+            type: 'player.banned'
+        };
+        const req2 = buildAdGemWebhookRequest(payloadNoData, TEST_WEBHOOK_SECRET);
+        const res2 = createMockRes();
+        await handleAdGemPlayerWebhook(req2, res2);
+        assert.equal(res2.statusCode, 400);
+        assert.ok(res2.body.error.includes('Missing or invalid data object'));
+    });
+
+    await runTest('handleAdGemPlayerWebhook: duplicate event delivery processes idempotently with HTTP 200', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser();
+        const payload = {
+            type: 'player.banned',
+            data: { player_id: String(user._id), app_id: 34014, ban_reason: 'repeated event test' }
+        };
+
+        const req1 = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res1 = createMockRes();
+        await handleAdGemPlayerWebhook(req1, res1);
+        assert.equal(res1.statusCode, 200);
+        assert.equal(user.adgemSuspended, true);
+
+        // Second duplicate delivery
+        const req2 = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res2 = createMockRes();
+        await handleAdGemPlayerWebhook(req2, res2);
+        assert.equal(res2.statusCode, 200);
+        assert.equal(user.adgemSuspended, true);
+    });
+
+    await runTest('Enforcement: Suspended player cannot launch AdGem offers', async () => {
+        const provider = setupAdGemProvider({ approvalStatus: 'Approved', status: 'ACTIVE', enabled: true, appId: '34014' });
+        const user = setupTestUser({ adgemSuspended: true });
+        const placement = {
+            _id: '607f1f77bcf86cd799439099',
+            providerKey: 'adgem',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            parentTabId: 'available_jobs',
+            userLevels: ['All Levels'],
+            targetCountries: ['All Countries']
+        };
+        db.placements.set(String(placement._id), placement);
+
+        const req = {
+            user: { id: String(user._id) },
+            params: { placementId: String(placement._id) }
+        };
+        const res = createMockRes();
+        await launchProviderPlacement(req, res);
+
+        assert.equal(res.statusCode, 403);
+        assert.ok(res.body.error.includes('suspended from AdGem'));
+    });
+
+    await runTest('Enforcement: Suspended player cannot see AdGem in getAvailablePlacements', async () => {
+        setupAdGemProvider({ approvalStatus: 'Approved', status: 'ACTIVE', enabled: true, appId: '34014' });
+        const user = setupTestUser({ adgemSuspended: true });
+        const placement = {
+            _id: '607f1f77bcf86cd799439099',
+            providerKey: 'adgem',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            parentTabId: 'available_jobs'
+        };
+        db.placements.set(String(placement._id), placement);
+
+        const req = {
+            user: { id: String(user._id) },
+            params: { parentTabId: 'available_jobs' }
+        };
+        const res = createMockRes();
+        await getAvailablePlacements(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.data.length, 0); // Excluded because adgemSuspended is true
+    });
+
+    await runTest('Enforcement: Suspended player cannot receive AdGem rewards', async () => {
+        const provider = setupAdGemProvider();
+        const user = setupTestUser({ adgemSuspended: true });
+        const payload = {
+            request_id: 'req_suspended_reward',
+            data: {
+                conversion_type: 'reward',
+                app_id: '12345',
+                conversion_id: 'conv_suspended_001',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        };
+
+        const req = buildAdGemRequest(payload, provider.postbackKey);
+        const res = createMockRes();
+        await handleAdGemPostback(req, res);
+
+        assert.equal(res.statusCode, 403);
+        assert.ok(res.body.error.includes('suspended from AdGem'));
+
+        // Zero balance mutation and zero transactions created
+        assert.equal(user.taskEarningsBalance, 25.0);
+        assert.equal(user.taskWalletBalance, 25.0);
+        assert.equal(user.walletBalance, 150.0);
+        assert.equal(db.transactions.size, 0);
+    });
+
+    await runTest('Restoration: Unsuspended player can access and earn from AdGem again', async () => {
+        const provider = setupAdGemProvider({ approvalStatus: 'Approved', status: 'ACTIVE', enabled: true, appId: '12345' });
+        // User was suspended, now unbanned
+        const user = setupTestUser({ adgemSuspended: false });
+        const placement = {
+            _id: '607f1f77bcf86cd799439099',
+            providerKey: 'adgem',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            parentTabId: 'available_jobs',
+            userLevels: ['All Levels'],
+            targetCountries: ['All Countries']
+        };
+        db.placements.set(String(placement._id), placement);
+
+        // 1. Placement visibility restored
+        const reqList = { user: { id: String(user._id) }, params: { parentTabId: 'available_jobs' } };
+        const resList = createMockRes();
+        await getAvailablePlacements(reqList, resList);
+        assert.equal(resList.statusCode, 200);
+        assert.equal(resList.body.data.length, 1);
+
+        // 2. Launch restored
+        const reqLaunch = { user: { id: String(user._id) }, params: { placementId: String(placement._id) } };
+        const resLaunch = createMockRes();
+        await launchProviderPlacement(reqLaunch, resLaunch);
+        assert.equal(resLaunch.statusCode, 200);
+        assert.ok(resLaunch.body.launchUrl.includes('api.adgem.com'));
+
+        // 3. Reward processing restored
+        const payloadReward = {
+            request_id: 'req_restored_reward',
+            data: {
+                conversion_type: 'reward',
+                app_id: '12345',
+                conversion_id: 'conv_restored_001',
+                player_id: String(user._id),
+                amount: 105,
+                payout: 1.50
+            }
+        };
+        const reqReward = buildAdGemRequest(payloadReward, provider.postbackKey);
+        const resReward = createMockRes();
+        await handleAdGemPostback(reqReward, resReward);
+        assert.equal(resReward.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 26.05);
+        assert.equal(db.transactions.size, 1);
+    });
+
+    await runTest('Provider Isolation: Other providers (CPX Research) remain unaffected by AdGem suspension', async () => {
+        // Provider setup
+        setupAdGemProvider({ approvalStatus: 'Approved', status: 'ACTIVE', enabled: true, appId: '12345' });
+        const cpxProvider = {
+            providerKey: 'cpx_research',
+            name: 'CPX Research',
+            category: 'survey',
+            group: 'Group B: Survey Routers',
+            enabled: true,
+            status: 'ACTIVE',
+            appId: '9876',
+            secretKey: 'test_cpx_secret_key_123',
+            iframeUrlTemplate: 'https://offers.cpx-research.com/index.php?app_id={appId}&ext_user_id={userId}'
+        };
+        db.providers.set('cpx_research', cpxProvider);
+
+        // User is AdGem-suspended, but NOT globally restricted
+        const user = setupTestUser({ adgemSuspended: true });
+
+        const adgemPlacement = {
+            _id: '607f1f77bcf86cd799439001',
+            providerKey: 'adgem',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            parentTabId: 'available_jobs'
+        };
+        const cpxPlacement = {
+            _id: '607f1f77bcf86cd799439002',
+            providerKey: 'cpx_research',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            parentTabId: 'available_jobs',
+            userLevels: ['All Levels'],
+            targetCountries: ['All Countries']
+        };
+        db.placements.set(String(adgemPlacement._id), adgemPlacement);
+        db.placements.set(String(cpxPlacement._id), cpxPlacement);
+
+        // 1. In getAvailablePlacements: AdGem is filtered out, but CPX Research is included
+        const reqList = { user: { id: String(user._id) }, params: { parentTabId: 'available_jobs' } };
+        const resList = createMockRes();
+        await getAvailablePlacements(reqList, resList);
+        assert.equal(resList.statusCode, 200);
+        assert.equal(resList.body.data.length, 1);
+        assert.equal(resList.body.data[0].providerKey, 'cpx_research');
+
+        // 2. In launchProviderPlacement: CPX Research launches successfully
+        const reqLaunch = { user: { id: String(user._id) }, params: { placementId: String(cpxPlacement._id) } };
+        const resLaunch = createMockRes();
+        await launchProviderPlacement(reqLaunch, resLaunch);
+        assert.equal(resLaunch.statusCode, 200);
+        assert.ok(resLaunch.body.launchUrl.includes('cpx-research.com'));
+
+        // 3. User global status and balances untouched
+        assert.equal(user.status, 'Active');
+        assert.equal(user.walletBalance, 150.0);
     });
 
     console.log(`\n========================================================`);

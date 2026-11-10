@@ -166,6 +166,11 @@ export const getAvailablePlacements = async (req, res) => {
                 continue;
             }
 
+            // AdGem player suspension check: suspended players cannot see or launch AdGem offers
+            if (placement.providerKey === 'adgem' && (user.adgemSuspended === true || user.restrictions?.adgemSuspended === true)) {
+                continue;
+            }
+
             // Evaluate worker eligibility (user targeting, country targeting, deterministic rollout)
             const evalResult = evaluatePlacementEligibility(user, placement);
             if (!evalResult.eligible) {
@@ -272,8 +277,13 @@ export const launchProviderPlacement = async (req, res) => {
         if (!provider || provider.enabled !== true || provider.status !== 'ACTIVE') {
             return res.status(400).json({ success: false, error: 'Offerwall provider is operationally disabled or not active' });
         }
-        if (placement.providerKey === 'adgem' && provider.approvalStatus !== 'Approved') {
-            return res.status(403).json({ success: false, error: 'AdGem provider is pending approval or not approved' });
+        if (placement.providerKey === 'adgem') {
+            if (user.adgemSuspended === true || user.restrictions?.adgemSuspended === true) {
+                return res.status(403).json({ success: false, error: 'User is suspended from AdGem offers' });
+            }
+            if (provider.approvalStatus !== 'Approved') {
+                return res.status(403).json({ success: false, error: 'AdGem provider is pending approval or not approved' });
+            }
         }
 
         // 4. Generate Validated Provider Session

@@ -4,6 +4,7 @@ import {
     handlePostback, 
     handleTheoremReachEventWebhook,
     handleAdGemPostback,
+    handleAdGemPlayerWebhook,
     getOfferwallProviders, 
     updateOfferwallProvider, 
     getOfferwallLogs, 
@@ -71,6 +72,12 @@ router.post('/events', handleTheoremReachEventWebhook);
 // Dedicated Inbound AdGem v3 Postback Webhook Endpoint
 router.post('/adgem', handleAdGemPostback);
 router.all('/adgem', handleAdGemPostback);
+
+// Dedicated Inbound AdGem Suspended Player Webhook Endpoints
+router.post('/adgem/events', handleAdGemPlayerWebhook);
+router.all('/adgem/events', handleAdGemPlayerWebhook);
+router.post('/adgem/webhook', handleAdGemPlayerWebhook);
+router.all('/adgem/webhook', handleAdGemPlayerWebhook);
 
 // Generic & Network-Specific Postback Webhook Endpoints (supports both GET and POST)
 router.all('/:provider', handlePostback);

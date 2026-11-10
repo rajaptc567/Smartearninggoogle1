@@ -114,6 +114,18 @@ const UserSchema = new mongoose.Schema({
         excludeFromTicker: { type: Boolean, default: false },
         loginBlocked: { type: Boolean, default: false },
         purchaseBlocked: { type: Boolean, default: false },
+        adgemSuspended: { type: Boolean, default: false },
+    },
+    adgemSuspended: {
+        type: Boolean,
+        default: false,
+    },
+    adgemSuspendedAt: {
+        type: Date,
+    },
+    adgemSuspensionReason: {
+        type: String,
+        default: '',
     },
     disputeLossCount: { type: Number, default: 0 },
     trustScore: { type: Number, default: 100 },
