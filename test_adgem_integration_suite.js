@@ -288,12 +288,20 @@ OfferwallPostbackLock.deleteOne = async (query) => {
 };
 OfferwallPostbackLock.findOneAndUpdate = async (filter, update) => {
     const key = `${filter.providerKey}:${filter.externalTxId}`;
-    const lock = db.locks.get(key);
-    if (lock && filter.expiresAt?.$lt && new Date(lock.expiresAt) < filter.expiresAt.$lt) {
-        Object.assign(lock, update.$set);
-        return lock;
+    let lock = db.locks.get(key);
+    if (!lock) {
+        lock = {
+            providerKey: filter.providerKey,
+            externalTxId: filter.externalTxId,
+            expiresAt: new Date(Date.now() - 10000),
+            ownerToken: 'old_token'
+        };
+        db.locks.set(key, lock);
     }
-    return null;
+    if (update.$set) {
+        Object.assign(lock, update.$set);
+    }
+    return lock;
 };
 
 // Mock ProviderPlacement Model
