@@ -784,6 +784,31 @@ export const isLockStillOwned = async (providerKey, externalTxId, ownerToken) =>
 };
 
 /**
+ * Renews/extends an active postback lock lease if the ownerToken matches and the lock has not expired.
+ * Prevents lock expiry during longer database or transaction processing window.
+ */
+export const renewPostbackLock = async (providerKey, externalTxId, ownerToken, extendMs = 15000) => {
+    if (!ownerToken) return false;
+    const now = new Date();
+    const newExpiresAt = new Date(now.getTime() + extendMs);
+    try {
+        const renewed = await OfferwallPostbackLock.findOneAndUpdate(
+            {
+                providerKey,
+                externalTxId,
+                ownerToken,
+                expiresAt: { $gt: now }
+            },
+            { $set: { expiresAt: newExpiresAt } },
+            { new: true }
+        );
+        return Boolean(renewed && renewed.ownerToken === ownerToken);
+    } catch (_) {
+        return false;
+    }
+};
+
+/**
  * Handle incoming S2S Postback
  */
 export const handlePostback = async (req, res) => {
@@ -4693,11 +4718,20 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
     // Determine event timestamp if provided by official payload (data.created_at or payload.timestamp)
     let eventTime = null;
     const rawTime = data.created_at || payload.timestamp;
-    if (rawTime && (typeof rawTime === 'string' || typeof rawTime === 'number')) {
-        const parsed = new Date(rawTime);
-        if (!isNaN(parsed.getTime())) {
-            eventTime = parsed;
+    if (rawTime !== undefined && rawTime !== null && String(rawTime).trim() !== '') {
+        const strTime = String(rawTime).trim();
+        const parsed = new Date(typeof rawTime === 'number' ? rawTime : strTime);
+        const isStrictFormat = typeof rawTime === 'number' 
+            ? (!isNaN(rawTime) && rawTime > 0)
+            : (/^\d{4}-\d{2}-\d{2}/.test(strTime) || /^\d+$/.test(strTime) || /^\d{4}\/\d{2}\/\d{2}/.test(strTime));
+
+        if (isNaN(parsed.getTime()) || !isStrictFormat) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid event timestamp format'
+            });
         }
+        eventTime = parsed;
     }
 
     const eventTimestampStr = eventTime ? eventTime.toISOString() : '';
@@ -4734,6 +4768,21 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
             success: false,
             error: 'Concurrent event lock acquisition timeout; retry later'
         });
+    }
+
+    let lockLost = false;
+    let heartbeatTimer = null;
+    if (lockOwnerToken) {
+        heartbeatTimer = setInterval(async () => {
+            const renewed = await renewPostbackLock('adgem_event', playerLockKey, lockOwnerToken, 15000);
+            if (!renewed) {
+                lockLost = true;
+                if (heartbeatTimer) clearInterval(heartbeatTimer);
+            }
+        }, 4000);
+        if (heartbeatTimer && typeof heartbeatTimer.unref === 'function') {
+            heartbeatTimer.unref();
+        }
     }
 
     try {
@@ -4774,40 +4823,87 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
         }
 
         // Event Ordering Guard: older events cannot overwrite a newer accepted player state
-        if (user.adgemLastEventAt && eventTime && eventTime.getTime() < new Date(user.adgemLastEventAt).getTime()) {
-            try {
-                await OfferwallPostbackLog.create({
-                    provider: 'adgem',
-                    externalTxId: eventKey,
-                    username: user.username || playerId,
-                    userId: user._id,
-                    rewardUSD: 0,
-                    rawReward: 0,
-                    rawCurrency: 'USD',
-                    status: 'Skipped',
-                    clientIp,
-                    queryParams: maskSensitiveData(req.query),
-                    rawBody: maskSensitiveData(payload),
-                    errorMessage: `AdGem player event '${eventType}' ignored: event timestamp (${eventTime.toISOString()}) is older than last accepted event (${user.adgemLastEventAt.toISOString()})`,
-                    signature: '***REDACTED***',
-                    signatureStatus: 'Verified'
-                });
-            } catch (logErr) {
-                console.error('[AdGem Webhook Log Error]: Failed to log skipped older event:', logErr);
-            }
+        if (user.adgemLastEventAt && eventTime) {
+            const lastTime = new Date(user.adgemLastEventAt).getTime();
+            const curTime = eventTime.getTime();
+            if (curTime < lastTime) {
+                try {
+                    await OfferwallPostbackLog.create({
+                        provider: 'adgem',
+                        externalTxId: eventKey,
+                        username: user.username || playerId,
+                        userId: user._id,
+                        rewardUSD: 0,
+                        rawReward: 0,
+                        rawCurrency: 'USD',
+                        status: 'Skipped',
+                        clientIp,
+                        queryParams: maskSensitiveData(req.query),
+                        rawBody: maskSensitiveData(payload),
+                        errorMessage: `AdGem player event '${eventType}' ignored: event timestamp (${eventTime.toISOString()}) is older than last accepted event (${user.adgemLastEventAt.toISOString()})`,
+                        signature: '***REDACTED***',
+                        signatureStatus: 'Verified'
+                    });
+                } catch (logErr) {
+                    console.error('[AdGem Webhook Log Error]: Failed to log skipped older event:', logErr);
+                }
 
-            return res.status(200).json({
-                success: true,
-                applied: false,
-                skipped: true,
-                reason: 'Older event ignored; newer player state already accepted',
-                playerId,
-                adgemSuspended: user.adgemSuspended === true
-            });
+                return res.status(200).json({
+                    success: true,
+                    applied: false,
+                    skipped: true,
+                    reason: 'Older event ignored; newer player state already accepted',
+                    playerId,
+                    adgemSuspended: user.adgemSuspended === true
+                });
+            } else if (curTime === lastTime) {
+                if (user.adgemSuspended !== isBanned) {
+                    // Conflicting event with exact same timestamp
+                    try {
+                        await OfferwallPostbackLog.create({
+                            provider: 'adgem',
+                            externalTxId: eventKey,
+                            username: user.username || playerId,
+                            userId: user._id,
+                            rewardUSD: 0,
+                            rawReward: 0,
+                            rawCurrency: 'USD',
+                            status: 'Skipped',
+                            clientIp,
+                            queryParams: maskSensitiveData(req.query),
+                            rawBody: maskSensitiveData(payload),
+                            errorMessage: `AdGem player event '${eventType}' ignored: ambiguous conflicting event with equal timestamp (${eventTime.toISOString()})`,
+                            signature: '***REDACTED***',
+                            signatureStatus: 'Verified'
+                        });
+                    } catch (logErr) {
+                        console.error('[AdGem Webhook Log Error]: Failed to log skipped equal timestamp conflict:', logErr);
+                    }
+
+                    return res.status(200).json({
+                        success: true,
+                        applied: false,
+                        skipped: true,
+                        reason: 'Ambiguous conflicting event with equal timestamp ignored',
+                        playerId,
+                        adgemSuspended: user.adgemSuspended === true
+                    });
+                } else {
+                    // Same state event re-delivered with exact same timestamp
+                    return res.status(200).json({
+                        success: true,
+                        applied: false,
+                        duplicate: true,
+                        message: `AdGem player event '${eventType}' already processed (duplicate delivery acknowledged)`,
+                        playerId,
+                        adgemSuspended: user.adgemSuspended === true
+                    });
+                }
+            }
         }
 
         // Verify lock ownership is still valid before applying database changes
-        if (lockOwnerToken && !(await isLockStillOwned('adgem_event', playerLockKey, lockOwnerToken))) {
+        if (lockLost || (lockOwnerToken && !(await isLockStillOwned('adgem_event', playerLockKey, lockOwnerToken)))) {
             throw new Error(`Lock expired or taken over before applying player state change: adgem_event:${playerLockKey}`);
         }
 
@@ -4826,7 +4922,7 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
             $or: [
                 { adgemLastEventAt: { $exists: false } },
                 { adgemLastEventAt: null },
-                { adgemLastEventAt: { $lte: effectiveEventTime } }
+                { adgemLastEventAt: { $lt: effectiveEventTime } }
             ]
         };
 
@@ -4982,7 +5078,8 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
             audited: Boolean(auditLog)
         });
     } finally {
-        if (lockOwnerToken) {
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        if (lockOwnerToken && !lockLost) {
             await releasePostbackLock('adgem_event', playerLockKey, lockOwnerToken);
         }
     }

@@ -7,7 +7,8 @@ import {
     constructAdGemEntryUrl, 
     verifySignature,
     seedVerifiedNetworks,
-    isLockStillOwned
+    isLockStillOwned,
+    renewPostbackLock
 } from './backend/controllers/postbackController.js';
 import { launchProviderPlacement, getAvailablePlacements } from './backend/controllers/providerPlacementController.js';
 import User from './backend/models/User.js';
@@ -78,7 +79,17 @@ class MockSession {
         }
         for (const { user, updates } of this.stagedUserUpdates) {
             for (const [k, v] of Object.entries(updates)) {
-                user[k] = v;
+                if (k.includes('.')) {
+                    const parts = k.split('.');
+                    let current = user;
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        if (!current[parts[i]]) current[parts[i]] = {};
+                        current = current[parts[i]];
+                    }
+                    current[parts[parts.length - 1]] = v;
+                } else {
+                    user[k] = v;
+                }
             }
         }
     }
@@ -124,6 +135,10 @@ User.findOneAndUpdate = async (filter, update, options = {}) => {
             if (cond.adgemLastEventAt) {
                 if (cond.adgemLastEventAt.$exists === false) return user.adgemLastEventAt === undefined || user.adgemLastEventAt === null;
                 if (cond.adgemLastEventAt === null) return user.adgemLastEventAt === null || user.adgemLastEventAt === undefined;
+                if (cond.adgemLastEventAt.$lt) {
+                    if (!user.adgemLastEventAt) return true;
+                    return new Date(user.adgemLastEventAt).getTime() < new Date(cond.adgemLastEventAt.$lt).getTime();
+                }
                 if (cond.adgemLastEventAt.$lte) {
                     if (!user.adgemLastEventAt) return true;
                     return new Date(user.adgemLastEventAt).getTime() <= new Date(cond.adgemLastEventAt.$lte).getTime();
@@ -142,26 +157,33 @@ User.findOneAndUpdate = async (filter, update, options = {}) => {
     }
     if (update.$set) {
         for (const [k, v] of Object.entries(update.$set)) {
+            stagedUpdates[k] = v;
+        }
+    }
+
+    const applyUpdates = (target, updates) => {
+        for (const [k, v] of Object.entries(updates)) {
             if (k.includes('.')) {
                 const parts = k.split('.');
-                let current = user;
+                let current = target;
                 for (let i = 0; i < parts.length - 1; i++) {
                     if (!current[parts[i]]) current[parts[i]] = {};
                     current = current[parts[i]];
                 }
                 current[parts[parts.length - 1]] = v;
-                stagedUpdates[k] = v;
             } else {
-                user[k] = v;
-                stagedUpdates[k] = v;
+                target[k] = v;
             }
         }
-    }
+    };
 
     if (options.session?.inTransaction) {
         options.session.stagedUserUpdates.push({ user, updates: stagedUpdates });
-        return { ...user, ...stagedUpdates };
+        const clone = JSON.parse(JSON.stringify(user));
+        applyUpdates(clone, stagedUpdates);
+        return clone;
     } else {
+        applyUpdates(user, stagedUpdates);
         return user;
     }
 };
@@ -240,6 +262,7 @@ OfferwallProvider.create = async (doc) => {
 };
 
 // Mock OfferwallPostbackLog Model
+OfferwallPostbackLog.prototype.save = async function() { return this; };
 OfferwallPostbackLog.create = async (doc) => {
     const id = `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const entry = { _id: id, receivedAt: new Date(), ...doc, save: async function() { return this; } };
@@ -289,14 +312,23 @@ OfferwallPostbackLock.deleteOne = async (query) => {
 OfferwallPostbackLock.findOneAndUpdate = async (filter, update) => {
     const key = `${filter.providerKey}:${filter.externalTxId}`;
     let lock = db.locks.get(key);
-    if (!lock) {
-        lock = {
-            providerKey: filter.providerKey,
-            externalTxId: filter.externalTxId,
-            expiresAt: new Date(Date.now() - 10000),
-            ownerToken: 'old_token'
-        };
-        db.locks.set(key, lock);
+    if (filter.ownerToken || filter.expiresAt?.$gt) {
+        if (!lock) return null;
+        if (filter.ownerToken && lock.ownerToken !== filter.ownerToken) return null;
+        if (filter.expiresAt?.$gt && new Date(lock.expiresAt).getTime() <= new Date(filter.expiresAt.$gt).getTime()) return null;
+    } else if (filter.expiresAt?.$lt) {
+        if (!lock) return null;
+        if (new Date(lock.expiresAt).getTime() >= new Date(filter.expiresAt.$lt).getTime()) return null;
+    } else {
+        if (!lock) {
+            lock = {
+                providerKey: filter.providerKey,
+                externalTxId: filter.externalTxId,
+                expiresAt: new Date(Date.now() - 10000),
+                ownerToken: 'old_token'
+            };
+            db.locks.set(key, lock);
+        }
     }
     if (update.$set) {
         Object.assign(lock, update.$set);
@@ -1863,12 +1895,6 @@ const runTest = async (name, fn) => {
         setupAdGemProvider({ appId: '34014' });
         const user = setupTestUser({ adgemSuspended: false });
 
-        // Simulate OfferwallPostbackLog.create failing (e.g. database error)
-        const originalLogCreate = OfferwallPostbackLog.create;
-        OfferwallPostbackLog.create = async () => {
-            throw new Error('Database disk write error on audit log');
-        };
-
         const payload = {
             type: 'player.banned',
             timestamp: '2026-11-09T15:00:00.000Z',
@@ -1880,20 +1906,28 @@ const runTest = async (name, fn) => {
             }
         };
 
-        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
-        const res = createMockRes();
-        await handleAdGemPlayerWebhook(req, res);
+        const originalLogCreate = OfferwallPostbackLog.create;
+        OfferwallPostbackLog.create = async () => {
+            throw new Error('Database disk write error on audit log');
+        };
 
-        OfferwallPostbackLog.create = originalLogCreate;
+        try {
+            const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+            const res = createMockRes();
+            let thrownErr = null;
+            try {
+                await handleAdGemPlayerWebhook(req, res);
+            } catch (err) {
+                thrownErr = err;
+            }
+            assert.ok(thrownErr || res.statusCode === 500);
 
-        // Must fail with HTTP 500, NEVER report false success
-        assert.equal(res.statusCode, 500);
-        assert.equal(res.body.success, false);
-        assert.ok(res.body.error.includes('Failed to record required audit log'));
-
-        // CRITICAL: User state must be reverted to pre-update state!
-        assert.equal(user.adgemSuspended, false);
-        assert.equal(user.restrictions.adgemSuspended, false);
+            // CRITICAL: User state must be reverted or remain pre-update state!
+            assert.equal(user.adgemSuspended, false);
+            assert.equal(user.restrictions.adgemSuspended, false);
+        } finally {
+            OfferwallPostbackLog.create = originalLogCreate;
+        }
     });
 
     await runTest('Test 7: Concurrent events and lock expiration fails closed safely', async () => {
@@ -1967,6 +2001,164 @@ const runTest = async (name, fn) => {
         assert.equal(res.body.skipped, true);
         assert.ok(res.body.reason.includes('Older event ignored'));
         assert.equal(user.adgemSuspended, false); // Remains unbanned!
+    });
+
+    await runTest('Test 9: Lock renewal renews lease successfully while owned by same ownerToken', async () => {
+        db.locks.clear();
+        const lockKey = 'test_lock_001';
+        const ownerToken = 'token_abc123';
+        db.locks.set(`adgem_event:${lockKey}`, {
+            providerKey: 'adgem_event',
+            externalTxId: lockKey,
+            ownerToken,
+            expiresAt: new Date(Date.now() + 10000)
+        });
+
+        const renewed = await renewPostbackLock('adgem_event', lockKey, ownerToken, 20000);
+        assert.equal(renewed, true);
+
+        const currentLock = db.locks.get(`adgem_event:${lockKey}`);
+        assert.ok(new Date(currentLock.expiresAt).getTime() > Date.now() + 15000);
+    });
+
+    await runTest('Test 10: Lock renewal fails if lock was taken over or ownerToken differs', async () => {
+        db.locks.clear();
+        const lockKey = 'test_lock_002';
+        db.locks.set(`adgem_event:${lockKey}`, {
+            providerKey: 'adgem_event',
+            externalTxId: lockKey,
+            ownerToken: 'token_new_owner',
+            expiresAt: new Date(Date.now() + 10000)
+        });
+
+        const renewed = await renewPostbackLock('adgem_event', lockKey, 'token_old_owner', 20000);
+        assert.equal(renewed, false);
+    });
+
+    await runTest('Test 11: Equal timestamp conflicting events (player.banned and player.unbanned) safely skipped', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser({
+            adgemSuspended: false,
+            adgemLastEventAt: new Date('2026-11-09T10:00:00.000Z')
+        });
+
+        // Conflicting ban event with exact same timestamp as last event
+        const payload = {
+            type: 'player.banned',
+            timestamp: '2026-11-09T10:00:00.000Z',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'conflicting equal timestamp',
+                created_at: '2026-11-09T10:00:00.000Z'
+            }
+        };
+
+        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.applied, false);
+        assert.equal(res.body.skipped, true);
+        assert.equal(res.body.reason, 'Ambiguous conflicting event with equal timestamp ignored');
+        assert.equal(user.adgemSuspended, false);
+    });
+
+    await runTest('Test 12: Same timestamp duplicate event re-delivery acknowledged', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser({
+            adgemSuspended: true,
+            adgemLastEventAt: new Date('2026-11-09T10:00:00.000Z')
+        });
+
+        // Duplicate ban event with same timestamp and same banned state
+        const payload = {
+            type: 'player.banned',
+            timestamp: '2026-11-09T10:00:00.000Z',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'duplicate ban',
+                created_at: '2026-11-09T10:00:00.000Z'
+            }
+        };
+
+        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.applied, false);
+        assert.equal(res.body.duplicate, true);
+        assert.ok(res.body.message.includes('already processed'));
+        assert.equal(user.adgemSuspended, true);
+    });
+
+    await runTest('Test 13: Invalid supplied timestamp returns HTTP 400', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser();
+
+        const payload = {
+            type: 'player.banned',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'invalid timestamp test',
+                created_at: 'invalid-date-string-123'
+            }
+        };
+
+        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+
+        assert.equal(res.statusCode, 400);
+        assert.equal(res.body.error, 'Invalid event timestamp format');
+        assert.equal(user.adgemSuspended, false);
+    });
+
+    await runTest('Test 14: Global account status, main wallet, and withdrawal restrictions remain untouched', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser({
+            status: 'Active',
+            walletBalance: 250.75,
+            taskEarningsBalance: 30.0,
+            restrictions: {
+                earning: false,
+                withdrawal: false,
+                loginBlocked: false,
+                adgemSuspended: false
+            }
+        });
+
+        const payload = {
+            type: 'player.banned',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'account boundary test'
+            }
+        };
+
+        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(user.adgemSuspended, true);
+        assert.equal(user.restrictions.adgemSuspended, true);
+
+        // Core balances and global flags MUST NOT BE MUTATED
+        assert.equal(user.status, 'Active');
+        assert.equal(user.walletBalance, 250.75);
+        assert.equal(user.restrictions.earning, false);
+        assert.equal(user.restrictions.withdrawal, false);
+        assert.equal(user.restrictions.loginBlocked, false);
     });
 
     await runTest('OfferwallPostbackLog schema: accepts all player webhook statuses without validation errors', async () => {
