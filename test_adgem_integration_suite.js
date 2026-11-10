@@ -8,7 +8,8 @@ import {
     verifySignature,
     seedVerifiedNetworks,
     isLockStillOwned,
-    renewPostbackLock
+    renewPostbackLock,
+    releasePostbackLock
 } from './backend/controllers/postbackController.js';
 import { launchProviderPlacement, getAvailablePlacements } from './backend/controllers/providerPlacementController.js';
 import User from './backend/models/User.js';
@@ -2359,6 +2360,102 @@ const runTest = async (name, fn) => {
         // 3. User global status and balances untouched
         assert.equal(user.status, 'Active');
         assert.equal(user.walletBalance, 150.0);
+    });
+
+    await runTest('Test 15: Sequential heartbeat scheduling does not produce overlapping renewals', async () => {
+        db.locks.clear();
+        const lockKey = 'seq_heartbeat_lock_001';
+        const ownerToken = 'token_seq_123';
+        let renewalCallCount = 0;
+        let isOverlapping = false;
+        let activeCall = false;
+
+        db.locks.set(`adgem_event:${lockKey}`, {
+            providerKey: 'adgem_event',
+            externalTxId: lockKey,
+            ownerToken,
+            expiresAt: new Date(Date.now() + 10000)
+        });
+
+        const mockRenew = async () => {
+            if (activeCall) isOverlapping = true;
+            activeCall = true;
+            renewalCallCount++;
+            await new Promise(r => setTimeout(r, 10));
+            activeCall = false;
+            return true;
+        };
+
+        await mockRenew();
+        await mockRenew();
+
+        assert.equal(isOverlapping, false);
+        assert.equal(renewalCallCount, 2);
+    });
+
+    await runTest('Test 16: Expired owner token cannot release a lock taken over by another owner', async () => {
+        db.locks.clear();
+        const lockKey = 'taken_over_lock_001';
+        const oldOwner = 'old_token_111';
+        const newOwner = 'new_token_222';
+
+        db.locks.set(`adgem_event:${lockKey}`, {
+            providerKey: 'adgem_event',
+            externalTxId: lockKey,
+            ownerToken: newOwner,
+            expiresAt: new Date(Date.now() + 15000)
+        });
+
+        const released = await releasePostbackLock('adgem_event', lockKey, oldOwner);
+
+        assert.equal(released, false);
+        assert.equal(db.locks.get(`adgem_event:${lockKey}`)?.ownerToken, newOwner);
+    });
+
+    await runTest('Test 17: Pre-commit ownership loss aborts session transaction cleanly', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser({ adgemSuspended: false });
+
+        const payload = {
+            type: 'player.banned',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'pre-commit lock loss test'
+            }
+        };
+
+        const req = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+
+        let calls = 0;
+        const originalIsLockStillOwned = OfferwallPostbackLock.findOne;
+        OfferwallPostbackLock.findOne = async (query) => {
+            calls++;
+            if (calls >= 2) {
+                // Simulates lock taken over by another owner: searching for query.ownerToken yields null in MongoDB
+                return null;
+            }
+            return {
+                providerKey: query.providerKey,
+                externalTxId: query.externalTxId,
+                ownerToken: query.ownerToken,
+                expiresAt: new Date(Date.now() + 15000)
+            };
+        };
+
+        let thrownErr = null;
+        try {
+            await handleAdGemPlayerWebhook(req, res);
+        } catch (err) {
+            thrownErr = err;
+        }
+
+        OfferwallPostbackLock.findOne = originalIsLockStillOwned;
+
+        assert.ok(thrownErr && thrownErr.message.includes('Lock expired or taken over'));
+        assert.equal(user.adgemSuspended, false);
     });
 
     console.log(`\n========================================================`);

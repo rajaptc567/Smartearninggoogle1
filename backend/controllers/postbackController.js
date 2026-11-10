@@ -780,7 +780,7 @@ export const releasePostbackLock = async (providerKey, externalTxId, ownerToken 
 export const isLockStillOwned = async (providerKey, externalTxId, ownerToken) => {
     if (!ownerToken) return false;
     const currentLock = await OfferwallPostbackLock.findOne({ providerKey, externalTxId, ownerToken });
-    return Boolean(currentLock && (!currentLock.expiresAt || new Date(currentLock.expiresAt) > new Date()));
+    return Boolean(currentLock && currentLock.ownerToken === ownerToken && (!currentLock.expiresAt || new Date(currentLock.expiresAt) > new Date()));
 };
 
 /**
@@ -4771,18 +4771,46 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
     }
 
     let lockLost = false;
-    let heartbeatTimer = null;
-    if (lockOwnerToken) {
-        heartbeatTimer = setInterval(async () => {
-            const renewed = await renewPostbackLock('adgem_event', playerLockKey, lockOwnerToken, 15000);
-            if (!renewed) {
-                lockLost = true;
-                if (heartbeatTimer) clearInterval(heartbeatTimer);
+    let heartbeatActive = true;
+    let heartbeatTimeoutId = null;
+    let isRenewing = false;
+
+    const scheduleHeartbeat = () => {
+        if (!heartbeatActive || !lockOwnerToken) return;
+        heartbeatTimeoutId = setTimeout(async () => {
+            if (!heartbeatActive || isRenewing) return;
+            isRenewing = true;
+            try {
+                const renewed = await renewPostbackLock('adgem_event', playerLockKey, lockOwnerToken, 15000);
+                if (!renewed) {
+                    lockLost = true;
+                    heartbeatActive = false;
+                    return;
+                }
+            } catch (_) {
+                // Ignore transient network errors on heartbeat renewal attempt
+            } finally {
+                isRenewing = false;
+                if (heartbeatActive) {
+                    scheduleHeartbeat();
+                }
             }
         }, 4000);
-        if (heartbeatTimer && typeof heartbeatTimer.unref === 'function') {
-            heartbeatTimer.unref();
+        if (heartbeatTimeoutId && typeof heartbeatTimeoutId.unref === 'function') {
+            heartbeatTimeoutId.unref();
         }
+    };
+
+    const stopHeartbeat = () => {
+        heartbeatActive = false;
+        if (heartbeatTimeoutId) {
+            clearTimeout(heartbeatTimeoutId);
+            heartbeatTimeoutId = null;
+        }
+    };
+
+    if (lockOwnerToken) {
+        scheduleHeartbeat();
     }
 
     try {
@@ -4904,6 +4932,7 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
 
         // Verify lock ownership is still valid before applying database changes
         if (lockLost || (lockOwnerToken && !(await isLockStillOwned('adgem_event', playerLockKey, lockOwnerToken)))) {
+            lockLost = true;
             throw new Error(`Lock expired or taken over before applying player state change: adgem_event:${playerLockKey}`);
         }
 
@@ -4973,6 +5002,15 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
                         signature: '***REDACTED***',
                         signatureStatus: 'Verified'
                     }, { session });
+
+                    // Recheck lock ownership immediately before committing transaction
+                    if (lockLost || (lockOwnerToken && !(await isLockStillOwned('adgem_event', playerLockKey, lockOwnerToken)))) {
+                        lockLost = true;
+                        await session.abortTransaction();
+                        await session.endSession();
+                        throw new Error(`Lock expired or taken over before commitTransaction: adgem_event:${playerLockKey}`);
+                    }
+
                     await session.commitTransaction();
                     await session.endSession();
                 }
@@ -5078,7 +5116,7 @@ export const handleAdGemPlayerWebhook = async (req, res) => {
             audited: Boolean(auditLog)
         });
     } finally {
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        stopHeartbeat();
         if (lockOwnerToken && !lockLost) {
             await releasePostbackLock('adgem_event', playerLockKey, lockOwnerToken);
         }
