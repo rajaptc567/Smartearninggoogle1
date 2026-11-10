@@ -118,6 +118,20 @@ User.findOneAndUpdate = async (filter, update, options = {}) => {
     if (filter['restrictions.loginBlocked']?.$ne && user.restrictions?.loginBlocked === true) return null;
     if (filter.adgemSuspended?.$ne && user.adgemSuspended === filter.adgemSuspended.$ne) return null;
     if (filter['restrictions.adgemSuspended']?.$ne && user.restrictions?.adgemSuspended === filter['restrictions.adgemSuspended'].$ne) return null;
+    if (filter.$or) {
+        const matchesOr = filter.$or.some(cond => {
+            if (cond.adgemLastEventAt) {
+                if (cond.adgemLastEventAt.$exists === false) return user.adgemLastEventAt === undefined || user.adgemLastEventAt === null;
+                if (cond.adgemLastEventAt === null) return user.adgemLastEventAt === null || user.adgemLastEventAt === undefined;
+                if (cond.adgemLastEventAt.$lte) {
+                    if (!user.adgemLastEventAt) return true;
+                    return new Date(user.adgemLastEventAt).getTime() <= new Date(cond.adgemLastEventAt.$lte).getTime();
+                }
+            }
+            return false;
+        });
+        if (!matchesOr) return null;
+    }
 
     const stagedUpdates = {};
     if (update.$inc) {
@@ -231,11 +245,15 @@ OfferwallPostbackLog.create = async (doc) => {
     db.logs.set(id, entry);
     return entry;
 };
-OfferwallPostbackLog.prototype.save = async function() {
-    const id = this._id || `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    this._id = id;
-    db.logs.set(id, this);
-    return this;
+OfferwallPostbackLog.findOne = async (query = {}) => {
+    for (const log of db.logs.values()) {
+        let match = true;
+        if (query.provider && log.provider !== query.provider) match = false;
+        if (query.externalTxId && log.externalTxId !== query.externalTxId) match = false;
+        if (query.userId && String(log.userId) !== String(query.userId)) match = false;
+        if (match) return log;
+    }
+    return null;
 };
 
 // Mock OfferwallPostbackLock Model
@@ -1467,6 +1485,7 @@ const runTest = async (name, fn) => {
         setupAdGemProvider({ appId: '34014' });
         const user = setupTestUser({
             adgemSuspended: true,
+            adgemSuspendedAt: new Date('2026-11-09T10:00:00.000Z'),
             restrictions: { earning: false, loginBlocked: false, adgemSuspended: true }
         });
         const payload = {
@@ -1488,9 +1507,10 @@ const runTest = async (name, fn) => {
         assert.equal(res.body.success, true);
         assert.equal(res.body.adgemSuspended, false);
 
-        // Verify AdGem suspension is cleared
+        // Verify AdGem suspension is cleared AND adgemSuspendedAt is null
         assert.equal(user.adgemSuspended, false);
         assert.equal(user.restrictions.adgemSuspended, false);
+        assert.strictEqual(user.adgemSuspendedAt, null);
         assert.equal(user.adgemSuspensionReason, 'reviewed and cleared by support');
 
         // Global account status untouched
@@ -1641,7 +1661,13 @@ const runTest = async (name, fn) => {
         const user = setupTestUser();
         const payload = {
             type: 'player.banned',
-            data: { player_id: String(user._id), app_id: 34014, ban_reason: 'repeated event test' }
+            timestamp: '2026-11-09T14:00:00.000Z',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'repeated event test',
+                created_at: '2026-11-09T14:00:00.000Z'
+            }
         };
 
         const req1 = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
@@ -1650,12 +1676,106 @@ const runTest = async (name, fn) => {
         assert.equal(res1.statusCode, 200);
         assert.equal(user.adgemSuspended, true);
 
-        // Second duplicate delivery
+        const logsBefore = Array.from(db.logs.values()).length;
+
+        // Second duplicate delivery of the exact same event
         const req2 = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
         const res2 = createMockRes();
         await handleAdGemPlayerWebhook(req2, res2);
         assert.equal(res2.statusCode, 200);
+        assert.equal(res2.body.duplicate, true);
         assert.equal(user.adgemSuspended, true);
+
+        // Idempotency: verify no duplicate audit log created
+        const logsAfter = Array.from(db.logs.values()).length;
+        assert.equal(logsAfter, logsBefore);
+    });
+
+    await runTest('handleAdGemPlayerWebhook: duplicate concurrent deliveries are handled safely via locking', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        const user = setupTestUser();
+        const payload = {
+            type: 'player.banned',
+            timestamp: '2026-11-09T14:30:00.000Z',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'concurrent delivery race test',
+                created_at: '2026-11-09T14:30:00.000Z'
+            }
+        };
+
+        const req1 = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res1 = createMockRes();
+        const req2 = buildAdGemWebhookRequest(payload, TEST_WEBHOOK_SECRET);
+        const res2 = createMockRes();
+
+        await Promise.all([
+            handleAdGemPlayerWebhook(req1, res1),
+            handleAdGemPlayerWebhook(req2, res2)
+        ]);
+
+        assert.equal(res1.statusCode, 200);
+        assert.equal(res2.statusCode, 200);
+        assert.equal(user.adgemSuspended, true);
+
+        // Exactly one processed and one identified duplicate
+        const responses = [res1.body, res2.body];
+        const processed = responses.filter(r => r.duplicate !== true);
+        const duplicate = responses.filter(r => r.duplicate === true);
+        assert.equal(processed.length, 1);
+        assert.equal(duplicate.length, 1);
+    });
+
+    await runTest('handleAdGemPlayerWebhook: older event cannot overwrite a newer accepted player state', async () => {
+        process.env.ADGEM_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+        setupAdGemProvider({ appId: '34014' });
+        // Player was already unbanned at 15:00:00
+        const user = setupTestUser({
+            adgemSuspended: false,
+            adgemLastEventAt: new Date('2026-11-09T15:00:00.000Z')
+        });
+
+        // A delayed ban event from 13:00:00 arrives out of order
+        const olderBanPayload = {
+            type: 'player.banned',
+            timestamp: '2026-11-09T13:00:00.000Z',
+            data: {
+                player_id: String(user._id),
+                app_id: 34014,
+                ban_reason: 'delayed ban event from earlier',
+                created_at: '2026-11-09T13:00:00.000Z'
+            }
+        };
+
+        const req = buildAdGemWebhookRequest(olderBanPayload, TEST_WEBHOOK_SECRET);
+        const res = createMockRes();
+        await handleAdGemPlayerWebhook(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.ignored, true);
+        assert.ok(res.body.reason.includes('Older event ignored'));
+
+        // CRITICAL: Player remains unbanned!
+        assert.equal(user.adgemSuspended, false);
+        assert.equal(user.restrictions.adgemSuspended, false);
+    });
+
+    await runTest('OfferwallPostbackLog schema: accepts all player webhook statuses without validation errors', async () => {
+        const statuses = ['PlayerSuspended', 'PlayerUnsuspended', 'DuplicateEvent', 'SecurityRejected'];
+        const allowedStatuses = OfferwallPostbackLog.schema.path('status').enumValues;
+
+        for (const st of statuses) {
+            assert.ok(allowedStatuses.includes(st), `Status '${st}' must be in OfferwallPostbackLog status enum`);
+            const doc = new OfferwallPostbackLog({
+                provider: 'adgem',
+                externalTxId: `schema_test_${st}`,
+                status: st
+            });
+            const err = doc.validateSync();
+            assert.equal(err, undefined, `Document with status '${st}' must pass schema validation`);
+        }
     });
 
     await runTest('Enforcement: Suspended player cannot launch AdGem offers', async () => {

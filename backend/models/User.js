@@ -123,6 +123,9 @@ const UserSchema = new mongoose.Schema({
     adgemSuspendedAt: {
         type: Date,
     },
+    adgemLastEventAt: {
+        type: Date,
+    },
     adgemSuspensionReason: {
         type: String,
         default: '',
