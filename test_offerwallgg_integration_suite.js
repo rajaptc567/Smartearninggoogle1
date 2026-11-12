@@ -1335,7 +1335,7 @@ const runTest = async (name, fn) => {
         assert.equal(lastLog.status, 'TestCallback', 'Log status must be TestCallback');
     });
 
-    await runTest('T49: Disabled Offerwall.GG + testMode false + test=1 => Rejected with HTTP 403', async () => {
+    await runTest('T49: Disabled Offerwall.GG + live callback (test=0) => Rejected with HTTP 403 PROVIDER_INACTIVE', async () => {
         process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
         const owProvider = db.providers.get('offerwall_gg');
         owProvider.enabled = false;
@@ -1348,7 +1348,7 @@ const runTest = async (name, fn) => {
         const taskWalletBefore = user.taskWalletBalance;
         const walletBalanceBefore = user.walletBalance;
 
-        const txId = 'ow_tx_test_disabled_testmode_false';
+        const txId = 'ow_tx_test_disabled_live_callback';
         const amount = '70.00';
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
@@ -1360,14 +1360,14 @@ const runTest = async (name, fn) => {
         const req = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
-            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, status: 'credited', test: '1', signature: sig },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, status: 'credited', test: '0', signature: sig },
             body: {},
             headers: {}
         };
         const res = createMockRes();
         await handlePostback(req, res);
 
-        assert.equal(res.statusCode, 403, 'Must be rejected by inactive-provider protection when testMode is false');
+        assert.equal(res.statusCode, 403, 'Must be rejected by inactive-provider protection when test parameter is 0');
         assert.equal(res.body.error.includes('PROVIDER_INACTIVE'), true, 'Error response must state PROVIDER_INACTIVE');
         assert.equal(db.transactions.size, txCountBefore, 'No transaction created on rejected request');
         assert.equal(db.notifications.size, notifCountBefore, 'No notification dispatched on rejected request');
@@ -1489,21 +1489,127 @@ const runTest = async (name, fn) => {
         assert.equal(lastLog.status, 'TestCallback', 'Log status must be TestCallback');
     });
 
-    await runTest('T52: ACTIVE provider + test=1 processes as normal live callback without bypassing financial crediting', async () => {
+    await runTest('T52: ACTIVE provider + valid HMAC + test=1 => Intercepted as TestCallback with zero financial mutations or user lookups', async () => {
         process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
         const owProvider = db.providers.get('offerwall_gg');
         owProvider.enabled = true;
         owProvider.status = 'ACTIVE';
         owProvider.approvalStatus = 'Approved';
-        owProvider.testMode = false; // Server-side testMode disabled
+        owProvider.testMode = false;
 
         const user = db.users.get(TEST_USER_ID);
         user.taskEarningsBalance = 10.00;
         user.taskWalletBalance = 10.00;
         const walletBalanceBefore = user.walletBalance;
 
-        const txId = 'ow_tx_active_with_test_param';
-        const amount = '70.00'; // $1.00 gross -> $0.70 reward (70 Coins = $1 USD, 70% share)
+        const txId = 'ow_tx_active_with_test1_param';
+        const amount = '70.00';
+        const sig = computeSignature(TEST_USER_ID, txId, amount);
+
+        const txCountBefore = db.transactions.size;
+        const logCountBefore = db.logs.size;
+        const notifCountBefore = db.notifications.size;
+        db.userLookupCalls = [];
+
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: {
+                userId: TEST_USER_ID,
+                transactionId: txId,
+                currencyAmount: amount,
+                status: 'credited',
+                test: '1',
+                signature: sig
+            },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body, 'OK');
+        assert.equal(user.taskEarningsBalance, 10.00, 'taskEarningsBalance unchanged on test=1 callback');
+        assert.equal(user.taskWalletBalance, 10.00, 'taskWalletBalance unchanged on test=1 callback');
+        assert.equal(user.walletBalance, walletBalanceBefore, 'walletBalance unchanged on test=1 callback');
+        assert.equal(db.userLookupCalls.length, 0, 'No user lookup performed for test=1 callback');
+        assert.equal(db.transactions.size, txCountBefore, 'No transaction created for test=1 callback');
+        assert.equal(db.notifications.size, notifCountBefore, 'No notification dispatched for test=1 callback');
+        assert.equal(db.logs.size, logCountBefore + 1, 'Postback log recorded for test=1 callback');
+
+        const lastLog = Array.from(db.logs.values()).pop();
+        assert.equal(lastLog.status, 'TestCallback', 'Log status must be TestCallback for test=1 callback');
+    });
+
+    await runTest('T53: Valid signed test reversal callback (test=1) => Intercepted as TestCallback with zero debit/rollback or side effects', async () => {
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Approved';
+        owProvider.testMode = false;
+
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 10.00;
+        user.taskWalletBalance = 10.00;
+        const walletBalanceBefore = user.walletBalance;
+
+        const txId = 'ow_tx_test_reversal_test1';
+        const amount = '-70.00';
+        const sig = computeSignature(TEST_USER_ID, txId, amount);
+
+        const txCountBefore = db.transactions.size;
+        const logCountBefore = db.logs.size;
+        const notifCountBefore = db.notifications.size;
+        db.userLookupCalls = [];
+
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: {
+                userId: TEST_USER_ID,
+                transactionId: txId,
+                currencyAmount: amount,
+                status: 'reversed',
+                test: '1',
+                signature: sig
+            },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body, 'OK');
+        assert.equal(user.taskEarningsBalance, 10.00, 'taskEarningsBalance unchanged on test=1 reversal');
+        assert.equal(user.taskWalletBalance, 10.00, 'taskWalletBalance unchanged on test=1 reversal');
+        assert.equal(user.walletBalance, walletBalanceBefore, 'walletBalance unchanged on test=1 reversal');
+        assert.equal(db.userLookupCalls.length, 0, 'No user lookup performed for test=1 reversal');
+        assert.equal(db.transactions.size, txCountBefore, 'No transaction created for test=1 reversal');
+        assert.equal(db.notifications.size, notifCountBefore, 'No notification dispatched for test=1 reversal');
+        assert.equal(db.logs.size, logCountBefore + 1, 'Postback log recorded for test=1 reversal');
+
+        const lastLog = Array.from(db.logs.values()).pop();
+        assert.equal(lastLog.status, 'TestCallback', 'Log status must be TestCallback for test=1 reversal');
+    });
+
+    await runTest('T54: Live callback with test=0 on ACTIVE provider => Follows normal live credit validation and accounting', async () => {
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Approved';
+        owProvider.testMode = false;
+
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 10.00;
+        user.taskWalletBalance = 10.00;
+        const walletBalanceBefore = user.walletBalance;
+
+        const txId = 'ow_tx_live_credit_test0';
+        const amount = '70.00'; // $1.00 gross -> $0.70 reward
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const txCountBefore = db.transactions.size;
@@ -1518,7 +1624,7 @@ const runTest = async (name, fn) => {
                 transactionId: txId,
                 currencyAmount: amount,
                 status: 'credited',
-                test: '1', // Unsigned test parameter appended
+                test: '0', // Genuine live callback
                 signature: sig
             },
             body: {},
@@ -1529,22 +1635,22 @@ const runTest = async (name, fn) => {
 
         assert.equal(res.statusCode, 200);
         assert.equal(res.body, 'OK');
-        assert.equal(user.taskEarningsBalance, 10.70, 'Normal authenticated live credit must occur despite test=1 param');
-        assert.equal(user.taskWalletBalance, 10.70, 'Task wallet balance updated with reward');
-        assert.equal(user.walletBalance, walletBalanceBefore, 'Core deposit wallet balance remains untouched');
-        assert.ok(db.userLookupCalls.length > 0, 'User lookup must be performed for live authenticated callback');
+        assert.equal(user.taskEarningsBalance, 10.70, 'taskEarningsBalance credited on live callback');
+        assert.equal(user.taskWalletBalance, 10.70, 'taskWalletBalance credited on live callback');
+        assert.equal(user.walletBalance, walletBalanceBefore, 'walletBalance untouched on live callback');
+        assert.ok(db.userLookupCalls.length > 0, 'User lookup performed for live callback');
 
         const tx = await Transaction.findOne({ idempotencyKey: `offerwall_gg_${txId}_credit` });
-        assert.ok(tx, 'Live transaction record must be created');
-        assert.equal(tx.amount, 0.70, 'Transaction amount must match expected reward');
-        assert.equal(tx.type, 'Offerwall Reward', 'Transaction type must be Offerwall Reward');
+        assert.ok(tx, 'Live transaction record created');
+        assert.equal(tx.amount, 0.70, 'Transaction amount matches reward');
+        assert.equal(tx.type, 'Offerwall Reward', 'Transaction type is Offerwall Reward');
 
         assert.equal(db.transactions.size, txCountBefore + 1, 'Exactly one transaction created');
-        assert.equal(db.notifications.size, notifCountBefore + 1, 'User notification dispatched on live credit');
+        assert.equal(db.notifications.size, notifCountBefore + 1, 'User notification dispatched');
 
         const lastLog = Array.from(db.logs.values()).pop();
         assert.notEqual(lastLog.status, 'TestCallback', 'Log status must NOT be TestCallback for live processing');
-        assert.equal(lastLog.status, 'Processed', 'Log status must be Processed');
+        assert.equal(lastLog.status, 'Processed', 'Log status must be Processed for live processing');
     });
 
     console.log(`\n========================================================`);
