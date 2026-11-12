@@ -1310,6 +1310,59 @@ export const AdminOfferwalls: React.FC = () => {
                                 </div>
                             )}
 
+                            {(editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg') && (
+                                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-4">
+                                    <div className="border-b border-slate-800 pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">🎮</span>
+                                            <h4 className="text-xs font-black uppercase text-indigo-300 tracking-wider">
+                                                Offerwall.GG Dashboard Configuration &amp; Reference Guide
+                                            </h4>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-1">
+                                            Placement ID: <code className="text-indigo-300 font-mono">9604</code> | Currency: <code className="text-emerald-300 font-mono">Coins</code> (70 Coins = $1.00 USD)
+                                        </p>
+                                    </div>
+
+                                    {/* S2S Callback Setup */}
+                                    <div className="space-y-2">
+                                        <span className="block text-[11px] font-black uppercase text-slate-300">
+                                            Server-to-Server (S2S) Postback URL (Configured in Offerwall.GG Dashboard)
+                                        </span>
+                                        <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl font-mono text-[11px] text-indigo-300 select-all break-all">
+                                            {getFullPostbackUrl('offerwall_gg')}?userId=&#123;userId&#125;&amp;transactionId=&#123;transactionId&#125;&amp;currencyAmount=&#123;currencyAmount&#125;&amp;payoutUsd=&#123;payoutUsd&#125;&amp;status=&#123;status&#125;&amp;signature=&#123;signature&#125;&amp;test=&#123;test&#125;&amp;offerId=&#123;offerId&#125;&amp;offerName=&#123;offerName&#125;
+                                        </div>
+                                        <p className="text-[10px] text-slate-500">
+                                            Uses HMAC-SHA256 signature calculated over <code className="text-indigo-400 font-mono">userId:transactionId:currencyAmount</code> using your secret key.
+                                        </p>
+                                    </div>
+
+                                    {/* Accounting Details */}
+                                    <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-xs space-y-1">
+                                        <div className="flex items-center gap-2 font-black text-emerald-400">
+                                            <span>📊</span>
+                                            <span>SmartExn 70/30 Split Accounting</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-300">
+                                            70 Coins = $1.00 USD. For example, a $1.50 publisher payout credits $1.05 USD (70%) to worker <code className="text-emerald-300 font-mono">taskEarningsBalance</code> and retains $0.45 USD (30%) platform revenue.
+                                        </p>
+                                    </div>
+
+                                    {/* Secret Key Status */}
+                                    <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-xs flex items-center justify-between">
+                                        <div>
+                                            <span className="text-slate-400 font-bold block text-[11px]">Server Environment Signing Key Status</span>
+                                            <span className="text-[10px] text-slate-500">
+                                                Configured via <code className="text-indigo-300 font-mono">OFFERWALL_GG_SECRET_KEY</code> on Render
+                                            </span>
+                                        </div>
+                                        <span className="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[10px] font-bold">
+                                            {editingProvider.secretKey ? 'Configured in DB' : 'ENV Variable Secret'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs">
                                 <span className="text-slate-400 font-bold">Your Postback URL for this provider:</span>
                                 <div className="font-mono text-indigo-400 mt-1 break-all select-all">

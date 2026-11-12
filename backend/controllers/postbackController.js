@@ -313,6 +313,93 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
         return { valid: true };
     }
 
+    // Offerwall.GG must always enforce HMAC-SHA256 signature verification over userId:transactionId:currencyAmount
+    // Cannot be bypassed by requireSignature=false, signatureType='none', or IP-only verification
+    if (key === 'offerwall_gg' || key === 'offerwallgg') {
+        const secret = (process.env.OFFERWALL_GG_SECRET_KEY || provider.secretKey || '').trim();
+        if (!secret) {
+            return { valid: false, error: 'Offerwall.GG secret key is not configured; failing closed' };
+        }
+
+        const query = (req && req.query && typeof req.query === 'object') ? req.query : {};
+        const body = (req && req.body && typeof req.body === 'object') ? req.body : {};
+
+        const getParam = (names) => {
+            let qVal = undefined;
+            let bVal = undefined;
+            for (const name of names) {
+                if (qVal === undefined && query[name] !== undefined) qVal = query[name];
+                if (bVal === undefined && body[name] !== undefined) bVal = body[name];
+            }
+            // Detect conflicting query and body values
+            if (qVal !== undefined && bVal !== undefined && String(qVal).trim() !== String(bVal).trim()) {
+                return { conflict: true };
+            }
+            const val = qVal !== undefined ? qVal : (bVal !== undefined ? bVal : undefined);
+            if (val !== undefined) return { value: val };
+            for (const name of names) {
+                if (params[name] !== undefined) return { value: params[name] };
+            }
+            return { value: undefined };
+        };
+
+        const userRes = getParam(['userId', 'user_id', 'subId', 'subid', 'uid']);
+        const txRes = getParam(['transactionId', 'transaction_id', 'trans_id', 'transId', 'txid', 'id']);
+        const amountRes = getParam(['currencyAmount', 'amount', 'reward', 'points']);
+        const sigRes = getParam(['signature', 'sig', 'hash']);
+
+        if (userRes.conflict || txRes.conflict || amountRes.conflict || sigRes.conflict) {
+            return { valid: false, error: 'Offerwall.GG conflicting query and body parameters detected; failing closed' };
+        }
+
+        const rawUserId = userRes.value;
+        const rawTxId = txRes.value;
+        const rawCurrencyAmount = amountRes.value;
+        const receivedSig = sigRes.value;
+
+        // Reject arrays or nested objects for signed parameters
+        for (const [k, v] of [['userId', rawUserId], ['transactionId', rawTxId], ['currencyAmount', rawCurrencyAmount], ['signature', receivedSig]]) {
+            if (Array.isArray(v) || (typeof v === 'object' && v !== null)) {
+                return { valid: false, error: `Offerwall.GG parameter '${k}' must be a scalar; failing closed` };
+            }
+        }
+
+        if (rawUserId === undefined || rawUserId === null || String(rawUserId).trim() === '') {
+            return { valid: false, error: 'Offerwall.GG userId missing for signature verification' };
+        }
+        if (rawTxId === undefined || rawTxId === null || String(rawTxId).trim() === '') {
+            return { valid: false, error: 'Offerwall.GG transactionId missing for signature verification' };
+        }
+        if (rawCurrencyAmount === undefined || rawCurrencyAmount === null || String(rawCurrencyAmount).trim() === '') {
+            return { valid: false, error: 'Offerwall.GG currencyAmount missing for signature verification' };
+        }
+        if (receivedSig === undefined || receivedSig === null || String(receivedSig).trim() === '') {
+            return { valid: false, error: 'Offerwall.GG signature missing; failing closed' };
+        }
+
+        // Exact transmitted string values: preserve formatting and do NOT parse as Number
+        const strUser = String(rawUserId).trim();
+        const strTx = String(rawTxId).trim();
+        const strAmount = String(rawCurrencyAmount).trim();
+        const strReceived = String(receivedSig).trim();
+
+        const message = `${strUser}:${strTx}:${strAmount}`;
+        const expectedSig = crypto.createHmac('sha256', secret).update(message).digest('hex');
+
+        if (!safeTimingCompare(strReceived, expectedSig)) {
+            return { valid: false, error: 'Offerwall.GG HMAC-SHA256 signature mismatch' };
+        }
+
+        if (provider.ipWhitelist && provider.ipWhitelist.length > 0) {
+            const ipMatches = provider.ipWhitelist.some(allowedIp => allowedIp.trim() === clientIp);
+            if (!ipMatches) {
+                return { valid: false, error: 'Client IP not in whitelist' };
+            }
+        }
+
+        return { valid: true };
+    }
+
     // Fail closed: requireSignature: true with signatureType: 'none' must not pass
     if (provider.requireSignature && (!provider.signatureType || provider.signatureType === 'none')) {
         return { valid: false, error: 'Provider requires signature but signatureType is none or not configured' };
@@ -588,6 +675,7 @@ const normalizePostbackParams = (providerKey, rawParams) => {
     let rawCurrency = p.currency || 'USD';
 
     let rawOfferId = p.offer_id || p.oid || p.offerId || p.campaign_id || '';
+    let offerName = String(p.o_name || p.offer_name || p.offerName || p.campaign_name || p.reward_name || `${providerKey} reward`).trim();
 
     if (key === 'theoremreach') {
         rawUserId = p.user_id || p.userId || p.uid || p.subId || p.ext_user_id || '';
@@ -621,9 +709,43 @@ const normalizePostbackParams = (providerKey, rawParams) => {
         }
     }
 
+    if (key === 'offerwall_gg' || key === 'offerwallgg') {
+        rawUserId = (p.userId !== undefined && p.userId !== null) ? String(p.userId).trim() :
+            ((p.user_id !== undefined && p.user_id !== null) ? String(p.user_id).trim() :
+            ((p.subId !== undefined && p.subId !== null) ? String(p.subId).trim() :
+            ((p.subid !== undefined && p.subid !== null) ? String(p.subid).trim() :
+            ((p.uid !== undefined && p.uid !== null) ? String(p.uid).trim() : ''))));
+
+        rawTxId = (p.transactionId !== undefined && p.transactionId !== null) ? String(p.transactionId).trim() :
+            ((p.transaction_id !== undefined && p.transaction_id !== null) ? String(p.transaction_id).trim() :
+            ((p.trans_id !== undefined && p.trans_id !== null) ? String(p.trans_id).trim() :
+            ((p.transId !== undefined && p.transId !== null) ? String(p.transId).trim() :
+            ((p.txid !== undefined && p.txid !== null) ? String(p.txid).trim() :
+            ((p.id !== undefined && p.id !== null) ? String(p.id).trim() : '')))));
+
+        rawAmount = (p.currencyAmount !== undefined && p.currencyAmount !== null) ? p.currencyAmount :
+            ((p.amount !== undefined && p.amount !== null) ? p.amount :
+            ((p.reward !== undefined && p.reward !== null) ? p.reward :
+            ((p.points !== undefined && p.points !== null) ? p.points : 0)));
+
+        rawCurrency = (p.currencyName || p.currency || 'Coins');
+        rawOfferId = (p.offerId !== undefined && p.offerId !== null) ? String(p.offerId).trim() :
+            ((p.offer_id !== undefined && p.offer_id !== null) ? String(p.offer_id).trim() :
+            ((p.oid !== undefined && p.oid !== null) ? String(p.oid).trim() : ''));
+
+        offerName = String(p.offerName || p.offer_name || `${providerKey} reward`).trim();
+    }
+
     // Detect Reversal / Chargeback
     let isReversal = false;
-    if (key === 'cpx_research') {
+    if (key === 'offerwall_gg' || key === 'offerwallgg') {
+        const rawStatus = String(p.status || '').trim().toLowerCase();
+        if (rawStatus === 'reversed' || Number(rawAmount) < 0) {
+            isReversal = true;
+        } else if (rawStatus === 'credited') {
+            isReversal = false;
+        }
+    } else if (key === 'cpx_research') {
         // CPX Research reversal handling is strictly tied to status=2 or explicit reversal type
         // Earning callbacks with negative amounts are malformed payout values, not valid reversals
         if (p.status === '2' || p.status === 2 || p.type === 'reversal' || p.type === 'chargeback') {
@@ -657,7 +779,6 @@ const normalizePostbackParams = (providerKey, rawParams) => {
     const rewardNum = Math.abs(Number(rawAmount) || 0);
 
     let eventType = 'complete';
-    let offerName = String(p.o_name || p.offer_name || p.offerName || p.campaign_name || p.reward_name || `${providerKey} reward`).trim();
 
     if (key === 'cpx_research') {
         const rawType = String(p.type || '').trim().toLowerCase();
@@ -937,14 +1058,20 @@ export const handlePostback = async (req, res) => {
         // Find target User (by MongoDB _id, username, or email)
         let user = null;
         if (normalized.userId) {
-            if (normalized.userId.match(/^[0-9a-fA-F]{24}$/)) {
-                user = await User.findById(normalized.userId);
-            }
-            if (!user) {
-                user = await User.findOne({ username: normalized.userId });
-            }
-            if (!user) {
-                user = await User.findOne({ email: normalized.userId });
+            if (providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') {
+                if (/^[0-9a-fA-F]{24}$/.test(normalized.userId)) {
+                    user = await User.findById(normalized.userId);
+                }
+            } else {
+                if (normalized.userId.match(/^[0-9a-fA-F]{24}$/)) {
+                    user = await User.findById(normalized.userId);
+                }
+                if (!user) {
+                    user = await User.findOne({ username: normalized.userId });
+                }
+                if (!user) {
+                    user = await User.findOne({ email: normalized.userId });
+                }
             }
         }
 
@@ -1321,6 +1448,19 @@ export const handlePostback = async (req, res) => {
         } else if (providerKey === 'ayetstudios') {
             // ayeT-Studios payout_usd is the actual publisher revenue/payout in USD
             grossUSD = Number(Math.abs(Number(rawParams.payout_usd)).toFixed(4));
+        } else if (providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') {
+            // Offerwall.GG Financial Split & Revenue Accounting
+            // If payoutUsd is provided in callback, it is the gross publisher revenue in USD.
+            // If payoutUsd is not provided, convert raw virtual currency (Coins) to USD using exchangeRateMultiplier (70 Coins = $1.00 USD).
+            const rawPayoutUsd = rawParams.payoutUsd !== undefined ? rawParams.payoutUsd : rawParams.payout_usd;
+            if (rawPayoutUsd !== undefined && rawPayoutUsd !== null && String(rawPayoutUsd).trim() !== '' && !isNaN(Number(rawPayoutUsd))) {
+                grossUSD = Number(Math.abs(Number(rawPayoutUsd)).toFixed(4));
+            } else {
+                const multiplier = (typeof provider.exchangeRateMultiplier === 'number' && provider.exchangeRateMultiplier > 0)
+                    ? provider.exchangeRateMultiplier
+                    : 70.0;
+                grossUSD = Number((absReward / multiplier).toFixed(4));
+            }
         } else {
             grossUSD = Number((absReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
         }
@@ -1342,7 +1482,7 @@ export const handlePostback = async (req, res) => {
         log.userRewardUSD = userRewardUSD;
         log.platformRevenueUSD = platformRevenueUSD;
 
-        // Isolate genuine test/debug callbacks (TheoremReach, CPX Research & ayeT-Studios)
+        // Isolate genuine test/debug callbacks (TheoremReach, CPX Research, ayeT-Studios & Offerwall.GG)
         const isDebugCallback = ((providerKey === 'theoremreach') && (rawParams.debug === 'true' || rawParams.debug === true || rawParams.debug === '1' || rawParams.debug === 1)) ||
             ((providerKey === 'cpx_research') && (
                 rawParams.test === '1' || rawParams.test === 'true' || rawParams.test === true ||
@@ -1352,6 +1492,9 @@ export const handlePostback = async (req, res) => {
             )) ||
             ((providerKey === 'ayetstudios') && (
                 rawParams.is_sandbox === '1' || rawParams.is_sandbox === 1 || rawParams.is_sandbox === 'true' || rawParams.is_sandbox === true
+            )) ||
+            ((providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') && (
+                rawParams.test === '1' || rawParams.test === 1 || rawParams.test === 'true' || rawParams.test === true
             ));
         if (isDebugCallback) {
             log.status = 'TestCallback';
@@ -2370,6 +2513,9 @@ export const getOfferwallProviders = async (req, res) => {
             if (p.providerKey === 'adgem') {
                 return p.enabled === true && p.status === 'ACTIVE' && p.approvalStatus === 'Approved';
             }
+            if (p.providerKey === 'offerwall_gg' || p.providerKey === 'offerwallgg') {
+                return p.enabled === true && p.status === 'ACTIVE' && p.approvalStatus === 'Approved';
+            }
             return true;
         });
 
@@ -2924,6 +3070,31 @@ export const seedVerifiedNetworks = async () => {
         // ==========================================
         // GROUP A: Multi-Task / Offerwall Networks
         // ==========================================
+        {
+            providerKey: 'offerwall_gg',
+            name: 'Offerwall.GG',
+            category: 'offerwall',
+            group: 'Group A: Multi-Task / Offerwall',
+            enabled: false,
+            status: 'NOT_STARTED',
+            approvalStatus: 'Pending',
+            integrationStatus: 'Not Started',
+            appId: '9604',
+            apiKey: '44e2f34845f41e2de70f39b9c3b5a543',
+            exchangeRateMultiplier: 70,
+            commissionMode: 'smartexn_managed',
+            userRevenueSharePercent: 70,
+            platformRevenueSharePercent: 30,
+            iframeUrlTemplate: 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={userId}',
+            signatureType: 'custom',
+            requireSignature: true,
+            technicalReadinessScore: 100,
+            approvalLikelihoodScore: 'High',
+            badge: 'Active Placement',
+            icon: '🎮',
+            description: 'Leading gaming, app engagement, and multi-reward offerwall.',
+            complianceNotes: 'HMAC-SHA256 signature verification over userId:transactionId:currencyAmount using secret key. 70 Coins = $1.00 USD.'
+        },
         {
             providerKey: 'adgem',
             name: 'AdGem',
