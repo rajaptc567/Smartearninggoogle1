@@ -971,8 +971,11 @@ export const handlePostback = async (req, res) => {
         });
     }
 
+    const isOfferwallGgTest = (providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') &&
+        (rawParams.test === '1' || rawParams.test === 1 || rawParams.test === 'true' || rawParams.test === true);
+
     // P14: Provider State Check
-    if (!provider.enabled || provider.status === 'DISABLED' || provider.status === 'SUSPENDED') {
+    if (!isOfferwallGgTest && (!provider.enabled || provider.status === 'DISABLED' || provider.status === 'SUSPENDED')) {
         if (isDryRun) {
             req.dryRunResult = {
                 isDryRun: true,
@@ -991,19 +994,13 @@ export const handlePostback = async (req, res) => {
         });
     }
 
-
-
-
     // P14: Provider State & Approval Check for Offerwall.GG
     if (providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') {
-        const isTest = rawParams.test === '1' || rawParams.test === 1 || rawParams.test === 'true' || rawParams.test === true;
-        if (provider.enabled !== true || provider.status !== 'ACTIVE' || provider.approvalStatus !== 'Approved') {
-            if (!isTest) {
-                return res.status(403).json({
-                    success: false,
-                    error: `PROVIDER_NOT_ACTIVE_OR_APPROVED: Offerwall.GG provider must be active, enabled, and approved for live financial credits.`
-                });
-            }
+        if (!isOfferwallGgTest && (provider.enabled !== true || provider.status !== 'ACTIVE' || provider.approvalStatus !== 'Approved')) {
+            return res.status(403).json({
+                success: false,
+                error: `PROVIDER_NOT_ACTIVE_OR_APPROVED: Offerwall.GG provider must be active, enabled, and approved for live financial credits.`
+            });
         }
     }
 
@@ -1092,6 +1089,14 @@ export const handlePostback = async (req, res) => {
             return res.status(400).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'INVALID_SIGNATURE');
         }
         log.signatureStatus = provider.requireSignature ? 'Verified' : 'NotRequired';
+
+        // Isolate Offerwall.GG test callbacks after signature verification before user lookup
+        if (isOfferwallGgTest) {
+            log.status = 'TestCallback';
+            log.errorMessage = 'Offerwall.GG test callback (test=1) received and signature verified; balance mutation and user lookup bypassed.';
+            try { await log.save(); } catch (_) {}
+            return res.status(200).send('OK');
+        }
 
         // Find target User (by MongoDB _id, username, or email)
         let user = null;

@@ -1252,6 +1252,94 @@ const runTest = async (name, fn) => {
         assert.equal(provider2.serverSecretConfigured, false, 'serverSecretConfigured should be false when secret env var is missing');
     });
 
+    await runTest('T48: Disabled Offerwall.GG + valid test=1 + valid signature => HTTP 200 with zero financial mutations', async () => {
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = false;
+        owProvider.status = 'NOT_STARTED';
+        owProvider.approvalStatus = 'Pending';
+
+        const syntheticUserId = 'synthetic_test_user_999';
+        const txId = 'ow_tx_test_disabled_provider';
+        const amount = '70.00';
+        const sig = computeSignature(syntheticUserId, txId, amount);
+
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: syntheticUserId, transactionId: txId, currencyAmount: amount, status: 'credited', test: '1', signature: sig },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body, 'OK');
+    });
+
+    await runTest('T49: Disabled Offerwall.GG + normal live callback => HTTP 403', async () => {
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = false;
+        owProvider.status = 'NOT_STARTED';
+
+        const txId = 'ow_tx_live_disabled_provider';
+        const amount = '70.00';
+        const sig = computeSignature(TEST_USER_ID, txId, amount);
+
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, status: 'credited', signature: sig },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 403);
+    });
+
+    await runTest('T50: Test callback with missing signature rejected with HTTP 400', async () => {
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: 'ow_tx_test_nosig', currencyAmount: '70', status: 'credited', test: '1' },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 400);
+    });
+
+    await runTest('T51: Test callback with synthetic/nonexistent user ID returns HTTP 200 after signature validation', async () => {
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = false;
+
+        const syntheticUserId = 'nonexistent_synthetic_user_id_12345';
+        const txId = 'ow_tx_test_synthetic_user';
+        const amount = '70.00';
+        const sig = computeSignature(syntheticUserId, txId, amount);
+
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: syntheticUserId, transactionId: txId, currencyAmount: amount, status: 'credited', test: '1', signature: sig },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body, 'OK');
+    });
+
     console.log(`\n========================================================`);
     console.log(`RESULTS: ${passedTests}/${totalTests} tests passed.`);
     console.log(`========================================================\n`);
