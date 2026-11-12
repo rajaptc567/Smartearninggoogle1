@@ -166,6 +166,11 @@ export const getAvailablePlacements = async (req, res) => {
                 continue;
             }
 
+            // Offerwall.GG special ACTIVE, enabled, and Approved operational status requirement
+            if ((placement.providerKey === 'offerwall_gg' || placement.providerKey === 'offerwallgg') && (provider.enabled !== true || provider.status !== 'ACTIVE' || provider.approvalStatus !== 'Approved')) {
+                continue;
+            }
+
             // AdGem player suspension check: suspended players cannot see or launch AdGem offers
             if (placement.providerKey === 'adgem' && (user.adgemSuspended === true || user.restrictions?.adgemSuspended === true)) {
                 continue;
@@ -339,7 +344,9 @@ export const launchProviderPlacement = async (req, res) => {
             }
             launchUrl = provider.iframeUrlTemplate
                 .replace(/\{userId\}/g, user._id.toString())
+                .replace(/\{user_id\}/g, user._id.toString())
                 .replace(/\{appId\}/g, provider.appId.trim())
+                .replace(/\{appid\}/g, provider.appId.trim())
                 .replace(/\{subId\}/g, user._id.toString());
         }
 

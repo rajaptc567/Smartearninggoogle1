@@ -1653,6 +1653,112 @@ const runTest = async (name, fn) => {
         assert.equal(lastLog.status, 'Processed', 'Log status must be Processed for live processing');
     });
 
+    await runTest('T55: Public getOfferwallProviders includes Offerwall.GG when ACTIVE, enabled, and Approved', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Approved';
+        owProvider.appId = '9604';
+        owProvider.iframeUrlTemplate = 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={user_id}';
+
+        const req = { user: { id: TEST_USER_ID } };
+        const res = createMockRes();
+        await getOfferwallProviders(req, res);
+
+        assert.equal(res.statusCode, 200);
+        const found = res.body?.data?.find(p => p.providerKey === 'offerwall_gg');
+        assert.ok(found, 'Approved Offerwall.GG must be included in public worker response');
+        assert.equal(found.iframeUrl, `https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId=${TEST_USER_ID}`, '{user_id} macro resolved correctly in public worker view');
+    });
+
+    await runTest('T56: Public getOfferwallProviders excludes Offerwall.GG when approvalStatus is Pending', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Pending'; // Unapproved
+
+        const req = { user: { id: TEST_USER_ID } };
+        const res = createMockRes();
+        await getOfferwallProviders(req, res);
+
+        assert.equal(res.statusCode, 200);
+        const found = res.body?.data?.find(p => p.providerKey === 'offerwall_gg');
+        assert.equal(found, undefined, 'Unapproved Offerwall.GG must be excluded from public worker response');
+    });
+
+    await runTest('T57: getAvailablePlacements excludes unapproved Offerwall.GG and includes approved ACTIVE Offerwall.GG', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Pending';
+
+        const pId = '64f1a2b3c4d5e6f7a8b9c0e0';
+        const placement = {
+            _id: pId,
+            providerKey: 'offerwall_gg',
+            parentTabId: 'available_jobs',
+            subTabId: '',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            displayName: 'Offerwall.GG Tasks',
+            displayOrder: 1
+        };
+        db.placements.set(pId, placement);
+
+        const req = {
+            user: { id: TEST_USER_ID },
+            params: { parentTabId: 'available_jobs' }
+        };
+
+        // Case 1: Unapproved
+        const resUnapproved = createMockRes();
+        await getAvailablePlacements(req, resUnapproved);
+        assert.equal(resUnapproved.statusCode, 200);
+        const foundUnapproved = resUnapproved.body?.data?.find(p => p.providerKey === 'offerwall_gg');
+        assert.equal(foundUnapproved, undefined, 'Unapproved Offerwall.GG placement must be excluded from Available Tasks');
+
+        // Case 2: Approved
+        owProvider.approvalStatus = 'Approved';
+        const resApproved = createMockRes();
+        await getAvailablePlacements(req, resApproved);
+        assert.equal(resApproved.statusCode, 200);
+        const foundApproved = resApproved.body?.data?.find(p => p.providerKey === 'offerwall_gg');
+        assert.ok(foundApproved, 'Approved Offerwall.GG placement must be included in Available Tasks');
+    });
+
+    await runTest('T58: both {userId} and {user_id} resolve correctly in placement launch URL without exposing secrets', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Approved';
+        owProvider.appId = '9604';
+        owProvider.iframeUrlTemplate = 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={user_id}&app={appId}';
+
+        const pId = '64f1a2b3c4d5e6f7a8b9c0e1';
+        const placement = {
+            _id: pId,
+            providerKey: 'offerwall_gg',
+            parentTabId: 'available_jobs',
+            subTabId: '',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            trustedLaunchDomains: ['offerwall.gg']
+        };
+        db.placements.set(pId, placement);
+
+        const req = {
+            user: { id: TEST_USER_ID },
+            params: { placementId: pId }
+        };
+        const res = createMockRes();
+        await launchProviderPlacement(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.launchUrl, `https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId=${TEST_USER_ID}&app=9604`);
+        assert.equal(res.body.launchUrl.includes(TEST_USER_ID), true);
+        assert.equal(res.body.launchUrl.includes('{user_id}'), false);
+    });
+
     console.log(`\n========================================================`);
     console.log(`RESULTS: ${passedTests}/${totalTests} tests passed.`);
     console.log(`========================================================\n`);

@@ -2538,7 +2538,7 @@ export const getOfferwallProviders = async (req, res) => {
         // Public / Worker View: Only enabled, non-disabled, non-suspended providers with SAFE projection
         const providers = await OfferwallProvider.find(
             { enabled: true, status: { $nin: ['DISABLED', 'SUSPENDED', 'NOT_STARTED'] } },
-            'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status enabled userRevenueSharePercent platformRevenueSharePercent commissionMode appId apiKey secretKey exchangeRateMultiplier requireSignature signatureType customConfig'
+            'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status approvalStatus enabled userRevenueSharePercent platformRevenueSharePercent commissionMode appId apiKey secretKey exchangeRateMultiplier requireSignature signatureType customConfig'
         ).sort({ category: 1, name: 1 });
 
         // Phase 6: CPX-Only Visibility Gate
@@ -2613,7 +2613,9 @@ export const getOfferwallProviders = async (req, res) => {
                 if (p.appId && p.appId.trim()) {
                     obj.iframeUrl = obj.iframeUrlTemplate
                         .replace(/\{userId\}/g, String(req.user.id))
-                        .replace(/\{appId\}/g, p.appId.trim());
+                        .replace(/\{user_id\}/g, String(req.user.id))
+                        .replace(/\{appId\}/g, p.appId.trim())
+                        .replace(/\{appid\}/g, p.appId.trim());
                 } else {
                     obj.iframeUrl = '';
                     obj.configurationError = 'App ID / Placement ID is not configured for this provider.';
