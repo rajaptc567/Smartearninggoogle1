@@ -1357,8 +1357,8 @@ export const AdminOfferwalls: React.FC = () => {
                                                 Configured via <code className="text-indigo-300 font-mono">OFFERWALL_GG_SECRET_KEY</code> on Render
                                             </span>
                                         </div>
-                                        <span className="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[10px] font-bold">
-                                            {editingProvider.secretKey ? 'Configured in DB' : 'ENV Variable Secret'}
+                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${editingProvider.serverSecretConfigured ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30' : 'bg-amber-950/60 text-amber-400 border-amber-500/30'}`}>
+                                            {editingProvider.serverSecretConfigured ? 'Environment Secret Configured' : 'Environment Secret Missing'}
                                         </span>
                                     </div>
                                 </div>

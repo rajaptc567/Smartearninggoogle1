@@ -93,7 +93,10 @@ OfferwallProvider.findOne = async (query) => {
     return db.providers.get(key) || null;
 };
 OfferwallProvider.find = (query = {}) => {
-    const all = Array.from(db.providers.values());
+    const all = Array.from(db.providers.values()).map(p => ({
+        ...p,
+        toObject: typeof p.toObject === 'function' ? p.toObject : function() { return { ...this }; }
+    }));
     const filter = (items) => {
         let res = items;
         if (query.enabled !== undefined) res = res.filter(p => p.enabled === query.enabled);
@@ -361,6 +364,7 @@ const runTest = async (name, fn) => {
                 transactionId: txId,
                 currencyAmount: amount,
                 payoutUsd: '1.50',
+                status: 'credited',
                 signature: sig
             },
             body: {},
@@ -371,7 +375,7 @@ const runTest = async (name, fn) => {
 
         assert.equal(res.statusCode, 200);
         assert.equal(res.body, 'OK');
-        assert.equal(user.taskEarningsBalance, 11.05); // 10.00 + 70% of $1.50 = 11.05
+        assert.equal(user.taskEarningsBalance, 10.70); // 10.00 + 70% of ($70.00/70) = 10.70
     });
 
     await runTest('T06: POST valid signature accepted with HTTP 200', async () => {
@@ -392,6 +396,7 @@ const runTest = async (name, fn) => {
                 transactionId: txId,
                 currencyAmount: amount,
                 payoutUsd: '3.00',
+                status: 'credited',
                 signature: sig
             },
             headers: { 'content-type': 'application/json' }
@@ -401,7 +406,7 @@ const runTest = async (name, fn) => {
 
         assert.equal(res.statusCode, 200);
         assert.equal(res.body, 'OK');
-        assert.equal(user.taskEarningsBalance, 12.10); // 10.00 + 70% of $3.00 = 12.10
+        assert.equal(user.taskEarningsBalance, 11.40); // 10.00 + 70% of ($140.00/70) = 11.40
     });
 
     await runTest('T07: GET and POST produce identical verification and financial result', async () => {
@@ -411,8 +416,8 @@ const runTest = async (name, fn) => {
         const sig1 = computeSignature(TEST_USER_ID, txId1, amount);
         const sig2 = computeSignature(TEST_USER_ID, txId2, amount);
 
-        const reqGet = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId1, currencyAmount: amount, payoutUsd: '1.00', signature: sig1 }, body: {}, headers: {} };
-        const reqPost = { method: 'POST', params: { provider: 'offerwall_gg' }, query: {}, body: { userId: TEST_USER_ID, transactionId: txId2, currencyAmount: amount, payoutUsd: '1.00', signature: sig2 }, headers: {} };
+        const reqGet = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId1, currencyAmount: amount, status: 'credited', payoutUsd: '1.00', signature: sig1 }, body: {}, headers: {} };
+        const reqPost = { method: 'POST', params: { provider: 'offerwall_gg' }, query: {}, body: { userId: TEST_USER_ID, transactionId: txId2, currencyAmount: amount, status: 'credited', payoutUsd: '1.00', signature: sig2 }, headers: {} };
 
         const resGet = createMockRes();
         const resPost = createMockRes();
@@ -438,7 +443,7 @@ const runTest = async (name, fn) => {
         const txId = 'ow_tx_no_sec';
         const sig = computeSignature(TEST_USER_ID, txId, '70');
 
-        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', signature: sig }, body: {}, headers: {} };
+        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: sig }, body: {}, headers: {} };
         const res = createMockRes();
         await handlePostback(req, res);
 
@@ -448,7 +453,7 @@ const runTest = async (name, fn) => {
 
     await runTest('T09: Missing signature fails closed with HTTP 400', async () => {
         process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
-        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: 'ow_tx_nosig', currencyAmount: '70' }, body: {}, headers: {} };
+        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: 'ow_tx_nosig', currencyAmount: '70', status: 'credited' }, body: {}, headers: {} };
         const res = createMockRes();
         await handlePostback(req, res);
 
@@ -456,7 +461,7 @@ const runTest = async (name, fn) => {
     });
 
     await runTest('T10: Incorrect signature rejected with HTTP 400', async () => {
-        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: 'ow_tx_badsig', currencyAmount: '70', signature: 'bad_signature_1234567890abcdef' }, body: {}, headers: {} };
+        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: 'ow_tx_badsig', currencyAmount: '70', status: 'credited', signature: 'bad_signature_1234567890abcdef' }, body: {}, headers: {} };
         const res = createMockRes();
         await handlePostback(req, res);
 
@@ -469,7 +474,7 @@ const runTest = async (name, fn) => {
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const tamperedUserId = '64f1a2b3c4d5e6f7a8b9c0d2'; // Different ID
-        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: tamperedUserId, transactionId: txId, currencyAmount: amount, signature: sig }, body: {}, headers: {} };
+        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: tamperedUserId, transactionId: txId, currencyAmount: amount, status: 'credited', signature: sig }, body: {}, headers: {} };
         const res = createMockRes();
         await handlePostback(req, res);
 
@@ -480,7 +485,7 @@ const runTest = async (name, fn) => {
         const amount = '70';
         const sig = computeSignature(TEST_USER_ID, 'original_tx', amount);
 
-        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: 'tampered_tx', currencyAmount: amount, signature: sig }, body: {}, headers: {} };
+        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: 'tampered_tx', currencyAmount: amount, status: 'credited', signature: sig }, body: {}, headers: {} };
         const res = createMockRes();
         await handlePostback(req, res);
 
@@ -491,7 +496,7 @@ const runTest = async (name, fn) => {
         const txId = 'ow_tx_tamper_amt';
         const sig = computeSignature(TEST_USER_ID, txId, '70.00');
 
-        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '700.00', signature: sig }, body: {}, headers: {} };
+        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '700.00', status: 'credited', signature: sig }, body: {}, headers: {} };
         const res = createMockRes();
         await handlePostback(req, res);
 
@@ -507,7 +512,7 @@ const runTest = async (name, fn) => {
         assert.notEqual(sigWithDecimals, sigWithoutDecimals, 'Trailing zeros change HMAC hash');
 
         // Sending "70.00" with sigWithDecimals succeeds
-        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70.00', signature: sigWithDecimals }, body: {}, headers: {} };
+        const req = { method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70.00', status: 'credited', signature: sigWithDecimals }, body: {}, headers: {} };
         const res = createMockRes();
         await handlePostback(req, res);
         assert.equal(res.statusCode, 200);
@@ -517,8 +522,8 @@ const runTest = async (name, fn) => {
         const req = {
             method: 'POST',
             params: { provider: 'offerwall_gg' },
-            query: { transactionId: 'tx_query_111', currencyAmount: '70' },
-            body: { transactionId: 'tx_body_222', currencyAmount: '70', userId: TEST_USER_ID, signature: 'any' },
+            query: { transactionId: 'tx_query_111', currencyAmount: '70', status: 'credited' },
+            body: { transactionId: 'tx_body_222', currencyAmount: '70', status: 'credited', userId: TEST_USER_ID, signature: 'any' },
             headers: {}
         };
         const res = createMockRes();
@@ -539,7 +544,7 @@ const runTest = async (name, fn) => {
         const req = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
-            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, test: '1', signature: sig },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, status: 'credited', test: '1', signature: sig },
             body: {},
             headers: {}
         };
@@ -555,7 +560,7 @@ const runTest = async (name, fn) => {
         const req = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
-            query: { userId: TEST_USER_ID, transactionId: 'ow_tx_test_bad', currencyAmount: '70', test: '1', signature: 'bad_signature_xxx' },
+            query: { userId: TEST_USER_ID, transactionId: 'ow_tx_test_bad', currencyAmount: '70', status: 'credited', test: '1', signature: 'bad_signature_xxx' },
             body: {},
             headers: {}
         };
@@ -573,13 +578,13 @@ const runTest = async (name, fn) => {
         user.taskWalletBalance = 0;
 
         const txId = 'ow_tx_split_calc';
-        const amount = '73.5'; // 70 Coins = $1 -> $1.05 = 73.5 Coins
+        const amount = '70'; // 70 Coins = $1.00 gross -> $0.70 user reward
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const req = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
-            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, payoutUsd: '1.50', signature: sig },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, payoutUsd: '1.00', status: 'credited', signature: sig },
             body: {},
             headers: {}
         };
@@ -587,7 +592,7 @@ const runTest = async (name, fn) => {
         await handlePostback(req, res);
 
         assert.equal(res.statusCode, 200);
-        assert.equal(user.taskEarningsBalance, 1.05); // 70% of $1.50
+        assert.equal(user.taskEarningsBalance, 0.70); // 70% of $1.00
     });
 
     await runTest('T19: Duplicate credit returns HTTP 200 without second crediting', async () => {
@@ -595,13 +600,13 @@ const runTest = async (name, fn) => {
         const balanceBefore = user.taskEarningsBalance;
 
         const txId = 'ow_tx_split_calc'; // Same as T18
-        const amount = '73.5';
+        const amount = '70';
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const req = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
-            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, payoutUsd: '1.50', signature: sig },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, payoutUsd: '1.00', status: 'credited', signature: sig },
             body: {},
             headers: {}
         };
@@ -623,7 +628,7 @@ const runTest = async (name, fn) => {
         const makeReq = () => ({
             method: 'GET',
             params: { provider: 'offerwall_gg' },
-            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, payoutUsd: '1.00', signature: sig },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, payoutUsd: '1.00', status: 'credited', signature: sig },
             body: {},
             headers: {}
         });
@@ -643,8 +648,8 @@ const runTest = async (name, fn) => {
         const user = db.users.get(TEST_USER_ID);
         const balanceBefore = user.taskEarningsBalance;
 
-        const txId = 'ow_tx_split_calc'; // Originally credited $1.05
-        const amount = '-73.5';
+        const txId = 'ow_tx_split_calc'; // Originally credited $0.70
+        const amount = '-70';
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const req = {
@@ -658,7 +663,7 @@ const runTest = async (name, fn) => {
         await handlePostback(req, res);
 
         assert.equal(res.statusCode, 200);
-        assert.equal(Number(user.taskEarningsBalance.toFixed(2)), Number((balanceBefore - 1.05).toFixed(2)));
+        assert.equal(Number(user.taskEarningsBalance.toFixed(2)), Number((balanceBefore - 0.70).toFixed(2)));
     });
 
     await runTest('T22: Duplicate reversal acknowledged without double deduction', async () => {
@@ -666,7 +671,7 @@ const runTest = async (name, fn) => {
         const balanceBefore = user.taskEarningsBalance;
 
         const txId = 'ow_tx_split_calc';
-        const amount = '-73.5';
+        const amount = '-70';
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const req = {
@@ -683,39 +688,39 @@ const runTest = async (name, fn) => {
         assert.equal(user.taskEarningsBalance, balanceBefore, 'Duplicate reversal must not deduct again');
     });
 
-    await runTest('T23: Negative amount reversal without explicit status recognized as reversal', async () => {
+    await runTest('T23: Reversal with negative currencyAmount and status=reversed recognized as reversal', async () => {
         // First credit
         const txId = 'ow_tx_neg_amount_test';
         const credAmount = '70';
         const credSig = computeSignature(TEST_USER_ID, txId, credAmount);
         const resCred = createMockRes();
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: credAmount, payoutUsd: '1.00', signature: credSig }, body: {}, headers: {} }, resCred);
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: credAmount, payoutUsd: '1.00', status: 'credited', signature: credSig }, body: {}, headers: {} }, resCred);
 
         const user = db.users.get(TEST_USER_ID);
         const midBalance = user.taskEarningsBalance;
 
-        // Reversal with negative amount
+        // Reversal with negative amount and status=reversed
         const revAmount = '-70';
         const revSig = computeSignature(TEST_USER_ID, txId, revAmount);
         const resRev = createMockRes();
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: revAmount, signature: revSig }, body: {}, headers: {} }, resRev);
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: revAmount, status: 'reversed', signature: revSig }, body: {}, headers: {} }, resRev);
 
         assert.equal(resRev.statusCode, 200);
         assert.equal(Number((midBalance - user.taskEarningsBalance).toFixed(2)), 0.70);
     });
 
-    await runTest('T24: status=reversed with positive currencyAmount handled as reversal', async () => {
+    await runTest('T24: status=reversed with negative currencyAmount handled as reversal', async () => {
         const txId = 'ow_tx_status_rev_test';
         const credSig = computeSignature(TEST_USER_ID, txId, '70');
         const resCred = createMockRes();
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', signature: credSig }, body: {}, headers: {} }, resCred);
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: credSig }, body: {}, headers: {} }, resCred);
 
         const user = db.users.get(TEST_USER_ID);
         const midBalance = user.taskEarningsBalance;
 
-        const revSig = computeSignature(TEST_USER_ID, txId, '70');
+        const revSig = computeSignature(TEST_USER_ID, txId, '-70');
         const resRev = createMockRes();
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'reversed', signature: revSig }, body: {}, headers: {} }, resRev);
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '-70', status: 'reversed', signature: revSig }, body: {}, headers: {} }, resRev);
 
         assert.equal(resRev.statusCode, 200);
         assert.equal(Number((midBalance - user.taskEarningsBalance).toFixed(2)), 0.70);
@@ -728,7 +733,7 @@ const runTest = async (name, fn) => {
         const txId = 'ow_tx_unmatched_first';
         const revSig = computeSignature(TEST_USER_ID, txId, '-70');
         const resRev = createMockRes();
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '-70', signature: revSig }, body: {}, headers: {} }, resRev);
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '-70', status: 'reversed', signature: revSig }, body: {}, headers: {} }, resRev);
 
         assert.equal(resRev.statusCode, 200);
         assert.equal(user.taskEarningsBalance, startBalance, 'Unmatched reversal must not deduct balance');
@@ -745,7 +750,7 @@ const runTest = async (name, fn) => {
         const txId = 'ow_tx_unmatched_first'; // From T25
         const credSig = computeSignature(TEST_USER_ID, txId, '70');
         const resCred = createMockRes();
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', signature: credSig }, body: {}, headers: {} }, resCred);
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: credSig }, body: {}, headers: {} }, resCred);
 
         assert.equal(resCred.statusCode, 200);
         assert.equal(user.taskEarningsBalance, startBalance, 'Late credit must be blocked by pre-existing reversal marker');
@@ -758,7 +763,7 @@ const runTest = async (name, fn) => {
 
         const txId = 'ow_tx_deficit_case';
         const credSig = computeSignature(TEST_USER_ID, txId, '70');
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', signature: credSig }, body: {}, headers: {} }, createMockRes());
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: credSig }, body: {}, headers: {} }, createMockRes());
 
         // Balance is now 0.20 + 0.70 = 0.90
         // Now withdraw/reset balance to 0.20
@@ -767,7 +772,7 @@ const runTest = async (name, fn) => {
         // Reversal of $0.70 occurs
         const revSig = computeSignature(TEST_USER_ID, txId, '-70');
         const resRev = createMockRes();
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '-70', signature: revSig }, body: {}, headers: {} }, resRev);
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '-70', status: 'reversed', signature: revSig }, body: {}, headers: {} }, resRev);
 
         assert.equal(resRev.statusCode, 200);
         assert.equal(user.taskEarningsBalance, 0, 'Balance must floor at 0 rather than becoming negative');
@@ -779,19 +784,19 @@ const runTest = async (name, fn) => {
         user.taskEarningsBalance = 0;
 
         const txId = 'ow_tx_precise_split';
-        const amount = '73.50';
+        const amount = '70.00';
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const req = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
-            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, payoutUsd: '1.50', signature: sig },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, payoutUsd: '1.00', status: 'credited', signature: sig },
             body: {},
             headers: {}
         };
         await handlePostback(req, createMockRes());
 
-        assert.equal(user.taskEarningsBalance, 1.05);
+        assert.equal(user.taskEarningsBalance, 0.70);
     });
 
     console.log('\n--- SECTION 5: Provider Placement, Targeting & Visibility Gates ---');
@@ -1104,6 +1109,13 @@ const runTest = async (name, fn) => {
     });
 
     await runTest('T43: Tampering payoutUsd with valid HMAC does not alter credited reward', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        if (owProvider) {
+            owProvider.enabled = true;
+            owProvider.status = 'ACTIVE';
+            owProvider.approvalStatus = 'Approved';
+        }
+
         const user = db.users.get(TEST_USER_ID);
         user.taskEarningsBalance = 10.0;
         user.taskWalletBalance = 10.0;
@@ -1134,6 +1146,13 @@ const runTest = async (name, fn) => {
     });
 
     await runTest('T44: Status and sign consistency validation (positive amount with status=reversed rejected)', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        if (owProvider) {
+            owProvider.enabled = true;
+            owProvider.status = 'ACTIVE';
+            owProvider.approvalStatus = 'Approved';
+        }
+
         const txId = 'ow_tx_invalid_status_sign';
         const amount = '70.00';
         const sig = computeSignature(TEST_USER_ID, txId, amount);
@@ -1163,14 +1182,16 @@ const runTest = async (name, fn) => {
         owProvider.enabled = true;
         owProvider.approvalStatus = 'Pending'; // Not Approved
 
+        const pId = '64f1a2b3c4d5e6f7a8b9c0d9'; // Valid 24-char hex ID
         const placement = {
+            _id: pId,
             providerKey: 'offerwall_gg',
             parentTabId: 'offerwalls_main',
             placementEnabled: true,
+            offerwallVisibility: true,
             availableTasksVisibility: true,
             trustedLaunchDomains: ['offerwall.gg']
         };
-        const pId = 'p_ow_unapproved';
         db.placements.set(pId, placement);
 
         const req = {
@@ -1210,6 +1231,25 @@ const runTest = async (name, fn) => {
         await handlePostback(req, res);
 
         assert.equal(res.statusCode, 403); // Testing state rejected for live credit
+    });
+
+    await runTest('T47: getOfferwallProviders returns serverSecretConfigured boolean for admin users', async () => {
+        process.env.OFFERWALL_GG_SECRET_KEY = 'test_secret_key';
+        const adminReq = { user: { id: TEST_USER_ID, role: 'admin' } };
+        const res1 = createMockRes();
+        await getOfferwallProviders(adminReq, res1);
+
+        const provider1 = res1.body?.data?.find(p => p.providerKey === 'offerwall_gg');
+        assert.ok(provider1, 'Offerwall.GG provider should be returned for admin');
+        assert.equal(provider1.serverSecretConfigured, true, 'serverSecretConfigured should be true when secret env var is present');
+
+        delete process.env.OFFERWALL_GG_SECRET_KEY;
+        const res2 = createMockRes();
+        await getOfferwallProviders(adminReq, res2);
+
+        const provider2 = res2.body?.data?.find(p => p.providerKey === 'offerwall_gg');
+        assert.ok(provider2, 'Offerwall.GG provider should be returned for admin');
+        assert.equal(provider2.serverSecretConfigured, false, 'serverSecretConfigured should be false when secret env var is missing');
     });
 
     console.log(`\n========================================================`);
