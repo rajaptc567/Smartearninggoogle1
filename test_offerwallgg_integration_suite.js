@@ -534,6 +534,14 @@ const runTest = async (name, fn) => {
     console.log('\n--- SECTION 3: Test Callback Isolation (test=1) ---');
 
     await runTest('T16: test=1 with valid signature acknowledged with HTTP 200 without balance mutation', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        if (owProvider) {
+            owProvider.enabled = false;
+            owProvider.status = 'NOT_STARTED';
+            owProvider.approvalStatus = 'Pending';
+            owProvider.testMode = true;
+        }
+
         const user = db.users.get(TEST_USER_ID);
         const balanceBefore = user.taskEarningsBalance;
 
@@ -557,6 +565,14 @@ const runTest = async (name, fn) => {
     });
 
     await runTest('T17: test=1 with invalid signature strictly rejected with HTTP 400', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        if (owProvider) {
+            owProvider.enabled = false;
+            owProvider.status = 'NOT_STARTED';
+            owProvider.approvalStatus = 'Pending';
+            owProvider.testMode = true;
+        }
+
         const req = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
@@ -573,6 +589,14 @@ const runTest = async (name, fn) => {
     console.log('\n--- SECTION 4: Financial Accounting, Idempotency & Reversals ---');
 
     await runTest('T18: Normal credit splits 70% user / 30% platform on payoutUsd', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        if (owProvider) {
+            owProvider.enabled = true;
+            owProvider.status = 'ACTIVE';
+            owProvider.approvalStatus = 'Approved';
+            owProvider.testMode = false;
+        }
+
         const user = db.users.get(TEST_USER_ID);
         user.taskEarningsBalance = 0;
         user.taskWalletBalance = 0;
@@ -1252,17 +1276,21 @@ const runTest = async (name, fn) => {
         assert.equal(provider2.serverSecretConfigured, false, 'serverSecretConfigured should be false when secret env var is missing');
     });
 
-    await runTest('T48: Disabled Offerwall.GG + valid test=1 + valid signature => HTTP 200 with zero financial mutations', async () => {
+    await runTest('T48: Disabled Offerwall.GG + testMode true + valid HMAC + test=1 => HTTP 200 TestCallback with zero financial mutations', async () => {
         process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
         const owProvider = db.providers.get('offerwall_gg');
         owProvider.enabled = false;
         owProvider.status = 'NOT_STARTED';
         owProvider.approvalStatus = 'Pending';
+        owProvider.testMode = true;
 
         const syntheticUserId = 'synthetic_test_user_999';
         const txId = 'ow_tx_test_disabled_provider';
         const amount = '70.00';
         const sig = computeSignature(syntheticUserId, txId, amount);
+
+        const txCountBefore = db.transactions.size;
+        const logCountBefore = db.logs.size;
 
         const req = {
             method: 'GET',
@@ -1276,50 +1304,75 @@ const runTest = async (name, fn) => {
 
         assert.equal(res.statusCode, 200);
         assert.equal(res.body, 'OK');
+        assert.equal(db.transactions.size, txCountBefore, 'No transaction creation allowed');
+        assert.equal(db.logs.size, logCountBefore + 1, 'Postback log recorded');
+        const lastLog = Array.from(db.logs.values()).pop();
+        assert.equal(lastLog.status, 'TestCallback', 'Log status must be TestCallback');
     });
 
-    await runTest('T49: Disabled Offerwall.GG + normal live callback => HTTP 403', async () => {
+    await runTest('T49: Disabled Offerwall.GG + testMode false + test=1 => Rejected with HTTP 403', async () => {
         process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
         const owProvider = db.providers.get('offerwall_gg');
         owProvider.enabled = false;
         owProvider.status = 'NOT_STARTED';
+        owProvider.approvalStatus = 'Pending';
+        owProvider.testMode = false;
 
-        const txId = 'ow_tx_live_disabled_provider';
+        const txId = 'ow_tx_test_disabled_testmode_false';
         const amount = '70.00';
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const req = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
-            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, status: 'credited', signature: sig },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: amount, status: 'credited', test: '1', signature: sig },
             body: {},
             headers: {}
         };
         const res = createMockRes();
         await handlePostback(req, res);
 
-        assert.equal(res.statusCode, 403);
+        assert.equal(res.statusCode, 403, 'Must be rejected by inactive-provider protection when testMode is false');
     });
 
-    await runTest('T50: Test callback with missing signature rejected with HTTP 400', async () => {
+    await runTest('T50: Missing or invalid signature in test mode rejected with HTTP 400', async () => {
         process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
-        const req = {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = false;
+        owProvider.status = 'NOT_STARTED';
+        owProvider.testMode = true;
+
+        const reqMissing = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
             query: { userId: TEST_USER_ID, transactionId: 'ow_tx_test_nosig', currencyAmount: '70', status: 'credited', test: '1' },
             body: {},
             headers: {}
         };
-        const res = createMockRes();
-        await handlePostback(req, res);
+        const resMissing = createMockRes();
+        await handlePostback(reqMissing, resMissing);
 
-        assert.equal(res.statusCode, 400);
+        assert.equal(resMissing.statusCode, 400, 'Missing signature must be rejected with HTTP 400');
+
+        const reqInvalid = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: 'ow_tx_test_badsig', currencyAmount: '70', status: 'credited', test: '1', signature: 'bad_signature_xyz' },
+            body: {},
+            headers: {}
+        };
+        const resInvalid = createMockRes();
+        await handlePostback(reqInvalid, resInvalid);
+
+        assert.equal(resInvalid.statusCode, 400, 'Invalid signature must be rejected with HTTP 400');
     });
 
-    await runTest('T51: Test callback with synthetic/nonexistent user ID returns HTTP 200 after signature validation', async () => {
+    await runTest('T51: Synthetic/nonexistent user ID in authorized server-side test mode returns HTTP 200 without real user', async () => {
         process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
         const owProvider = db.providers.get('offerwall_gg');
         owProvider.enabled = false;
+        owProvider.status = 'NOT_STARTED';
+        owProvider.testMode = true;
 
         const syntheticUserId = 'nonexistent_synthetic_user_id_12345';
         const txId = 'ow_tx_test_synthetic_user';
@@ -1338,6 +1391,48 @@ const runTest = async (name, fn) => {
 
         assert.equal(res.statusCode, 200);
         assert.equal(res.body, 'OK');
+    });
+
+    await runTest('T52: ACTIVE provider + test=1 processes as normal live callback without bypassing financial crediting', async () => {
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Approved';
+        owProvider.testMode = false; // Server-side testMode disabled
+
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 10.00;
+        user.taskWalletBalance = 10.00;
+
+        const txId = 'ow_tx_active_with_test_param';
+        const amount = '70.00'; // $1.00 gross -> $0.70 reward
+        const sig = computeSignature(TEST_USER_ID, txId, amount);
+
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: {
+                userId: TEST_USER_ID,
+                transactionId: txId,
+                currencyAmount: amount,
+                status: 'credited',
+                test: '1', // Unsigned test parameter appended
+                signature: sig
+            },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body, 'OK');
+        assert.equal(user.taskEarningsBalance, 10.70, 'Normal authenticated live credit must occur despite test=1 param');
+
+        const tx = await Transaction.findOne({ idempotencyKey: `offerwall_gg_${txId}_credit` });
+        assert.ok(tx, 'Live transaction record must be created');
+        assert.equal(tx.amount, 0.70, 'Transaction amount must match expected reward');
     });
 
     console.log(`\n========================================================`);
