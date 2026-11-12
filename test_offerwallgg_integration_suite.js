@@ -97,8 +97,20 @@ User.findOneAndUpdate = async (filter, update) => {
 };
 
 OfferwallProvider.findOne = async (query) => {
-    const key = query.providerKey?.toLowerCase();
-    return db.providers.get(key) || null;
+    if (!query) return null;
+    let targetKey = typeof query.providerKey === 'string' ? query.providerKey.toLowerCase() : null;
+    if (!targetKey && query.providerKey && Array.isArray(query.providerKey.$in)) {
+        for (const k of query.providerKey.$in) {
+            if (typeof k === 'string' && db.providers.has(k.toLowerCase())) {
+                targetKey = k.toLowerCase();
+                break;
+            }
+        }
+        if (!targetKey && query.providerKey.$in[0]) {
+            targetKey = String(query.providerKey.$in[0]).toLowerCase();
+        }
+    }
+    return (targetKey ? db.providers.get(targetKey) : null) || null;
 };
 OfferwallProvider.find = (query = {}) => {
     const all = Array.from(db.providers.values()).map(p => ({
@@ -257,6 +269,7 @@ ProviderPlacement.find = (query = {}) => {
         let res = items;
         if (query.parentTabId) res = res.filter(p => p.parentTabId === query.parentTabId);
         if (query.placementEnabled !== undefined) res = res.filter(p => p.placementEnabled === query.placementEnabled);
+        if (query.availableTasksVisibility !== undefined) res = res.filter(p => p.availableTasksVisibility === query.availableTasksVisibility);
         return res;
     };
     const queryObj = {
@@ -1757,6 +1770,98 @@ const runTest = async (name, fn) => {
         assert.equal(res.body.launchUrl, `https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId=${TEST_USER_ID}&app=9604`);
         assert.equal(res.body.launchUrl.includes(TEST_USER_ID), true);
         assert.equal(res.body.launchUrl.includes('{user_id}'), false);
+    });
+
+    await runTest('T59: placementEnabled=false or availableTasksVisibility=false excludes placement from getAvailablePlacements', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Approved';
+
+        const pId1 = '64f1a2b3c4d5e6f7a8b9c0e2';
+        const placement1 = {
+            _id: pId1,
+            providerKey: 'offerwall_gg',
+            parentTabId: 'available_jobs',
+            subTabId: '',
+            placementEnabled: false, // Disabled
+            availableTasksVisibility: true
+        };
+        db.placements.set(pId1, placement1);
+
+        const req = { user: { id: TEST_USER_ID }, params: { parentTabId: 'available_jobs' } };
+        const res1 = createMockRes();
+        await getAvailablePlacements(req, res1);
+        const found1 = res1.body?.data?.find(p => p._id === pId1);
+        assert.equal(found1, undefined, 'placementEnabled=false must be excluded');
+
+        const pId2 = '64f1a2b3c4d5e6f7a8b9c0e3';
+        const placement2 = {
+            _id: pId2,
+            providerKey: 'offerwall_gg',
+            parentTabId: 'available_jobs',
+            subTabId: '',
+            placementEnabled: true,
+            availableTasksVisibility: false // Hidden from available tasks
+        };
+        db.placements.set(pId2, placement2);
+
+        const res2 = createMockRes();
+        await getAvailablePlacements(req, res2);
+        const found2 = res2.body?.data?.find(p => p._id === pId2);
+        assert.equal(found2, undefined, 'availableTasksVisibility=false must be excluded');
+    });
+
+    await runTest('T60: Rejected approvalStatus excludes placement from getAvailablePlacements', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Rejected';
+
+        const pId = '64f1a2b3c4d5e6f7a8b9c0e4';
+        const placement = {
+            _id: pId,
+            providerKey: 'offerwall_gg',
+            parentTabId: 'available_jobs',
+            subTabId: '',
+            placementEnabled: true,
+            availableTasksVisibility: true
+        };
+        db.placements.set(pId, placement);
+
+        const req = { user: { id: TEST_USER_ID }, params: { parentTabId: 'available_jobs' } };
+        const res = createMockRes();
+        await getAvailablePlacements(req, res);
+        const found = res.body?.data?.find(p => p._id === pId);
+        assert.equal(found, undefined, 'Rejected approvalStatus must be excluded from Available Tasks');
+    });
+
+    await runTest('T61: Provider key alias offerwallgg matches provider record offerwall_gg in placement launch', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Approved';
+        owProvider.appId = '9604';
+        owProvider.iframeUrlTemplate = 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={user_id}';
+
+        const pId = '64f1a2b3c4d5e6f7a8b9c0e5';
+        const placement = {
+            _id: pId,
+            providerKey: 'offerwallgg', // Alias key
+            parentTabId: 'available_jobs',
+            subTabId: '',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            trustedLaunchDomains: ['offerwall.gg']
+        };
+        db.placements.set(pId, placement);
+
+        const req = { user: { id: TEST_USER_ID }, params: { placementId: pId } };
+        const res = createMockRes();
+        await launchProviderPlacement(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.launchUrl, `https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId=${TEST_USER_ID}`);
     });
 
     console.log(`\n========================================================`);

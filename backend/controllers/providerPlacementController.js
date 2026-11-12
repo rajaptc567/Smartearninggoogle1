@@ -139,14 +139,22 @@ export const getAvailablePlacements = async (req, res) => {
         }
 
         // 3. Fetch Operational State for required providers
-        const providerKeys = [...new Set(placements.map(p => p.providerKey))];
+        const requestedKeys = placements.map(p => p.providerKey);
+        const canonicalKeys = requestedKeys.map(k => (k === 'offerwallgg' ? 'offerwall_gg' : k));
+        const providerKeys = [...new Set([...requestedKeys, ...canonicalKeys])];
         const providers = await OfferwallProvider.find({
             providerKey: { $in: providerKeys },
             enabled: true,
             status: 'ACTIVE'
         }).select('providerKey name category group status enabled approvalStatus badge icon description').lean();
 
-        const providerMap = new Map(providers.map(p => [p.providerKey, p]));
+        const providerMap = new Map();
+        for (const p of providers) {
+            providerMap.set(p.providerKey, p);
+            if (p.providerKey === 'offerwall_gg') {
+                providerMap.set('offerwallgg', p);
+            }
+        }
 
         // 4. Filter Placements by Provider Operational State & Worker Eligibility
         const eligiblePlacements = [];
@@ -278,7 +286,8 @@ export const launchProviderPlacement = async (req, res) => {
         }
 
         // 3. Verify Operational OfferwallProvider State
-        const provider = await OfferwallProvider.findOne({ providerKey: placement.providerKey });
+        const searchKey = placement.providerKey === 'offerwallgg' ? 'offerwall_gg' : placement.providerKey;
+        const provider = await OfferwallProvider.findOne({ providerKey: { $in: [placement.providerKey, searchKey] } });
         if (!provider || provider.enabled !== true || provider.status !== 'ACTIVE') {
             return res.status(400).json({ success: false, error: 'Offerwall provider is operationally disabled or not active' });
         }
