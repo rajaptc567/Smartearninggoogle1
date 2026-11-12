@@ -1346,13 +1346,16 @@ const runTest = async (name, fn) => {
         const user = db.users.get(TEST_USER_ID);
         const taskEarningsBefore = user.taskEarningsBalance;
         const taskWalletBefore = user.taskWalletBalance;
+        const walletBalanceBefore = user.walletBalance;
 
         const txId = 'ow_tx_test_disabled_testmode_false';
         const amount = '70.00';
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const txCountBefore = db.transactions.size;
+        const logCountBefore = db.logs.size;
         const notifCountBefore = db.notifications.size;
+        db.userLookupCalls = [];
 
         const req = {
             method: 'GET',
@@ -1365,10 +1368,14 @@ const runTest = async (name, fn) => {
         await handlePostback(req, res);
 
         assert.equal(res.statusCode, 403, 'Must be rejected by inactive-provider protection when testMode is false');
+        assert.equal(res.body.error.includes('PROVIDER_INACTIVE'), true, 'Error response must state PROVIDER_INACTIVE');
         assert.equal(db.transactions.size, txCountBefore, 'No transaction created on rejected request');
         assert.equal(db.notifications.size, notifCountBefore, 'No notification dispatched on rejected request');
         assert.equal(user.taskEarningsBalance, taskEarningsBefore, 'Task earnings balance unchanged');
         assert.equal(user.taskWalletBalance, taskWalletBefore, 'Task wallet balance unchanged');
+        assert.equal(user.walletBalance, walletBalanceBefore, 'Core deposit wallet balance unchanged');
+        assert.equal(db.userLookupCalls.length, 0, 'No user lookup on 403 rejection');
+        assert.equal(db.logs.size, logCountBefore, 'No log entry created on early 403 inactive-provider guard');
     });
 
     await runTest('T50: Missing or invalid signature in test mode rejected with HTTP 400', async () => {
@@ -1380,9 +1387,14 @@ const runTest = async (name, fn) => {
 
         const user = db.users.get(TEST_USER_ID);
         const taskEarningsBefore = user.taskEarningsBalance;
+        const taskWalletBefore = user.taskWalletBalance;
+        const walletBalanceBefore = user.walletBalance;
         const txCountBefore = db.transactions.size;
+        const logCountBefore = db.logs.size;
         const notifCountBefore = db.notifications.size;
+        db.userLookupCalls = [];
 
+        // Sub-test 1: Missing signature
         const reqMissing = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
@@ -1394,10 +1406,19 @@ const runTest = async (name, fn) => {
         await handlePostback(reqMissing, resMissing);
 
         assert.equal(resMissing.statusCode, 400, 'Missing signature must be rejected with HTTP 400');
+        assert.equal(resMissing.body, 'INVALID_SIGNATURE', 'Missing signature body must be INVALID_SIGNATURE');
         assert.equal(db.transactions.size, txCountBefore, 'No transaction created on missing signature');
         assert.equal(db.notifications.size, notifCountBefore, 'No notification dispatched on missing signature');
-        assert.equal(user.taskEarningsBalance, taskEarningsBefore, 'Balance unchanged on missing signature');
+        assert.equal(user.taskEarningsBalance, taskEarningsBefore, 'Task earnings balance unchanged on missing signature');
+        assert.equal(user.taskWalletBalance, taskWalletBefore, 'Task wallet balance unchanged on missing signature');
+        assert.equal(user.walletBalance, walletBalanceBefore, 'Core deposit wallet balance unchanged on missing signature');
+        assert.equal(db.userLookupCalls.length, 0, 'No user lookup on missing signature');
+        assert.equal(db.logs.size, logCountBefore + 1, 'Audit log recorded for missing signature');
+        const logMissing = Array.from(db.logs.values()).pop();
+        assert.equal(logMissing.status, 'InvalidSignature', 'Missing signature log status must be InvalidSignature');
+        assert.equal(logMissing.signatureStatus, 'Invalid', 'Missing signature status must be Invalid');
 
+        // Sub-test 2: Invalid signature
         const reqInvalid = {
             method: 'GET',
             params: { provider: 'offerwall_gg' },
@@ -1409,9 +1430,17 @@ const runTest = async (name, fn) => {
         await handlePostback(reqInvalid, resInvalid);
 
         assert.equal(resInvalid.statusCode, 400, 'Invalid signature must be rejected with HTTP 400');
+        assert.equal(resInvalid.body, 'INVALID_SIGNATURE', 'Invalid signature body must be INVALID_SIGNATURE');
         assert.equal(db.transactions.size, txCountBefore, 'No transaction created on invalid signature');
         assert.equal(db.notifications.size, notifCountBefore, 'No notification dispatched on invalid signature');
-        assert.equal(user.taskEarningsBalance, taskEarningsBefore, 'Balance unchanged on invalid signature');
+        assert.equal(user.taskEarningsBalance, taskEarningsBefore, 'Task earnings balance unchanged on invalid signature');
+        assert.equal(user.taskWalletBalance, taskWalletBefore, 'Task wallet balance unchanged on invalid signature');
+        assert.equal(user.walletBalance, walletBalanceBefore, 'Core deposit wallet balance unchanged on invalid signature');
+        assert.equal(db.userLookupCalls.length, 0, 'No user lookup on invalid signature');
+        assert.equal(db.logs.size, logCountBefore + 2, 'Audit log recorded for invalid signature');
+        const logInvalid = Array.from(db.logs.values()).pop();
+        assert.equal(logInvalid.status, 'InvalidSignature', 'Invalid signature log status must be InvalidSignature');
+        assert.equal(logInvalid.signatureStatus, 'Invalid', 'Invalid signature status must be Invalid');
     });
 
     await runTest('T51: Synthetic/nonexistent user ID in authorized server-side test mode returns HTTP 200 without real user lookup or financial mutation', async () => {
@@ -1419,7 +1448,13 @@ const runTest = async (name, fn) => {
         const owProvider = db.providers.get('offerwall_gg');
         owProvider.enabled = false;
         owProvider.status = 'NOT_STARTED';
+        owProvider.approvalStatus = 'Pending';
         owProvider.testMode = true;
+
+        const user = db.users.get(TEST_USER_ID);
+        const taskEarningsBefore = user.taskEarningsBalance;
+        const taskWalletBefore = user.taskWalletBalance;
+        const walletBalanceBefore = user.walletBalance;
 
         const syntheticUserId = 'nonexistent_synthetic_user_id_12345';
         const txId = 'ow_tx_test_synthetic_user';
@@ -1446,6 +1481,9 @@ const runTest = async (name, fn) => {
         assert.equal(db.userLookupCalls.length, 0, 'No user lookup performed for synthetic user in test mode');
         assert.equal(db.transactions.size, txCountBefore, 'No transaction created for synthetic user test mode callback');
         assert.equal(db.notifications.size, notifCountBefore, 'No notification dispatched for synthetic user test mode callback');
+        assert.equal(user.taskEarningsBalance, taskEarningsBefore, 'Real user task earnings balance unchanged');
+        assert.equal(user.taskWalletBalance, taskWalletBefore, 'Real user task wallet balance unchanged');
+        assert.equal(user.walletBalance, walletBalanceBefore, 'Real user core deposit wallet balance unchanged');
         assert.equal(db.logs.size, logCountBefore + 1, 'Postback log recorded');
         const lastLog = Array.from(db.logs.values()).pop();
         assert.equal(lastLog.status, 'TestCallback', 'Log status must be TestCallback');
@@ -1462,9 +1500,10 @@ const runTest = async (name, fn) => {
         const user = db.users.get(TEST_USER_ID);
         user.taskEarningsBalance = 10.00;
         user.taskWalletBalance = 10.00;
+        const walletBalanceBefore = user.walletBalance;
 
         const txId = 'ow_tx_active_with_test_param';
-        const amount = '70.00'; // $1.00 gross -> $0.70 reward
+        const amount = '70.00'; // $1.00 gross -> $0.70 reward (70 Coins = $1 USD, 70% share)
         const sig = computeSignature(TEST_USER_ID, txId, amount);
 
         const txCountBefore = db.transactions.size;
@@ -1491,6 +1530,8 @@ const runTest = async (name, fn) => {
         assert.equal(res.statusCode, 200);
         assert.equal(res.body, 'OK');
         assert.equal(user.taskEarningsBalance, 10.70, 'Normal authenticated live credit must occur despite test=1 param');
+        assert.equal(user.taskWalletBalance, 10.70, 'Task wallet balance updated with reward');
+        assert.equal(user.walletBalance, walletBalanceBefore, 'Core deposit wallet balance remains untouched');
         assert.ok(db.userLookupCalls.length > 0, 'User lookup must be performed for live authenticated callback');
 
         const tx = await Transaction.findOne({ idempotencyKey: `offerwall_gg_${txId}_credit` });
