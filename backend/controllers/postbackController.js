@@ -377,10 +377,10 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
             return { valid: false, error: 'Offerwall.GG signature missing; failing closed' };
         }
 
-        // Exact transmitted string values: preserve formatting and do NOT parse as Number
-        const strUser = String(rawUserId).trim();
-        const strTx = String(rawTxId).trim();
-        const strAmount = String(rawCurrencyAmount).trim();
+        // Exact transmitted string values: preserve formatting and do NOT trim or numerically normalize before hashing
+        const strUser = String(rawUserId);
+        const strTx = String(rawTxId);
+        const strAmount = String(rawCurrencyAmount);
         const strReceived = String(receivedSig).trim();
 
         const message = `${strUser}:${strTx}:${strAmount}`;
@@ -738,12 +738,18 @@ const normalizePostbackParams = (providerKey, rawParams) => {
 
     // Detect Reversal / Chargeback
     let isReversal = false;
+    let offerwallStatusValid = true;
     if (key === 'offerwall_gg' || key === 'offerwallgg') {
         const rawStatus = String(p.status || '').trim().toLowerCase();
-        if (rawStatus === 'reversed' || Number(rawAmount) < 0) {
-            isReversal = true;
+        const amtNum = Number(rawAmount);
+        if (!rawStatus || (rawStatus !== 'credited' && rawStatus !== 'reversed') || isNaN(amtNum) || amtNum === 0) {
+            offerwallStatusValid = false;
         } else if (rawStatus === 'credited') {
+            if (amtNum <= 0) offerwallStatusValid = false;
             isReversal = false;
+        } else if (rawStatus === 'reversed') {
+            if (amtNum >= 0) offerwallStatusValid = false;
+            isReversal = true;
         }
     } else if (key === 'cpx_research') {
         // CPX Research reversal handling is strictly tied to status=2 or explicit reversal type
@@ -818,6 +824,7 @@ const normalizePostbackParams = (providerKey, rawParams) => {
         offerName,
         eventType,
         isReversal,
+        statusValid: offerwallStatusValid,
         signature: String(p.sig || p.signature || p.hash || p.secure_hash || '').trim()
     };
 };
@@ -984,7 +991,38 @@ export const handlePostback = async (req, res) => {
         });
     }
 
+
+
+
+    // P14: Provider State & Approval Check for Offerwall.GG
+    if (providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') {
+        const isTest = rawParams.test === '1' || rawParams.test === 1 || rawParams.test === 'true' || rawParams.test === true;
+        if (provider.enabled !== true || provider.status !== 'ACTIVE' || provider.approvalStatus !== 'Approved') {
+            if (!isTest) {
+                return res.status(403).json({
+                    success: false,
+                    error: `PROVIDER_NOT_ACTIVE_OR_APPROVED: Offerwall.GG provider must be active, enabled, and approved for live financial credits.`
+                });
+            }
+        }
+    }
+
     const normalized = normalizePostbackParams(providerKey, rawParams);
+
+    if ((providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') && normalized.statusValid === false) {
+        if (isDryRun) {
+            req.dryRunResult = {
+                isDryRun: true,
+                mutationsPerformed: false,
+                provider: providerKey,
+                validation: {
+                    status: 'FAILED',
+                    error: 'INVALID_STATUS_OR_AMOUNT_CONSISTENCY'
+                }
+            };
+        }
+        return res.status(400).send('INVALID_STATUS_OR_AMOUNT_CONSISTENCY');
+    }
 
     // Fail closed if external transaction ID is missing - preserves strict idempotency
     if (!normalized.externalTxId) {
@@ -1449,18 +1487,13 @@ export const handlePostback = async (req, res) => {
             // ayeT-Studios payout_usd is the actual publisher revenue/payout in USD
             grossUSD = Number(Math.abs(Number(rawParams.payout_usd)).toFixed(4));
         } else if (providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') {
-            // Offerwall.GG Financial Split & Revenue Accounting
-            // If payoutUsd is provided in callback, it is the gross publisher revenue in USD.
-            // If payoutUsd is not provided, convert raw virtual currency (Coins) to USD using exchangeRateMultiplier (70 Coins = $1.00 USD).
-            const rawPayoutUsd = rawParams.payoutUsd !== undefined ? rawParams.payoutUsd : rawParams.payout_usd;
-            if (rawPayoutUsd !== undefined && rawPayoutUsd !== null && String(rawPayoutUsd).trim() !== '' && !isNaN(Number(rawPayoutUsd))) {
-                grossUSD = Number(Math.abs(Number(rawPayoutUsd)).toFixed(4));
-            } else {
-                const multiplier = (typeof provider.exchangeRateMultiplier === 'number' && provider.exchangeRateMultiplier > 0)
-                    ? provider.exchangeRateMultiplier
-                    : 70.0;
-                grossUSD = Number((absReward / multiplier).toFixed(4));
-            }
+            // Offerwall.GG: Authoritative financial input is exclusively the signed currencyAmount (70 Coins = $1.00 USD).
+            // Unsigned payoutUsd is strictly informational/diagnostic and must never determine user reward or reversal amount.
+            const multiplier = (typeof provider.exchangeRateMultiplier === 'number' && provider.exchangeRateMultiplier > 0)
+                ? provider.exchangeRateMultiplier
+                : 70.0;
+            grossUSD = Number((absReward / multiplier).toFixed(4));
+            log.infoPayoutUsd = rawParams.payoutUsd !== undefined ? rawParams.payoutUsd : (rawParams.payout_usd || null);
         } else {
             grossUSD = Number((absReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
         }
@@ -2491,6 +2524,9 @@ export const getOfferwallProviders = async (req, res) => {
                 if (obj.apiKey) obj.apiKey = '••••••••';
                 if (obj.secretKey) obj.secretKey = '••••••••';
                 if (obj.postbackKey) obj.postbackKey = '••••••••';
+                if (obj.providerKey === 'offerwall_gg' || obj.providerKey === 'offerwallgg') {
+                    obj.serverSecretConfigured = Boolean(process.env.OFFERWALL_GG_SECRET_KEY && process.env.OFFERWALL_GG_SECRET_KEY.trim());
+                }
                 return obj;
             });
             return res.status(200).json({ success: true, count: masked.length, data: masked });

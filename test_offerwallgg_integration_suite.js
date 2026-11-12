@@ -1103,6 +1103,115 @@ const runTest = async (name, fn) => {
         assert.equal(res.body, 'OK');
     });
 
+    await runTest('T43: Tampering payoutUsd with valid HMAC does not alter credited reward', async () => {
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 10.0;
+        user.taskWalletBalance = 10.0;
+
+        const txId = 'ow_tx_tamper_payout';
+        const amount = '70.00'; // $1.00 gross -> $0.70 reward
+        const sig = computeSignature(TEST_USER_ID, txId, amount);
+
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: {
+                userId: TEST_USER_ID,
+                transactionId: txId,
+                currencyAmount: amount,
+                payoutUsd: '999.00', // Tampered unsigned payoutUsd!
+                status: 'credited',
+                signature: sig
+            },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 10.70); // Credited based on currencyAmount ($1.00 * 70% = $0.70), ignoring $999.00 payoutUsd
+    });
+
+    await runTest('T44: Status and sign consistency validation (positive amount with status=reversed rejected)', async () => {
+        const txId = 'ow_tx_invalid_status_sign';
+        const amount = '70.00';
+        const sig = computeSignature(TEST_USER_ID, txId, amount);
+
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: {
+                userId: TEST_USER_ID,
+                transactionId: txId,
+                currencyAmount: amount,
+                status: 'reversed', // Mismatched status!
+                signature: sig
+            },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 400);
+    });
+
+    await runTest('T45: Offerwall.GG launch rejected unless approvalStatus is Approved', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.status = 'ACTIVE';
+        owProvider.enabled = true;
+        owProvider.approvalStatus = 'Pending'; // Not Approved
+
+        const placement = {
+            providerKey: 'offerwall_gg',
+            parentTabId: 'offerwalls_main',
+            placementEnabled: true,
+            availableTasksVisibility: true,
+            trustedLaunchDomains: ['offerwall.gg']
+        };
+        const pId = 'p_ow_unapproved';
+        db.placements.set(pId, placement);
+
+        const req = {
+            user: { id: TEST_USER_ID },
+            params: { placementId: pId }
+        };
+        const res = createMockRes();
+        await launchProviderPlacement(req, res);
+
+        assert.equal(res.statusCode, 403);
+    });
+
+    await runTest('T46: TESTING status cannot create live financial credit', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.status = 'TESTING';
+        owProvider.enabled = true;
+        owProvider.approvalStatus = 'Approved';
+
+        const txId = 'ow_tx_testing_state';
+        const amount = '70.00';
+        const sig = computeSignature(TEST_USER_ID, txId, amount);
+
+        const req = {
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: {
+                userId: TEST_USER_ID,
+                transactionId: txId,
+                currencyAmount: amount,
+                status: 'credited',
+                signature: sig
+            },
+            body: {},
+            headers: {}
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 403); // Testing state rejected for live credit
+    });
+
     console.log(`\n========================================================`);
     console.log(`RESULTS: ${passedTests}/${totalTests} tests passed.`);
     console.log(`========================================================\n`);

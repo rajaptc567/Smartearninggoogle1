@@ -277,6 +277,11 @@ export const launchProviderPlacement = async (req, res) => {
         if (!provider || provider.enabled !== true || provider.status !== 'ACTIVE') {
             return res.status(400).json({ success: false, error: 'Offerwall provider is operationally disabled or not active' });
         }
+        if (placement.providerKey === 'offerwall_gg' || placement.providerKey === 'offerwallgg') {
+            if (provider.enabled !== true || provider.status !== 'ACTIVE' || provider.approvalStatus !== 'Approved') {
+                return res.status(403).json({ success: false, error: 'Offerwall.GG provider is not active, enabled, or approved' });
+            }
+        }
         if (placement.providerKey === 'adgem') {
             if (user.adgemSuspended === true || user.restrictions?.adgemSuspended === true) {
                 return res.status(403).json({ success: false, error: 'User is suspended from AdGem offers' });
@@ -371,6 +376,9 @@ export const launchProviderPlacement = async (req, res) => {
             } else if (placement.providerKey === 'adgem') {
                 const adgemDomains = ['api.adgem.com', 'adgem.com'];
                 isTrusted = adgemDomains.some(d => isDomainTrusted(launchHost, d));
+            } else if (placement.providerKey === 'offerwall_gg' || placement.providerKey === 'offerwallgg') {
+                const owDomains = ['offerwall.gg'];
+                isTrusted = owDomains.some(d => isDomainTrusted(launchHost, d));
             }
 
             // Generic providers MUST have their host in the placement-level allowlist

@@ -45,6 +45,7 @@ interface OfferwallProvider {
     eventWebhookUrl?: string;
     rewardCallbackUrl?: string;
     includeReversalsInRewardCallback?: boolean;
+    serverSecretConfigured?: boolean;
 }
 
 interface PostbackLog {
