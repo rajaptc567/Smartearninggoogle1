@@ -368,7 +368,8 @@ export const ProviderPlacementManager: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {placements.map(p => {
                                 const prov = p.providerInfo;
-                                const isProvDisabled = !prov || !prov.enabled || prov.status === 'DISABLED' || prov.status === 'SUSPENDED' || prov.status === 'NOT_STARTED';
+                                const isOfferwallGg = ['offerwall_gg', 'offerwallgg', 'offerwall.gg'].includes((p.providerKey || '').toLowerCase());
+                                const isProvDisabled = !prov || !prov.enabled || prov.status === 'DISABLED' || prov.status === 'SUSPENDED' || prov.status === 'NOT_STARTED' || (isOfferwallGg && (prov.status !== 'ACTIVE' || prov.approvalStatus !== 'Approved'));
 
                                 return (
                                     <div
@@ -447,7 +448,7 @@ export const ProviderPlacementManager: React.FC = () => {
                                             {/* Operational Status Warning */}
                                             {p.placementEnabled && isProvDisabled && (
                                                 <div className="bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-xl text-[11px] text-amber-300 font-bold">
-                                                    ⚠️ Placement is ON, but underlying provider status is operationally OFF ({prov?.status || 'DISABLED'}). Placement will not display to workers.
+                                                    ⚠️ Placement is ON, but underlying provider is not live ({prov?.status || 'DISABLED'}{isOfferwallGg ? `, Approval: ${prov?.approvalStatus || 'Pending'}` : ''}). Placement will not display to workers.
                                                 </div>
                                             )}
                                         </div>

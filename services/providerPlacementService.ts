@@ -28,6 +28,7 @@ export interface ProviderPlacement {
         group: string;
         status: string;
         enabled: boolean;
+        approvalStatus?: string;
         icon?: string;
         badge?: string;
         description?: string;
