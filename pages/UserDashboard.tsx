@@ -10,8 +10,6 @@ import Badge from '../components/ui/Badge';
 import ShareButtons from '../components/ui/ShareButtons';
 import { LoadingCircle } from '../components/ui/LoadingCircle';
 import { canAccessInvestmentModule } from '../utils/investmentAccess';
-import { getVisibleEarnTabs } from '../utils/earnTabsHelper';
-import { useOtherTasksPrefetch } from '../hooks/useOtherTasksPrefetch';
 
 // Icons
 const WalletIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
@@ -109,21 +107,6 @@ const UserDashboard: React.FC = () => {
     }, []);
 
     const activeViewMode = viewMode === 'auto' ? (isMobileView ? 'mobile' : 'desktop') : viewMode;
-
-    const prefetchEarnTabIds = useMemo(() => {
-        return getVisibleEarnTabs(settings?.customEarnTabs, settings?.modulePagesConfig).map(t => t.id);
-    }, [settings?.customEarnTabs, settings?.modulePagesConfig]);
-
-    useOtherTasksPrefetch({
-        enabled:
-            Boolean(currentUser?._id) &&
-            !state.isLoading &&
-            !state.isSyncing &&
-            dashboardMode === 'investment' &&
-            canAccessInvestmentModule(currentUser, settings),
-        userId: currentUser?._id,
-        tabIds: prefetchEarnTabIds
-    });
 
     if (!currentUser) {
         return (

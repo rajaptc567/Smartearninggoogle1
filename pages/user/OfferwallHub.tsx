@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useData } from '../../hooks/useData';
 import { getHeaders } from '../../services/api';
-import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
-import { useOtherTasksPrefetch } from '../../hooks/useOtherTasksPrefetch';
 
 interface OfferwallProvider {
     _id: string;
@@ -215,22 +213,6 @@ export const OfferwallHub: React.FC = () => {
 
         fetchProviders();
     }, []);
-
-    const prefetchEarnTabIds = React.useMemo(() => {
-        return getVisibleEarnTabs(settings?.customEarnTabs, settings?.modulePagesConfig).map(t => t.id);
-    }, [settings?.customEarnTabs, settings?.modulePagesConfig]);
-
-    useOtherTasksPrefetch({
-        enabled:
-            Boolean(currentUser?._id) &&
-            !state.isLoading &&
-            !state.isSyncing &&
-            !isLoading &&
-            !toroxSessionLoading &&
-            !theoremreachSessionLoading,
-        userId: currentUser?._id,
-        tabIds: prefetchEarnTabIds
-    });
 
     const filteredProviders = providers.filter(p => {
         if (activeTab === 'all') return true;

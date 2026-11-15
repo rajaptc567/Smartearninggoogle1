@@ -12,7 +12,6 @@ import { canAccessInvestmentModule } from '../utils/investmentAccess';
 import { Deposit, formatCurrency, Transaction, Transfer, User, Withdrawal, Notice } from '../types';
 import { SEOHead } from './SEOHead';
 import Footer from './Footer';
-import { clearPlacementCache, syncPlacementCacheUser } from '../services/providerPlacementService';
 
 const UserLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -224,7 +223,6 @@ const UserLayout: React.FC = () => {
   };
 
   const handleLogout = () => {
-    clearPlacementCache();
     localStorage.removeItem('authToken');
     localStorage.removeItem('currentUser');
     dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
@@ -312,7 +310,6 @@ const UserLayout: React.FC = () => {
   const [popupNotification, setPopupNotification] = useState<any | null>(null);
 
   useEffect(() => {
-    syncPlacementCacheUser(state.currentUser?._id ?? null);
     // This acts as a route guard. If no user is logged in, redirect to the login page.
     if (!state.currentUser) {
       navigate('/login', { replace: true });

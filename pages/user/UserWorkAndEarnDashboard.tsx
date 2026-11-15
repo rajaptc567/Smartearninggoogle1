@@ -57,7 +57,6 @@ import {
 import { useWorkAndEarnConfig } from '../../hooks/useWorkAndEarnConfig';
 import OtherTasksCard from '../../components/OtherTasksCard';
 import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
-import { useOtherTasksPrefetch } from '../../hooks/useOtherTasksPrefetch';
 import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
 import { getEffectiveModulePageControl } from '../../data/modulePagesDefaults';
 import { formatCurrency, currencySymbols, UserTask, UserTaskSubmission } from '../../types';
@@ -163,16 +162,11 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     // Phase 3: Pending Mandatory Surveys
     const [pendingMandatorySurveys, setPendingMandatorySurveys] = useState<UserTask[]>([]);
     const [isLoadingMandatory, setIsLoadingMandatory] = useState(false);
-    const [mandatoryCheckCompleted, setMandatoryCheckCompleted] = useState(false);
     const [activeMandatorySurvey, setActiveMandatorySurvey] = useState<UserTask | null>(null);
 
     const fetchPendingMandatorySurveys = async () => {
-        if (!currentUser) {
-            setMandatoryCheckCompleted(false);
-            return;
-        }
+        if (!currentUser) return;
         try {
-            setMandatoryCheckCompleted(false);
             setIsLoadingMandatory(true);
             const data = await getPendingMandatoryRequirements();
             const workAndEarnMandatory = (data || []).filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
@@ -181,24 +175,12 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             console.error('Failed to load mandatory survey requirements:', err);
         } finally {
             setIsLoadingMandatory(false);
-            setMandatoryCheckCompleted(true);
         }
     };
 
     useEffect(() => {
         fetchPendingMandatorySurveys();
     }, [currentUser?._id]);
-
-    useOtherTasksPrefetch({
-        enabled:
-            Boolean(currentUser?._id) &&
-            !state.isLoading &&
-            !state.isSyncing &&
-            mandatoryCheckCompleted &&
-            dashboardTab === 'available_jobs',
-        userId: currentUser?._id,
-        tabIds: visibleEarnTabs.map(t => t.id)
-    });
 
     // Session-scoped dismissal state for popups
     const [dismissedPopupIds, setDismissedPopupIds] = useState<string[]>(() => {
