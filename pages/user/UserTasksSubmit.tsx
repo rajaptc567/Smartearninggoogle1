@@ -18,13 +18,6 @@ import { SMARTEXN_SURVEY_TEMPLATES } from '../../lib/surveyTemplates';
 import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
 import { SurveySubmissionViewer, SurveyAnalyticsModal } from '../../components/surveys';
 
-export interface SharedMandatoryState {
-    pendingMandatorySurveys: UserTask[];
-    mandatoryCheckCompleted: boolean;
-    isLoadingMandatory?: boolean;
-    onRefreshMandatorySurveys?: () => Promise<void>;
-}
-
 export interface UserTasksSubmitProps {
     initialTab?: 'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs';
     hideHeaderAndTabs?: boolean;
@@ -32,7 +25,6 @@ export interface UserTasksSubmitProps {
     hideSubTabs?: boolean;
     isAdminMode?: boolean;
     onCampaignCreated?: () => void;
-    sharedMandatoryState?: SharedMandatoryState;
 }
 
 export const getRemainingTimeString = (targetDate?: string | Date) => {
@@ -234,7 +226,7 @@ export const renderDisputeTimerBox = (sub: any, settings: any) => {
     return null;
 };
 
-const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false, hideSubTabs = false, isAdminMode = false, onCampaignCreated, sharedMandatoryState }) => {
+const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false, hideSubTabs = false, isAdminMode = false, onCampaignCreated }) => {
     const { state, dispatch, refreshData } = useData();
     const { currentUser, userTasks, userTaskSubmissions, settings } = state;
     const rates = settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
@@ -498,92 +490,36 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     }, [visibleEarnTabs, availableTasksSubTab]);
 
     // Phase 3: Pending Mandatory Surveys in Available Tasks
-    const [localPendingMandatorySurveys, setLocalPendingMandatorySurveys] = useState<UserTask[]>([]);
-    const [localIsLoadingMandatory, setLocalIsLoadingMandatory] = useState(false);
-    const [localMandatoryCheckCompleted, setLocalMandatoryCheckCompleted] = useState(false);
+    const [pendingMandatorySurveys, setPendingMandatorySurveys] = useState<UserTask[]>([]);
+    const [isLoadingMandatory, setIsLoadingMandatory] = useState(false);
+    const [mandatoryCheckCompleted, setMandatoryCheckCompleted] = useState(false);
     const [activeMandatorySurvey, setActiveMandatorySurvey] = useState<UserTask | null>(null);
-    const isMountedRef = useRef(true);
-    const mandatoryRequestSeqRef = useRef(0);
-    const activeMandatoryUserIdRef = useRef<string | undefined>(currentUser?._id);
-
-    useEffect(() => {
-        isMountedRef.current = true;
-        return () => {
-            isMountedRef.current = false;
-        };
-    }, []);
-
-    const pendingMandatorySurveys = sharedMandatoryState ? sharedMandatoryState.pendingMandatorySurveys : localPendingMandatorySurveys;
-    const isLoadingMandatory = sharedMandatoryState ? Boolean(sharedMandatoryState.isLoadingMandatory) : localIsLoadingMandatory;
-    const mandatoryCheckCompleted = sharedMandatoryState ? sharedMandatoryState.mandatoryCheckCompleted : localMandatoryCheckCompleted;
 
     const fetchPendingMandatorySurveys = async () => {
-        if (sharedMandatoryState?.onRefreshMandatorySurveys) {
-            await sharedMandatoryState.onRefreshMandatorySurveys();
-            return;
-        }
-        if (sharedMandatoryState) {
-            return;
-        }
-
-        const targetUserId = currentUser?._id;
-        const requestSeq = ++mandatoryRequestSeqRef.current;
-
-        if (!targetUserId) {
-            setLocalPendingMandatorySurveys([]);
-            setLocalIsLoadingMandatory(false);
-            setLocalMandatoryCheckCompleted(false);
+        if (!currentUser) {
+            setMandatoryCheckCompleted(false);
             return;
         }
         try {
-            setLocalMandatoryCheckCompleted(false);
-            setLocalIsLoadingMandatory(true);
+            setMandatoryCheckCompleted(false);
+            setIsLoadingMandatory(true);
             const data = await getPendingMandatoryRequirements();
-            if (
-                !isMountedRef.current ||
-                mandatoryRequestSeqRef.current !== requestSeq ||
-                activeMandatoryUserIdRef.current !== targetUserId
-            ) {
-                return;
-            }
             const workAndEarnMandatory = (data || []).filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
-            setLocalPendingMandatorySurveys(workAndEarnMandatory);
+            setPendingMandatorySurveys(workAndEarnMandatory);
         } catch (err) {
-            if (
-                !isMountedRef.current ||
-                mandatoryRequestSeqRef.current !== requestSeq ||
-                activeMandatoryUserIdRef.current !== targetUserId
-            ) {
-                return;
-            }
             console.error('Failed to load mandatory survey requirements:', err);
         } finally {
-            if (
-                isMountedRef.current &&
-                mandatoryRequestSeqRef.current === requestSeq &&
-                activeMandatoryUserIdRef.current === targetUserId
-            ) {
-                setLocalIsLoadingMandatory(false);
-                setLocalMandatoryCheckCompleted(true);
-            }
+            setIsLoadingMandatory(false);
+            setMandatoryCheckCompleted(true);
         }
     };
 
     useEffect(() => {
-        if (activeMandatoryUserIdRef.current !== currentUser?._id) {
-            activeMandatoryUserIdRef.current = currentUser?._id;
-            setLocalPendingMandatorySurveys([]);
-            setLocalMandatoryCheckCompleted(false);
-        }
-        if (sharedMandatoryState) {
-            return;
-        }
         fetchPendingMandatorySurveys();
-    }, [currentUser?._id, Boolean(sharedMandatoryState)]);
+    }, [currentUser?._id]);
 
     useOtherTasksPrefetch({
         enabled:
-            !sharedMandatoryState &&
             !hideSubTabs &&
             Boolean(currentUser?._id) &&
             !state.isLoading &&
@@ -4393,8 +4329,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     const progressPercent = isUnlimited ? 100 : Math.min(100, Math.max(0, (task.currentCompletions / (task.targetQuantity || 1)) * 100));
                                     const spotsLeft = isUnlimited ? Infinity : Math.max(0, task.targetQuantity - task.currentCompletions);
                                     const hasPendingMandatory = pendingMandatorySurveys.length > 0;
-                                    const isCheckingMandatory = Boolean(currentUser && !mandatoryCheckCompleted);
-                                    const isLocked = Boolean(hasPendingMandatory || task.isLockedByMandatoryRequirement || isCheckingMandatory);
+                                    const isLocked = Boolean(hasPendingMandatory || task.isLockedByMandatoryRequirement);
                                     const isMandatoryTarget = String(task._id) === String(searchParams.get('mandatoryTaskId'));
 
                                     return (
@@ -4409,9 +4344,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             {isLocked && (
                                                 <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] rounded-2xl z-10 flex items-center justify-center p-3 text-center">
                                                     <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold font-mono">
-                                                        {hasPendingMandatory || task.isLockedByMandatoryRequirement
-                                                            ? '🔒 Locked (Required Survey Pending)'
-                                                            : '⏳ Checking Requirements...'}
+                                                        🔒 Locked (Required Survey Pending)
                                                     </span>
                                                 </div>
                                             )}
@@ -4471,10 +4404,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             type="button"
                                                             disabled={true}
                                                             aria-disabled="true"
-                                                            title={hasPendingMandatory || task.isLockedByMandatoryRequirement ? 'Complete pending required survey to unlock this task' : 'Verifying mandatory requirements'}
+                                                            title="Complete pending required survey to unlock this task"
                                                             className="w-full py-2 px-3 bg-slate-800/80 border border-slate-700/60 text-slate-400 font-bold rounded-xl text-xs uppercase tracking-wider cursor-not-allowed opacity-75 transition-all flex items-center justify-center gap-1.5 min-h-[40px]"
                                                         >
-                                                            <span>{hasPendingMandatory || task.isLockedByMandatoryRequirement ? '🔒 Locked' : '⏳ Checking...'}</span>
+                                                            <span>🔒 Locked</span>
                                                         </button>
                                                     ) : (
                                                         <button 

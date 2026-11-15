@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useData } from '../../hooks/useData';
 import UserTasksSubmit, { getRemainingTimeString } from './UserTasksSubmit';
@@ -165,24 +165,9 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     const [isLoadingMandatory, setIsLoadingMandatory] = useState(false);
     const [mandatoryCheckCompleted, setMandatoryCheckCompleted] = useState(false);
     const [activeMandatorySurvey, setActiveMandatorySurvey] = useState<UserTask | null>(null);
-    const isMountedRef = useRef(true);
-    const mandatoryRequestSeqRef = useRef(0);
-    const activeMandatoryUserIdRef = useRef<string | undefined>(currentUser?._id);
-
-    useEffect(() => {
-        isMountedRef.current = true;
-        return () => {
-            isMountedRef.current = false;
-        };
-    }, []);
 
     const fetchPendingMandatorySurveys = async () => {
-        const targetUserId = currentUser?._id;
-        const requestSeq = ++mandatoryRequestSeqRef.current;
-
-        if (!targetUserId) {
-            setPendingMandatorySurveys([]);
-            setIsLoadingMandatory(false);
+        if (!currentUser) {
             setMandatoryCheckCompleted(false);
             return;
         }
@@ -190,42 +175,17 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             setMandatoryCheckCompleted(false);
             setIsLoadingMandatory(true);
             const data = await getPendingMandatoryRequirements();
-            if (
-                !isMountedRef.current ||
-                mandatoryRequestSeqRef.current !== requestSeq ||
-                activeMandatoryUserIdRef.current !== targetUserId
-            ) {
-                return;
-            }
             const workAndEarnMandatory = (data || []).filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
             setPendingMandatorySurveys(workAndEarnMandatory);
         } catch (err) {
-            if (
-                !isMountedRef.current ||
-                mandatoryRequestSeqRef.current !== requestSeq ||
-                activeMandatoryUserIdRef.current !== targetUserId
-            ) {
-                return;
-            }
             console.error('Failed to load mandatory survey requirements:', err);
         } finally {
-            if (
-                isMountedRef.current &&
-                mandatoryRequestSeqRef.current === requestSeq &&
-                activeMandatoryUserIdRef.current === targetUserId
-            ) {
-                setIsLoadingMandatory(false);
-                setMandatoryCheckCompleted(true);
-            }
+            setIsLoadingMandatory(false);
+            setMandatoryCheckCompleted(true);
         }
     };
 
     useEffect(() => {
-        if (activeMandatoryUserIdRef.current !== currentUser?._id) {
-            activeMandatoryUserIdRef.current = currentUser?._id;
-            setPendingMandatorySurveys([]);
-            setMandatoryCheckCompleted(false);
-        }
         fetchPendingMandatorySurveys();
     }, [currentUser?._id]);
 
@@ -2426,18 +2386,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    <UserTasksSubmit
-                        initialTab="browse"
-                        hideHeaderAndTabs={true}
-                        hideHeroBanner={true}
-                        hideSubTabs={true}
-                        sharedMandatoryState={{
-                            pendingMandatorySurveys,
-                            mandatoryCheckCompleted,
-                            isLoadingMandatory,
-                            onRefreshMandatorySurveys: fetchPendingMandatorySurveys
-                        }}
-                    />
+                    <UserTasksSubmit initialTab="browse" hideHeaderAndTabs={true} hideHeroBanner={true} hideSubTabs={true} />
                 </div>
             )}
 
