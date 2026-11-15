@@ -78,7 +78,6 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     const activeTargetKeyRef = useRef<string>('');
     const sessionCounterRef = useRef<number>(0);
     const activeSessionIdRef = useRef<number | null>(null);
-    const loadedSessionIdRef = useRef<number | null>(null);
     const timeoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const onCountChangeRef = useRef<ProviderPlacementPanelProps['onCountChange']>(onCountChange);
@@ -103,7 +102,6 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         return () => {
             isMountedRef.current = false;
             activeSessionIdRef.current = null;
-            loadedSessionIdRef.current = null;
             clearIframeWaitTimers();
         };
     }, [clearIframeWaitTimers]);
@@ -111,7 +109,6 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     const closeLaunchSession = useCallback(() => {
         clearIframeWaitTimers();
         activeSessionIdRef.current = null;
-        loadedSessionIdRef.current = null;
         setActiveLaunchSession(null);
         setIframeLoaded(false);
         setIframeTimedOut(false);
@@ -122,7 +119,6 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         clearIframeWaitTimers();
         if (!activeLaunchSession) {
             activeSessionIdRef.current = null;
-            loadedSessionIdRef.current = null;
             setIframeLoaded(false);
             setIframeTimedOut(false);
             setSecondsRemaining(IFRAME_WAIT_THRESHOLD_SECONDS);
@@ -131,13 +127,6 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
 
         const currentSessionId = activeLaunchSession.sessionId;
         activeSessionIdRef.current = currentSessionId;
-
-        if (loadedSessionIdRef.current === currentSessionId) {
-            setIframeLoaded(true);
-            setIframeTimedOut(false);
-            return;
-        }
-
         setIframeLoaded(false);
         setIframeTimedOut(false);
         setSecondsRemaining(IFRAME_WAIT_THRESHOLD_SECONDS);
@@ -145,12 +134,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         const startedAt = Date.now();
 
         countdownIntervalRef.current = setInterval(() => {
-            if (
-                !isMountedRef.current ||
-                activeSessionIdRef.current !== currentSessionId ||
-                loadedSessionIdRef.current === currentSessionId
-            ) {
-                clearIframeWaitTimers();
+            if (!isMountedRef.current || activeSessionIdRef.current !== currentSessionId) {
                 return;
             }
             const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
@@ -159,12 +143,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         }, 250);
 
         timeoutTimerRef.current = setTimeout(() => {
-            if (
-                !isMountedRef.current ||
-                activeSessionIdRef.current !== currentSessionId ||
-                loadedSessionIdRef.current === currentSessionId
-            ) {
-                clearIframeWaitTimers();
+            if (!isMountedRef.current || activeSessionIdRef.current !== currentSessionId) {
                 return;
             }
             clearIframeWaitTimers();
@@ -180,7 +159,6 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         if (!isMountedRef.current || activeSessionIdRef.current !== sessionId) {
             return;
         }
-        loadedSessionIdRef.current = sessionId;
         clearIframeWaitTimers();
         setIframeLoaded(true);
         setIframeTimedOut(false);
@@ -303,22 +281,12 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
 
     const handleLaunchPlacement = async (placement: ProviderPlacement) => {
         if (launchingPlacementId) return;
-        const launchTargetKey = activeTargetKeyRef.current;
         setLaunchingPlacementId(placement._id);
         setErrorMessage(null);
 
         try {
             const res = await launchPlacement(placement._id);
-            if (!isMountedRef.current || activeTargetKeyRef.current !== launchTargetKey) {
-                return;
-            }
-            clearIframeWaitTimers();
             const nextSessionId = ++sessionCounterRef.current;
-            activeSessionIdRef.current = nextSessionId;
-            loadedSessionIdRef.current = null;
-            setIframeLoaded(false);
-            setIframeTimedOut(false);
-            setSecondsRemaining(IFRAME_WAIT_THRESHOLD_SECONDS);
             setActiveLaunchSession({
                 sessionId: nextSessionId,
                 displayName: res.displayName || placement.displayName,
@@ -327,17 +295,10 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
                 launchDisplayMode: res.launchDisplayMode || 'modal'
             });
         } catch (err: any) {
-            if (!isMountedRef.current) return;
             setErrorMessage(err.message || 'Failed to initialize offerwall session. Please try again later.');
-            setTimeout(() => {
-                if (isMountedRef.current) {
-                    setErrorMessage(null);
-                }
-            }, 6000);
+            setTimeout(() => setErrorMessage(null), 6000);
         } finally {
-            if (isMountedRef.current) {
-                setLaunchingPlacementId(null);
-            }
+            setLaunchingPlacementId(null);
         }
     };
 
@@ -352,21 +313,15 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
 
         if (!iframeTimedOut) {
             return (
-                <div className="absolute inset-x-3 top-3 z-10 pointer-events-none flex justify-center animate-fade-in">
-                    <div className="pointer-events-none w-full max-w-md bg-slate-900/90 backdrop-blur-sm border border-amber-500/30 rounded-2xl px-3.5 py-2.5 shadow-xl space-y-1.5">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <RefreshIcon className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
-                                <span className="text-xs text-slate-200 font-semibold truncate">
-                                    Connecting to {session.displayName}...
-                                </span>
-                            </div>
-                            <span
-                                className="text-[11px] font-mono text-amber-300 font-bold shrink-0"
-                                data-testid="iframe-wait-countdown"
-                            >
-                                {secondsRemaining}s
-                            </span>
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/60 pointer-events-none z-0 px-6">
+                    <RefreshIcon className="w-6 h-6 animate-spin text-amber-400" />
+                    <span className="text-xs text-slate-300 mt-2.5 font-semibold">
+                        Connecting to {session.displayName}...
+                    </span>
+                    <div className="mt-3 w-full max-w-xs space-y-1.5 text-center">
+                        <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                            <span>Wait timer</span>
+                            <span className="text-amber-300 font-bold" data-testid="iframe-wait-countdown">{secondsRemaining}s</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                             <div
@@ -374,12 +329,9 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
                                 style={{ width: `${elapsedWaitPercent}%` }}
                             />
                         </div>
-                        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
-                            <span>Wait timer</span>
-                            <span>
-                                Elapsed wait time ({elapsedWaitSeconds}s of {IFRAME_WAIT_THRESHOLD_SECONDS}s)
-                            </span>
-                        </div>
+                        <p className="text-[10px] text-slate-500">
+                            Elapsed wait time ({elapsedWaitSeconds}s of {IFRAME_WAIT_THRESHOLD_SECONDS}s)
+                        </p>
                     </div>
                 </div>
             );
