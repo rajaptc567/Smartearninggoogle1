@@ -1000,9 +1000,10 @@ const Settings: React.FC = () => {
       if (!editingSubTabId || !editEarnSubTabName.trim()) return;
 
       setLocalSettings(prev => {
-          if (!prev.customEarnTabs) return prev;
+          if (!prev.customEarnTabs || prev.customEarnTabs.length === 0) return prev;
+          const targetTabId = prev.customEarnTabs.find(tab => tab.id === selectedEarnTabId)?.id || prev.customEarnTabs[0].id;
           const updatedTabs = prev.customEarnTabs.map(t => {
-              if (t.id === selectedEarnTabId) {
+              if (t.id === targetTabId) {
                   const updatedSubTabs = (t.subTabs || []).map(st => {
                       if (st.id === editingSubTabId) {
                           return {
@@ -1028,9 +1029,10 @@ const Settings: React.FC = () => {
 
   const handleToggleEarnSubTab = (subId: string) => {
       setLocalSettings(prev => {
-          if (!prev.customEarnTabs) return prev;
+          if (!prev.customEarnTabs || prev.customEarnTabs.length === 0) return prev;
+          const targetTabId = prev.customEarnTabs.find(tab => tab.id === selectedEarnTabId)?.id || prev.customEarnTabs[0].id;
           const updatedTabs = prev.customEarnTabs.map(t => {
-              if (t.id === selectedEarnTabId) {
+              if (t.id === targetTabId) {
                   return {
                       ...t,
                       subTabs: (t.subTabs || []).map(st => {
@@ -1050,9 +1052,10 @@ const Settings: React.FC = () => {
 
   const handleRemoveEarnSubTab = (subId: string) => {
       setLocalSettings(prev => {
-          if (!prev.customEarnTabs) return prev;
+          if (!prev.customEarnTabs || prev.customEarnTabs.length === 0) return prev;
+          const targetTabId = prev.customEarnTabs.find(tab => tab.id === selectedEarnTabId)?.id || prev.customEarnTabs[0].id;
           const updatedTabs = prev.customEarnTabs.map(t => {
-              if (t.id === selectedEarnTabId) {
+              if (t.id === targetTabId) {
                   return {
                       ...t,
                       subTabs: (t.subTabs || []).filter(st => st.id !== subId)
@@ -1160,13 +1163,16 @@ const Settings: React.FC = () => {
                   id: String(t.id || 'other_tasks').trim(),
                   title: String(t.title || 'Other Tasks').trim(),
                   enabled: t.enabled !== false,
+                  ...((t as any).isHiddenInNav !== undefined ? { isHiddenInNav: Boolean((t as any).isHiddenInNav) } : {}),
                   subTabs: (t.subTabs || []).map(st => ({
                       id: String(st.id || '').trim(),
                       name: String(st.name || '').trim(),
                       providerKey: String(st.providerKey || st.id || '').trim(),
                       badge: String(st.badge || '').trim(),
                       description: String(st.description || '').trim(),
-                      enabled: st.enabled !== false
+                      icon: String((st as any).icon || '').trim(),
+                      enabled: st.enabled !== false,
+                      ...((st as any).isHiddenInNav !== undefined ? { isHiddenInNav: Boolean((st as any).isHiddenInNav) } : {})
                   })).filter(st => st.name)
               }))
           };

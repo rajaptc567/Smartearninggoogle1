@@ -409,16 +409,40 @@ export const AdminOfferwalls: React.FC = () => {
                                                 {p.commissionMode === 'smartexn_managed' ? 'SmartExn-Managed' : 'Provider-Managed'}
                                             </span>
                                         </div>
-                                        <div className="flex items-center justify-between text-slate-400">
-                                            <span>Revenue Split:</span>
-                                            <span className="font-bold text-amber-400">
-                                                {p.commissionMode === 'smartexn_managed'
-                                                    ? `${p.platformRevenueSharePercent !== undefined ? p.platformRevenueSharePercent : (100 - (p.userRevenueSharePercent ?? 70))}% Retained (Worker: ${p.userRevenueSharePercent ?? 70}%)`
-                                                    : '100% to Worker (Net Payout)'}
-                                            </span>
+                                            <div className="flex items-center justify-between text-slate-400">
+                                                <span>Revenue Split:</span>
+                                                <span className="font-bold text-amber-400">
+                                                    {p.commissionMode === 'smartexn_managed'
+                                                        ? `${p.platformRevenueSharePercent !== undefined ? p.platformRevenueSharePercent : (100 - (p.userRevenueSharePercent ?? 70))}% Retained (Worker: ${p.userRevenueSharePercent ?? 70}%)`
+                                                        : '100% to Worker (Net Payout)'}
+                                                </span>
+                                            </div>
+                                            {(p.providerKey === 'offerwall_gg' || p.providerKey === 'offerwallgg' || p.providerKey === 'offerwall.gg') && (
+                                                <>
+                                                    <div className="flex items-center justify-between text-slate-400">
+                                                        <span>Operational Status:</span>
+                                                        <span className={`font-mono font-bold text-[10px] px-2 py-0.5 rounded-md border ${
+                                                            p.status === 'ACTIVE'
+                                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                        }`}>
+                                                            {p.status || 'NOT_STARTED'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between text-slate-400">
+                                                        <span>Approval Status:</span>
+                                                        <span className={`font-mono font-bold text-[10px] px-2 py-0.5 rounded-md border ${
+                                                            p.approvalStatus === 'Approved'
+                                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                        }`}>
+                                                            {p.approvalStatus || 'Pending'}
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
 
                                 <div className="space-y-2 pt-2 border-t border-slate-800">
                                     <div className="flex items-center justify-between gap-2">
@@ -1311,7 +1335,7 @@ export const AdminOfferwalls: React.FC = () => {
                                 </div>
                             )}
 
-                            {(editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg') && (
+                            {(editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg' || editingProvider.providerKey === 'offerwall.gg') && (
                                 <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-4">
                                     <div className="border-b border-slate-800 pb-3">
                                         <div className="flex items-center gap-2">
@@ -1323,6 +1347,49 @@ export const AdminOfferwalls: React.FC = () => {
                                         <p className="text-[11px] text-slate-400 mt-1">
                                             Placement ID: <code className="text-indigo-300 font-mono">9604</code> | Currency: <code className="text-emerald-300 font-mono">Coins</code> (70 Coins = $1.00 USD)
                                         </p>
+                                    </div>
+
+                                    {/* Approval & Integration Status Controls (Editable by Admin) */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                                                Approval Status
+                                            </label>
+                                            <select
+                                                value={editingProvider.approvalStatus || 'Pending'}
+                                                onChange={(e) => setEditingProvider({ ...editingProvider, approvalStatus: e.target.value })}
+                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-bold"
+                                            >
+                                                <option value="Pending">Pending</option>
+                                                <option value="Submitted">Submitted</option>
+                                                <option value="Under Review">Under Review</option>
+                                                <option value="Approved">Approved</option>
+                                                <option value="Rejected">Rejected</option>
+                                            </select>
+                                            <p className="text-[10px] text-slate-500 mt-1">
+                                                Must be Approved (with Enable toggle ON and Operational Status ACTIVE) for worker visibility &amp; postback crediting.
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                                                Integration Status
+                                            </label>
+                                            <select
+                                                value={editingProvider.integrationStatus || 'Not Started'}
+                                                onChange={(e) => setEditingProvider({ ...editingProvider, integrationStatus: e.target.value })}
+                                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs font-bold"
+                                            >
+                                                <option value="Not Started">Not Started</option>
+                                                <option value="In Progress">In Progress</option>
+                                                <option value="Configured">Configured</option>
+                                                <option value="Tested">Tested</option>
+                                                <option value="Verified">Verified</option>
+                                            </select>
+                                            <p className="text-[10px] text-slate-500 mt-1">
+                                                Technical verification milestone for Offerwall.GG S2S postbacks.
+                                            </p>
+                                        </div>
                                     </div>
 
                                     {/* S2S Callback Setup */}
