@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useContext, useCallback } from 'react';
 import {
     ProviderPlacement,
-    fetchAvailablePlacements,
+    getPlacementCacheKey,
+    getCachedAvailablePlacements,
+    fetchAndCacheAvailablePlacements,
+    syncPlacementCacheUser,
     launchPlacement
 } from '../services/providerPlacementService';
+import { DataContext } from '../context/DataContext';
 import Modal from './ui/Modal';
 import {
     Globe as GlobeIcon,
@@ -18,6 +22,8 @@ import {
 import { formatCurrency } from '../types';
 import { JobGig } from './OtherTasksCard';
 
+const IFRAME_WAIT_THRESHOLD_SECONDS = 20;
+
 export interface ProviderPlacementPanelProps {
     activeTabId: string;
     activeSubTabId?: string;
@@ -26,6 +32,7 @@ export interface ProviderPlacementPanelProps {
     onSelectGig?: (gig: JobGig) => void;
     exchangeRate?: number;
     userCurrency?: string;
+    userId?: string | null;
     onCountChange?: (count: number) => void;
     className?: string;
 }
@@ -38,15 +45,20 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     onSelectGig,
     exchangeRate = 1,
     userCurrency = 'USD',
+    userId: userIdProp,
     onCountChange,
     className = ''
 }) => {
+    const dataContext = useContext(DataContext);
+    const activeUserId = userIdProp !== undefined ? userIdProp : (dataContext?.state?.currentUser?._id ?? null);
+
     const [placements, setPlacements] = useState<ProviderPlacement[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [launchingPlacementId, setLaunchingPlacementId] = useState<string | null>(null);
 
     // Active Provider Launch Session
     const [activeLaunchSession, setActiveLaunchSession] = useState<{
+        sessionId: number;
         displayName: string;
         launchUrl: string;
         providerKey: string;
@@ -56,45 +68,199 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [fetchError, setFetchError] = useState<string | null>(null);
 
-    // Iframe embed loading & timeout state
+    // Iframe embed loading & 20s countdown timeout state
     const [iframeLoaded, setIframeLoaded] = useState<boolean>(false);
     const [iframeTimedOut, setIframeTimedOut] = useState<boolean>(false);
+    const [secondsRemaining, setSecondsRemaining] = useState<number>(IFRAME_WAIT_THRESHOLD_SECONDS);
+
+    const isMountedRef = useRef<boolean>(true);
+    const requestSeqRef = useRef<number>(0);
+    const activeTargetKeyRef = useRef<string>('');
+    const sessionCounterRef = useRef<number>(0);
+    const activeSessionIdRef = useRef<number | null>(null);
+    const loadedSessionIdRef = useRef<number | null>(null);
+    const timeoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const onCountChangeRef = useRef<ProviderPlacementPanelProps['onCountChange']>(onCountChange);
 
     useEffect(() => {
+        onCountChangeRef.current = onCountChange;
+    }, [onCountChange]);
+
+    const clearIframeWaitTimers = useCallback(() => {
+        if (timeoutTimerRef.current !== null) {
+            clearTimeout(timeoutTimerRef.current);
+            timeoutTimerRef.current = null;
+        }
+        if (countdownIntervalRef.current !== null) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+        }
+    }, []);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+            activeSessionIdRef.current = null;
+            loadedSessionIdRef.current = null;
+            clearIframeWaitTimers();
+        };
+    }, [clearIframeWaitTimers]);
+
+    const closeLaunchSession = useCallback(() => {
+        clearIframeWaitTimers();
+        activeSessionIdRef.current = null;
+        loadedSessionIdRef.current = null;
+        setActiveLaunchSession(null);
+        setIframeLoaded(false);
+        setIframeTimedOut(false);
+        setSecondsRemaining(IFRAME_WAIT_THRESHOLD_SECONDS);
+    }, [clearIframeWaitTimers]);
+
+    useEffect(() => {
+        clearIframeWaitTimers();
         if (!activeLaunchSession) {
+            activeSessionIdRef.current = null;
+            loadedSessionIdRef.current = null;
             setIframeLoaded(false);
+            setIframeTimedOut(false);
+            setSecondsRemaining(IFRAME_WAIT_THRESHOLD_SECONDS);
+            return;
+        }
+
+        const currentSessionId = activeLaunchSession.sessionId;
+        activeSessionIdRef.current = currentSessionId;
+
+        if (loadedSessionIdRef.current === currentSessionId) {
+            setIframeLoaded(true);
             setIframeTimedOut(false);
             return;
         }
+
         setIframeLoaded(false);
         setIframeTimedOut(false);
-        const timer = setTimeout(() => {
-            setIframeTimedOut(true);
-        }, 10000);
-        return () => clearTimeout(timer);
-    }, [activeLaunchSession?.launchUrl]);
+        setSecondsRemaining(IFRAME_WAIT_THRESHOLD_SECONDS);
 
-    const loadPlacements = async () => {
-        if (!activeTabId) return;
-        setIsLoading(true);
-        onCountChange?.(0);
-        setErrorMessage(null);
-        setFetchError(null);
-        try {
-            const data = await fetchAvailablePlacements(activeTabId);
-            setPlacements(data || []);
-        } catch (err: any) {
-            console.error('Failed to load provider placements:', err);
-            setFetchError(err.message || 'Unable to load offer placements. Please try again later.');
-            onCountChange?.(0);
-        } finally {
-            setIsLoading(false);
+        const startedAt = Date.now();
+
+        countdownIntervalRef.current = setInterval(() => {
+            if (
+                !isMountedRef.current ||
+                activeSessionIdRef.current !== currentSessionId ||
+                loadedSessionIdRef.current === currentSessionId
+            ) {
+                clearIframeWaitTimers();
+                return;
+            }
+            const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+            const nextRemaining = Math.max(1, IFRAME_WAIT_THRESHOLD_SECONDS - elapsedSec);
+            setSecondsRemaining(prev => (prev === nextRemaining ? prev : nextRemaining));
+        }, 250);
+
+        timeoutTimerRef.current = setTimeout(() => {
+            if (
+                !isMountedRef.current ||
+                activeSessionIdRef.current !== currentSessionId ||
+                loadedSessionIdRef.current === currentSessionId
+            ) {
+                clearIframeWaitTimers();
+                return;
+            }
+            clearIframeWaitTimers();
+            setIframeTimedOut(true);
+        }, IFRAME_WAIT_THRESHOLD_SECONDS * 1000);
+
+        return () => {
+            clearIframeWaitTimers();
+        };
+    }, [activeLaunchSession?.sessionId, activeLaunchSession?.launchUrl, clearIframeWaitTimers]);
+
+    const handleIframeLoad = useCallback((sessionId: number) => {
+        if (!isMountedRef.current || activeSessionIdRef.current !== sessionId) {
+            return;
         }
-    };
+        loadedSessionIdRef.current = sessionId;
+        clearIframeWaitTimers();
+        setIframeLoaded(true);
+        setIframeTimedOut(false);
+    }, [clearIframeWaitTimers]);
+
+    const loadPlacements = useCallback(async (options?: { isBackgroundRefresh?: boolean }) => {
+        syncPlacementCacheUser(activeUserId);
+
+        if (!activeTabId || !activeUserId) {
+            activeTargetKeyRef.current = '';
+            setPlacements([]);
+            setIsLoading(false);
+            setFetchError(null);
+            onCountChangeRef.current?.(0);
+            return;
+        }
+
+        const targetKey = getPlacementCacheKey(activeUserId, activeTabId);
+        activeTargetKeyRef.current = targetKey;
+        const reqSeq = ++requestSeqRef.current;
+        const isBackgroundRefresh = Boolean(options?.isBackgroundRefresh);
+
+        if (!isBackgroundRefresh) {
+            setIsLoading(true);
+            onCountChangeRef.current?.(0);
+            setErrorMessage(null);
+            setFetchError(null);
+        }
+
+        try {
+            const data = await fetchAndCacheAvailablePlacements(activeUserId, activeTabId);
+            if (!isMountedRef.current || reqSeq !== requestSeqRef.current || activeTargetKeyRef.current !== targetKey) {
+                return;
+            }
+            setPlacements(data || []);
+            setFetchError(null);
+        } catch (err: any) {
+            if (!isMountedRef.current || reqSeq !== requestSeqRef.current || activeTargetKeyRef.current !== targetKey) {
+                return;
+            }
+            if (isBackgroundRefresh) {
+                console.warn('Background placement refresh failed; keeping cached placements:', err?.message || err);
+            } else {
+                console.error('Failed to load provider placements:', err);
+                setFetchError(err.message || 'Unable to load offer placements. Please try again later.');
+                onCountChangeRef.current?.(0);
+            }
+        } finally {
+            if (isMountedRef.current && reqSeq === requestSeqRef.current && activeTargetKeyRef.current === targetKey) {
+                setIsLoading(false);
+            }
+        }
+    }, [activeTabId, activeUserId]);
 
     useEffect(() => {
-        loadPlacements();
-    }, [activeTabId]);
+        closeLaunchSession();
+        syncPlacementCacheUser(activeUserId);
+
+        if (!activeTabId || !activeUserId) {
+            requestSeqRef.current += 1;
+            activeTargetKeyRef.current = '';
+            setPlacements([]);
+            setIsLoading(false);
+            setFetchError(null);
+            onCountChangeRef.current?.(0);
+            return;
+        }
+
+        const cached = getCachedAvailablePlacements(activeUserId, activeTabId);
+        if (cached !== null) {
+            setPlacements(cached);
+            setIsLoading(false);
+            setErrorMessage(null);
+            setFetchError(null);
+            void loadPlacements({ isBackgroundRefresh: true });
+        } else {
+            setPlacements([]);
+            void loadPlacements({ isBackgroundRefresh: false });
+        }
+    }, [activeTabId, activeUserId, loadPlacements, closeLaunchSession]);
 
     // Filter placements based on activeSubTabId and searchQuery
     const filteredPlacements = useMemo(() => {
@@ -133,27 +299,131 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
         } else {
             onCountChange?.(0);
         }
-    }, [filteredPlacements.length, isLoading, fetchError, onCountChange]);
+    }, [filteredPlacements.length, isLoading, fetchError]);
 
     const handleLaunchPlacement = async (placement: ProviderPlacement) => {
         if (launchingPlacementId) return;
+        const launchTargetKey = activeTargetKeyRef.current;
         setLaunchingPlacementId(placement._id);
         setErrorMessage(null);
 
         try {
             const res = await launchPlacement(placement._id);
+            if (!isMountedRef.current || activeTargetKeyRef.current !== launchTargetKey) {
+                return;
+            }
+            clearIframeWaitTimers();
+            const nextSessionId = ++sessionCounterRef.current;
+            activeSessionIdRef.current = nextSessionId;
+            loadedSessionIdRef.current = null;
+            setIframeLoaded(false);
+            setIframeTimedOut(false);
+            setSecondsRemaining(IFRAME_WAIT_THRESHOLD_SECONDS);
             setActiveLaunchSession({
+                sessionId: nextSessionId,
                 displayName: res.displayName || placement.displayName,
                 launchUrl: res.launchUrl,
                 providerKey: res.providerKey || placement.providerKey,
                 launchDisplayMode: res.launchDisplayMode || 'modal'
             });
         } catch (err: any) {
+            if (!isMountedRef.current) return;
             setErrorMessage(err.message || 'Failed to initialize offerwall session. Please try again later.');
-            setTimeout(() => setErrorMessage(null), 6000);
+            setTimeout(() => {
+                if (isMountedRef.current) {
+                    setErrorMessage(null);
+                }
+            }, 6000);
         } finally {
-            setLaunchingPlacementId(null);
+            if (isMountedRef.current) {
+                setLaunchingPlacementId(null);
+            }
         }
+    };
+
+    const elapsedWaitSeconds = Math.min(
+        IFRAME_WAIT_THRESHOLD_SECONDS,
+        Math.max(0, IFRAME_WAIT_THRESHOLD_SECONDS - secondsRemaining)
+    );
+    const elapsedWaitPercent = Math.round((elapsedWaitSeconds / IFRAME_WAIT_THRESHOLD_SECONDS) * 100);
+
+    const renderWaitingIndicator = (session: NonNullable<typeof activeLaunchSession>) => {
+        if (iframeLoaded) return null;
+
+        if (!iframeTimedOut) {
+            return (
+                <div className="absolute inset-x-3 top-3 z-10 pointer-events-none flex justify-center animate-fade-in">
+                    <div className="pointer-events-none w-full max-w-md bg-slate-900/90 backdrop-blur-sm border border-amber-500/30 rounded-2xl px-3.5 py-2.5 shadow-xl space-y-1.5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <RefreshIcon className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
+                                <span className="text-xs text-slate-200 font-semibold truncate">
+                                    Connecting to {session.displayName}...
+                                </span>
+                            </div>
+                            <span
+                                className="text-[11px] font-mono text-amber-300 font-bold shrink-0"
+                                data-testid="iframe-wait-countdown"
+                            >
+                                {secondsRemaining}s
+                            </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-amber-400 transition-all duration-300 ease-linear"
+                                style={{ width: `${elapsedWaitPercent}%` }}
+                            />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                            <span>Wait timer</span>
+                            <span>
+                                Elapsed wait time ({elapsedWaitSeconds}s of {IFRAME_WAIT_THRESHOLD_SECONDS}s)
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const slowMessage =
+            session.providerKey === 'theoremreach'
+                ? 'TheoremReach is taking longer than expected. Please continue waiting while we load your offers.'
+                : `${session.displayName} is taking longer than expected. Please continue waiting while we load your offers.`;
+
+        return (
+            <div className="absolute inset-x-3 top-3 z-10 pointer-events-none flex justify-center animate-fade-in">
+                <div className="pointer-events-auto w-full max-w-xl bg-slate-900/95 border border-amber-500/40 rounded-2xl p-3.5 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                        <div className="p-1.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-xl shrink-0 mt-0.5">
+                            <RefreshIcon className="w-4 h-4 animate-spin" />
+                        </div>
+                        <div className="space-y-0.5">
+                            <p className="text-xs font-semibold text-slate-100 leading-snug">
+                                {slowMessage}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={closeLaunchSession}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold rounded-xl transition-all"
+                        >
+                            Return to Placements
+                        </button>
+                        <a
+                            href={session.launchUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-black uppercase rounded-xl transition-all flex items-center gap-1"
+                        >
+                            <span>Open in New Tab</span>
+                            <LaunchIcon className="w-3 h-3" />
+                        </a>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     if (isLoading) {
@@ -172,7 +442,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
                     <AlertIcon className="w-5 h-5 text-rose-400 shrink-0" />
                     <span>Unable to load offer placements: {fetchError}</span>
                 </div>
-                <button onClick={loadPlacements} className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded-xl text-xs font-bold transition-all shrink-0">
+                <button onClick={() => void loadPlacements()} className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded-xl text-xs font-bold transition-all shrink-0">
                     Retry
                 </button>
             </div>
@@ -186,7 +456,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl">
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={() => setActiveLaunchSession(null)}
+                            onClick={closeLaunchSession}
                             className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all"
                             title="Go Back"
                         >
@@ -214,50 +484,15 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
                 </div>
 
                 <div className="relative w-full h-[700px] bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-                    {!iframeLoaded && !iframeTimedOut && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/60 pointer-events-none z-0">
-                            <RefreshIcon className="w-6 h-6 animate-spin text-amber-400" />
-                            <span className="text-xs text-slate-400 mt-2 font-medium">Connecting to provider...</span>
-                        </div>
-                    )}
-
-                    {iframeTimedOut && !iframeLoaded && (
-                        <div className="absolute inset-0 z-10 bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in">
-                            <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl">
-                                <AlertIcon className="w-8 h-8" />
-                            </div>
-                            <div className="max-w-md space-y-2">
-                                <h4 className="text-sm font-black text-white">Embed Loading Notice</h4>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    The offerwall session did not finish loading within the expected time. Some external providers may restrict embedded display in frames.
-                                </p>
-                            </div>
-                            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                                <button
-                                    onClick={() => setActiveLaunchSession(null)}
-                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-all"
-                                >
-                                    Return to Placements
-                                </button>
-                                <a
-                                    href={activeLaunchSession.launchUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase rounded-xl transition-all flex items-center gap-1.5"
-                                >
-                                    <span>Open in New Tab</span>
-                                    <LaunchIcon className="w-3.5 h-3.5" />
-                                </a>
-                            </div>
-                        </div>
-                    )}
+                    {renderWaitingIndicator(activeLaunchSession)}
 
                     <iframe
+                        key={activeLaunchSession.sessionId}
                         src={activeLaunchSession.launchUrl}
                         title={activeLaunchSession.displayName}
                         className="w-full h-full border-0"
                         allow="fullscreen; camera; microphone"
-                        onLoad={() => setIframeLoaded(true)}
+                        onLoad={() => handleIframeLoad(activeLaunchSession.sessionId)}
                     />
                 </div>
 
@@ -358,7 +593,7 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
             {activeLaunchSession && activeLaunchSession.launchDisplayMode === 'modal' && (
                 <Modal
                     isOpen={true}
-                    onClose={() => setActiveLaunchSession(null)}
+                    onClose={closeLaunchSession}
                     title={`🚀 ${activeLaunchSession.displayName}`}
                 >
                     <div className="space-y-4 p-1">
@@ -380,50 +615,15 @@ export const ProviderPlacementPanel: React.FC<ProviderPlacementPanelProps> = ({
 
                         {/* Iframe View */}
                         <div className="relative w-full h-[600px] bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-inner">
-                            {!iframeLoaded && !iframeTimedOut && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/60 pointer-events-none z-0">
-                                    <RefreshIcon className="w-6 h-6 animate-spin text-amber-400" />
-                                    <span className="text-xs text-slate-400 mt-2 font-medium">Connecting to provider...</span>
-                                </div>
-                            )}
-
-                            {iframeTimedOut && !iframeLoaded && (
-                                <div className="absolute inset-0 z-10 bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in">
-                                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl">
-                                        <AlertIcon className="w-8 h-8" />
-                                    </div>
-                                    <div className="max-w-md space-y-2">
-                                        <h4 className="text-sm font-black text-white">Embed Loading Notice</h4>
-                                        <p className="text-xs text-slate-400 leading-relaxed">
-                                            The offerwall session did not finish loading within the expected time. Some external providers may restrict embedded display in frames.
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                                        <button
-                                            onClick={() => setActiveLaunchSession(null)}
-                                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-all"
-                                        >
-                                            Return to Placements
-                                        </button>
-                                        <a
-                                            href={activeLaunchSession.launchUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase rounded-xl transition-all flex items-center gap-1.5"
-                                        >
-                                            <span>Open in New Tab</span>
-                                            <LaunchIcon className="w-3.5 h-3.5" />
-                                        </a>
-                                    </div>
-                                </div>
-                            )}
+                            {renderWaitingIndicator(activeLaunchSession)}
 
                             <iframe
+                                key={activeLaunchSession.sessionId}
                                 src={activeLaunchSession.launchUrl}
                                 title={activeLaunchSession.displayName}
                                 className="w-full h-full border-0"
                                 allow="fullscreen; camera; microphone"
-                                onLoad={() => setIframeLoaded(true)}
+                                onLoad={() => handleIframeLoad(activeLaunchSession.sessionId)}
                             />
                         </div>
 

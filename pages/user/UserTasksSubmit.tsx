@@ -11,6 +11,7 @@ import { DisputeTimeline } from '../../components/DisputeTimeline';
 import { seoAnalytics } from '../../services/seoAnalytics';
 import OtherTasksCard from '../../components/OtherTasksCard';
 import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
+import { useOtherTasksPrefetch } from '../../hooks/useOtherTasksPrefetch';
 import { Layers as TaskIcon, Globe as GlobeIcon, FileQuestion, HelpCircle, CheckSquare, RefreshCw as RefreshIcon } from 'lucide-react';
 import { SurveyBuilder, SurveyConfigData } from '../../components/SurveyBuilder';
 import { SMARTEXN_SURVEY_TEMPLATES } from '../../lib/surveyTemplates';
@@ -491,11 +492,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     // Phase 3: Pending Mandatory Surveys in Available Tasks
     const [pendingMandatorySurveys, setPendingMandatorySurveys] = useState<UserTask[]>([]);
     const [isLoadingMandatory, setIsLoadingMandatory] = useState(false);
+    const [mandatoryCheckCompleted, setMandatoryCheckCompleted] = useState(false);
     const [activeMandatorySurvey, setActiveMandatorySurvey] = useState<UserTask | null>(null);
 
     const fetchPendingMandatorySurveys = async () => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setMandatoryCheckCompleted(false);
+            return;
+        }
         try {
+            setMandatoryCheckCompleted(false);
             setIsLoadingMandatory(true);
             const data = await getPendingMandatoryRequirements();
             const workAndEarnMandatory = (data || []).filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
@@ -504,12 +510,25 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             console.error('Failed to load mandatory survey requirements:', err);
         } finally {
             setIsLoadingMandatory(false);
+            setMandatoryCheckCompleted(true);
         }
     };
 
     useEffect(() => {
         fetchPendingMandatorySurveys();
     }, [currentUser?._id]);
+
+    useOtherTasksPrefetch({
+        enabled:
+            !hideSubTabs &&
+            Boolean(currentUser?._id) &&
+            !state.isLoading &&
+            !state.isSyncing &&
+            mandatoryCheckCompleted &&
+            availableTasksSubTab === 'available_jobs',
+        userId: currentUser?._id,
+        tabIds: visibleEarnTabs.map(t => t.id)
+    });
 
     // Session-scoped dismissal state for popups
     const [dismissedPopupIds, setDismissedPopupIds] = useState<string[]>(() => {

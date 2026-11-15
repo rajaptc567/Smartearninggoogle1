@@ -28,6 +28,8 @@ import { formatCurrency } from '../../types';
 import { openTaskDispute } from '../../services/api';
 import { getRemainingTimeString, renderDisputeStageBadge, renderDisputeTimerBox } from './UserTasksSubmit';
 import { DisputeTimeline } from '../../components/DisputeTimeline';
+import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
+import { useOtherTasksPrefetch } from '../../hooks/useOtherTasksPrefetch';
 
 export type FilterTab = 'all' | 'campaign_purchases' | 'wallet_transfers' | 'task_rewards' | 'conversions' | 'deposits_withdrawals' | 'refunds';
 
@@ -133,6 +135,16 @@ const WorkAndEarnHistory: React.FC = () => {
     const [isDisputing, setIsDisputing] = useState(false);
     const [disputeSuccess, setDisputeSuccess] = useState<string | null>(null);
     const [copiedUrl, setCopiedUrl] = useState(false);
+
+    const prefetchEarnTabIds = useMemo(() => {
+        return getVisibleEarnTabs(state.settings?.customEarnTabs, state.settings?.modulePagesConfig).map(t => t.id);
+    }, [state.settings?.customEarnTabs, state.settings?.modulePagesConfig]);
+
+    useOtherTasksPrefetch({
+        enabled: Boolean(currentUser?._id) && !state.isLoading && !state.isSyncing,
+        userId: currentUser?._id,
+        tabIds: prefetchEarnTabIds
+    });
 
     if (!currentUser) {
         return (
