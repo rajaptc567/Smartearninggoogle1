@@ -4,6 +4,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import { getEffectiveModulePageControl } from '../data/modulePagesDefaults';
 import { canAccessInvestmentModule } from '../utils/investmentAccess';
+import { clearPlacementCache } from '../services/providerPlacementService';
 
 interface SidebarProps {
   sidebarOpen: boolean;
@@ -165,6 +166,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
     const activeLinkClass = "bg-blue-600 text-white shadow-lg shadow-blue-600/20";
 
     const handleLogout = () => {
+        clearPlacementCache();
         dispatch({ type: 'SET_CURRENT_USER', payload: null });
         setSidebarOpen(false);
     };

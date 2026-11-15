@@ -3,7 +3,7 @@ import React, { createContext, useReducer, ReactNode, useEffect, useRef, useCall
 import { io } from 'socket.io-client';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent, UserTask, UserTaskSubmission } from '../types';
 import { 
-    getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, getPublicPaymentMethods,
+    getUser, getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods,
     getInvestmentPlans, getRules, getSettings, getPublicSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks, getUserTasks, getUserTaskSubmissions,
     getDataVersion
 } from '../services/api';
@@ -201,7 +201,92 @@ type Action =
     | { type: 'SET_IS_TASKS_LOADING'; payload: boolean };
 
 
-const dataReducer = (state: AppState, action: Action): AppState => {
+export type SyncDatasetKey =
+    | 'currentUser'
+    | 'users'
+    | 'deposits'
+    | 'withdrawals'
+    | 'transactions'
+    | 'notifications'
+    | 'paymentMethods'
+    | 'investmentPlans'
+    | 'rules'
+    | 'settings'
+    | 'transfers'
+    | 'logs'
+    | 'passwordResetRequests'
+    | 'disputes'
+    | 'tasks'
+    | 'userTasks'
+    | 'userTaskSubmissions';
+
+export const isAdminSyncRole = (role?: string | null): boolean => {
+    const normalized = typeof role === 'string' ? role.trim().toLowerCase() : '';
+    return normalized === 'admin' || normalized === 'super_admin';
+};
+
+export const isRetryableSyncError = (err: unknown): boolean => {
+    if (!err) return true;
+    if (typeof err === 'object' && err !== null) {
+        const anyErr = err as { name?: string; status?: number; message?: string };
+        if (anyErr.name === 'AbortError') return false;
+        if (typeof anyErr.status === 'number') {
+            if (anyErr.status >= 400 && anyErr.status < 500) {
+                return false;
+            }
+            return anyErr.status >= 500 || anyErr.status === 0;
+        }
+        if (typeof anyErr.message === 'string') {
+            if (/access denied|unauthorized|forbidden|\b401\b|\b403\b/i.test(anyErr.message)) {
+                return false;
+            }
+        }
+    }
+    return true;
+};
+
+export const getAuthorizedSyncDatasets = (role?: string | null): SyncDatasetKey[] => {
+    const common: SyncDatasetKey[] = [
+        'settings',
+        'notifications',
+        'deposits',
+        'withdrawals',
+        'transactions',
+        'paymentMethods',
+        'investmentPlans',
+        'rules',
+        'transfers',
+        'disputes',
+        'tasks',
+        'userTasks',
+        'userTaskSubmissions'
+    ];
+    if (isAdminSyncRole(role)) {
+        return ['users', 'logs', 'passwordResetRequests', ...common];
+    }
+    return ['currentUser', ...common];
+};
+
+const DATASET_SET_ACTION_MAP: Partial<Record<SyncDatasetKey, Action['type']>> = {
+    users: 'SET_USERS',
+    deposits: 'SET_DEPOSITS',
+    withdrawals: 'SET_WITHDRAWALS',
+    transactions: 'SET_TRANSACTIONS',
+    notifications: 'SET_NOTIFICATIONS',
+    paymentMethods: 'SET_PAYMENT_METHODS',
+    investmentPlans: 'SET_INVESTMENT_PLANS',
+    rules: 'SET_RULES',
+    settings: 'SET_SETTINGS',
+    transfers: 'SET_TRANSFERS',
+    logs: 'SET_LOGS',
+    passwordResetRequests: 'SET_PASSWORD_RESET_REQUESTS',
+    disputes: 'SET_DISPUTES',
+    tasks: 'SET_TASKS',
+    userTasks: 'SET_USER_TASKS',
+    userTaskSubmissions: 'SET_USER_TASK_SUBMISSIONS'
+};
+
+export const dataReducer = (state: AppState, action: Action): AppState => {
     const sanitizeSettings = (settings: Settings) => {
         if (!settings) return state.settings;
         const newSettings = { ...(state.settings || {}), ...settings };
@@ -253,6 +338,10 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'SET_CURRENT_USER': {
             const user = action.payload && typeof action.payload === 'object' && 'user' in action.payload ? (action.payload as any).user : action.payload;
             const token = action.payload && typeof action.payload === 'object' && 'token' in action.payload ? (action.payload as any).token : undefined;
+            const prevUserId = state.currentUser?._id ? String(state.currentUser._id) : null;
+            const nextUserId = user?._id ? String(user._id) : null;
+            const isAccountChanged = prevUserId !== nextUserId;
+
             try {
                 if (user) {
                     localStorage.setItem('currentUser', JSON.stringify(user));
@@ -267,11 +356,47 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             } catch (error: any) {
                 console.error("Could not access localStorage:", error.message);
             }
-            newState = { ...state, currentUser: user || null };
+
+            if (!user || isAccountChanged) {
+                newState = {
+                    ...state,
+                    users: [],
+                    deposits: [],
+                    withdrawals: [],
+                    transfers: [],
+                    paymentMethods: [],
+                    rules: [],
+                    transactions: [],
+                    notifications: [],
+                    logs: [],
+                    passwordResetRequests: [],
+                    disputes: [],
+                    tasks: [],
+                    userTasks: [],
+                    userTaskSubmissions: [],
+                    currentUser: user || null,
+                    isSyncing: Boolean(user),
+                    isTasksLoading: Boolean(user),
+                };
+            } else {
+                newState = { ...state, currentUser: user || null };
+            }
             break;
         }
 
-        case 'SET_USERS': newState = { ...state, users: action.payload || [] }; break;
+        case 'SET_USERS': {
+            const usersList = action.payload || [];
+            let updatedCurrentUser = state.currentUser;
+            if (updatedCurrentUser && Array.isArray(usersList)) {
+                const freshUser = usersList.find((u: any) => String(u._id) === String(updatedCurrentUser?._id));
+                if (freshUser) {
+                    updatedCurrentUser = freshUser;
+                    try { localStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser)); } catch (e) {}
+                }
+            }
+            newState = { ...state, users: usersList, currentUser: updatedCurrentUser };
+            break;
+        }
         case 'ADD_USER': newState = { ...state, users: [action.payload, ...state.users.filter(u => String(u._id) !== String(action.payload._id))] }; break;
         case 'UPDATE_USER': {
             if (!action.payload) return state;
@@ -431,12 +556,335 @@ const initializer = (initialState: AppState) => {
                 initialData.currentUser = parsedUser;
             }
         }
-        
+
+        const hasToken = typeof localStorage !== 'undefined' ? Boolean(localStorage.getItem('authToken')) : false;
+        const hasAuthSession = Boolean(initialData.currentUser && hasToken);
+        initialData.isSyncing = hasAuthSession;
+        initialData.isTasksLoading = hasAuthSession;
+
         return initialData;
     } catch (error) {
         console.error("Could not parse data from localStorage", error);
     }
-    return initialState;
+    return { ...initialState, isSyncing: false, isTasksLoading: false };
+};
+
+export interface SyncApiAdapters {
+    getDataVersion: () => Promise<number | null>;
+    getUser: (id: string) => Promise<User | null>;
+    getUsers: () => Promise<User[]>;
+    getDeposits: () => Promise<Deposit[]>;
+    getWithdrawals: () => Promise<Withdrawal[]>;
+    getTransactions: () => Promise<Transaction[]>;
+    getNotifications: () => Promise<Notification[]>;
+    getPaymentMethods: () => Promise<PaymentMethod[]>;
+    getInvestmentPlans: () => Promise<InvestmentPlan[]>;
+    getRules: () => Promise<Rule[]>;
+    getSettings: () => Promise<Settings>;
+    getTransfers: () => Promise<Transfer[]>;
+    getLogs: () => Promise<Log[]>;
+    getPasswordResetRequests: () => Promise<PasswordResetRequest[]>;
+    getDisputes: () => Promise<Dispute[]>;
+    getTasks: () => Promise<Task[]>;
+    getUserTasks: () => Promise<UserTask[]>;
+    getUserTaskSubmissions: () => Promise<UserTaskSubmission[]>;
+}
+
+const defaultSyncApiAdapters: SyncApiAdapters = {
+    getDataVersion,
+    getUser,
+    getUsers,
+    getDeposits,
+    getWithdrawals,
+    getTransactions,
+    getNotifications,
+    getPaymentMethods,
+    getInvestmentPlans,
+    getRules,
+    getSettings,
+    getTransfers,
+    getLogs,
+    getPasswordResetRequests,
+    getDisputes,
+    getTasks,
+    getUserTasks,
+    getUserTaskSubmissions,
+};
+
+export interface SyncRuntimeRefs {
+    lastVersionRef: { current: number };
+    hasCompletedAuthSyncRef: { current: boolean };
+    isSyncingRef: { current: boolean };
+    activeSyncPromiseRef: { current: Promise<void> | null };
+    pendingForceRef: { current: boolean };
+    syncSessionEpochRef: { current: number };
+    activeUserIdRef: { current: string | null };
+    datasetSeqRef: { current: Partial<Record<SyncDatasetKey, number>> };
+    retryTimersRef: { current: Map<SyncDatasetKey, ReturnType<typeof setTimeout>> };
+}
+
+export interface ExecuteSyncPassOptions {
+    force?: boolean;
+    userId: string;
+    role?: string | null;
+    refs: SyncRuntimeRefs;
+    dispatch: React.Dispatch<Action>;
+    api?: SyncApiAdapters;
+    isMounted?: () => boolean;
+    hasAuthToken?: () => boolean;
+    maxRetries?: number;
+    retryBaseDelayMs?: number;
+}
+
+const fetchDatasetByKey = async (key: SyncDatasetKey, userId: string, api: SyncApiAdapters): Promise<any> => {
+    switch (key) {
+        case 'currentUser': return api.getUser(userId);
+        case 'users': return api.getUsers();
+        case 'deposits': return api.getDeposits();
+        case 'withdrawals': return api.getWithdrawals();
+        case 'transactions': return api.getTransactions();
+        case 'notifications': return api.getNotifications();
+        case 'paymentMethods': return api.getPaymentMethods();
+        case 'investmentPlans': return api.getInvestmentPlans();
+        case 'rules': return api.getRules();
+        case 'settings': return api.getSettings();
+        case 'transfers': return api.getTransfers();
+        case 'logs': return api.getLogs();
+        case 'passwordResetRequests': return api.getPasswordResetRequests();
+        case 'disputes': return api.getDisputes();
+        case 'tasks': return api.getTasks();
+        case 'userTasks': return api.getUserTasks();
+        case 'userTaskSubmissions': return api.getUserTaskSubmissions();
+    }
+};
+
+export const executeMasterDataSyncPass = async ({
+    force = false,
+    userId,
+    role,
+    refs,
+    dispatch,
+    api = defaultSyncApiAdapters,
+    isMounted = () => true,
+    hasAuthToken = () => typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('authToken')),
+    maxRetries = 3,
+    retryBaseDelayMs = 1000
+}: ExecuteSyncPassOptions): Promise<void> => {
+    const normalizedUserId = String(userId || '').trim();
+    if (!normalizedUserId || !hasAuthToken()) {
+        refs.isSyncingRef.current = false;
+        dispatch({ type: 'SET_IS_SYNCING', payload: false });
+        return;
+    }
+
+    const runSessionEpoch = refs.syncSessionEpochRef.current;
+
+    const isRunValid = (): boolean => {
+        return (
+            isMounted() &&
+            refs.syncSessionEpochRef.current === runSessionEpoch &&
+            refs.activeUserIdRef.current === normalizedUserId &&
+            hasAuthToken()
+        );
+    };
+
+    if (!isRunValid()) {
+        return;
+    }
+
+    if (force) {
+        refs.pendingForceRef.current = true;
+    }
+
+    if (refs.activeSyncPromiseRef.current) {
+        try {
+            await refs.activeSyncPromiseRef.current;
+        } catch (e) {}
+        if (!isRunValid()) return;
+        if (refs.pendingForceRef.current && !refs.activeSyncPromiseRef.current) {
+            return executeMasterDataSyncPass({
+                force: false,
+                userId: normalizedUserId,
+                role,
+                refs,
+                dispatch,
+                api,
+                isMounted,
+                hasAuthToken,
+                maxRetries,
+                retryBaseDelayMs
+            });
+        }
+        return refs.activeSyncPromiseRef.current || Promise.resolve();
+    }
+
+    const syncPromise = (async () => {
+        refs.isSyncingRef.current = true;
+        dispatch({ type: 'SET_IS_SYNCING', payload: true });
+
+        try {
+            const doForce = refs.pendingForceRef.current;
+            refs.pendingForceRef.current = false;
+
+            const isInitialSync = !refs.hasCompletedAuthSyncRef.current;
+            let serverVersion: number | null = null;
+            try {
+                serverVersion = await api.getDataVersion();
+            } catch {
+                serverVersion = null;
+            }
+
+            if (!isRunValid()) {
+                return;
+            }
+
+            let verifiedServerVersion: number | null = null;
+            if (serverVersion === null) {
+                // Version endpoint unavailable:
+                // Passive checks skip safely without fabricating a version; initial or forced syncs continue.
+                if (!doForce && !isInitialSync) {
+                    return;
+                }
+            } else {
+                if (!doForce && !isInitialSync && serverVersion <= refs.lastVersionRef.current) {
+                    return;
+                }
+                verifiedServerVersion = serverVersion;
+            }
+
+            const datasetKeys = getAuthorizedSyncDatasets(role);
+            const failedKeys = new Set<SyncDatasetKey>();
+            let initialPassFinished = false;
+            let tasksSettled = !datasetKeys.includes('tasks');
+            let userTasksSettled = !datasetKeys.includes('userTasks');
+
+            const maybeCompleteTasksLoading = () => {
+                if (isInitialSync && tasksSettled && userTasksSettled && isRunValid()) {
+                    dispatch({ type: 'SET_IS_TASKS_LOADING', payload: false });
+                }
+            };
+
+            const runDatasetAttempt = async (key: SyncDatasetKey, seq: number, attempt: number): Promise<void> => {
+                if (!isRunValid() || refs.datasetSeqRef.current[key] !== seq) {
+                    return;
+                }
+
+                try {
+                    const data = await fetchDatasetByKey(key, normalizedUserId, api);
+                    if (!isRunValid() || refs.datasetSeqRef.current[key] !== seq) {
+                        return;
+                    }
+
+                    if (key === 'currentUser') {
+                        if (data && data._id && String(data._id) === normalizedUserId) {
+                            dispatch({ type: 'UPDATE_USER', payload: data });
+                        }
+                    } else {
+                        const actionType = DATASET_SET_ACTION_MAP[key];
+                        if (actionType) {
+                            dispatch({ type: actionType, payload: data } as Action);
+                        }
+                    }
+
+                    failedKeys.delete(key);
+                    if (initialPassFinished && failedKeys.size === 0 && verifiedServerVersion !== null && isRunValid()) {
+                        refs.lastVersionRef.current = Math.max(refs.lastVersionRef.current, verifiedServerVersion);
+                    }
+                } catch (err) {
+                    if (!isRunValid() || refs.datasetSeqRef.current[key] !== seq) {
+                        return;
+                    }
+
+                    failedKeys.add(key);
+
+                    if (isRetryableSyncError(err) && attempt < maxRetries) {
+                        const existingTimer = refs.retryTimersRef.current.get(key);
+                        if (existingTimer) {
+                            clearTimeout(existingTimer);
+                        }
+                        const delay = Math.pow(2, attempt) * retryBaseDelayMs;
+                        const timer = setTimeout(() => {
+                            refs.retryTimersRef.current.delete(key);
+                            if (!isRunValid() || refs.datasetSeqRef.current[key] !== seq) {
+                                return;
+                            }
+                            void runDatasetAttempt(key, seq, attempt + 1);
+                        }, delay);
+                        refs.retryTimersRef.current.set(key, timer);
+                    } else {
+                        console.warn(`Sync dataset "${key}" failed without retry:`, err);
+                    }
+                } finally {
+                    if (attempt === 0) {
+                        if (key === 'tasks') {
+                            tasksSettled = true;
+                            maybeCompleteTasksLoading();
+                        } else if (key === 'userTasks') {
+                            userTasksSettled = true;
+                            maybeCompleteTasksLoading();
+                        }
+                    }
+                }
+            };
+
+            const initialPromises = datasetKeys.map(key => {
+                const pendingTimer = refs.retryTimersRef.current.get(key);
+                if (pendingTimer) {
+                    clearTimeout(pendingTimer);
+                    refs.retryTimersRef.current.delete(key);
+                }
+                const nextSeq = (refs.datasetSeqRef.current[key] || 0) + 1;
+                refs.datasetSeqRef.current[key] = nextSeq;
+                return runDatasetAttempt(key, nextSeq, 0);
+            });
+
+            await Promise.allSettled(initialPromises);
+            initialPassFinished = true;
+
+            if (!isRunValid()) {
+                return;
+            }
+
+            refs.hasCompletedAuthSyncRef.current = true;
+            if (isInitialSync) {
+                tasksSettled = true;
+                userTasksSettled = true;
+                maybeCompleteTasksLoading();
+            }
+
+            if (failedKeys.size === 0 && verifiedServerVersion !== null) {
+                refs.lastVersionRef.current = Math.max(refs.lastVersionRef.current, verifiedServerVersion);
+            }
+        } catch (err) {
+            console.error("Flicker-free live sync payload retrieval failed:", err);
+        } finally {
+            if (refs.syncSessionEpochRef.current === runSessionEpoch) {
+                refs.isSyncingRef.current = false;
+                dispatch({ type: 'SET_IS_SYNCING', payload: false });
+                if (refs.activeSyncPromiseRef.current === syncPromise) {
+                    refs.activeSyncPromiseRef.current = null;
+                }
+            }
+        }
+    })();
+
+    refs.activeSyncPromiseRef.current = syncPromise;
+    await syncPromise;
+
+    if (refs.pendingForceRef.current && isRunValid() && !refs.activeSyncPromiseRef.current) {
+        return executeMasterDataSyncPass({
+            force: false,
+            userId: normalizedUserId,
+            role,
+            refs,
+            dispatch,
+            api,
+            isMounted,
+            hasAuthToken,
+            maxRetries,
+            retryBaseDelayMs
+        });
+    }
 };
 
 interface DataProviderProps {
@@ -446,112 +894,73 @@ interface DataProviderProps {
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
+    const hasCompletedAuthSyncRef = useRef<boolean>(false);
     const isSyncingRef = useRef<boolean>(false);
     const stateRef = useRef<AppState>(state);
+    const isMountedRef = useRef<boolean>(true);
+    const activeSyncPromiseRef = useRef<Promise<void> | null>(null);
+    const pendingForceRef = useRef<boolean>(false);
+    const syncSessionEpochRef = useRef<number>(0);
+    const currentUserId = state.currentUser?._id ? String(state.currentUser._id) : null;
+    const activeUserIdRef = useRef<string | null>(currentUserId);
+    const datasetSeqRef = useRef<Partial<Record<SyncDatasetKey, number>>>({});
+    const retryTimersRef = useRef<Map<SyncDatasetKey, ReturnType<typeof setTimeout>>>(new Map());
+
+    const clearAllRetryTimers = useCallback(() => {
+        retryTimersRef.current.forEach(timer => clearTimeout(timer));
+        retryTimersRef.current.clear();
+    }, []);
+
+    // Synchronously invalidate prior account session refs on logout or account switch
+    if (activeUserIdRef.current !== currentUserId) {
+        activeUserIdRef.current = currentUserId;
+        syncSessionEpochRef.current += 1;
+        hasCompletedAuthSyncRef.current = false;
+        lastVersionRef.current = 0;
+        pendingForceRef.current = false;
+        activeSyncPromiseRef.current = null;
+        datasetSeqRef.current = {};
+        clearAllRetryTimers();
+    }
 
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
 
-    const activeSyncPromiseRef = useRef<Promise<void> | null>(null);
-    const pendingForceRef = useRef<boolean>(false);
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+            syncSessionEpochRef.current += 1;
+            clearAllRetryTimers();
+        };
+    }, [clearAllRetryTimers]);
 
-    const masterDataSync = useCallback(async (force: boolean = false, retryCount: number = 0): Promise<void> => {
-        if (force) {
-            pendingForceRef.current = true;
+    const masterDataSync = useCallback(async (force: boolean = false): Promise<void> => {
+        const currentUser = stateRef.current.currentUser;
+        if (!currentUser?._id) {
+            isSyncingRef.current = false;
+            dispatch({ type: 'SET_IS_SYNCING', payload: false });
+            return;
         }
-
-        if (activeSyncPromiseRef.current) {
-            try {
-                await activeSyncPromiseRef.current;
-            } catch (e) {}
-            if (pendingForceRef.current && !activeSyncPromiseRef.current) {
-                return masterDataSync(false);
-            }
-            return activeSyncPromiseRef.current || Promise.resolve();
-        }
-
-        const syncPromise = (async () => {
-            dispatch({ type: 'SET_IS_SYNCING', payload: true });
-            isSyncingRef.current = true;
-            try {
-                const doForce = pendingForceRef.current;
-                pendingForceRef.current = false;
-
-                const serverVersion = await getDataVersion();
-                
-                if (serverVersion === null) {
-                    if (doForce) {
-                        pendingForceRef.current = true;
-                    }
-                    return;
-                }
-
-                const isInitialSync = lastVersionRef.current === 0;
-
-                if (doForce || isInitialSync || serverVersion > lastVersionRef.current) {
-                    const results = await Promise.allSettled([
-                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
-                    ]);
-                    
-                    const hasFailures = results.some(r => r.status === 'rejected');
-                    
-                    // Task-specific loading: check if getUserTasks/getTasks failed
-                    const tasksResult = results[14]; // getUserTasks
-                    const tasksSucceeded = tasksResult && tasksResult.status === 'fulfilled';
-                    if (isInitialSync) {
-                        dispatch({ type: 'SET_IS_TASKS_LOADING', payload: !tasksSucceeded });
-                    }
-                    
-                    if (!hasFailures) {
-                        lastVersionRef.current = serverVersion;
-                    } else {
-                        pendingForceRef.current = true;
-                    }
-
-                    const getValue = (idx: number, fallback: any) => 
-                        (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
-
-                    dispatch({ 
-                        type: 'SET_ALL_DATA', 
-                        payload: { 
-                            users: getValue(0, stateRef.current.users), 
-                            deposits: getValue(1, stateRef.current.deposits), 
-                            withdrawals: getValue(2, stateRef.current.withdrawals),
-                            transactions: getValue(3, stateRef.current.transactions), 
-                            notifications: getValue(4, stateRef.current.notifications), 
-                            paymentMethods: getValue(5, stateRef.current.paymentMethods),
-                            investmentPlans: getValue(6, stateRef.current.investmentPlans), 
-                            rules: getValue(7, stateRef.current.rules), 
-                            settings: getValue(8, stateRef.current.settings),
-                            transfers: getValue(9, stateRef.current.transfers), 
-                            logs: getValue(10, stateRef.current.logs), 
-                            passwordResetRequests: getValue(11, stateRef.current.passwordResetRequests),
-                            disputes: getValue(12, stateRef.current.disputes), 
-                            tasks: getValue(13, stateRef.current.tasks),
-                            userTasks: getValue(14, stateRef.current.userTasks),
-                            userTaskSubmissions: getValue(15, stateRef.current.userTaskSubmissions)
-                        } 
-                    });
-                }
-            } catch (err) {
-                console.error("Flicker-free live sync payload retrieval failed:", err);
-            } finally {
-                isSyncingRef.current = false;
-                dispatch({ type: 'SET_IS_SYNCING', payload: false });
-                activeSyncPromiseRef.current = null;
-                if (pendingForceRef.current && retryCount < 3) {
-                    const delay = Math.pow(2, retryCount) * 1000;
-                    console.log(`Retrying sync in ${delay}ms (retry ${retryCount + 1}/3)...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    return masterDataSync(false, retryCount + 1);
-                }
-            }
-        })();
-
-        activeSyncPromiseRef.current = syncPromise;
-        return syncPromise;
+        return executeMasterDataSyncPass({
+            force,
+            userId: String(currentUser._id),
+            role: currentUser.role,
+            refs: {
+                lastVersionRef,
+                hasCompletedAuthSyncRef,
+                isSyncingRef,
+                activeSyncPromiseRef,
+                pendingForceRef,
+                syncSessionEpochRef,
+                activeUserIdRef,
+                datasetSeqRef,
+                retryTimersRef
+            },
+            dispatch,
+            isMounted: () => isMountedRef.current
+        });
     }, []);
 
     const masterDataSyncRef = useRef<(force?: boolean) => Promise<void>>(masterDataSync);
@@ -576,62 +985,57 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         }
     };
 
-    // Fast Non-Blocking Initial Handshake + Deferred Lazy Background Fetch
+    // Fast Public Handshake + Immediate Authenticated Sync
     useEffect(() => {
-        let isMounted = true;
+        let isEffectActive = true;
+        const effectSessionEpoch = syncSessionEpochRef.current;
 
         const executeInitialLoad = async () => {
-            const token = localStorage.getItem('authToken');
-            const isLoggedIn = !!token;
+            const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
+            const isLoggedIn = Boolean(token && currentUserId);
 
             // Phase 1: Ultra-fast critical public handshake (< 3 KB) - never blocks render
             try {
                 const publicSettings = await getPublicSettings();
 
-                if (isMounted && publicSettings) {
-                    lastVersionRef.current = publicSettings.dataVersion || 1;
+                if (isEffectActive && syncSessionEpochRef.current === effectSessionEpoch && publicSettings) {
                     dispatch({
-                        type: 'SET_ALL_DATA',
-                        payload: {
-                            settings: publicSettings as any
-                        }
+                        type: 'SET_SETTINGS',
+                        payload: publicSettings as any
                     });
                 }
             } catch (err) {
                 console.warn("Public settings handshake error:", err);
             } finally {
-                if (isMounted) {
+                if (isEffectActive) {
                     dispatch({ type: 'SET_LOADING', payload: false });
                 }
             }
 
-            // Phase 2: Deferred non-critical background loading ONLY for authenticated users
-            // Coordinated through masterDataSync(true) to prevent race conditions, duplicate requests, and stale state.
-            if (!isLoggedIn) {
+            if (!isEffectActive || syncSessionEpochRef.current !== effectSessionEpoch) {
                 return;
             }
 
-            const scheduleBackgroundFetch = typeof window !== 'undefined' && 'requestIdleCallback' in window
-                ? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 3000 })
-                : (cb: () => void) => setTimeout(cb, 1000);
+            if (!isLoggedIn) {
+                dispatch({ type: 'SET_IS_SYNCING', payload: false });
+                dispatch({ type: 'SET_IS_TASKS_LOADING', payload: false });
+                return;
+            }
 
-            scheduleBackgroundFetch(async () => {
-                if (!isMounted) return;
-
-                try {
-                    await masterDataSyncRef.current(true);
-                } catch (bgError) {
-                    console.warn("Background data load error:", bgError);
-                }
-            });
+            // Start authenticated sync immediately after public settings complete (no idle/timer delay)
+            try {
+                await masterDataSyncRef.current(true);
+            } catch (bgError) {
+                console.warn("Authenticated data load error:", bgError);
+            }
         };
 
-        executeInitialLoad();
+        void executeInitialLoad();
 
         return () => {
-            isMounted = false;
+            isEffectActive = false;
         };
-    }, [state.currentUser?._id]);
+    }, [currentUserId]);
 
     // --- REAL-TIME LIVE SYNCHRONIZATION WITH SOCKET.IO ---
     useEffect(() => {

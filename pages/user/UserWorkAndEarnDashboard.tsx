@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useData } from '../../hooks/useData';
 import UserTasksSubmit, { getRemainingTimeString } from './UserTasksSubmit';
@@ -57,6 +57,7 @@ import {
 import { useWorkAndEarnConfig } from '../../hooks/useWorkAndEarnConfig';
 import OtherTasksCard from '../../components/OtherTasksCard';
 import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
+import { useOtherTasksPrefetch } from '../../hooks/useOtherTasksPrefetch';
 import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
 import { getEffectiveModulePageControl } from '../../data/modulePagesDefaults';
 import { formatCurrency, currencySymbols, UserTask, UserTaskSubmission } from '../../types';
@@ -162,25 +163,82 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     // Phase 3: Pending Mandatory Surveys
     const [pendingMandatorySurveys, setPendingMandatorySurveys] = useState<UserTask[]>([]);
     const [isLoadingMandatory, setIsLoadingMandatory] = useState(false);
+    const [mandatoryCheckCompleted, setMandatoryCheckCompleted] = useState(false);
     const [activeMandatorySurvey, setActiveMandatorySurvey] = useState<UserTask | null>(null);
+    const isMountedRef = useRef(true);
+    const mandatoryRequestSeqRef = useRef(0);
+    const activeMandatoryUserIdRef = useRef<string | undefined>(currentUser?._id);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     const fetchPendingMandatorySurveys = async () => {
-        if (!currentUser) return;
+        const targetUserId = currentUser?._id;
+        const requestSeq = ++mandatoryRequestSeqRef.current;
+
+        if (!targetUserId) {
+            setPendingMandatorySurveys([]);
+            setIsLoadingMandatory(false);
+            setMandatoryCheckCompleted(false);
+            return;
+        }
         try {
+            setMandatoryCheckCompleted(false);
             setIsLoadingMandatory(true);
             const data = await getPendingMandatoryRequirements();
+            if (
+                !isMountedRef.current ||
+                mandatoryRequestSeqRef.current !== requestSeq ||
+                activeMandatoryUserIdRef.current !== targetUserId
+            ) {
+                return;
+            }
             const workAndEarnMandatory = (data || []).filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
             setPendingMandatorySurveys(workAndEarnMandatory);
         } catch (err) {
+            if (
+                !isMountedRef.current ||
+                mandatoryRequestSeqRef.current !== requestSeq ||
+                activeMandatoryUserIdRef.current !== targetUserId
+            ) {
+                return;
+            }
             console.error('Failed to load mandatory survey requirements:', err);
         } finally {
-            setIsLoadingMandatory(false);
+            if (
+                isMountedRef.current &&
+                mandatoryRequestSeqRef.current === requestSeq &&
+                activeMandatoryUserIdRef.current === targetUserId
+            ) {
+                setIsLoadingMandatory(false);
+                setMandatoryCheckCompleted(true);
+            }
         }
     };
 
     useEffect(() => {
+        if (activeMandatoryUserIdRef.current !== currentUser?._id) {
+            activeMandatoryUserIdRef.current = currentUser?._id;
+            setPendingMandatorySurveys([]);
+            setMandatoryCheckCompleted(false);
+        }
         fetchPendingMandatorySurveys();
     }, [currentUser?._id]);
+
+    useOtherTasksPrefetch({
+        enabled:
+            Boolean(currentUser?._id) &&
+            !state.isLoading &&
+            !state.isSyncing &&
+            mandatoryCheckCompleted &&
+            dashboardTab === 'available_jobs',
+        userId: currentUser?._id,
+        tabIds: visibleEarnTabs.map(t => t.id)
+    });
 
     // Session-scoped dismissal state for popups
     const [dismissedPopupIds, setDismissedPopupIds] = useState<string[]>(() => {
@@ -2368,7 +2426,18 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    <UserTasksSubmit initialTab="browse" hideHeaderAndTabs={true} hideHeroBanner={true} hideSubTabs={true} />
+                    <UserTasksSubmit
+                        initialTab="browse"
+                        hideHeaderAndTabs={true}
+                        hideHeroBanner={true}
+                        hideSubTabs={true}
+                        sharedMandatoryState={{
+                            pendingMandatorySurveys,
+                            mandatoryCheckCompleted,
+                            isLoadingMandatory,
+                            onRefreshMandatorySurveys: fetchPendingMandatorySurveys
+                        }}
+                    />
                 </div>
             )}
 

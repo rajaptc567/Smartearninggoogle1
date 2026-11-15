@@ -47,13 +47,25 @@ export const getHeaders = (isMultipart = false) => {
     return headers;
 };
 
+export class ApiError extends Error {
+    status?: number;
+    data?: any;
+
+    constructor(message: string, status?: number, data?: any) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status;
+        this.data = data;
+    }
+}
+
 const handleResponse = async (response: Response) => {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         if (!response.ok) {
             const error = (data && (data.error || data.message)) || response.statusText || 'An unexpected error occurred.';
-            throw new Error(error);
+            throw new ApiError(error, response.status, data);
         }
         return data; 
     } else {
@@ -62,23 +74,26 @@ const handleResponse = async (response: Response) => {
             const data = JSON.parse(text);
             if (!response.ok) {
                 const error = (data && (data.error || data.message)) || response.statusText || 'An unexpected error occurred.';
-                throw new Error(error);
+                throw new ApiError(error, response.status, data);
             }
             return data;
         } catch (e) {
+            if (e instanceof ApiError) {
+                throw e;
+            }
             if (response.status === 404) {
-                throw new Error('Requested service or page was not found. Please try again later.');
+                throw new ApiError('Requested service or page was not found. Please try again later.', response.status);
             }
             if (response.status === 401 || response.status === 403) {
-                throw new Error('Access denied or session expired. Please log in again.');
+                throw new ApiError('Access denied or session expired. Please log in again.', response.status);
             }
             if (response.status === 502 || response.status === 503 || response.status === 504) {
-                throw new Error('Server is temporarily unreachable. Please try again in a few moments.');
+                throw new ApiError('Server is temporarily unreachable. Please try again in a few moments.', response.status);
             }
             if (response.status >= 500) {
-                throw new Error('A server error occurred. Please try again later.');
+                throw new ApiError('A server error occurred. Please try again later.', response.status);
             }
-            throw new Error('Unable to connect to the server. Please check your connection and try again.');
+            throw new ApiError('Unable to connect to the server. Please check your connection and try again.', response.status || undefined);
         }
     }
 };
@@ -104,6 +119,20 @@ export const getUsers = async (): Promise<User[]> => {
     });
     const result = await handleResponse(response);
     return result.data;
+};
+
+export const getUser = async (id: string): Promise<User | null> => {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+        return null;
+    }
+    const response = await fetch(`${API_BASE_URL}/users/${encodeURIComponent(id.trim())}`, {
+        headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    if (!result || result.success === false || !result.data || !result.data._id) {
+        return null;
+    }
+    return result.data as User;
 };
 
 export const createUser = async (userData: Partial<User>): Promise<{ token: string; data: User; verificationStatus?: any }> => {
