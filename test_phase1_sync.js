@@ -475,6 +475,20 @@ async function runTests() {
         assert.ok(subSrc.includes('mandatoryRequestSeqRef') && subSrc.includes('activeMandatoryUserIdRef'));
     });
 
+    await test('16. Fix 1: getUser controller excludes sensitive secret and hash fields', () => {
+        const ctrlSrc = fs.readFileSync(path.join(ROOT, 'backend/controllers/usersController.js'), 'utf8');
+        assert.ok(ctrlSrc.includes("delete userObj.password"));
+        assert.ok(ctrlSrc.includes("delete userObj.passwordResetToken"));
+        assert.ok(ctrlSrc.includes("delete userObj.emailVerificationOtpHash"));
+    });
+
+    await test('17. Fix 2: Mandatory verification fails closed on error/non-array response', () => {
+        const dashSrc = fs.readFileSync(path.join(ROOT, 'pages/user/UserWorkAndEarnDashboard.tsx'), 'utf8');
+        const subSrc = fs.readFileSync(path.join(ROOT, 'pages/user/UserTasksSubmit.tsx'), 'utf8');
+        assert.ok(dashSrc.includes("setMandatoryCheckCompleted(false)") && dashSrc.includes("Array.isArray(data)"));
+        assert.ok(subSrc.includes("setLocalMandatoryCheckCompleted(false)") && subSrc.includes("Array.isArray(data)"));
+    });
+
     console.log(`\nALL ${passed} PHASE 1 REGRESSION TESTS PASSED.`);
 }
 
