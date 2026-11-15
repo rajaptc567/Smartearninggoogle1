@@ -6,8 +6,6 @@ import Button from '../../components/ui/Button';
 import { completeTask } from '../../services/api';
 import { seoAnalytics } from '../../services/seoAnalytics';
 import OtherTasksCard from '../../components/OtherTasksCard';
-import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
-import { useOtherTasksPrefetch } from '../../hooks/useOtherTasksPrefetch';
 import { Zap as ZapIcon, Globe as GlobeIcon } from 'lucide-react';
 
 const UserTasks: React.FC = () => {
@@ -53,24 +51,6 @@ const UserTasks: React.FC = () => {
         }
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
     }, [activeVideoTask, isTabVisible, timeLeft, isVideoComplete]);
-
-    const otherTasksPrefetchIds = useMemo(() => {
-        const visible = getVisibleEarnTabs(settings?.customEarnTabs, settings?.modulePagesConfig);
-        if (visible.some(t => t.id === 'other_tasks')) return ['other_tasks'];
-        if (Array.isArray(settings?.customEarnTabs) && settings.customEarnTabs.length > 0) return [];
-        return ['other_tasks'];
-    }, [settings?.customEarnTabs, settings?.modulePagesConfig]);
-
-    useOtherTasksPrefetch({
-        enabled:
-            Boolean(currentUser?._id) &&
-            !state.isLoading &&
-            !state.isSyncing &&
-            activeTab === 'missions' &&
-            otherTasksPrefetchIds.length > 0,
-        userId: currentUser?._id,
-        tabIds: otherTasksPrefetchIds
-    });
 
     if (!currentUser) return null;
 
