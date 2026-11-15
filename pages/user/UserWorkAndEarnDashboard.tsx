@@ -197,8 +197,12 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             ) {
                 return;
             }
-            const workAndEarnMandatory = (data || []).filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
+            if (!Array.isArray(data)) {
+                throw new Error('Invalid mandatory requirements response format');
+            }
+            const workAndEarnMandatory = data.filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
             setPendingMandatorySurveys(workAndEarnMandatory);
+            setMandatoryCheckCompleted(true);
         } catch (err) {
             if (
                 !isMountedRef.current ||
@@ -208,6 +212,8 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                 return;
             }
             console.error('Failed to load mandatory survey requirements:', err);
+            setPendingMandatorySurveys([]);
+            setMandatoryCheckCompleted(false);
         } finally {
             if (
                 isMountedRef.current &&
@@ -215,7 +221,6 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                 activeMandatoryUserIdRef.current === targetUserId
             ) {
                 setIsLoadingMandatory(false);
-                setMandatoryCheckCompleted(true);
             }
         }
     };

@@ -546,8 +546,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             ) {
                 return;
             }
-            const workAndEarnMandatory = (data || []).filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
+            if (!Array.isArray(data)) {
+                throw new Error('Invalid mandatory requirements response format');
+            }
+            const workAndEarnMandatory = data.filter(t => t.requirementMode !== 'mandatory_before_withdrawal');
             setLocalPendingMandatorySurveys(workAndEarnMandatory);
+            setLocalMandatoryCheckCompleted(true);
         } catch (err) {
             if (
                 !isMountedRef.current ||
@@ -557,6 +561,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 return;
             }
             console.error('Failed to load mandatory survey requirements:', err);
+            setLocalPendingMandatorySurveys([]);
+            setLocalMandatoryCheckCompleted(false);
         } finally {
             if (
                 isMountedRef.current &&
@@ -564,7 +570,6 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 activeMandatoryUserIdRef.current === targetUserId
             ) {
                 setLocalIsLoadingMandatory(false);
-                setLocalMandatoryCheckCompleted(true);
             }
         }
     };

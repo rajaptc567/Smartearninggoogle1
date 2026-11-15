@@ -371,17 +371,30 @@ export const getUsers = async (req, res) => {
 
 export const getUser = async (req, res) => {
     try {
-        const user = await User.findById(req.params.id);
-        if (!user) return res.status(200).json({ success: false, data: {} });
+        const userDoc = await User.findById(req.params.id);
+        if (!userDoc) return res.status(200).json({ success: false, data: {} });
 
         const loggedInUserId = req.user?.id;
         const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
-        if (!isAdmin && String(loggedInUserId) !== String(user._id)) {
+        if (!isAdmin && String(loggedInUserId) !== String(userDoc._id)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot access other users profiles.' });
         }
 
-        res.status(200).json({ success: true, data: user });
+        const userObj = userDoc.toObject ? userDoc.toObject() : { ...userDoc };
+        delete userObj.password;
+        delete userObj.passwordResetToken;
+        delete userObj.passwordResetOtp;
+        delete userObj.passwordResetExpires;
+        delete userObj.emailVerificationOtpHash;
+        delete userObj.whatsappVerificationOtpHash;
+        delete userObj.emailVerificationExpires;
+        delete userObj.emailVerificationTokenHash;
+        delete userObj.emailVerificationTokenExpires;
+        delete userObj.whatsappVerificationTokenHash;
+        delete userObj.whatsappVerificationTokenExpires;
+
+        res.status(200).json({ success: true, data: userObj });
     } catch (err) { res.status(200).json({ success: false, data: {} }); }
 };
 
