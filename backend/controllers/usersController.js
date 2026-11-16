@@ -12,6 +12,8 @@ import Deposit from '../models/Deposit.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
+import { emitRealtimeChange } from '../utils/socketRealtime.js';
 
 const escapeHtml = (str) => {
     if (typeof str !== 'string') return '';
@@ -1059,7 +1061,16 @@ export const userRequestPasswordReset = async (req, res) => {
                 console.error('Failed to dispatch password reset admin notifications:', notifErr);
             }
 
-            req.app.get('io')?.emit('DATA_CHANGED');
+            let resetVersion1;
+            if (mongoose.connection?.readyState === 1) {
+                resetVersion1 = await Setting.bumpVersion();
+            }
+            emitRealtimeChange(req.app.get('io'), {
+                scope: 'admin',
+                datasets: ['passwordResetRequests', 'notifications'],
+                version: resetVersion1,
+                event: 'PASSWORD_RESET_REQUESTED'
+            });
             
             // Automatic Password Reset handling wrapped in localized try-catch so it won't crash DB writes
             try {
@@ -1107,7 +1118,16 @@ export const userRequestPasswordReset = async (req, res) => {
             } catch (autoErr) {
                 console.error('Automation failed during userRequestPasswordReset:', autoErr);
             }
-            req.app.get('io')?.emit('DATA_CHANGED');
+            let resetVersion2;
+            if (mongoose.connection?.readyState === 1) {
+                resetVersion2 = await Setting.bumpVersion();
+            }
+            emitRealtimeChange(req.app.get('io'), {
+                scope: 'admin',
+                datasets: ['passwordResetRequests'],
+                version: resetVersion2,
+                event: 'PASSWORD_RESET_REQUESTS_UPDATED'
+            });
         } else {
             console.warn(`userRequestPasswordReset: No registered user found for email "${emailInput}"`);
         }
@@ -1129,7 +1149,16 @@ export const adminInitiatePasswordReset = async (req, res) => {
         user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
         await user.save();
 
-        req.app.get('io')?.emit('DATA_CHANGED');
+        let resetVersion3;
+        if (mongoose.connection?.readyState === 1) {
+            resetVersion3 = await Setting.bumpVersion();
+        }
+        emitRealtimeChange(req.app.get('io'), {
+            scope: 'admin',
+            datasets: ['passwordResetRequests'],
+            version: resetVersion3,
+            event: 'PASSWORD_RESET_REQUESTS_UPDATED'
+        });
 
         // Also trigger automatic send via templates, wrapped in localized try-catch so it won't crash DB write
         try {

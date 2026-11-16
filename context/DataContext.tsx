@@ -267,6 +267,83 @@ export const getAuthorizedSyncDatasets = (role?: string | null): SyncDatasetKey[
     return ['currentUser', ...common];
 };
 
+const ALL_SYNC_DATASETS: ReadonlySet<SyncDatasetKey> = new Set([
+    'currentUser',
+    'users',
+    'deposits',
+    'withdrawals',
+    'transactions',
+    'notifications',
+    'paymentMethods',
+    'investmentPlans',
+    'rules',
+    'settings',
+    'transfers',
+    'logs',
+    'passwordResetRequests',
+    'disputes',
+    'tasks',
+    'userTasks',
+    'userTaskSubmissions'
+]);
+
+const VALID_REALTIME_SCOPES = new Set(['global', 'admin', 'user', 'targeted']);
+
+export interface ParsedRealtimeChange {
+    isSelective: boolean;
+    datasets: SyncDatasetKey[];
+    version: number | null;
+    reason: 'selective' | 'no_payload' | 'invalid_payload' | 'invalid_scope' | 'unsupported_dataset' | 'role_filtered_out';
+}
+
+export const parseRealtimeChangePayload = (payload: unknown, role?: string | null): ParsedRealtimeChange => {
+    if (payload === undefined || payload === null) {
+        return { isSelective: false, datasets: [], version: null, reason: 'no_payload' };
+    }
+    if (typeof payload !== 'object' || Array.isArray(payload)) {
+        return { isSelective: false, datasets: [], version: null, reason: 'invalid_payload' };
+    }
+
+    const record = payload as Record<string, unknown>;
+    if (record.scope !== undefined && (typeof record.scope !== 'string' || !VALID_REALTIME_SCOPES.has(record.scope))) {
+        return { isSelective: false, datasets: [], version: null, reason: 'invalid_scope' };
+    }
+
+    const rawVersion = record.version;
+    const version = typeof rawVersion === 'number' && Number.isFinite(rawVersion) && rawVersion > 0 ? rawVersion : null;
+
+    if (!Array.isArray(record.datasets) || record.datasets.length === 0) {
+        return { isSelective: false, datasets: [], version, reason: 'invalid_payload' };
+    }
+
+    const validRequested: SyncDatasetKey[] = [];
+    for (const item of record.datasets) {
+        if (typeof item !== 'string' || !ALL_SYNC_DATASETS.has(item as SyncDatasetKey)) {
+            return { isSelective: false, datasets: [], version, reason: 'unsupported_dataset' };
+        }
+        if (!validRequested.includes(item as SyncDatasetKey)) {
+            validRequested.push(item as SyncDatasetKey);
+        }
+    }
+
+    const authorizedSet = new Set(getAuthorizedSyncDatasets(role));
+    const authorizedDatasets = validRequested.filter((key) => authorizedSet.has(key));
+
+    if (authorizedDatasets.length === 0) {
+        if (record.scope === 'admin' && !isAdminSyncRole(role)) {
+            return { isSelective: false, datasets: [], version, reason: 'role_filtered_out' };
+        }
+        return { isSelective: false, datasets: [], version, reason: 'role_filtered_out' };
+    }
+
+    return {
+        isSelective: true,
+        datasets: authorizedDatasets,
+        version,
+        reason: 'selective'
+    };
+};
+
 const DATASET_SET_ACTION_MAP: Partial<Record<SyncDatasetKey, Action['type']>> = {
     users: 'SET_USERS',
     deposits: 'SET_DEPOSITS',
@@ -887,6 +964,303 @@ export const executeMasterDataSyncPass = async ({
     }
 };
 
+export interface ExecuteSelectiveSyncPassOptions extends Omit<ExecuteSyncPassOptions, 'force'> {
+    datasets: SyncDatasetKey[];
+    eventVersion?: number | null;
+}
+
+export const executeSelectiveSyncPass = async ({
+    datasets,
+    eventVersion = null,
+    userId,
+    role,
+    refs,
+    dispatch,
+    api = defaultSyncApiAdapters,
+    isMounted = () => true,
+    hasAuthToken = () => typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('authToken')),
+    maxRetries = 2,
+    retryBaseDelayMs = 1000
+}: ExecuteSelectiveSyncPassOptions): Promise<void> => {
+    const normalizedUserId = String(userId || '').trim();
+    if (!normalizedUserId || !hasAuthToken()) {
+        return;
+    }
+
+    const authorizedSet = new Set(getAuthorizedSyncDatasets(role));
+    const targetDatasets = Array.from(new Set(
+        (Array.isArray(datasets) ? datasets : []).filter((key) => authorizedSet.has(key))
+    ));
+    if (targetDatasets.length === 0) {
+        return;
+    }
+
+    const runSessionEpoch = refs.syncSessionEpochRef.current;
+    const isRunValid = (): boolean => (
+        isMounted() &&
+        refs.syncSessionEpochRef.current === runSessionEpoch &&
+        refs.activeUserIdRef.current === normalizedUserId &&
+        hasAuthToken()
+    );
+
+    if (!isRunValid()) {
+        return;
+    }
+
+    if (refs.activeSyncPromiseRef.current) {
+        try {
+            await refs.activeSyncPromiseRef.current;
+        } catch (e) {}
+        if (!isRunValid()) return;
+        if (refs.pendingForceRef.current && !refs.activeSyncPromiseRef.current) {
+            return executeMasterDataSyncPass({
+                force: true,
+                userId: normalizedUserId,
+                role,
+                refs,
+                dispatch,
+                api,
+                isMounted,
+                hasAuthToken,
+                maxRetries,
+                retryBaseDelayMs
+            });
+        }
+    }
+
+    let shouldEscalateToFullSync = false;
+
+    const selectivePromise = (async () => {
+        try {
+            let serverVersion: number | null = null;
+            try {
+                serverVersion = await api.getDataVersion();
+            } catch {
+                serverVersion = null;
+            }
+
+            if (!isRunValid()) {
+                return;
+            }
+
+            // Detect missed/concurrent mutations when DB version moved past this selective event
+            if (eventVersion !== null && serverVersion !== null && serverVersion > eventVersion) {
+                shouldEscalateToFullSync = true;
+                return;
+            }
+
+            const retryableFailedKeys = new Set<SyncDatasetKey>();
+            const pendingRetries = new Set<SyncDatasetKey>();
+
+            const runSelectiveAttempt = async (key: SyncDatasetKey, seq: number, attempt: number): Promise<void> => {
+                if (!isRunValid() || refs.datasetSeqRef.current[key] !== seq) {
+                    return;
+                }
+
+                try {
+                    const data = await fetchDatasetByKey(key, normalizedUserId, api);
+                    if (!isRunValid() || refs.datasetSeqRef.current[key] !== seq) {
+                        return;
+                    }
+
+                    if (key === 'currentUser') {
+                        if (data && data._id && String(data._id) === normalizedUserId) {
+                            dispatch({ type: 'UPDATE_USER', payload: data });
+                        }
+                    } else {
+                        const actionType = DATASET_SET_ACTION_MAP[key];
+                        if (actionType) {
+                            dispatch({ type: actionType, payload: data } as Action);
+                        }
+                    }
+
+                    retryableFailedKeys.delete(key);
+                    pendingRetries.delete(key);
+                } catch (err) {
+                    if (!isRunValid() || refs.datasetSeqRef.current[key] !== seq) {
+                        return;
+                    }
+
+                    if (isRetryableSyncError(err)) {
+                        retryableFailedKeys.add(key);
+                        if (attempt < maxRetries) {
+                            const existingTimer = refs.retryTimersRef.current.get(key);
+                            if (existingTimer) {
+                                clearTimeout(existingTimer);
+                            }
+                            pendingRetries.add(key);
+                            const delay = Math.pow(2, attempt) * retryBaseDelayMs;
+                            await new Promise<void>((resolve) => {
+                                const timer = setTimeout(() => {
+                                    refs.retryTimersRef.current.delete(key);
+                                    if (!isRunValid() || refs.datasetSeqRef.current[key] !== seq) {
+                                        resolve();
+                                        return;
+                                    }
+                                    void runSelectiveAttempt(key, seq, attempt + 1).finally(resolve);
+                                }, delay);
+                                refs.retryTimersRef.current.set(key, timer);
+                            });
+                        } else {
+                            pendingRetries.delete(key);
+                        }
+                    } else {
+                        pendingRetries.delete(key);
+                        console.warn(`Selective sync dataset "${key}" failed without retry:`, err);
+                    }
+                }
+            };
+
+            const promises = targetDatasets.map((key) => {
+                const pendingTimer = refs.retryTimersRef.current.get(key);
+                if (pendingTimer) {
+                    clearTimeout(pendingTimer);
+                    refs.retryTimersRef.current.delete(key);
+                }
+                const nextSeq = (refs.datasetSeqRef.current[key] || 0) + 1;
+                refs.datasetSeqRef.current[key] = nextSeq;
+                return runSelectiveAttempt(key, nextSeq, 0);
+            });
+
+            await Promise.allSettled(promises);
+
+            if (!isRunValid()) {
+                return;
+            }
+
+            if (retryableFailedKeys.size > 0) {
+                shouldEscalateToFullSync = true;
+                return;
+            }
+
+            if (serverVersion !== null && (eventVersion === null || serverVersion <= eventVersion)) {
+                refs.lastVersionRef.current = Math.max(refs.lastVersionRef.current, serverVersion);
+            }
+        } catch (err) {
+            console.warn('Selective realtime sync encountered an unexpected error; escalating to full sync:', err);
+            shouldEscalateToFullSync = true;
+        } finally {
+            if (refs.syncSessionEpochRef.current === runSessionEpoch && refs.activeSyncPromiseRef.current === selectivePromise) {
+                refs.activeSyncPromiseRef.current = null;
+            }
+        }
+    })();
+
+    refs.activeSyncPromiseRef.current = selectivePromise;
+    await selectivePromise;
+
+    if ((shouldEscalateToFullSync || refs.pendingForceRef.current) && isRunValid() && !refs.activeSyncPromiseRef.current) {
+        return executeMasterDataSyncPass({
+            force: true,
+            userId: normalizedUserId,
+            role,
+            refs,
+            dispatch,
+            api,
+            isMounted,
+            hasAuthToken,
+            maxRetries,
+            retryBaseDelayMs
+        });
+    }
+};
+
+export interface RealtimeEventSchedulerOptions {
+    coalesceDelayMs?: number;
+    getRole: () => string | null | undefined;
+    isRunActive: () => boolean;
+    onFullSync: () => void | Promise<void>;
+    onSelectiveSync: (datasets: SyncDatasetKey[], version: number | null) => void | Promise<void>;
+}
+
+export const createRealtimeEventScheduler = ({
+    coalesceDelayMs = 120,
+    getRole,
+    isRunActive,
+    onFullSync,
+    onSelectiveSync
+}: RealtimeEventSchedulerOptions) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pendingFullSync = false;
+    const pendingDatasets = new Set<SyncDatasetKey>();
+    let pendingVersion: number | null = null;
+
+    const clear = () => {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+        pendingFullSync = false;
+        pendingDatasets.clear();
+        pendingVersion = null;
+    };
+
+    const flush = () => {
+        timer = null;
+        const doFull = pendingFullSync;
+        const datasets = Array.from(pendingDatasets);
+        const version = pendingVersion;
+
+        pendingFullSync = false;
+        pendingDatasets.clear();
+        pendingVersion = null;
+
+        if (!isRunActive()) {
+            return;
+        }
+
+        if (doFull) {
+            void onFullSync();
+        } else if (datasets.length > 0) {
+            void onSelectiveSync(datasets, version);
+        }
+    };
+
+    const handleEvent = (payload?: unknown) => {
+        if (!isRunActive()) {
+            return;
+        }
+
+        const parsed = parseRealtimeChangePayload(payload, getRole());
+        if (!parsed.isSelective) {
+            if (parsed.reason === 'role_filtered_out') {
+                return;
+            }
+            pendingFullSync = true;
+        } else {
+            for (const key of parsed.datasets) {
+                pendingDatasets.add(key);
+            }
+            if (parsed.version !== null) {
+                pendingVersion = pendingVersion === null ? parsed.version : Math.max(pendingVersion, parsed.version);
+            }
+        }
+
+        if (timer) {
+            clearTimeout(timer);
+        }
+
+        if (coalesceDelayMs <= 0) {
+            flush();
+            return;
+        }
+
+        timer = setTimeout(flush, coalesceDelayMs);
+    };
+
+    return {
+        handleEvent,
+        flush,
+        clear,
+        getPendingState: () => ({
+            hasTimer: Boolean(timer),
+            pendingFullSync,
+            pendingDatasets: Array.from(pendingDatasets),
+            pendingVersion
+        })
+    };
+};
+
 interface DataProviderProps {
   children: ReactNode;
 }
@@ -966,6 +1340,35 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const masterDataSyncRef = useRef<(force?: boolean) => Promise<void>>(masterDataSync);
     masterDataSyncRef.current = masterDataSync;
 
+    const selectiveDataSync = useCallback(async (datasets: SyncDatasetKey[], eventVersion: number | null = null): Promise<void> => {
+        const currentUser = stateRef.current.currentUser;
+        if (!currentUser?._id) {
+            return;
+        }
+        return executeSelectiveSyncPass({
+            datasets,
+            eventVersion,
+            userId: String(currentUser._id),
+            role: currentUser.role,
+            refs: {
+                lastVersionRef,
+                hasCompletedAuthSyncRef,
+                isSyncingRef,
+                activeSyncPromiseRef,
+                pendingForceRef,
+                syncSessionEpochRef,
+                activeUserIdRef,
+                datasetSeqRef,
+                retryTimersRef
+            },
+            dispatch,
+            isMounted: () => isMountedRef.current
+        });
+    }, []);
+
+    const selectiveDataSyncRef = useRef<(datasets: SyncDatasetKey[], eventVersion?: number | null) => Promise<void>>(selectiveDataSync);
+    selectiveDataSyncRef.current = selectiveDataSync;
+
     const refreshSettings = async (): Promise<Settings | null> => {
         try {
             const fresh = await getSettings();
@@ -1040,6 +1443,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     // --- REAL-TIME LIVE SYNCHRONIZATION WITH SOCKET.IO ---
     useEffect(() => {
         if (!state.currentUser) return;
+        const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
+        if (!token) return;
+
+        const effectUserId = String(state.currentUser._id);
+        const effectSessionEpoch = syncSessionEpochRef.current;
 
         const getSocketUrl = () => {
             try {
@@ -1060,7 +1468,23 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         };
 
         const socketUrl = getSocketUrl();
-        const token = localStorage.getItem('authToken');
+
+        const scheduler = createRealtimeEventScheduler({
+            coalesceDelayMs: 120,
+            getRole: () => stateRef.current.currentUser?.role,
+            isRunActive: () => (
+                isMountedRef.current &&
+                syncSessionEpochRef.current === effectSessionEpoch &&
+                activeUserIdRef.current === effectUserId &&
+                typeof localStorage !== 'undefined' &&
+                Boolean(localStorage.getItem('authToken'))
+            ),
+            onFullSync: () => masterDataSync(true),
+            onSelectiveSync: (datasets, version) => selectiveDataSyncRef.current(datasets, version)
+        });
+
+        let hasConnectedOnce = false;
+        let sawDisconnect = false;
 
         // Connect with automatic reconnection controls optimized for Render free tier sleep cycles
         const socket = io(socketUrl, {
@@ -1074,16 +1498,36 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         socket.on('connect', () => {
             console.log(`Socket syncer successfully connected to server: ${socketUrl}`);
+            if (hasConnectedOnce && sawDisconnect) {
+                sawDisconnect = false;
+                void masterDataSync(true);
+            }
+            hasConnectedOnce = true;
         });
 
-        // Listen for the master real-time trigger event
-        socket.on('DATA_CHANGED', () => {
+        socket.on('disconnect', () => {
+            sawDisconnect = true;
+            scheduler.clear();
+        });
+
+        socket.on('SESSION_EXPIRED', () => {
+            scheduler.clear();
+            socket.disconnect();
+        });
+
+        // Listen for the master real-time trigger event (selective when validated, full-sync fallback otherwise)
+        socket.on('DATA_CHANGED', (payload?: unknown) => {
             console.log('Real-time notification: DATA_CHANGED event received. Syncing states...');
-            masterDataSync(true);
+            scheduler.handleEvent(payload);
         });
 
         socket.on('connect_error', (error) => {
             console.warn("Connection difficulty detected. Socket-client will auto-retry.", error.message);
+            const msg = String(error?.message || '');
+            if (/authentication required|invalid or expired token|account restricted|account not found/i.test(msg)) {
+                scheduler.clear();
+                socket.disconnect();
+            }
         });
 
         // Sync active data when tab is focused or became visible (different tabs/returned users)
@@ -1105,6 +1549,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         return () => {
             console.log('Cleaning up active socket connection and focus listeners...');
+            scheduler.clear();
             socket.disconnect();
             window.removeEventListener('focus', handleTabReturn);
             document.removeEventListener('visibilitychange', handleTabReturn);

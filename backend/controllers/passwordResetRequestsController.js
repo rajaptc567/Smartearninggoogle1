@@ -1,4 +1,7 @@
+import mongoose from 'mongoose';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
+import Setting from '../models/Setting.js';
+import { emitRealtimeChange } from '../utils/socketRealtime.js';
 
 // @desc    Get all password reset requests
 // @route   GET /api/v1/password-reset-requests
@@ -41,7 +44,16 @@ export const updatePasswordResetRequest = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Request not found' });
         }
         
-        req.app.get('io')?.emit('DATA_CHANGED');
+        let version;
+        if (mongoose.connection?.readyState === 1) {
+            version = await Setting.bumpVersion();
+        }
+        emitRealtimeChange(req.app.get('io'), {
+            scope: 'admin',
+            datasets: ['passwordResetRequests'],
+            version,
+            event: 'PASSWORD_RESET_REQUESTS_UPDATED'
+        });
         res.status(200).json({ success: true, data: request });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -56,7 +68,16 @@ export const deletePasswordResetRequest = async (req, res) => {
         if (!request) {
             return res.status(404).json({ success: false, error: 'Request not found' });
         }
-        req.app.get('io')?.emit('DATA_CHANGED');
+        let version;
+        if (mongoose.connection?.readyState === 1) {
+            version = await Setting.bumpVersion();
+        }
+        emitRealtimeChange(req.app.get('io'), {
+            scope: 'admin',
+            datasets: ['passwordResetRequests'],
+            version,
+            event: 'PASSWORD_RESET_REQUESTS_UPDATED'
+        });
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

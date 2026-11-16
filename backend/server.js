@@ -14,6 +14,7 @@ import User from './models/User.js';
 // Middleware
 import { authMiddleware } from './middleware/authMiddleware.js';
 import { globalLimiter, postbackLimiter } from './middleware/rateLimiter.js';
+import { createSocketAuthMiddleware, registerSocketConnection } from './utils/socketRealtime.js';
 
 // Route files
 import userRoutes from './routes/userRoutes.js';
@@ -148,7 +149,11 @@ const io = new Server(httpServer, {
 // Expose Socket.io instance on Express app
 app.set('io', io);
 
+// Enforce JWT + DB user authentication on all Socket.io handshakes
+io.use(createSocketAuthMiddleware());
+
 io.on('connection', (socket) => {
+    registerSocketConnection(socket);
     console.log(`Socket connection established: ${socket.id}`);
     socket.on('disconnect', () => {
         console.log(`Socket connection closed: ${socket.id}`);

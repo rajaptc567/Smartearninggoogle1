@@ -1,5 +1,6 @@
 import PaymentMethod from '../models/PaymentMethod.js';
 import Setting from '../models/Setting.js';
+import { emitRealtimeChange } from '../utils/socketRealtime.js';
 
 // Clean standard fallback logos map for popular gateways
 const STANDARD_FALLBACK_LOGOS = {
@@ -242,10 +243,15 @@ export const createPaymentMethod = async (req, res) => {
         const method = await PaymentMethod.create(methodData);
         
         // Update version for real-time sync and notify connected clients
-        await Setting.bumpVersion();
+        const version = await Setting.bumpVersion();
         const io = req.app.get('io');
         if (io) {
-            io.emit('DATA_CHANGED');
+            emitRealtimeChange(io, {
+                scope: 'global',
+                datasets: ['paymentMethods'],
+                version,
+                event: 'PAYMENT_METHODS_UPDATED'
+            });
         }
         
         res.status(201).json({ success: true, data: method });
@@ -341,10 +347,15 @@ export const updatePaymentMethod = async (req, res) => {
         if (!method) return res.status(404).json({ success: false, error: 'Payment method not found' });
         
         // Update version for real-time sync and notify connected clients
-        await Setting.bumpVersion();
+        const version = await Setting.bumpVersion();
         const io = req.app.get('io');
         if (io) {
-            io.emit('DATA_CHANGED');
+            emitRealtimeChange(io, {
+                scope: 'global',
+                datasets: ['paymentMethods'],
+                version,
+                event: 'PAYMENT_METHODS_UPDATED'
+            });
         }
         
         res.status(200).json({ success: true, data: method });
@@ -359,10 +370,15 @@ export const deletePaymentMethod = async (req, res) => {
         if (!method) return res.status(404).json({ success: false, error: 'Payment method not found' });
         
         // Update version for real-time sync and notify connected clients
-        await Setting.bumpVersion();
+        const version = await Setting.bumpVersion();
         const io = req.app.get('io');
         if (io) {
-            io.emit('DATA_CHANGED');
+            emitRealtimeChange(io, {
+                scope: 'global',
+                datasets: ['paymentMethods'],
+                version,
+                event: 'PAYMENT_METHODS_UPDATED'
+            });
         }
         
         res.status(200).json({ success: true, data: {} });

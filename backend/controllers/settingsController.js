@@ -7,6 +7,7 @@ import Task from '../models/Task.js';
 import EmailLog from '../models/EmailLog.js';
 import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendEmail, APPROVED_SENDERS } from '../services/emailService.js';
+import { emitRealtimeChange } from '../utils/socketRealtime.js';
 
 // Clean standard fallback logos map for popular gateways
 const STANDARD_FALLBACK_LOGOS = {
@@ -593,10 +594,18 @@ export const updateSettings = async (req, res) => {
             }
         }
         
-        // Notify all clients via socket.io for instant real-time reflections
+        // Notify authenticated clients via socket.io with targeted dataset scope
         const io = req.app.get('io');
         if (io) {
-            io.emit('DATA_CHANGED');
+            const changedDatasets = (emailBecameRequired || whatsappBecameRequired)
+                ? ['settings', 'users', 'currentUser']
+                : ['settings'];
+            emitRealtimeChange(io, {
+                scope: 'global',
+                datasets: changedDatasets,
+                version: settings?.dataVersion,
+                event: 'SETTINGS_UPDATED'
+            });
         }
         
         res.status(200).json({ success: true, data: settings });

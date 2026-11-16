@@ -10,6 +10,7 @@ import Setting from '../models/Setting.js';
 import Transaction from '../models/Transaction.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 import { sendTemplateNotification } from '../utils/automation.js';
+import { emitRealtimeChange } from '../utils/socketRealtime.js';
 
 export const getDisputes = async (req, res) => {
     try {
@@ -135,10 +136,18 @@ export const createDispute = async (req, res) => {
         sendTemplateNotification({ userId: dispute.userId, templateKey: 'dispute_opened_email', variables: dispVars });
         sendTemplateNotification({ userId: dispute.userId, templateKey: 'dispute_opened_whatsapp', variables: dispVars });
 
+        let version;
         if (mongoose.connection?.readyState === 1) {
-            await Setting.bumpVersion();
+            version = await Setting.bumpVersion();
         }
-        req?.app?.get('io')?.emit('DATA_CHANGED');
+        emitRealtimeChange(req?.app?.get('io'), {
+            scope: 'targeted',
+            targetUserIds: [dispute.userId, dispute.creatorId].filter(Boolean),
+            includeAdmins: true,
+            datasets: ['disputes', 'notifications'],
+            version,
+            event: 'DISPUTE_CREATED'
+        });
 
         res.status(201).json({ success: true, data: dispute });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -190,10 +199,18 @@ export const updateDispute = async (req, res) => {
         }
         
         await dispute.save();
+        let version;
         if (mongoose.connection?.readyState === 1) {
-            await Setting.bumpVersion();
+            version = await Setting.bumpVersion();
         }
-        req.app.get('io')?.emit('DATA_CHANGED');
+        emitRealtimeChange(req.app.get('io'), {
+            scope: 'targeted',
+            targetUserIds: [dispute.userId, dispute.creatorId].filter(Boolean),
+            includeAdmins: true,
+            datasets: ['disputes'],
+            version,
+            event: 'DISPUTE_UPDATED'
+        });
         res.status(200).json({ success: true, data: dispute });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -214,10 +231,18 @@ export const markAsRead = async (req, res) => {
         if (isAdmin) dispute.adminUnread = false;
         else dispute.userUnread = false;
         await dispute.save();
+        let version;
         if (mongoose.connection?.readyState === 1) {
-            await Setting.bumpVersion();
+            version = await Setting.bumpVersion();
         }
-        req.app.get('io')?.emit('DATA_CHANGED');
+        emitRealtimeChange(req.app.get('io'), {
+            scope: 'targeted',
+            targetUserIds: [dispute.userId, dispute.creatorId].filter(Boolean),
+            includeAdmins: true,
+            datasets: ['disputes'],
+            version,
+            event: 'DISPUTE_READ_UPDATED'
+        });
         res.status(200).json({ success: true, data: dispute });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

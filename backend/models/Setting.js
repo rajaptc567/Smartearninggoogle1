@@ -2026,7 +2026,9 @@ SettingSchema.statics.getSettings = async function() {
 
 // Static method to bump the version
 SettingSchema.statics.bumpVersion = async function() {
-    await this.findOneAndUpdate({}, { dataVersion: Date.now() }, { upsert: true });
+    const nextVersion = Date.now();
+    const updated = await this.findOneAndUpdate({}, { dataVersion: nextVersion }, { upsert: true, new: true });
+    return updated?.dataVersion || nextVersion;
 };
 
 export default mongoose.model('Setting', SettingSchema);

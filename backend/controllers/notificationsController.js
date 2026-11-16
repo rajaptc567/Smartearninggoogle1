@@ -1,7 +1,10 @@
 
+import mongoose from 'mongoose';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import Setting from '../models/Setting.js';
 import { sendAutomatedMessage } from '../utils/automation.js';
+import { emitRealtimeChange } from '../utils/socketRealtime.js';
 
 // @desc    Get notifications scoped by user role
 // @route   GET /api/v1/notifications
@@ -54,10 +57,33 @@ export const createNotification = async (req, res) => {
 
         if (targetQuery && (verificationAction === 'must_verify' || verificationAction === 'unverify')) {
             await User.updateMany(targetQuery, { $set: { emailVerified: false, whatsappVerified: false } });
+            let version;
+            if (mongoose.connection?.readyState === 1) {
+                version = await Setting.bumpVersion();
+            }
             // Notify clients via socket.io for instant real-time reflections
             const io = req.app.get('io');
             if (io) {
-                io.emit('DATA_CHANGED');
+                const targetedUserIds = userId
+                    ? [String(userId)]
+                    : (targetType === 'single' && Array.isArray(targetIds) ? targetIds.map((id) => String(id)) : null);
+                if (targetedUserIds && targetedUserIds.length > 0) {
+                    emitRealtimeChange(io, {
+                        scope: 'targeted',
+                        targetUserIds: targetedUserIds,
+                        includeAdmins: true,
+                        datasets: ['notifications', 'users', 'currentUser'],
+                        version,
+                        event: 'VERIFICATION_RESET_REQUIRED'
+                    });
+                } else {
+                    emitRealtimeChange(io, {
+                        scope: 'global',
+                        datasets: ['notifications', 'users', 'currentUser'],
+                        version,
+                        event: 'VERIFICATION_RESET_REQUIRED'
+                    });
+                }
             }
         }
 
@@ -171,6 +197,23 @@ export const createNotification = async (req, res) => {
                         }
                     }
                 })().catch(err => console.error('Bulk announcement processing failed:', err));
+            }
+
+            let version;
+            if (mongoose.connection?.readyState === 1) {
+                version = await Setting.bumpVersion();
+            }
+            const io = req.app.get('io');
+            if (io) {
+                const recipientIds = Array.from(new Set(created.map((n) => String(n.userId))));
+                emitRealtimeChange(io, {
+                    scope: 'user',
+                    targetUserIds: recipientIds,
+                    includeAdmins: false,
+                    datasets: ['notifications'],
+                    version,
+                    event: 'NOTIFICATIONS_CREATED'
+                });
             }
 
             // Return all newly created notifications so frontend state can be updated
