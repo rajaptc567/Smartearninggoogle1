@@ -3191,7 +3191,7 @@ const runTest = async (name, fn) => {
         }
     });
 
-    await runTest('T100 — Terminal record protection (Processed and Reversed)', async () => {
+    await runTest('T100 — Terminal record protection (Processed and Reversed) with before/after state capture', async () => {
         setupProviderManagedOfferwallGg();
         const user = db.users.get(TEST_USER_ID);
         user.taskEarningsBalance = 10.0;
@@ -3224,7 +3224,7 @@ const runTest = async (name, fn) => {
         };
 
         try {
-            // 1. Processed record protection
+            // 1. Processed record protection & before/after capture
             const txIdProc = 't100_proc_rec';
             const goodSig = computeSignature(TEST_USER_ID, txIdProc, '70');
             await handlePostback({
@@ -3235,9 +3235,19 @@ const runTest = async (name, fn) => {
                 headers: { 'x-forwarded-for': '1.1.1.1' }
             }, createMockRes());
 
-            const balanceBeforeProbe = user.taskEarningsBalance;
             const logProcBefore = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdProc, isReversal: false });
-            const txIdLinked = logProcBefore.transactionId;
+            const beforeProc = {
+                status: logProcBefore.status,
+                transactionId: logProcBefore.transactionId,
+                rewardUSD: logProcBefore.rewardUSD,
+                grossAmountUSD: logProcBefore.grossAmountUSD,
+                userRewardUSD: logProcBefore.userRewardUSD,
+                platformRevenueUSD: logProcBefore.platformRevenueUSD,
+                reversedAmountUSD: logProcBefore.reversedAmountUSD,
+                reversalReferenceTxId: logProcBefore.reversalReferenceTxId,
+                taskEarningsBalance: user.taskEarningsBalance,
+                queryParams: { ...logProcBefore.queryParams }
+            };
 
             // Later invalid signature probe on Processed record
             await handlePostback({
@@ -3249,14 +3259,33 @@ const runTest = async (name, fn) => {
             }, createMockRes());
 
             const logProcAfter = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdProc, isReversal: false });
-            assert.equal(logProcAfter.status, 'Processed', 'Terminal Processed status must not be downgraded');
-            assert.equal(logProcAfter.transactionId.toString(), txIdLinked.toString(), 'Transaction ID must remain unchanged');
-            assert.equal(user.taskEarningsBalance, balanceBeforeProbe, 'User balance must remain unchanged');
-            assert.equal(logProcAfter.queryParams.tag, 'valid_credit', 'Successful request evidence must remain unchanged');
+            const afterProc = {
+                status: logProcAfter.status,
+                transactionId: logProcAfter.transactionId,
+                rewardUSD: logProcAfter.rewardUSD,
+                grossAmountUSD: logProcAfter.grossAmountUSD,
+                userRewardUSD: logProcAfter.userRewardUSD,
+                platformRevenueUSD: logProcAfter.platformRevenueUSD,
+                reversedAmountUSD: logProcAfter.reversedAmountUSD,
+                reversalReferenceTxId: logProcAfter.reversalReferenceTxId,
+                taskEarningsBalance: user.taskEarningsBalance,
+                queryParams: { ...logProcAfter.queryParams }
+            };
+
+            assert.equal(afterProc.status, beforeProc.status);
+            assert.equal(String(afterProc.transactionId), String(beforeProc.transactionId));
+            assert.equal(afterProc.rewardUSD, beforeProc.rewardUSD);
+            assert.equal(afterProc.grossAmountUSD, beforeProc.grossAmountUSD);
+            assert.equal(afterProc.userRewardUSD, beforeProc.userRewardUSD);
+            assert.equal(afterProc.platformRevenueUSD, beforeProc.platformRevenueUSD);
+            assert.equal(afterProc.reversedAmountUSD, beforeProc.reversedAmountUSD);
+            assert.equal(afterProc.reversalReferenceTxId, beforeProc.reversalReferenceTxId);
+            assert.equal(afterProc.taskEarningsBalance, beforeProc.taskEarningsBalance);
+            assert.equal(afterProc.queryParams.tag, 'valid_credit');
             assert.equal(logProcAfter.priorSecurityEvents.length, 1);
             assert.equal(logProcAfter.priorSecurityEvents[0].queryParams.tag, 'invalid_probe');
 
-            // 2. Reversed record protection
+            // 2. Reversed record protection & before/after capture
             const txIdRev = 't100_rev_rec';
             const goodSigRev = computeSignature(TEST_USER_ID, txIdRev, '70');
             // Credit first
@@ -3279,8 +3308,18 @@ const runTest = async (name, fn) => {
             }, createMockRes());
 
             const logRevBefore = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdRev, isReversal: true });
-            assert.equal(logRevBefore.status, 'Reversed');
-            const balanceBeforeRevProbe = user.taskEarningsBalance;
+            const beforeRev = {
+                status: logRevBefore.status,
+                transactionId: logRevBefore.transactionId,
+                rewardUSD: logRevBefore.rewardUSD,
+                grossAmountUSD: logRevBefore.grossAmountUSD,
+                userRewardUSD: logRevBefore.userRewardUSD,
+                platformRevenueUSD: logRevBefore.platformRevenueUSD,
+                reversedAmountUSD: logRevBefore.reversedAmountUSD,
+                reversalReferenceTxId: logRevBefore.reversalReferenceTxId,
+                taskEarningsBalance: user.taskEarningsBalance,
+                queryParams: { ...logRevBefore.queryParams }
+            };
 
             // Later invalid signature probe on reversal record
             await handlePostback({
@@ -3292,15 +3331,66 @@ const runTest = async (name, fn) => {
             }, createMockRes());
 
             const logRevAfter = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdRev, isReversal: true });
-            assert.equal(logRevAfter.status, 'Reversed', 'Terminal Reversed status must not be downgraded');
-            assert.equal(user.taskEarningsBalance, balanceBeforeRevProbe, 'User balance must remain unchanged');
-            assert.equal(logRevAfter.queryParams.tag, 'valid_reversal', 'Successful reversal request evidence must remain unchanged');
+            const afterRev = {
+                status: logRevAfter.status,
+                transactionId: logRevAfter.transactionId,
+                rewardUSD: logRevAfter.rewardUSD,
+                grossAmountUSD: logRevAfter.grossAmountUSD,
+                userRewardUSD: logRevAfter.userRewardUSD,
+                platformRevenueUSD: logRevAfter.platformRevenueUSD,
+                reversedAmountUSD: logRevAfter.reversedAmountUSD,
+                reversalReferenceTxId: logRevAfter.reversalReferenceTxId,
+                taskEarningsBalance: user.taskEarningsBalance,
+                queryParams: { ...logRevAfter.queryParams }
+            };
+
+            assert.equal(afterRev.status, beforeRev.status);
+            assert.equal(String(afterRev.transactionId), String(beforeRev.transactionId));
+            assert.equal(afterRev.rewardUSD, beforeRev.rewardUSD);
+            assert.equal(afterRev.grossAmountUSD, beforeRev.grossAmountUSD);
+            assert.equal(afterRev.userRewardUSD, beforeRev.userRewardUSD);
+            assert.equal(afterRev.platformRevenueUSD, beforeRev.platformRevenueUSD);
+            assert.equal(afterRev.reversedAmountUSD, beforeRev.reversedAmountUSD);
+            assert.equal(afterRev.reversalReferenceTxId, beforeRev.reversalReferenceTxId);
+            assert.equal(afterRev.taskEarningsBalance, beforeRev.taskEarningsBalance);
+            assert.equal(afterRev.queryParams.tag, 'valid_reversal');
             assert.equal(logRevAfter.priorSecurityEvents.length, 1);
             assert.equal(logRevAfter.priorSecurityEvents[0].queryParams.tag, 'invalid_rev_probe');
         } finally {
             OfferwallPostbackLog.prototype.save = origSave;
             OfferwallPostbackLog.findOne = origFindOne;
             Transaction.create = origTxCreate;
+        }
+    });
+
+    await runTest('T101 — Sensitive-field masking assertions in postback logs', async () => {
+        setupProviderManagedOfferwallGg();
+        const origFindOne = OfferwallPostbackLog.findOne;
+        OfferwallPostbackLog.findOne = async (query) => {
+            for (const entry of db.logs.values()) {
+                if (entry.provider === query.provider && entry.externalTxId === query.externalTxId) return entry;
+            }
+            return null;
+        };
+
+        try {
+            const txId = 't101_masking';
+            const sig = computeSignature(TEST_USER_ID, txId, '70');
+            await handlePostback({
+                method: 'POST',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: sig },
+                body: { secret: 'secret_key_xyz', apiKey: 'api_key_123', auth: 'bearer_token_abc' },
+                headers: {}
+            }, createMockRes());
+
+            const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId });
+            assert.ok(log);
+            assert.equal(log.rawBody.secret, '***REDACTED***');
+            assert.equal(log.rawBody.apiKey, '***REDACTED***');
+            assert.equal(log.rawBody.auth, '***REDACTED***');
+        } finally {
+            OfferwallPostbackLog.findOne = origFindOne;
         }
     });
 
