@@ -88,6 +88,10 @@ const OfferwallPostbackLogSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    infoPayoutUsd: {
+        type: String,
+        default: null
+    },
     reversalReferenceTxId: {
         type: mongoose.Schema.ObjectId,
         ref: 'Transaction'
@@ -114,6 +118,10 @@ const OfferwallPostbackLogSchema = new mongoose.Schema({
     },
     riskReason: {
         type: String
+    },
+    priorSecurityEvents: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: undefined
     },
     errorMessage: {
         type: String

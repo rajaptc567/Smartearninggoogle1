@@ -316,7 +316,7 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
     // Offerwall.GG must always enforce HMAC-SHA256 signature verification over userId:transactionId:currencyAmount
     // Cannot be bypassed by requireSignature=false, signatureType='none', or IP-only verification
     if (key === 'offerwall_gg' || key === 'offerwallgg') {
-        const secret = (process.env.OFFERWALL_GG_SECRET_KEY || provider.secretKey || '').trim();
+        const secret = ((process.env.OFFERWALL_GG_SECRET_KEY && process.env.OFFERWALL_GG_SECRET_KEY.trim()) || (provider.secretKey && provider.secretKey.trim()) || '');
         if (!secret) {
             return { valid: false, error: 'Offerwall.GG secret key is not configured; failing closed' };
         }
@@ -347,8 +347,9 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
         const txRes = getParam(['transactionId', 'transaction_id', 'trans_id', 'transId', 'txid', 'id']);
         const amountRes = getParam(['currencyAmount', 'amount', 'reward', 'points']);
         const sigRes = getParam(['signature', 'sig', 'hash']);
+        const statusRes = getParam(['status']);
 
-        if (userRes.conflict || txRes.conflict || amountRes.conflict || sigRes.conflict) {
+        if (userRes.conflict || txRes.conflict || amountRes.conflict || sigRes.conflict || statusRes.conflict) {
             return { valid: false, error: 'Offerwall.GG conflicting query and body parameters detected; failing closed' };
         }
 
@@ -357,8 +358,8 @@ export const verifySignature = (provider, params, clientIp, req = null) => {
         const rawCurrencyAmount = amountRes.value;
         const receivedSig = sigRes.value;
 
-        // Reject arrays or nested objects for signed parameters
-        for (const [k, v] of [['userId', rawUserId], ['transactionId', rawTxId], ['currencyAmount', rawCurrencyAmount], ['signature', receivedSig]]) {
+        // Reject arrays or nested objects for signed parameters and status
+        for (const [k, v] of [['userId', rawUserId], ['transactionId', rawTxId], ['currencyAmount', rawCurrencyAmount], ['signature', receivedSig], ['status', statusRes.value]]) {
             if (Array.isArray(v) || (typeof v === 'object' && v !== null)) {
                 return { valid: false, error: `Offerwall.GG parameter '${k}' must be a scalar; failing closed` };
             }
@@ -740,9 +741,16 @@ const normalizePostbackParams = (providerKey, rawParams) => {
     let isReversal = false;
     let offerwallStatusValid = true;
     if (key === 'offerwall_gg' || key === 'offerwallgg') {
-        const rawStatus = String(p.status || '').trim().toLowerCase();
-        const amtNum = Number(rawAmount);
-        if (!rawStatus || (rawStatus !== 'credited' && rawStatus !== 'reversed') || isNaN(amtNum) || amtNum === 0) {
+        const rawStatus = typeof p.status === 'string' ? p.status.trim().toLowerCase() : '';
+        const isBadAmountType =
+            rawAmount === undefined ||
+            rawAmount === null ||
+            typeof rawAmount === 'boolean' ||
+            Array.isArray(rawAmount) ||
+            typeof rawAmount === 'object' ||
+            (typeof rawAmount === 'string' && rawAmount.trim() === '');
+        const amtNum = isBadAmountType ? NaN : Number(typeof rawAmount === 'string' ? rawAmount.trim() : rawAmount);
+        if (!rawStatus || (rawStatus !== 'credited' && rawStatus !== 'reversed') || !Number.isFinite(amtNum) || amtNum === 0) {
             offerwallStatusValid = false;
         } else if (rawStatus === 'credited') {
             if (amtNum <= 0) offerwallStatusValid = false;
@@ -817,7 +825,9 @@ const normalizePostbackParams = (providerKey, rawParams) => {
         userId: String(rawUserId).trim(),
         externalTxId: String(rawTxId).trim(),
         // Keep raw reward units separate from USD revenue
-        rawReward: Number(rawAmount) || 0,
+        rawReward: (key === 'offerwall_gg' || key === 'offerwallgg')
+            ? (offerwallStatusValid ? Number(typeof rawAmount === 'string' ? rawAmount.trim() : rawAmount) : 0)
+            : (Number(rawAmount) || 0),
         rawCurrency: rawCurrency,
         rewardUSD: 0, // Will be calculated based on provider config
         offerId: String(rawOfferId).trim(),
@@ -937,10 +947,93 @@ export const renewPostbackLock = async (providerKey, externalTxId, ownerToken, e
 };
 
 /**
+ * Offerwall.GG duplicate log persistence helper:
+ * Preserves prior security evidence (e.g. InvalidSignature) without deleting old records
+ * while allowing valid retries under the shared { provider, externalTxId, isReversal } unique index.
+ */
+const persistOfferwallGgLog = async (logDoc) => {
+    try {
+        return await logDoc.save();
+    } catch (saveErr) {
+        if (saveErr?.code !== 11000) {
+            throw saveErr;
+        }
+        let existingLog = null;
+        const lookupProviders = (logDoc.provider === 'offerwall_gg' || logDoc.provider === 'offerwallgg')
+            ? (logDoc.provider === 'offerwall_gg' ? ['offerwall_gg', 'offerwallgg'] : ['offerwallgg', 'offerwall_gg'])
+            : [logDoc.provider];
+        for (const prov of lookupProviders) {
+            existingLog = await OfferwallPostbackLog.findOne({
+                provider: prov,
+                externalTxId: logDoc.externalTxId,
+                isReversal: Boolean(logDoc.isReversal)
+            });
+            if (existingLog) break;
+        }
+        if (!existingLog) {
+            throw saveErr;
+        }
+
+        const terminalStatuses = new Set(['Processed', 'Reversed']);
+        const preProcessingStatuses = new Set(['InvalidSignature', 'IPBlocked', 'UserNotFound', 'Error', 'UserRestricted', 'TestCallback', 'Rejected']);
+        const incomingIsFinalOutcome = terminalStatuses.has(logDoc.status) || logDoc.status === 'IgnoredUnmatchedReversalWithMarker' || logDoc.status === 'PreReversed';
+
+        const buildSnapshot = (src) => ({
+            status: src.status,
+            signatureStatus: src.signatureStatus,
+            errorMessage: src.errorMessage || '',
+            clientIp: src.clientIp || '',
+            signature: src.signature || '',
+            recordedAt: src.receivedAt || new Date()
+        });
+
+        if (preProcessingStatuses.has(existingLog.status) && incomingIsFinalOutcome) {
+            const history = Array.isArray(existingLog.priorSecurityEvents) ? [...existingLog.priorSecurityEvents] : [];
+            history.push(buildSnapshot(existingLog));
+            existingLog.priorSecurityEvents = history;
+            existingLog.provider = logDoc.provider;
+            existingLog.userId = logDoc.userId;
+            existingLog.username = logDoc.username;
+            existingLog.rewardUSD = logDoc.rewardUSD;
+            existingLog.rawReward = logDoc.rawReward;
+            existingLog.rawCurrency = logDoc.rawCurrency;
+            existingLog.offerId = logDoc.offerId;
+            existingLog.offerName = logDoc.offerName;
+            existingLog.status = logDoc.status;
+            existingLog.signatureStatus = logDoc.signatureStatus;
+            existingLog.grossAmountUSD = logDoc.grossAmountUSD;
+            existingLog.userRewardUSD = logDoc.userRewardUSD;
+            existingLog.platformRevenueUSD = logDoc.platformRevenueUSD;
+            existingLog.infoPayoutUsd = logDoc.infoPayoutUsd;
+            existingLog.reversalReferenceTxId = logDoc.reversalReferenceTxId;
+            existingLog.reversedAmountUSD = logDoc.reversedAmountUSD;
+            existingLog.chargebackStatus = logDoc.chargebackStatus;
+            existingLog.userBalanceBefore = logDoc.userBalanceBefore;
+            existingLog.userBalanceAfter = logDoc.userBalanceAfter;
+            existingLog.riskStatus = logDoc.riskStatus;
+            existingLog.riskReason = logDoc.riskReason;
+            existingLog.transactionId = logDoc.transactionId;
+            existingLog.errorMessage = logDoc.errorMessage || `Processed after prior ${history[history.length - 1].status} event (security evidence preserved)`;
+            return await existingLog.save();
+        }
+
+        if (terminalStatuses.has(existingLog.status) && logDoc.status === 'InvalidSignature') {
+            const history = Array.isArray(existingLog.priorSecurityEvents) ? [...existingLog.priorSecurityEvents] : [];
+            history.push(buildSnapshot(logDoc));
+            existingLog.priorSecurityEvents = history;
+            return await existingLog.save();
+        }
+
+        return existingLog;
+    }
+};
+
+/**
  * Handle incoming S2S Postback
  */
 export const handlePostback = async (req, res) => {
     const providerKey = req.params.provider?.toLowerCase() || 'generic';
+    const isOfferwallGg = providerKey === 'offerwall_gg' || providerKey === 'offerwallgg';
     const rawParams = { ...req.query, ...req.body };
     const clientIp = getClientIp(req);
 
@@ -949,7 +1042,11 @@ export const handlePostback = async (req, res) => {
     const isDryRun = Boolean(req && req.__isSimulatorDryRun === true && req.__simulatedByAdmin === true);
 
     // P3: Unknown Provider Safety - DO NOT auto-create unknown providers!
-    const provider = await OfferwallProvider.findOne({ providerKey });
+    let provider = await OfferwallProvider.findOne({ providerKey });
+    if (!provider && isOfferwallGg) {
+        const altProviderKey = providerKey === 'offerwallgg' ? 'offerwall_gg' : 'offerwallgg';
+        provider = await OfferwallProvider.findOne({ providerKey: altProviderKey });
+    }
     if (!provider) {
         console.warn(`[SECURITY ALERT] Unknown provider postback attempt: '${providerKey}' from IP ${clientIp}`);
         if (isDryRun) {
@@ -1064,6 +1161,30 @@ export const handlePostback = async (req, res) => {
         signature: signatureToLog
     });
 
+    const saveLogSafely = async (logDoc) => (isOfferwallGg ? persistOfferwallGgLog(logDoc) : logDoc.save());
+
+    const findOfferwallGgTx = async (txId, type, suffix) => {
+        const candidateKeys = providerKey === 'offerwall_gg'
+            ? [`offerwall_gg_${txId}_${suffix}`, `offerwallgg_${txId}_${suffix}`]
+            : [`offerwallgg_${txId}_${suffix}`, `offerwall_gg_${txId}_${suffix}`];
+        for (const key of candidateKeys) {
+            const byKey = await Transaction.findOne({ idempotencyKey: key });
+            if (byKey) return byKey;
+        }
+        const candidateProviders = providerKey === 'offerwall_gg'
+            ? ['offerwall_gg', 'offerwallgg']
+            : ['offerwallgg', 'offerwall_gg'];
+        for (const prov of candidateProviders) {
+            const byLegacy = await Transaction.findOne({
+                offerwallProvider: prov,
+                externalTransactionId: txId,
+                type
+            });
+            if (byLegacy) return byLegacy;
+        }
+        return null;
+    };
+
     try {
         // P4: Strict Signature & IP Validation (Fail-closed)
         const sigCheck = verifySignature(provider, rawParams, clientIp, req);
@@ -1084,7 +1205,7 @@ export const handlePostback = async (req, res) => {
                 log.status = 'InvalidSignature';
                 log.signatureStatus = 'Invalid';
                 log.errorMessage = sigCheck.error || 'Signature check failed';
-                try { await log.save(); } catch (_) {}
+                try { await saveLogSafely(log); } catch (_) {}
             }
             return res.status(400).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'INVALID_SIGNATURE');
         }
@@ -1094,7 +1215,7 @@ export const handlePostback = async (req, res) => {
         if (isOfferwallGgTestCallback) {
             log.status = 'TestCallback';
             log.errorMessage = 'Offerwall.GG test callback (test=1) received and signature verified; balance mutation and user lookup bypassed.';
-            try { await log.save(); } catch (_) {}
+            try { await saveLogSafely(log); } catch (_) {}
             return res.status(200).send('OK');
         }
 
@@ -1136,7 +1257,7 @@ export const handlePostback = async (req, res) => {
             }
             log.status = 'UserNotFound';
             log.errorMessage = `User not found for subId: ${normalized.userId}`;
-            try { await log.save(); } catch (_) {}
+            try { await saveLogSafely(log); } catch (_) {}
             // Acknowledge so provider doesn't indefinitely retry an orphaned subId, but do NOT credit
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'USER_NOT_FOUND_LOGGED');
         }
@@ -1497,7 +1618,10 @@ export const handlePostback = async (req, res) => {
         } else if (providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') {
             // Offerwall.GG: Authoritative financial input is exclusively the signed currencyAmount.
             // Unsigned payoutUsd is strictly informational/diagnostic and must never determine user reward or reversal amount.
-            log.infoPayoutUsd = rawParams.payoutUsd !== undefined ? rawParams.payoutUsd : (rawParams.payout_usd || null);
+            const rawInfoPayout = rawParams.payoutUsd !== undefined ? rawParams.payoutUsd : rawParams.payout_usd;
+            log.infoPayoutUsd = (rawInfoPayout !== undefined && rawInfoPayout !== null && typeof rawInfoPayout !== 'object' && !Array.isArray(rawInfoPayout))
+                ? (String(rawInfoPayout).trim() || null)
+                : null;
             const owCommissionMode = provider.commissionMode || 'provider_managed';
             if (owCommissionMode === 'provider_managed') {
                 // Provider-Managed model:
@@ -1522,7 +1646,7 @@ export const handlePostback = async (req, res) => {
                     } else {
                         log.status = 'Error';
                         log.errorMessage = `Offerwall.GG provider_managed mode requires exchangeRateMultiplier === 100 (got '${rawMultiplier}'); failing closed`;
-                        try { await log.save(); } catch (_) {}
+                        try { await saveLogSafely(log); } catch (_) {}
                     }
                     return res.status(400).send('OFFERWALL_GG_MULTIPLIER_INVALID');
                 }
@@ -1556,6 +1680,27 @@ export const handlePostback = async (req, res) => {
             }
         }
 
+        if (isOfferwallGg && (
+            !Number.isFinite(absReward) || absReward <= 0 ||
+            !Number.isFinite(grossUSD) || grossUSD < 0 ||
+            !Number.isFinite(userRewardUSD) || userRewardUSD < 0 ||
+            !Number.isFinite(platformRevenueUSD) || platformRevenueUSD < 0
+        )) {
+            if (isDryRun) {
+                req.dryRunResult = {
+                    isDryRun: true,
+                    mutationsPerformed: false,
+                    provider: providerKey,
+                    validation: { status: 'FAILED', error: 'INVALID_REWARD_AMOUNT' }
+                };
+            } else {
+                log.status = 'Error';
+                log.errorMessage = `Offerwall.GG calculated reward values invalid or non-finite (gross=${grossUSD}, user=${userRewardUSD}, platform=${platformRevenueUSD}); failing closed`;
+                try { await saveLogSafely(log); } catch (_) {}
+            }
+            return res.status(400).send('INVALID_REWARD_AMOUNT');
+        }
+
         normalized.rewardUSD = userRewardUSD;
         log.rewardUSD = userRewardUSD;
         log.grossAmountUSD = grossUSD;
@@ -1577,7 +1722,7 @@ export const handlePostback = async (req, res) => {
         if (isDebugCallback) {
             log.status = 'TestCallback';
             log.errorMessage = `${provider.name || providerKey} test callback with debug/test/sandbox indicator received; live user balance mutation and transaction record bypassed.`;
-            try { await log.save(); } catch (_) {}
+            try { await saveLogSafely(log); } catch (_) {}
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
         }
 
@@ -1607,18 +1752,19 @@ export const handlePostback = async (req, res) => {
         log.riskStatus = riskStatus;
         log.riskReason = riskReason;
 
+        const lockProviderKey = isOfferwallGg ? 'offerwall_gg' : providerKey;
         let lockAcquired = false;
         let lockOwnerToken = null;
         if (!isDryRun && !isDebugCallback) {
-            lockOwnerToken = await acquirePostbackLock(providerKey, normalized.externalTxId);
+            lockOwnerToken = await acquirePostbackLock(lockProviderKey, normalized.externalTxId);
             lockAcquired = Boolean(lockOwnerToken);
         }
 
         try {
             if (normalized.isReversal) {
                 // Verify lock ownership is still valid before processing
-                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
-                    throw new Error(`Postback lock expired or taken over during processing: ${providerKey}:${normalized.externalTxId}`);
+                if (lockOwnerToken && !(await isLockStillOwned(lockProviderKey, normalized.externalTxId, lockOwnerToken))) {
+                    throw new Error(`Postback lock expired or taken over during processing: ${lockProviderKey}:${normalized.externalTxId}`);
                 }
 
                 // ==========================================
@@ -1629,33 +1775,37 @@ export const handlePostback = async (req, res) => {
                     ? normalized.externalTxId.slice(2)
                     : normalized.externalTxId;
 
-                const existingReversal = (await Transaction.findOne({ idempotencyKey: reversalKey }))
-                    || (await Transaction.findOne({
-                        offerwallProvider: providerKey,
-                        externalTransactionId: normalized.externalTxId,
-                        type: 'Offerwall Reversal'
-                    }))
-                    || (providerKey === 'ayetstudios' && baseTxId !== normalized.externalTxId && (
-                        (await Transaction.findOne({ idempotencyKey: `${providerKey}_${baseTxId}_reversal` }))
+                const existingReversal = isOfferwallGg
+                    ? (await findOfferwallGgTx(normalized.externalTxId, 'Offerwall Reversal', 'reversal'))
+                    : ((await Transaction.findOne({ idempotencyKey: reversalKey }))
                         || (await Transaction.findOne({
                             offerwallProvider: providerKey,
-                            externalTransactionId: baseTxId,
+                            externalTransactionId: normalized.externalTxId,
                             type: 'Offerwall Reversal'
                         }))
-                    ));
+                        || (providerKey === 'ayetstudios' && baseTxId !== normalized.externalTxId && (
+                            (await Transaction.findOne({ idempotencyKey: `${providerKey}_${baseTxId}_reversal` }))
+                            || (await Transaction.findOne({
+                                offerwallProvider: providerKey,
+                                externalTransactionId: baseTxId,
+                                type: 'Offerwall Reversal'
+                            }))
+                        )));
 
                 if (existingReversal) {
                     log.status = 'Duplicate';
                     log.errorMessage = 'Duplicate reversal callback received; already reversed.';
-                    try { await log.save(); } catch (_) {}
+                    try { await saveLogSafely(log); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
-                let origTx = await Transaction.findOne({
-                    offerwallProvider: providerKey,
-                    externalTransactionId: normalized.externalTxId,
-                    type: 'Offerwall Reward'
-                });
+                let origTx = isOfferwallGg
+                    ? (await findOfferwallGgTx(normalized.externalTxId, 'Offerwall Reward', 'credit'))
+                    : await Transaction.findOne({
+                        offerwallProvider: providerKey,
+                        externalTransactionId: normalized.externalTxId,
+                        type: 'Offerwall Reward'
+                    });
                 if (!origTx && providerKey === 'ayetstudios' && baseTxId !== normalized.externalTxId) {
                     origTx = await Transaction.findOne({
                         offerwallProvider: providerKey,
@@ -1759,20 +1909,20 @@ export const handlePostback = async (req, res) => {
                             console.error('[CRITICAL] Failed to persist unmatched reversal marker:', markerErr.message);
                             log.status = 'Error';
                             log.errorMessage = `Failed to persist unmatched reversal marker: ${markerErr.message}`;
-                            try { await log.save(); } catch (_) {}
+                            try { await saveLogSafely(log); } catch (_) {}
                             throw markerErr;
                         }
                     }
 
                     log.status = 'IgnoredUnmatchedReversalWithMarker';
                     log.errorMessage = 'Unmatched reversal: original transaction reward not found; balance mutation bypassed safely and durable reversal marker persisted.';
-                    try { await log.save(); } catch (_) {}
+                    try { await saveLogSafely(log); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
                 // Re-verify lock ownership immediately before reversal balance deduction
-                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
-                    throw new Error(`Postback lock expired or taken over before reversal balance deduction: ${providerKey}:${normalized.externalTxId}`);
+                if (lockOwnerToken && !(await isLockStillOwned(lockProviderKey, normalized.externalTxId, lockOwnerToken))) {
+                    throw new Error(`Postback lock expired or taken over before reversal balance deduction: ${lockProviderKey}:${normalized.externalTxId}`);
                 }
 
                 // Matched Reversal: Atomic balance deduction and liability tracking
@@ -1791,7 +1941,7 @@ export const handlePostback = async (req, res) => {
                     console.error('[Reversal Error] User not found or update failed for user ID:', user._id);
                     log.status = 'Error';
                     log.errorMessage = `User not found or balance deduction failed during reversal for user ID ${user._id}`;
-                    try { await log.save(); } catch (_) {}
+                    try { await saveLogSafely(log); } catch (_) {}
                     if (providerKey === 'cpx_research' || providerKey === 'torox') {
                         return res.status(400).send('0');
                     }
@@ -1860,13 +2010,13 @@ export const handlePostback = async (req, res) => {
                             if (!rollbackSucceeded) {
                                 log.status = 'CriticalCompensationFailure';
                                 log.errorMessage = 'CRITICAL: Duplicate reversal detected but compensating balance restoration failed';
-                                try { await log.save(); } catch (_) {}
+                                try { await saveLogSafely(log); } catch (_) {}
                                 throw new Error('CRITICAL_REVERSAL_COMPENSATION_FAILURE: Duplicate reversal detected but balance rollback failed');
                             }
 
                             log.status = 'Duplicate';
                             log.errorMessage = 'Duplicate reversal transaction key verified';
-                            try { await log.save(); } catch (_) {}
+                            try { await saveLogSafely(log); } catch (_) {}
                             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                         }
                     }
@@ -1893,13 +2043,13 @@ export const handlePostback = async (req, res) => {
                     if (!rollbackSucceeded) {
                         log.status = 'CriticalCompensationFailure';
                         log.errorMessage = `CRITICAL: Reversal transaction creation failed (${revTxErr.message}) and compensation rollback failed`;
-                        try { await log.save(); } catch (_) {}
+                        try { await saveLogSafely(log); } catch (_) {}
                         throw new Error(`CRITICAL_REVERSAL_COMPENSATION_FAILURE: Reversal transaction creation failed (${revTxErr.message}) and balance rollback failed`);
                     }
 
                     log.status = 'Compensated';
                     log.errorMessage = `Reversal transaction creation failed; user balance safely compensated: ${revTxErr.message}`;
-                    try { await log.save(); } catch (_) {}
+                    try { await saveLogSafely(log); } catch (_) {}
                     throw revTxErr;
                 }
 
@@ -1920,7 +2070,7 @@ export const handlePostback = async (req, res) => {
                 log.chargebackStatus = chargebackStatus;
                 log.userBalanceBefore = balanceBefore;
                 log.userBalanceAfter = balanceAfter;
-                try { await log.save(); } catch (_) {}
+                try { await saveLogSafely(log); } catch (_) {}
 
                 try {
                     await Notification.create({
@@ -2034,44 +2184,48 @@ export const handlePostback = async (req, res) => {
                 }
 
                 // Verify lock ownership is still valid before processing credit
-                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
-                    throw new Error(`Postback lock expired or taken over during processing: ${providerKey}:${normalized.externalTxId}`);
+                if (lockOwnerToken && !(await isLockStillOwned(lockProviderKey, normalized.externalTxId, lockOwnerToken))) {
+                    throw new Error(`Postback lock expired or taken over during processing: ${lockProviderKey}:${normalized.externalTxId}`);
                 }
 
                 // Duplicate credit pre-check (protects historical records without _credit suffix)
-                const existingCredit = (await Transaction.findOne({ idempotencyKey: creditKey }))
-                    || (await Transaction.findOne({
-                        offerwallProvider: providerKey,
-                        externalTransactionId: normalized.externalTxId,
-                        type: 'Offerwall Reward'
-                    }));
+                const existingCredit = isOfferwallGg
+                    ? (await findOfferwallGgTx(normalized.externalTxId, 'Offerwall Reward', 'credit'))
+                    : ((await Transaction.findOne({ idempotencyKey: creditKey }))
+                        || (await Transaction.findOne({
+                            offerwallProvider: providerKey,
+                            externalTransactionId: normalized.externalTxId,
+                            type: 'Offerwall Reward'
+                        })));
                 if (existingCredit) {
                     log.status = 'Duplicate';
                     log.errorMessage = 'Duplicate credit transaction detected';
-                    try { await log.save(); } catch (_) {}
+                    try { await saveLogSafely(log); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'DUP_ALREADY_PROCESSED');
                 }
 
                 // Safety guard: Check if an out-of-order reversal has already been processed for this transaction ID.
-                const priorReversal = (await Transaction.findOne({ idempotencyKey: reversalKey }))
-                    || (await Transaction.findOne({
-                        offerwallProvider: providerKey,
-                        externalTransactionId: normalized.externalTxId,
-                        type: 'Offerwall Reversal'
-                    }))
-                    || (providerKey === 'ayetstudios' && (
-                        (await Transaction.findOne({ idempotencyKey: `${providerKey}_r-${normalized.externalTxId}_reversal` }))
+                const priorReversal = isOfferwallGg
+                    ? (await findOfferwallGgTx(normalized.externalTxId, 'Offerwall Reversal', 'reversal'))
+                    : ((await Transaction.findOne({ idempotencyKey: reversalKey }))
                         || (await Transaction.findOne({
                             offerwallProvider: providerKey,
-                            externalTransactionId: `r-${normalized.externalTxId}`,
+                            externalTransactionId: normalized.externalTxId,
                             type: 'Offerwall Reversal'
                         }))
-                    ));
+                        || (providerKey === 'ayetstudios' && (
+                            (await Transaction.findOne({ idempotencyKey: `${providerKey}_r-${normalized.externalTxId}_reversal` }))
+                            || (await Transaction.findOne({
+                                offerwallProvider: providerKey,
+                                externalTransactionId: `r-${normalized.externalTxId}`,
+                                type: 'Offerwall Reversal'
+                            }))
+                        )));
 
                 if (priorReversal) {
                     log.status = 'PreReversed';
                     log.errorMessage = 'Credit received after pre-existing reversal; balance mutation bypassed safely at net zero.';
-                    try { await log.save(); } catch (_) {}
+                    try { await saveLogSafely(log); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
@@ -2079,7 +2233,7 @@ export const handlePostback = async (req, res) => {
                 if (user.status === 'Blocked' || user.restrictions?.earning === true) {
                     log.status = 'UserRestricted';
                     log.errorMessage = 'User account is Blocked or earning-restricted; credit rejected.';
-                    try { await log.save(); } catch (_) {}
+                    try { await saveLogSafely(log); } catch (_) {}
                     return res.status(403).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'USER_RESTRICTED');
                 }
 
@@ -2087,8 +2241,8 @@ export const handlePostback = async (req, res) => {
                 const balanceAfter = Number((balanceBefore + userRewardUSD).toFixed(4));
 
                 // Re-verify lock ownership immediately before transaction creation
-                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
-                    throw new Error(`Postback lock expired or taken over before transaction creation: ${providerKey}:${normalized.externalTxId}`);
+                if (lockOwnerToken && !(await isLockStillOwned(lockProviderKey, normalized.externalTxId, lockOwnerToken))) {
+                    throw new Error(`Postback lock expired or taken over before transaction creation: ${lockProviderKey}:${normalized.externalTxId}`);
                 }
 
                 // Atomic creation: Transaction first to secure idempotency
@@ -2123,14 +2277,14 @@ export const handlePostback = async (req, res) => {
                     if (err.code === 11000) {
                         log.status = 'Duplicate';
                         log.errorMessage = 'Duplicate transaction key caught by database constraint';
-                        try { await log.save(); } catch (_) {}
+                        try { await saveLogSafely(log); } catch (_) {}
                         return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'DUP_ALREADY_PROCESSED');
                     }
                     throw err;
                 }
 
                 // Re-verify lock ownership immediately before conditional balance update
-                if (lockOwnerToken && !(await isLockStillOwned(providerKey, normalized.externalTxId, lockOwnerToken))) {
+                if (lockOwnerToken && !(await isLockStillOwned(lockProviderKey, normalized.externalTxId, lockOwnerToken))) {
                     let cleanupSuccessful = false;
                     try {
                         const delRes = await Transaction.deleteOne({ _id: tx._id });
@@ -2141,10 +2295,10 @@ export const handlePostback = async (req, res) => {
                     if (!cleanupSuccessful) {
                         log.status = 'CriticalInconsistency';
                         log.errorMessage = `CRITICAL_INCONSISTENCY: Lock lost before balance update and transaction cleanup failed for tx ${tx._id}`;
-                        try { await log.save(); } catch (_) {}
+                        try { await saveLogSafely(log); } catch (_) {}
                         throw new Error(`CRITICAL_INCONSISTENCY: Lock lost before balance update and transaction cleanup failed for tx ${tx._id}`);
                     }
-                    throw new Error(`Postback lock expired or taken over before balance update: ${providerKey}:${normalized.externalTxId}`);
+                    throw new Error(`Postback lock expired or taken over before balance update: ${lockProviderKey}:${normalized.externalTxId}`);
                 }
 
                 // If transaction created, update user balance atomically while re-verifying user is NOT blocked or earning-restricted
@@ -2178,7 +2332,7 @@ export const handlePostback = async (req, res) => {
                         console.error('[CRITICAL_INCONSISTENCY] Orphaned transaction remained after balance update failure! txId:', tx._id);
                         log.status = 'CriticalInconsistency';
                         log.errorMessage = `CRITICAL_INCONSISTENCY: Balance update failed (${balanceErr.message}) and transaction cleanup failed for tx ${tx._id}`;
-                        try { await log.save(); } catch (_) {}
+                        try { await saveLogSafely(log); } catch (_) {}
                         throw new Error(`CRITICAL_INCONSISTENCY: Balance update failed (${balanceErr.message}) and transaction cleanup failed for tx ${tx._id}`);
                     }
                     throw balanceErr;
@@ -2197,12 +2351,12 @@ export const handlePostback = async (req, res) => {
                         console.error('[CRITICAL_INCONSISTENCY] Orphaned transaction remained after restricted user rejection! txId:', tx._id);
                         log.status = 'CriticalInconsistency';
                         log.errorMessage = `CRITICAL_INCONSISTENCY: User account is Blocked or earning-restricted at balance update point, but transaction cleanup failed to delete tx ${tx._id}`;
-                        try { await log.save(); } catch (_) {}
+                        try { await saveLogSafely(log); } catch (_) {}
                         return res.status(500).send('POSTBACK_ERROR: CRITICAL_INCONSISTENCY: Transaction deletion failed for restricted user');
                     }
                     log.status = 'UserRestricted';
                     log.errorMessage = 'User account is Blocked or earning-restricted at balance update point; credit rejected.';
-                    try { await log.save(); } catch (_) {}
+                    try { await saveLogSafely(log); } catch (_) {}
                     return res.status(403).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'USER_RESTRICTED');
                 }
 
@@ -2224,7 +2378,7 @@ export const handlePostback = async (req, res) => {
                 log.transactionId = tx._id;
                 log.userBalanceBefore = balanceBefore;
                 log.userBalanceAfter = balanceAfter;
-                try { await log.save(); } catch (_) {}
+                try { await saveLogSafely(log); } catch (_) {}
 
                 // Notify Worker in Inbox
                 let notifSubject = `Offerwall Reward Credited! 🎁 (+$${userRewardUSD})`;
@@ -2294,7 +2448,7 @@ export const handlePostback = async (req, res) => {
             }
         } finally {
             if (lockAcquired && lockOwnerToken) {
-                await releasePostbackLock(providerKey, normalized.externalTxId, lockOwnerToken);
+                await releasePostbackLock(lockProviderKey, normalized.externalTxId, lockOwnerToken);
             }
         }
     } catch (err) {
@@ -2317,7 +2471,7 @@ export const handlePostback = async (req, res) => {
                 log.status = 'Error';
             }
             log.errorMessage = err.message;
-            try { await log.save(); } catch (_) {}
+            try { await saveLogSafely(log); } catch (_) {}
         }
         return res.status(500).send(`POSTBACK_ERROR: ${err.message}`);
     }
@@ -2740,6 +2894,10 @@ export const updateOfferwallProvider = async (req, res) => {
         let existingProviderRecord = null;
         if ((sanitizedUpdates.customConfig !== undefined && typeof sanitizedUpdates.customConfig === 'object') || isOfferwallGgProvider) {
             existingProviderRecord = await OfferwallProvider.findOne({ providerKey: normalizedProviderKey });
+            if (!existingProviderRecord && isOfferwallGgProvider) {
+                const altKey = normalizedProviderKey === 'offerwallgg' ? 'offerwall_gg' : 'offerwallgg';
+                existingProviderRecord = await OfferwallProvider.findOne({ providerKey: altKey });
+            }
             if (isOfferwallGgProvider && !existingProviderRecord) {
                 return res.status(404).json({ success: false, error: `Provider '${providerKey}' not found` });
             }
@@ -2891,8 +3049,11 @@ export const updateOfferwallProvider = async (req, res) => {
             }
         }
 
+        const targetProviderKey = (isOfferwallGgProvider && existingProviderRecord?.providerKey)
+            ? existingProviderRecord.providerKey
+            : normalizedProviderKey;
         const provider = await OfferwallProvider.findOneAndUpdate(
-            { providerKey: normalizedProviderKey },
+            { providerKey: targetProviderKey },
             { $set: sanitizedUpdates },
             { new: true, runValidators: true }
         );
@@ -2962,7 +3123,12 @@ export const simulatePostback = async (req, res) => {
 
         const { providerKey, userId, amount = 1.0, isReversal = false, offerName = 'Test Survey / Offer' } = req.body;
         const normalizedKey = String(providerKey || '').trim().toLowerCase();
-        const provider = await OfferwallProvider.findOne({ providerKey: normalizedKey });
+        const isOfferwallGgSim = normalizedKey === 'offerwall_gg' || normalizedKey === 'offerwallgg';
+        let provider = await OfferwallProvider.findOne({ providerKey: normalizedKey });
+        if (!provider && isOfferwallGgSim) {
+            const altKey = normalizedKey === 'offerwallgg' ? 'offerwall_gg' : 'offerwallgg';
+            provider = await OfferwallProvider.findOne({ providerKey: altKey });
+        }
         if (!provider) {
             return res.status(404).json({
                 success: false,
@@ -2973,68 +3139,120 @@ export const simulatePostback = async (req, res) => {
         }
 
         const simTxId = req.body.externalTxId || req.body.transId || `sim_${Date.now()}`;
-        const queryParams = {
-            user_id: userId,
-            id: simTxId,
-            trans_id: simTxId,
-            amount: amount,
-            status: isReversal ? 2 : 1,
-            o_name: offerName
-        };
+        let queryParams;
 
-        const secret = provider.secretKey || provider.postbackKey || '';
-        if (provider.requireSignature && secret) {
-            const pKey = provider.providerKey.toLowerCase();
-            if (pKey === 'torox') {
-                const simOid = `offer_${Date.now()}`;
-                queryParams.oid = simOid;
-                queryParams.sig = crypto.createHash('md5').update(`${simOid}-${userId}-${secret}`).digest('hex');
-            } else if (pKey === 'cpx_research') {
-                queryParams.hash = crypto.createHash('md5').update(`${simTxId}-${secret}`).digest('hex');
-                if (req.body.amount_local !== undefined) {
-                    queryParams.amount_local = req.body.amount_local;
-                } else if (provider.commissionMode === 'provider_managed') {
-                    queryParams.amount_local = amount;
+        if (isOfferwallGgSim) {
+            const simUserIdStr = userId !== undefined && userId !== null ? String(userId) : '';
+            const simTxIdStr = String(simTxId);
+            const rawSimAmountInput = req.body.currencyAmount !== undefined ? req.body.currencyAmount : amount;
+            let simCurrencyAmount;
+            if (rawSimAmountInput === undefined || rawSimAmountInput === null) {
+                simCurrencyAmount = isReversal ? '-70' : '70';
+            } else if (typeof rawSimAmountInput === 'string') {
+                const trimmed = rawSimAmountInput.trim();
+                const parsed = Number(trimmed);
+                if (!trimmed || !Number.isFinite(parsed) || parsed === 0) {
+                    simCurrencyAmount = rawSimAmountInput;
+                } else if (isReversal) {
+                    simCurrencyAmount = parsed < 0 ? trimmed : `-${trimmed.replace(/^\+/, '')}`;
+                } else {
+                    simCurrencyAmount = parsed > 0 ? trimmed : String(Math.abs(parsed));
                 }
-                if (req.body.amount_usd !== undefined) {
-                    queryParams.amount_usd = req.body.amount_usd;
-                } else if (provider.commissionMode === 'smartexn_managed') {
-                    queryParams.amount_usd = amount;
+            } else {
+                const parsed = Number(rawSimAmountInput);
+                if (!Number.isFinite(parsed) || parsed === 0) {
+                    simCurrencyAmount = rawSimAmountInput;
+                } else {
+                    simCurrencyAmount = isReversal ? String(-Math.abs(parsed)) : String(Math.abs(parsed));
                 }
-                if (req.body.currency !== undefined) {
-                    queryParams.currency = req.body.currency;
-                } else if (provider.commissionMode === 'provider_managed' && !provider.customConfig?.currency && !provider.currency) {
-                    queryParams.currency = 'USD';
+            }
+
+            queryParams = {
+                userId: simUserIdStr,
+                transactionId: simTxIdStr,
+                currencyAmount: simCurrencyAmount,
+                status: isReversal ? 'reversed' : 'credited',
+                offerName
+            };
+            if (req.body.payoutUsd !== undefined) {
+                queryParams.payoutUsd = req.body.payoutUsd;
+            }
+
+            const resolvedSecret = (
+                (process.env.OFFERWALL_GG_SECRET_KEY && process.env.OFFERWALL_GG_SECRET_KEY.trim()) ||
+                (provider.secretKey && provider.secretKey.trim()) ||
+                ''
+            );
+            if (req.body.signature !== undefined && !req.body.testInvalidSignature) {
+                queryParams.signature = String(req.body.signature);
+            } else if (resolvedSecret && !req.body.testInvalidSignature) {
+                const canonicalMsg = `${simUserIdStr}:${simTxIdStr}:${String(simCurrencyAmount)}`;
+                queryParams.signature = crypto.createHmac('sha256', resolvedSecret).update(canonicalMsg).digest('hex');
+            }
+        } else {
+            queryParams = {
+                user_id: userId,
+                id: simTxId,
+                trans_id: simTxId,
+                amount: amount,
+                status: isReversal ? 2 : 1,
+                o_name: offerName
+            };
+
+            const secret = provider.secretKey || provider.postbackKey || '';
+            if (provider.requireSignature && secret) {
+                const pKey = provider.providerKey.toLowerCase();
+                if (pKey === 'torox') {
+                    const simOid = `offer_${Date.now()}`;
+                    queryParams.oid = simOid;
+                    queryParams.sig = crypto.createHash('md5').update(`${simOid}-${userId}-${secret}`).digest('hex');
+                } else if (pKey === 'cpx_research') {
+                    queryParams.hash = crypto.createHash('md5').update(`${simTxId}-${secret}`).digest('hex');
+                    if (req.body.amount_local !== undefined) {
+                        queryParams.amount_local = req.body.amount_local;
+                    } else if (provider.commissionMode === 'provider_managed') {
+                        queryParams.amount_local = amount;
+                    }
+                    if (req.body.amount_usd !== undefined) {
+                        queryParams.amount_usd = req.body.amount_usd;
+                    } else if (provider.commissionMode === 'smartexn_managed') {
+                        queryParams.amount_usd = amount;
+                    }
+                    if (req.body.currency !== undefined) {
+                        queryParams.currency = req.body.currency;
+                    } else if (provider.commissionMode === 'provider_managed' && !provider.customConfig?.currency && !provider.currency) {
+                        queryParams.currency = 'USD';
+                    }
+                } else if (pKey === 'wannads') {
+                    queryParams.subId = userId;
+                    queryParams.transId = simTxId;
+                    queryParams.reward = amount;
+                    queryParams.signature = crypto.createHash('md5').update(`${userId}${simTxId}${amount}${secret}`).digest('hex');
+                } else if (pKey === 'revlum') {
+                    queryParams.subId = userId;
+                    queryParams.trans_id = simTxId;
+                    queryParams.reward = amount;
+                    queryParams.signature = crypto.createHash('md5').update(`${userId}${simTxId}${amount}${secret}`).digest('hex');
+                } else if (pKey === 'monlix') {
+                    queryParams.signature = crypto.createHash('sha256').update(`${userId}${simTxId}${secret}`).digest('hex');
+                } else if (pKey === 'lootably') {
+                    const simIp = (provider.ipWhitelist && provider.ipWhitelist.length > 0) ? provider.ipWhitelist[0] : '127.0.0.1';
+                    queryParams.userID = userId;
+                    queryParams.ip = simIp;
+                    queryParams.revenue = amount;
+                    queryParams.currencyReward = amount;
+                    queryParams.signature = crypto.createHash('sha256').update(`${userId}${simIp}${amount}${amount}${secret}`).digest('hex');
+                } else if (pKey === 'bitlabs' || pKey === 'bitlabs_surveys') {
+                    queryParams.signature = crypto.createHmac('sha256', secret).update(`${amount}${userId}${simTxId}`).digest('hex');
+                } else if (provider.signatureType === 'hmac_sha256') {
+                    queryParams.signature = crypto.createHmac('sha256', secret).update(String(simTxId)).digest('hex');
+                } else if (provider.signatureType === 'md5') {
+                    queryParams.signature = crypto.createHash('md5').update(`${userId}-${simTxId}-${secret}`).digest('hex');
+                } else if (provider.signatureType === 'sha256') {
+                    queryParams.signature = crypto.createHash('sha256').update(`${userId}-${simTxId}-${secret}`).digest('hex');
+                } else if (provider.signatureType === 'sha1') {
+                    queryParams.signature = crypto.createHash('sha1').update(`${userId}-${simTxId}-${secret}`).digest('hex');
                 }
-            } else if (pKey === 'wannads') {
-                queryParams.subId = userId;
-                queryParams.transId = simTxId;
-                queryParams.reward = amount;
-                queryParams.signature = crypto.createHash('md5').update(`${userId}${simTxId}${amount}${secret}`).digest('hex');
-            } else if (pKey === 'revlum') {
-                queryParams.subId = userId;
-                queryParams.trans_id = simTxId;
-                queryParams.reward = amount;
-                queryParams.signature = crypto.createHash('md5').update(`${userId}${simTxId}${amount}${secret}`).digest('hex');
-            } else if (pKey === 'monlix') {
-                queryParams.signature = crypto.createHash('sha256').update(`${userId}${simTxId}${secret}`).digest('hex');
-            } else if (pKey === 'lootably') {
-                const simIp = (provider.ipWhitelist && provider.ipWhitelist.length > 0) ? provider.ipWhitelist[0] : '127.0.0.1';
-                queryParams.userID = userId;
-                queryParams.ip = simIp;
-                queryParams.revenue = amount;
-                queryParams.currencyReward = amount;
-                queryParams.signature = crypto.createHash('sha256').update(`${userId}${simIp}${amount}${amount}${secret}`).digest('hex');
-            } else if (pKey === 'bitlabs' || pKey === 'bitlabs_surveys') {
-                queryParams.signature = crypto.createHmac('sha256', secret).update(`${amount}${userId}${simTxId}`).digest('hex');
-            } else if (provider.signatureType === 'hmac_sha256') {
-                queryParams.signature = crypto.createHmac('sha256', secret).update(String(simTxId)).digest('hex');
-            } else if (provider.signatureType === 'md5') {
-                queryParams.signature = crypto.createHash('md5').update(`${userId}-${simTxId}-${secret}`).digest('hex');
-            } else if (provider.signatureType === 'sha256') {
-                queryParams.signature = crypto.createHash('sha256').update(`${userId}-${simTxId}-${secret}`).digest('hex');
-            } else if (provider.signatureType === 'sha1') {
-                queryParams.signature = crypto.createHash('sha1').update(`${userId}-${simTxId}-${secret}`).digest('hex');
             }
         }
 

@@ -6,6 +6,7 @@ import {
     seedVerifiedNetworks, 
     getOfferwallProviders, 
     updateOfferwallProvider,
+    simulatePostback,
     acquirePostbackLock, 
     releasePostbackLock, 
     isLockStillOwned 
@@ -2546,6 +2547,543 @@ const runTest = async (name, fn) => {
         }, cpxNonStringRes);
         assert.equal(cpxNonStringRes.statusCode, 200);
         assert.equal(cpxProvider.commissionMode, 'smartexn_managed');
+    });
+
+    console.log('\n--- SECTION 9: Postback Audit Fixes (Simulator, Strict Validation, Logging & Cross-Alias Safety) ---');
+
+    await runTest('T83: Offerwall.GG simulator executes real HMAC-signed credit dry-run with zero DB mutations', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        owProvider.secretKey = 'provider_fallback_secret_value';
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 15.0;
+        user.taskWalletBalance = 15.0;
+        user.walletBalance = 100.0;
+        const txBefore = db.transactions.size;
+        const logBefore = db.logs.size;
+        const notifBefore = db.notifications.size;
+        const lockBefore = db.locks.size;
+        const postbackCountBefore = owProvider.totalPostbackCount || 0;
+
+        const simReq = {
+            user: adminUser,
+            body: {
+                providerKey: 'offerwall_gg',
+                userId: TEST_USER_ID,
+                externalTxId: 'sim_ow_credit_01',
+                currencyAmount: '70',
+                payoutUsd: '1.00',
+                isReversal: false,
+                offerName: 'Simulator Test Offer'
+            }
+        };
+        const simRes = createMockRes();
+        await simulatePostback(simReq, simRes);
+
+        assert.equal(simRes.statusCode, 200);
+        assert.equal(simRes.body.success, true);
+        assert.equal(simRes.body.isDryRun, true);
+        assert.equal(simRes.body.mutationsPerformed, false);
+        assert.equal(simRes.body.action, 'CREDIT');
+        assert.equal(simRes.body.validation.signatureValid, true);
+        assert.equal(simRes.body.accounting.grossUSD, 1.0);
+        assert.equal(simRes.body.accounting.userRewardUSD, 0.7);
+        assert.equal(simRes.body.accounting.platformRevenueUSD, 0.3);
+        assert.equal(simRes.body.user.currentTaskEarningsUSD, 15.0);
+        assert.equal(simRes.body.user.projectedTaskEarningsUSD, 15.7);
+
+        // Verify zero side effects
+        assert.equal(user.taskEarningsBalance, 15.0);
+        assert.equal(user.taskWalletBalance, 15.0);
+        assert.equal(user.walletBalance, 100.0);
+        assert.equal(db.transactions.size, txBefore);
+        assert.equal(db.logs.size, logBefore);
+        assert.equal(db.notifications.size, notifBefore);
+        assert.equal(db.locks.size, lockBefore);
+        assert.equal(owProvider.totalPostbackCount || 0, postbackCountBefore);
+    });
+
+    await runTest('T84: Offerwall.GG simulator handles reversal dry-runs (both positive and negative input amounts) against live credit with zero mutations', async () => {
+        setupProviderManagedOfferwallGg();
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 10.0;
+        user.taskWalletBalance = 10.0;
+
+        const liveTxId = 'sim_ow_live_credit_ref';
+        const credSig = computeSignature(TEST_USER_ID, liveTxId, '70');
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: liveTxId, currencyAmount: '70', status: 'credited', signature: credSig },
+            body: {},
+            headers: {}
+        }, createMockRes());
+        assert.equal(user.taskEarningsBalance, 10.7);
+
+        const txBefore = db.transactions.size;
+        const logBefore = db.logs.size;
+        const notifBefore = db.notifications.size;
+
+        // Positive input amount with isReversal: true should be normalized to negative '-70' and signed identically
+        const revPosRes = createMockRes();
+        await simulatePostback({
+            user: adminUser,
+            body: {
+                providerKey: 'offerwall_gg',
+                userId: TEST_USER_ID,
+                externalTxId: liveTxId,
+                amount: 70,
+                isReversal: true
+            }
+        }, revPosRes);
+
+        assert.equal(revPosRes.statusCode, 200);
+        assert.equal(revPosRes.body.success, true);
+        assert.equal(revPosRes.body.action, 'REVERSAL');
+        assert.equal(revPosRes.body.validation.signatureValid, true);
+        assert.equal(revPosRes.body.validation.originalTransactionFound, true);
+        assert.equal(revPosRes.body.accounting.rawReward, -70);
+        assert.equal(revPosRes.body.accounting.deductionAmountUSD, 0.7);
+        assert.equal(revPosRes.body.user.projectedTaskEarningsUSD, 10.0);
+
+        // Negative string input with isReversal: true also works identically
+        const revNegRes = createMockRes();
+        await simulatePostback({
+            user: adminUser,
+            body: {
+                providerKey: 'offerwall_gg',
+                userId: TEST_USER_ID,
+                externalTxId: liveTxId,
+                currencyAmount: '-70',
+                isReversal: true
+            }
+        }, revNegRes);
+
+        assert.equal(revNegRes.statusCode, 200);
+        assert.equal(revNegRes.body.success, true);
+        assert.equal(revNegRes.body.accounting.rawReward, -70);
+
+        assert.equal(user.taskEarningsBalance, 10.7, 'Dry-run reversal must not deduct balance');
+        assert.equal(db.transactions.size, txBefore);
+        assert.equal(db.logs.size, logBefore);
+        assert.equal(db.notifications.size, notifBefore);
+    });
+
+    await runTest('T85: Simulator and live verifySignature use identical secret precedence (env OVER provider.secretKey, with provider fallback)', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        const envSecret = 'env_priority_secret_abc';
+        const dbSecret = 'db_fallback_secret_xyz';
+        owProvider.secretKey = dbSecret;
+        process.env.OFFERWALL_GG_SECRET_KEY = envSecret;
+
+        // With env set, signature generated by env passes, dbSecret fails
+        const resEnv = createMockRes();
+        await simulatePostback({
+            user: adminUser,
+            body: { providerKey: 'offerwall_gg', userId: TEST_USER_ID, externalTxId: 'sim_sec_env', amount: 70 }
+        }, resEnv);
+        assert.equal(resEnv.statusCode, 200);
+        assert.equal(resEnv.body.success, true);
+        assert.equal(resEnv.body.validation.signatureValid, true);
+
+        // Explicit signature signed with stale dbSecret while envSecret is active must fail in simulator
+        const staleSig = computeSignature(TEST_USER_ID, 'sim_sec_stale', '70', dbSecret);
+        const resStale = createMockRes();
+        await simulatePostback({
+            user: adminUser,
+            body: { providerKey: 'offerwall_gg', userId: TEST_USER_ID, externalTxId: 'sim_sec_stale', amount: '70', signature: staleSig }
+        }, resStale);
+        assert.equal(resStale.statusCode, 200);
+        assert.equal(resStale.body.success, false);
+        assert.equal(resStale.body.validation.signatureValid, false);
+
+        // Removing env falls back to provider.secretKey consistently
+        process.env.OFFERWALL_GG_SECRET_KEY = '   ';
+        const resFallback = createMockRes();
+        await simulatePostback({
+            user: adminUser,
+            body: { providerKey: 'offerwall_gg', userId: TEST_USER_ID, externalTxId: 'sim_sec_fallback', amount: 70 }
+        }, resFallback);
+        assert.equal(resFallback.statusCode, 200);
+        assert.equal(resFallback.body.success, true);
+        assert.equal(resFallback.body.validation.signatureValid, true);
+
+        // Missing both env and db secret fails closed
+        owProvider.secretKey = '';
+        const resMissing = createMockRes();
+        await simulatePostback({
+            user: adminUser,
+            body: { providerKey: 'offerwall_gg', userId: TEST_USER_ID, externalTxId: 'sim_sec_none', amount: 70 }
+        }, resMissing);
+        assert.equal(resMissing.statusCode, 200);
+        assert.equal(resMissing.body.success, false);
+        assert.equal(resMissing.body.validation.signatureValid, false);
+
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+    });
+
+    await runTest('T86: Simulator testInvalidSignature and alias key offerwallgg work with zero DB mutations and leave CPX untouched', async () => {
+        setupProviderManagedOfferwallGg();
+        db.providers.delete('offerwallgg'); // Ensure only 'offerwall_gg' exists in DB
+
+        const user = db.users.get(TEST_USER_ID);
+        const balBefore = user.taskEarningsBalance;
+        const txBefore = db.transactions.size;
+        const logBefore = db.logs.size;
+
+        const badSigRes = createMockRes();
+        await simulatePostback({
+            user: adminUser,
+            body: { providerKey: 'offerwall_gg', userId: TEST_USER_ID, externalTxId: 'sim_bad_sig', amount: 70, testInvalidSignature: true }
+        }, badSigRes);
+        assert.equal(badSigRes.statusCode, 200);
+        assert.equal(badSigRes.body.success, false);
+        assert.equal(badSigRes.body.validation.signatureValid, false);
+
+        const aliasSimRes = createMockRes();
+        await simulatePostback({
+            user: adminUser,
+            body: { providerKey: 'offerwallgg', userId: TEST_USER_ID, externalTxId: 'sim_alias_ok', amount: 70 }
+        }, aliasSimRes);
+        assert.equal(aliasSimRes.statusCode, 200);
+        assert.equal(aliasSimRes.body.success, true);
+        assert.equal(aliasSimRes.body.accounting.userRewardUSD, 0.7);
+
+        // Verify CPX simulator remains unaffected
+        const cpxProvider = db.providers.get('cpx_research');
+        cpxProvider.enabled = true;
+        cpxProvider.status = 'ACTIVE';
+        cpxProvider.requireSignature = true;
+        cpxProvider.secretKey = 'cpx_sim_sec';
+        cpxProvider.commissionMode = 'smartexn_managed';
+        const cpxSimRes = createMockRes();
+        await simulatePostback({
+            user: adminUser,
+            body: { providerKey: 'cpx_research', userId: TEST_USER_ID, externalTxId: 'sim_cpx_ok', amount: 1.0 }
+        }, cpxSimRes);
+        assert.equal(cpxSimRes.statusCode, 200);
+        assert.equal(cpxSimRes.body.success, true);
+
+        assert.equal(user.taskEarningsBalance, balBefore);
+        assert.equal(db.transactions.size, txBefore);
+        assert.equal(db.logs.size, logBefore);
+    });
+
+    await runTest('T87: Strict currencyAmount & status validation rejects non-finite, overflow, zero, non-scalar, wrong-sign, and conflicting inputs', async () => {
+        setupProviderManagedOfferwallGg();
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 5.0;
+        user.taskWalletBalance = 5.0;
+        const txBefore = db.transactions.size;
+
+        const invalidPayloads = [
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_zero_str', currencyAmount: '0', status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_zero_str', '0') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_zero_num', currencyAmount: 0, status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_zero_num', '0') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_neg_cred', currencyAmount: '-70', status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_neg_cred', '-70') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_pos_rev', currencyAmount: '70', status: 'reversed', signature: computeSignature(TEST_USER_ID, 'bad_pos_rev', '70') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_nan', currencyAmount: 'NaN', status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_nan', 'NaN') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_inf', currencyAmount: 'Infinity', status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_inf', 'Infinity') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_ninf', currencyAmount: '-Infinity', status: 'reversed', signature: computeSignature(TEST_USER_ID, 'bad_ninf', '-Infinity') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_over', currencyAmount: '1e309', status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_over', '1e309') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_empty', currencyAmount: '   ', status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_empty', '   ') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_bool', currencyAmount: true, status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_bool', 'true') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_arr', currencyAmount: ['70'], status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_arr', '70') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_obj', currencyAmount: { value: 70 }, status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_obj', '[object Object]') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_status_type', currencyAmount: '70', status: ['credited'], signature: computeSignature(TEST_USER_ID, 'bad_status_type', '70') } },
+            { query: { userId: TEST_USER_ID, transactionId: 'bad_status_val', currencyAmount: '70', status: 'pending', signature: computeSignature(TEST_USER_ID, 'bad_status_val', '70') } },
+            {
+                method: 'POST',
+                query: { userId: TEST_USER_ID, transactionId: 'bad_conflict_amt', currencyAmount: '70', status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_conflict_amt', '70') },
+                body: { userId: TEST_USER_ID, transactionId: 'bad_conflict_amt', currencyAmount: '700', status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_conflict_amt', '70') }
+            },
+            {
+                method: 'POST',
+                query: { userId: TEST_USER_ID, transactionId: 'bad_conflict_st', currencyAmount: '70', status: 'credited', signature: computeSignature(TEST_USER_ID, 'bad_conflict_st', '70') },
+                body: { userId: TEST_USER_ID, transactionId: 'bad_conflict_st', currencyAmount: '70', status: 'reversed', signature: computeSignature(TEST_USER_ID, 'bad_conflict_st', '70') }
+            }
+        ];
+
+        for (const payload of invalidPayloads) {
+            const res = createMockRes();
+            await handlePostback({
+                method: payload.method || 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: payload.query || {},
+                body: payload.body || {},
+                headers: {}
+            }, res);
+            assert.equal(res.statusCode, 400, `Expected HTTP 400 for invalid payload ${payload.query.transactionId}`);
+        }
+
+        assert.equal(user.taskEarningsBalance, 5.0, 'Rejected invalid amounts must never alter earnings balance');
+        assert.equal(user.taskWalletBalance, 5.0, 'Rejected invalid amounts must never alter task wallet');
+        assert.equal(db.transactions.size, txBefore, 'Rejected invalid amounts must never create transactions');
+    });
+
+    await runTest('T88: OfferwallPostbackLog schema persists infoPayoutUsd and priorSecurityEvents and ignores payoutUsd in financial accounting', async () => {
+        setupProviderManagedOfferwallGg();
+        assert.ok(OfferwallPostbackLog.schema.path('infoPayoutUsd'), 'OfferwallPostbackLog schema must define infoPayoutUsd');
+        assert.ok(OfferwallPostbackLog.schema.path('priorSecurityEvents'), 'OfferwallPostbackLog schema must define priorSecurityEvents');
+
+        const schemaDoc = new OfferwallPostbackLog({
+            provider: 'offerwall_gg',
+            externalTxId: 'schema_verify_tx',
+            infoPayoutUsd: '500.00',
+            priorSecurityEvents: [{ status: 'InvalidSignature', recordedAt: new Date() }]
+        });
+        const plainObj = schemaDoc.toObject();
+        assert.equal(plainObj.infoPayoutUsd, '500.00');
+        assert.equal(plainObj.priorSecurityEvents.length, 1);
+
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 0;
+        user.taskWalletBalance = 0;
+
+        // Tampered large payoutUsd=500.00 with 70 Coins -> still $0.70 reward, log retains infoPayoutUsd='500.00'
+        const txId = 'ow_info_payout_test';
+        const res = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: ' 500.00 ', status: 'credited', signature: computeSignature(TEST_USER_ID, txId, '70') },
+            body: {},
+            headers: {}
+        }, res);
+        assert.equal(res.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 0.7);
+        const lastLog = Array.from(db.logs.values()).pop();
+        assert.equal(lastLog.toObject().infoPayoutUsd, '500.00');
+        assert.equal(lastLog.userRewardUSD, 0.7);
+
+        // Object/array payoutUsd is safely coerced to null rather than crashing log persistence
+        const txIdArr = 'ow_info_payout_arr';
+        const resArr = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txIdArr, currencyAmount: '70', payoutUsd: ['1.00', '2.00'], status: 'credited', signature: computeSignature(TEST_USER_ID, txIdArr, '70') },
+            body: {},
+            headers: {}
+        }, resArr);
+        assert.equal(resArr.statusCode, 200);
+        const lastArrLog = Array.from(db.logs.values()).pop();
+        assert.equal(lastArrLog.toObject().infoPayoutUsd, null);
+    });
+
+    await runTest('T89: InvalidSignature followed by valid retry preserves priorSecurityEvents under { provider, externalTxId, isReversal } unique index', async () => {
+        setupProviderManagedOfferwallGg();
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 0;
+        user.taskWalletBalance = 0;
+
+        const origSave = OfferwallPostbackLog.prototype.save;
+        const origFindOne = OfferwallPostbackLog.findOne;
+        const origTxCreate = Transaction.create;
+
+        // Temporarily enforce MongoDB unique index { provider: 1, externalTxId: 1, isReversal: 1 } and real ObjectId on tx._id
+        Transaction.create = async (doc, options) => {
+            const res = await origTxCreate(doc, options);
+            if (!Array.isArray(res) && res && typeof res._id === 'string' && !/^[0-9a-fA-F]{24}$/.test(res._id)) {
+                res._id = new mongoose.Types.ObjectId();
+            }
+            return res;
+        };
+        OfferwallPostbackLog.prototype.save = async function() {
+            const keyMatch = (entry) =>
+                entry.provider === this.provider &&
+                entry.externalTxId === this.externalTxId &&
+                Boolean(entry.isReversal) === Boolean(this.isReversal);
+            for (const existing of db.logs.values()) {
+                if (keyMatch(existing) && String(existing._id) !== String(this._id)) {
+                    const err = new Error('E11000 duplicate key error collection: offerwallpostbacklogs index: provider_1_externalTxId_1_isReversal_1');
+                    err.code = 11000;
+                    throw err;
+                }
+            }
+            const id = this._id || `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            db.logs.set(String(id), this);
+            return this;
+        };
+        OfferwallPostbackLog.findOne = async (query) => {
+            for (const entry of db.logs.values()) {
+                if (
+                    entry.provider === query.provider &&
+                    entry.externalTxId === query.externalTxId &&
+                    Boolean(entry.isReversal) === Boolean(query.isReversal)
+                ) {
+                    return entry;
+                }
+            }
+            return null;
+        };
+
+        try {
+            const txId = 'ow_retry_after_badsig';
+            const badRes = createMockRes();
+            await handlePostback({
+                method: 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'tampered_bad_sig' },
+                body: {},
+                headers: { 'x-forwarded-for': '203.0.113.9' }
+            }, badRes);
+            assert.equal(badRes.statusCode, 400);
+
+            const afterBadLog = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
+            assert.ok(afterBadLog);
+            assert.equal(afterBadLog.status, 'InvalidSignature');
+            const totalLogsAfterBad = db.logs.size;
+
+            // Valid retry for the exact same externalTxId + provider + isReversal
+            const goodSig = computeSignature(TEST_USER_ID, txId, '70');
+            const goodRes = createMockRes();
+            await handlePostback({
+                method: 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: goodSig },
+                body: {},
+                headers: {}
+            }, goodRes);
+            assert.equal(goodRes.statusCode, 200);
+            assert.equal(user.taskEarningsBalance, 0.7);
+            assert.equal(db.logs.size, totalLogsAfterBad, 'No log records deleted; existing log updated safely under unique index');
+
+            const updatedLog = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
+            assert.equal(updatedLog.status, 'Processed');
+            assert.ok(updatedLog.transactionId, 'Final log must store linked transactionId');
+            assert.equal(updatedLog.infoPayoutUsd, '1.00');
+            assert.equal(updatedLog.userRewardUSD, 0.7);
+            assert.ok(Array.isArray(updatedLog.priorSecurityEvents) && updatedLog.priorSecurityEvents.length === 1);
+            assert.equal(updatedLog.priorSecurityEvents[0].status, 'InvalidSignature');
+            assert.equal(updatedLog.priorSecurityEvents[0].clientIp, '203.0.113.9');
+
+            // Subsequent InvalidSignature tamper attempt after Processed must not downgrade Processed status
+            const postTamperRes = createMockRes();
+            await handlePostback({
+                method: 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '700', status: 'credited', signature: 'tampered_again' },
+                body: {},
+                headers: { 'x-forwarded-for': '203.0.113.10' }
+            }, postTamperRes);
+            assert.equal(postTamperRes.statusCode, 400);
+            assert.equal(updatedLog.status, 'Processed', 'Processed terminal log status must not downgrade on later invalid-sig probe');
+            assert.equal(updatedLog.priorSecurityEvents.length, 2);
+            assert.equal(updatedLog.priorSecurityEvents[1].status, 'InvalidSignature');
+        } finally {
+            OfferwallPostbackLog.prototype.save = origSave;
+            OfferwallPostbackLog.findOne = origFindOne;
+            Transaction.create = origTxCreate;
+        }
+    });
+
+    await runTest('T90: Cross-alias duplicate credits, cross-alias reversals, unmatched reversal marker, and concurrent alias locks stay consistent', async () => {
+        setupProviderManagedOfferwallGg();
+        db.providers.delete('offerwallgg'); // Single DB record 'offerwall_gg'
+
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 10.0;
+        user.taskWalletBalance = 10.0;
+        user.chargebackLiabilityUSD = 0;
+
+        // 1. Credit via offerwall_gg, duplicate replay via offerwallgg -> DUP_ALREADY_PROCESSED
+        const txDup = 'ow_cross_alias_dup';
+        const sigDup = computeSignature(TEST_USER_ID, txDup, '70');
+        const c1 = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txDup, currencyAmount: '70', status: 'credited', signature: sigDup },
+            body: {},
+            headers: {}
+        }, c1);
+        assert.equal(c1.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 10.7);
+
+        const c2 = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwallgg' },
+            query: { userId: TEST_USER_ID, transactionId: txDup, currencyAmount: '70', status: 'credited', signature: sigDup },
+            body: {},
+            headers: {}
+        }, c2);
+        assert.equal(c2.statusCode, 200);
+        assert.equal(c2.body, 'DUP_ALREADY_PROCESSED');
+        assert.equal(user.taskEarningsBalance, 10.7);
+
+        // 2. Reverse via alias offerwallgg against credit recorded under offerwall_gg
+        const revSigDup = computeSignature(TEST_USER_ID, txDup, '-70');
+        const rAlias = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwallgg' },
+            query: { userId: TEST_USER_ID, transactionId: txDup, currencyAmount: '-70', status: 'reversed', signature: revSigDup },
+            body: {},
+            headers: {}
+        }, rAlias);
+        assert.equal(rAlias.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 10.0, 'Cross-alias reversal must deduct original reward');
+
+        // Replay reversal via offerwall_gg must detect existing reversal on offerwallgg
+        const rReplay = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txDup, currencyAmount: '-70', status: 'reversed', signature: revSigDup },
+            body: {},
+            headers: {}
+        }, rReplay);
+        assert.equal(rReplay.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 10.0, 'Cross-alias duplicate reversal must not double-deduct');
+
+        // 3. Unmatched reversal on offerwallgg blocks delayed credit on offerwall_gg
+        const txPreRev = 'ow_cross_alias_prerev';
+        const preRevRes = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwallgg' },
+            query: { userId: TEST_USER_ID, transactionId: txPreRev, currencyAmount: '-70', status: 'reversed', signature: computeSignature(TEST_USER_ID, txPreRev, '-70') },
+            body: {},
+            headers: {}
+        }, preRevRes);
+        assert.equal(preRevRes.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 10.0);
+
+        const lateCredRes = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txPreRev, currencyAmount: '70', status: 'credited', signature: computeSignature(TEST_USER_ID, txPreRev, '70') },
+            body: {},
+            headers: {}
+        }, lateCredRes);
+        assert.equal(lateCredRes.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 10.0, 'Delayed credit on primary key must be blocked by prior reversal on alias');
+
+        // 4. Concurrent Promise.all across offerwall_gg and offerwallgg acquires unified lock and credits once
+        const txRace = 'ow_cross_alias_race';
+        const raceSig = computeSignature(TEST_USER_ID, txRace, '70');
+        const raceRes1 = createMockRes();
+        const raceRes2 = createMockRes();
+        await Promise.all([
+            handlePostback({
+                method: 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txRace, currencyAmount: '70', status: 'credited', signature: raceSig },
+                body: {},
+                headers: {}
+            }, raceRes1),
+            handlePostback({
+                method: 'POST',
+                params: { provider: 'offerwallgg' },
+                query: {},
+                body: { userId: TEST_USER_ID, transactionId: txRace, currencyAmount: '70', status: 'credited', signature: raceSig },
+                headers: {}
+            }, raceRes2)
+        ]);
+        assert.equal(user.taskEarningsBalance, 10.7, 'Concurrent cross-alias callbacks must credit exactly once');
     });
 
     console.log(`\n========================================================`);
