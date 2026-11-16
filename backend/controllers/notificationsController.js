@@ -6,6 +6,36 @@ import Setting from '../models/Setting.js';
 import { sendAutomatedMessage } from '../utils/automation.js';
 import { emitRealtimeChange } from '../utils/socketRealtime.js';
 
+const notifyNotificationRealtime = async (req, targetUserIds, event) => {
+    const ids = Array.from(new Set((Array.isArray(targetUserIds) ? targetUserIds : []).map((id) => String(id || '').trim()).filter(Boolean)));
+    if (ids.length === 0) return;
+
+    let version;
+    try {
+        if (mongoose.connection?.readyState === 1) {
+            version = await Setting.bumpVersion();
+        }
+    } catch (versionErr) {
+        console.error('Non-critical notification version bump failed:', versionErr);
+    }
+
+    try {
+        const io = req?.app?.get('io');
+        if (io) {
+            emitRealtimeChange(io, {
+                scope: 'user',
+                targetUserIds: ids,
+                includeAdmins: false,
+                datasets: ['notifications'],
+                version,
+                event
+            });
+        }
+    } catch (socketErr) {
+        console.error('Non-critical notification realtime emit failed:', socketErr);
+    }
+};
+
 // @desc    Get notifications scoped by user role
 // @route   GET /api/v1/notifications
 export const getNotifications = async (req, res) => {
@@ -57,33 +87,37 @@ export const createNotification = async (req, res) => {
 
         if (targetQuery && (verificationAction === 'must_verify' || verificationAction === 'unverify')) {
             await User.updateMany(targetQuery, { $set: { emailVerified: false, whatsappVerified: false } });
-            let version;
-            if (mongoose.connection?.readyState === 1) {
-                version = await Setting.bumpVersion();
-            }
-            // Notify clients via socket.io for instant real-time reflections
-            const io = req.app.get('io');
-            if (io) {
-                const targetedUserIds = userId
-                    ? [String(userId)]
-                    : (targetType === 'single' && Array.isArray(targetIds) ? targetIds.map((id) => String(id)) : null);
-                if (targetedUserIds && targetedUserIds.length > 0) {
-                    emitRealtimeChange(io, {
-                        scope: 'targeted',
-                        targetUserIds: targetedUserIds,
-                        includeAdmins: true,
-                        datasets: ['notifications', 'users', 'currentUser'],
-                        version,
-                        event: 'VERIFICATION_RESET_REQUIRED'
-                    });
-                } else {
-                    emitRealtimeChange(io, {
-                        scope: 'global',
-                        datasets: ['notifications', 'users', 'currentUser'],
-                        version,
-                        event: 'VERIFICATION_RESET_REQUIRED'
-                    });
+            try {
+                let version;
+                if (mongoose.connection?.readyState === 1) {
+                    version = await Setting.bumpVersion();
                 }
+                // Notify clients via socket.io for instant real-time reflections
+                const io = req.app.get('io');
+                if (io) {
+                    const targetedUserIds = userId
+                        ? [String(userId)]
+                        : (targetType === 'single' && Array.isArray(targetIds) ? targetIds.map((id) => String(id)) : null);
+                    if (targetedUserIds && targetedUserIds.length > 0) {
+                        emitRealtimeChange(io, {
+                            scope: 'targeted',
+                            targetUserIds: targetedUserIds,
+                            includeAdmins: true,
+                            datasets: ['notifications', 'users', 'currentUser'],
+                            version,
+                            event: 'VERIFICATION_RESET_REQUIRED'
+                        });
+                    } else {
+                        emitRealtimeChange(io, {
+                            scope: 'global',
+                            datasets: ['notifications', 'users', 'currentUser'],
+                            version,
+                            event: 'VERIFICATION_RESET_REQUIRED'
+                        });
+                    }
+                }
+            } catch (syncErr) {
+                console.error('Non-critical verification reset realtime/version update failed:', syncErr);
             }
         }
 
@@ -199,22 +233,8 @@ export const createNotification = async (req, res) => {
                 })().catch(err => console.error('Bulk announcement processing failed:', err));
             }
 
-            let version;
-            if (mongoose.connection?.readyState === 1) {
-                version = await Setting.bumpVersion();
-            }
-            const io = req.app.get('io');
-            if (io) {
-                const recipientIds = Array.from(new Set(created.map((n) => String(n.userId))));
-                emitRealtimeChange(io, {
-                    scope: 'user',
-                    targetUserIds: recipientIds,
-                    includeAdmins: false,
-                    datasets: ['notifications'],
-                    version,
-                    event: 'NOTIFICATIONS_CREATED'
-                });
-            }
+            const recipientIds = Array.from(new Set(created.map((n) => String(n.userId))));
+            await notifyNotificationRealtime(req, recipientIds, 'NOTIFICATIONS_CREATED');
 
             // Return all newly created notifications so frontend state can be updated
             return res.status(201).json({ success: true, count: created.length, data: created });
@@ -236,10 +256,13 @@ export const markAsRead = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Not authorized to update notifications for another user' });
         }
 
-        await Notification.updateMany(
+        const result = await Notification.updateMany(
             { userId: req.params.userId, read: false },
             { $set: { read: true } }
         );
+        if ((result?.modifiedCount || 0) > 0) {
+            await notifyNotificationRealtime(req, [req.params.userId], 'NOTIFICATIONS_MARKED_READ');
+        }
         const updatedNotifications = await Notification.find({ userId: req.user?.id }).sort({ date: -1 });
         res.status(200).json({ success: true, data: updatedNotifications });
     } catch (err) {
@@ -272,6 +295,9 @@ export const updateNotification = async (req, res) => {
             updateData,
             { new: true }
         );
+        if (notification && Object.keys(updateData).length > 0) {
+            await notifyNotificationRealtime(req, [notification.userId || existing.userId], 'NOTIFICATION_UPDATED');
+        }
         res.status(200).json({ success: true, data: notification });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -290,7 +316,10 @@ export const deleteNotification = async (req, res) => {
             return res.status(403).json({ success: false, error: "Not authorized to delete this notification" });
         }
 
-        await Notification.findByIdAndDelete(req.params.id);
+        const deleted = await Notification.findByIdAndDelete(req.params.id);
+        if (deleted) {
+            await notifyNotificationRealtime(req, [deleted.userId || existing.userId], 'NOTIFICATION_DELETED');
+        }
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -307,7 +336,19 @@ export const bulkDeleteNotifications = async (req, res) => {
         }
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         const deleteQuery = isAdmin ? { _id: { $in: ids } } : { _id: { $in: ids }, userId: req.user?.id };
+        let matchingDocs = [];
+        try {
+            matchingDocs = await Notification.find(deleteQuery).select('userId').lean();
+        } catch (lookupErr) {
+            matchingDocs = [];
+        }
         const result = await Notification.deleteMany(deleteQuery);
+        if ((result?.deletedCount || 0) > 0) {
+            const affectedUserIds = matchingDocs.map((doc) => doc?.userId).filter(Boolean);
+            if (affectedUserIds.length > 0) {
+                await notifyNotificationRealtime(req, affectedUserIds, 'NOTIFICATIONS_BULK_DELETED');
+            }
+        }
         res.status(200).json({ success: true, message: `${result.deletedCount ?? ids.length} notifications deleted successfully.` });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -326,8 +367,13 @@ export const markPopupShown = async (req, res) => {
             return res.status(403).json({ success: false, error: "Not authorized to modify this notification" });
         }
 
+        const wasUnshown = existing.popupShown !== true;
         existing.popupShown = true;
         await existing.save();
+
+        if (wasUnshown) {
+            await notifyNotificationRealtime(req, [existing.userId], 'NOTIFICATION_POPUP_SHOWN');
+        }
 
         const notifications = await Notification.find({ userId: req.user?.id }).sort({ date: -1 });
         res.status(200).json({ success: true, data: notifications });

@@ -13,7 +13,8 @@ import {
     createSocketAuthMiddleware,
     registerSocketConnection,
     emitRealtimeChange,
-    sanitizeRealtimePayload
+    sanitizeRealtimePayload,
+    revokeUserSockets
 } from './backend/utils/socketRealtime.js';
 
 const require = createRequire(import.meta.url);
@@ -352,6 +353,293 @@ async function runTests() {
             emitRealtimeChange(io, { scope: 'global', datasets: ['settings'], version: 400 });
             await wait(50);
             assert.equal(receivedAfterExpiry, false);
+        });
+
+        await test('D19. Fail-closed socket scope rejects missing or invalid scopes instead of broadcasting globally', async () => {
+            assert.equal(sanitizeRealtimePayload(undefined), null);
+            assert.equal(sanitizeRealtimePayload(null), null);
+            assert.equal(sanitizeRealtimePayload([]), null);
+            assert.equal(sanitizeRealtimePayload({ datasets: ['settings'], version: 1 }), null);
+            assert.equal(sanitizeRealtimePayload({ scope: 'everywhere', datasets: ['settings'], version: 1 }), null);
+            assert.equal(sanitizeRealtimePayload({ scope: '', datasets: ['settings'], version: 1 }), null);
+
+            const tokenA = jwt.sign({ id: 'user-a', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' });
+            const cA = await connectClient(baseUrl, { auth: { token: tokenA } });
+            assert.equal(cA.ok, true);
+
+            const received = [];
+            cA.socket.on('DATA_CHANGED', (p) => received.push(p));
+
+            assert.equal(emitRealtimeChange(io, { datasets: ['settings'], version: 901 }), false);
+            assert.equal(emitRealtimeChange(io, { scope: 'invalid_scope', datasets: ['settings'], version: 902 }), false);
+            await wait(60);
+            assert.equal(received.length, 0);
+
+            // Explicit global continues emitting cleanly
+            assert.equal(emitRealtimeChange(io, { scope: 'global', datasets: ['settings'], version: 903 }), true);
+            await wait(60);
+            assert.equal(received.length, 1);
+            assert.equal(received[0].scope, 'global');
+
+            cA.socket.disconnect();
+            await wait(30);
+        });
+
+        await test('B19. revokeUserSockets terminates blocked/deleted sessions and disconnects role-changed users cleanly', async () => {
+            const tokenA = jwt.sign({ id: 'user-a', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' });
+            const tokenB = jwt.sign({ id: 'user-b', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' });
+            const [cA, cB] = await Promise.all([
+                connectClient(baseUrl, { auth: { token: tokenA } }),
+                connectClient(baseUrl, { auth: { token: tokenB } })
+            ]);
+            assert.ok(cA.ok && cB.ok);
+
+            let expiredA = false;
+            let disconnectedA = false;
+            let expiredB = false;
+            let disconnectedB = false;
+            cA.socket.on('SESSION_EXPIRED', () => { expiredA = true; });
+            cA.socket.on('disconnect', () => { disconnectedA = true; });
+            cB.socket.on('SESSION_EXPIRED', () => { expiredB = true; });
+            cB.socket.on('disconnect', () => { disconnectedB = true; });
+
+            assert.equal(revokeUserSockets(io, 'user-a', { terminateSession: true, reason: 'account_restricted' }), true);
+            await wait(80);
+            assert.equal(expiredA, true);
+            assert.equal(disconnectedA, true);
+            assert.equal(expiredB, false);
+            assert.equal(disconnectedB, false);
+
+            // Non-terminating revocation (e.g. role change) disconnects without SESSION_EXPIRED
+            assert.equal(revokeUserSockets(io, 'user-b', { terminateSession: false, reason: 'privileges_changed' }), true);
+            await wait(80);
+            assert.equal(expiredB, false);
+            assert.equal(disconnectedB, true);
+        });
+
+        await test('B20. usersController updateUser, bulkUpdateRestrictions, deleteUser, and bulkDeleteUsers revoke affected sockets safely', async () => {
+            const usersCtrl = await import('./backend/controllers/usersController.js');
+            const UserMod = (await import('./backend/models/User.js')).default;
+            const SettingMod = (await import('./backend/models/Setting.js')).default;
+            const PlanMod = (await import('./backend/models/InvestmentPlan.js')).default;
+            const TxMod = (await import('./backend/models/Transaction.js')).default;
+            const NotifMod = (await import('./backend/models/Notification.js')).default;
+            const DepMod = (await import('./backend/models/Deposit.js')).default;
+            const WdMod = (await import('./backend/models/Withdrawal.js')).default;
+            const TrMod = (await import('./backend/models/Transfer.js')).default;
+
+            const orig = {
+                userFindById: UserMod.findById,
+                userFind: UserMod.find,
+                userFindByIdAndDelete: UserMod.findByIdAndDelete,
+                userDeleteMany: UserMod.deleteMany,
+                getSettings: SettingMod.getSettings,
+                planFind: PlanMod.find,
+                txFind: TxMod.find,
+                txDeleteMany: TxMod.deleteMany,
+                notifCreate: NotifMod.create,
+                notifDeleteMany: NotifMod.deleteMany,
+                depDeleteMany: DepMod.deleteMany,
+                wdDeleteMany: WdMod.deleteMany,
+                trDeleteMany: TrMod.deleteMany
+            };
+
+            const origUserA = { ...userStore.get('user-a') };
+            const origUserB = { ...userStore.get('user-b') };
+            const origDemoted = { ...userStore.get('demoted-1') };
+
+            const makeRes = () => {
+                const out = { status: 0, body: null };
+                return {
+                    out,
+                    status(s) { out.status = s; return this; },
+                    json(b) { out.body = b; return this; }
+                };
+            };
+
+            try {
+                // Start demoted-1 as admin in userStore for role demotion test
+                userStore.set('demoted-1', { _id: 'demoted-1', role: 'admin', status: 'Active', restrictions: { loginBlocked: false } });
+
+                SettingMod.getSettings = async () => ({});
+                PlanMod.find = async () => [];
+                TxMod.find = async () => [];
+                TxMod.deleteMany = async () => ({ deletedCount: 0 });
+                NotifMod.create = async () => ({});
+                NotifMod.deleteMany = async () => ({ deletedCount: 0 });
+                DepMod.deleteMany = async () => ({ deletedCount: 0 });
+                WdMod.deleteMany = async () => ({ deletedCount: 0 });
+                TrMod.deleteMany = async () => ({ deletedCount: 0 });
+
+                const mkDoc = (id) => {
+                    const data = userStore.get(id);
+                    if (!data) return null;
+                    const doc = {
+                        ...data,
+                        restrictions: { ...(data.restrictions || {}) },
+                        async save() {
+                            const updated = { ...this };
+                            delete updated.save;
+                            userStore.set(String(this._id), updated);
+                            return updated;
+                        }
+                    };
+                    return doc;
+                };
+
+                UserMod.findById = async (id) => mkDoc(String(id));
+                UserMod.findByIdAndDelete = async (id) => {
+                    userStore.delete(String(id));
+                    return { _id: id };
+                };
+
+                const mockApp = { get: (k) => (k === 'io' ? io : undefined) };
+
+                // 1) updateUser status -> Blocked terminates user-a without disconnecting user-b
+                const [cA1, cB1] = await Promise.all([
+                    connectClient(baseUrl, { auth: { token: jwt.sign({ id: 'user-a', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' }) } }),
+                    connectClient(baseUrl, { auth: { token: jwt.sign({ id: 'user-b', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' }) } })
+                ]);
+                assert.ok(cA1.ok && cB1.ok);
+
+                let a1Expired = false;
+                let a1Disconnected = false;
+                let b1Disconnected = false;
+                cA1.socket.on('SESSION_EXPIRED', () => { a1Expired = true; });
+                cA1.socket.on('disconnect', () => { a1Disconnected = true; });
+                cB1.socket.on('disconnect', () => { b1Disconnected = true; });
+
+                const rBlock = makeRes();
+                await usersCtrl.updateUser({
+                    params: { id: 'user-a' },
+                    user: { id: 'admin-1', role: 'admin' },
+                    body: { status: 'Blocked' },
+                    app: mockApp
+                }, rBlock);
+                assert.equal(rBlock.out.status, 200);
+                await wait(80);
+                assert.equal(a1Expired, true);
+                assert.equal(a1Disconnected, true);
+                assert.equal(b1Disconnected, false);
+
+                // Reconnect by blocked user-a is rejected at handshake
+                const blockedReconnect = await connectClient(baseUrl, {
+                    auth: { token: jwt.sign({ id: 'user-a', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' }) }
+                });
+                assert.equal(blockedReconnect.ok, false);
+                assert.match(blockedReconnect.error.message, /restricted or blocked/i);
+
+                // 2) updateUser role demotion disconnects without SESSION_EXPIRED; reconnect derives fresh DB role
+                const demotedJwt = jwt.sign({ id: 'demoted-1', role: 'admin' }, TEST_JWT_SECRET, { expiresIn: '1h' });
+                const cDem1 = await connectClient(baseUrl, { auth: { token: demotedJwt } });
+                assert.equal(cDem1.ok, true);
+                assert.equal(serverSockets.get('demoted-1')?.rooms.has('role:admin'), true);
+
+                let demExpired = false;
+                let demDisconnected = false;
+                cDem1.socket.on('SESSION_EXPIRED', () => { demExpired = true; });
+                cDem1.socket.on('disconnect', () => { demDisconnected = true; });
+
+                const rDemote = makeRes();
+                await usersCtrl.updateUser({
+                    params: { id: 'demoted-1' },
+                    user: { id: 'admin-1', role: 'super_admin' },
+                    body: { role: 'user' },
+                    app: mockApp
+                }, rDemote);
+                assert.equal(rDemote.out.status, 200);
+                await wait(80);
+                assert.equal(demExpired, false);
+                assert.equal(demDisconnected, true);
+
+                // Reconnect with same old admin JWT must derive fresh DB 'user' role and NOT join role:admin
+                const cDem2 = await connectClient(baseUrl, { auth: { token: demotedJwt } });
+                assert.equal(cDem2.ok, true);
+                assert.equal(serverSockets.get('demoted-1')?.user.role, 'user');
+                assert.equal(serverSockets.get('demoted-1')?.rooms.has('role:admin'), false);
+                cDem2.socket.disconnect();
+
+                // 3) bulkUpdateRestrictions revokes ONLY users whose loginBlocked changed
+                userStore.set('user-a', { ...origUserA }); // restore user-a Active
+                const cA3 = await connectClient(baseUrl, { auth: { token: jwt.sign({ id: 'user-a', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' }) } });
+                assert.equal(cA3.ok, true);
+                let a3Expired = false;
+                let a3Disconnected = false;
+                let b3Disconnected = false;
+                cA3.socket.on('SESSION_EXPIRED', () => { a3Expired = true; });
+                cA3.socket.on('disconnect', () => { a3Disconnected = true; });
+                cB1.socket.on('disconnect', () => { b3Disconnected = true; });
+
+                UserMod.find = async () => [mkDoc('user-a')];
+                const rBulkRest = makeRes();
+                await usersCtrl.bulkUpdateRestrictions({
+                    body: { targetType: 'single', targetIds: ['user-a'], restrictions: { loginBlocked: true }, action: 'enable' },
+                    app: mockApp
+                }, rBulkRest);
+                assert.equal(rBulkRest.out.status, 200);
+                await wait(80);
+                assert.equal(a3Expired, true);
+                assert.equal(a3Disconnected, true);
+                assert.equal(b3Disconnected, false);
+
+                // 4) deleteUser & bulkDeleteUsers revoke deleted users and do zero revocations on no-op delete
+                userStore.set('user-a', { ...origUserA });
+                const cA4 = await connectClient(baseUrl, { auth: { token: jwt.sign({ id: 'user-a', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' }) } });
+                assert.equal(cA4.ok, true);
+                let a4Expired = false;
+                let a4Disconnected = false;
+                cA4.socket.on('SESSION_EXPIRED', () => { a4Expired = true; });
+                cA4.socket.on('disconnect', () => { a4Disconnected = true; });
+
+                const rDel = makeRes();
+                await usersCtrl.deleteUser({ params: { id: 'user-a' }, app: mockApp }, rDel);
+                assert.equal(rDel.out.status, 200);
+                await wait(80);
+                assert.equal(a4Expired, true);
+                assert.equal(a4Disconnected, true);
+
+                // bulkDeleteUsers with deletedCount: 0 must leave user-b connected
+                let bBulkNoopDisconnected = false;
+                cB1.socket.on('disconnect', () => { bBulkNoopDisconnected = true; });
+                UserMod.find = () => ({ select: () => ({ lean: async () => [{ _id: 'non-existent' }] }) });
+                UserMod.deleteMany = async () => ({ deletedCount: 0 });
+                const rBulkZero = makeRes();
+                await usersCtrl.bulkDeleteUsers({ body: { ids: ['non-existent'] }, app: mockApp }, rBulkZero);
+                assert.equal(rBulkZero.out.status, 200);
+                await wait(60);
+                assert.equal(bBulkNoopDisconnected, false);
+
+                // bulkDeleteUsers deleting user-b revokes user-b
+                let bBulkExpired = false;
+                let bBulkDisconnected = false;
+                cB1.socket.on('SESSION_EXPIRED', () => { bBulkExpired = true; });
+                cB1.socket.on('disconnect', () => { bBulkDisconnected = true; });
+                UserMod.find = () => ({ select: () => ({ lean: async () => [{ _id: 'user-b' }] }) });
+                UserMod.deleteMany = async () => ({ deletedCount: 1 });
+                const rBulkHit = makeRes();
+                await usersCtrl.bulkDeleteUsers({ body: { ids: ['user-b'] }, app: mockApp }, rBulkHit);
+                assert.equal(rBulkHit.out.status, 200);
+                await wait(80);
+                assert.equal(bBulkExpired, true);
+                assert.equal(bBulkDisconnected, true);
+            } finally {
+                UserMod.findById = orig.userFindById;
+                UserMod.find = orig.userFind;
+                UserMod.findByIdAndDelete = orig.userFindByIdAndDelete;
+                UserMod.deleteMany = orig.userDeleteMany;
+                SettingMod.getSettings = orig.getSettings;
+                PlanMod.find = orig.planFind;
+                TxMod.find = orig.txFind;
+                TxMod.deleteMany = orig.txDeleteMany;
+                NotifMod.create = orig.notifCreate;
+                NotifMod.deleteMany = orig.notifDeleteMany;
+                DepMod.deleteMany = orig.depDeleteMany;
+                WdMod.deleteMany = orig.wdDeleteMany;
+                TrMod.deleteMany = orig.trDeleteMany;
+                userStore.set('user-a', origUserA);
+                userStore.set('user-b', origUserB);
+                userStore.set('demoted-1', origDemoted);
+            }
         });
     } finally {
         await new Promise((resolve) => io.close(resolve));
@@ -697,6 +985,374 @@ async function runTests() {
         assert.ok(prCtrl.includes("Setting.bumpVersion()") && prCtrl.includes("scope: 'admin'"));
         assert.ok(notifCtrl.includes("Setting.bumpVersion()") && notifCtrl.includes("NOTIFICATIONS_CREATED"));
         assert.ok(dispCtrl.includes("DISPUTE_CREATED") && dispCtrl.includes("DISPUTE_UPDATED"));
+    });
+
+    await test('A21. isDefinitiveSocketAuthRejection triggers only on definitive auth failures and ignores transient errors', () => {
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection({ message: 'any', data: { code: 'AUTH_INVALID_TOKEN' } }), true);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection({ message: 'any', data: { code: 'AUTH_MISSING_TOKEN' } }), true);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection({ message: 'any', data: { code: 'AUTH_USER_NOT_FOUND' } }), true);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection({ message: 'any', data: { code: 'AUTH_ACCOUNT_BLOCKED' } }), true);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection(new Error('Invalid or expired token')), true);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection(new Error('Account not found')), true);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection(new Error('Account restricted or blocked')), true);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection(new Error('Authentication required')), true);
+
+        // Transient network / server restart / Render sleep / config errors must NEVER log out
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection(new Error('websocket error')), false);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection(new Error('xhr poll error')), false);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection(new Error('timeout')), false);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection(new Error('Service Unavailable 503')), false);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection({ message: 'Authentication failed', data: { code: 'AUTH_ERROR' } }), false);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection({ message: 'Authentication service unavailable', data: { code: 'AUTH_CONFIG_ERROR' } }), false);
+        assert.equal(dcMod.isDefinitiveSocketAuthRejection(null), false);
+    });
+
+    await test('A22. invalidateSessionOnSocketAuthFailure logs out and redirects only active sessions on protected routes', () => {
+        const calls = [];
+        const dispatches = [];
+
+        // Active session on /member route -> clears state + redirects
+        const ranMember = dcMod.invalidateSessionOnSocketAuthFailure({
+            clearScheduler: () => calls.push('clearScheduler'),
+            disconnectSocket: () => calls.push('disconnectSocket'),
+            clearAllRetryTimers: () => calls.push('clearTimers'),
+            dispatch: (a) => dispatches.push(a),
+            isSessionActive: () => true,
+            getPathname: () => '/member/dashboard',
+            redirectToLogin: () => calls.push('redirect:/login')
+        });
+        assert.equal(ranMember, true);
+        assert.deepEqual(dispatches, [{ type: 'SET_CURRENT_USER', payload: { user: null } }]);
+        assert.deepEqual(calls, ['clearScheduler', 'disconnectSocket', 'clearTimers', 'redirect:/login']);
+
+        // Active session already on /login -> clears state without redirect loop
+        const callsLogin = [];
+        const dispatchesLogin = [];
+        const ranLogin = dcMod.invalidateSessionOnSocketAuthFailure({
+            clearScheduler: () => callsLogin.push('clearScheduler'),
+            disconnectSocket: () => callsLogin.push('disconnectSocket'),
+            clearAllRetryTimers: () => callsLogin.push('clearTimers'),
+            dispatch: (a) => dispatchesLogin.push(a),
+            isSessionActive: () => true,
+            getPathname: () => '/login',
+            redirectToLogin: () => callsLogin.push('redirect:/login')
+        });
+        assert.equal(ranLogin, true);
+        assert.equal(dispatchesLogin.length, 1);
+        assert.equal(callsLogin.includes('redirect:/login'), false);
+
+        // Stale session after account switch -> must NOT log out current account
+        const staleDispatches = [];
+        const ranStale = dcMod.invalidateSessionOnSocketAuthFailure({
+            clearScheduler: () => {},
+            disconnectSocket: () => {},
+            clearAllRetryTimers: () => {},
+            dispatch: (a) => staleDispatches.push(a),
+            isSessionActive: () => false,
+            getPathname: () => '/admin',
+            redirectToLogin: () => { throw new Error('Should not redirect stale session'); }
+        });
+        assert.equal(ranStale, false);
+        assert.equal(staleDispatches.length, 0);
+    });
+
+    await test('C23. notificationsController emits targeted user events only on actual mutation and never on no-ops or 403', async () => {
+        const notifCtrl = await import('./backend/controllers/notificationsController.js');
+        const NotificationMod = (await import('./backend/models/Notification.js')).default;
+        const SettingMod = (await import('./backend/models/Setting.js')).default;
+        const mongooseMod = (await import('mongoose')).default;
+
+        const origFind = NotificationMod.find;
+        const origFindById = NotificationMod.findById;
+        const origUpdateMany = NotificationMod.updateMany;
+        const origFindByIdAndUpdate = NotificationMod.findByIdAndUpdate;
+        const origFindByIdAndDelete = NotificationMod.findByIdAndDelete;
+        const origDeleteMany = NotificationMod.deleteMany;
+        const origBump = SettingMod.bumpVersion;
+        const origReadyStateDesc = Object.getOwnPropertyDescriptor(mongooseMod.connection, 'readyState');
+
+        const emitted = [];
+        let bumpCalls = 0;
+        const spyIo = {
+            to(firstRoom) {
+                const rooms = [firstRoom];
+                const builder = {
+                    to(nextRoom) { rooms.push(nextRoom); return builder; },
+                    emit(event, payload) { emitted.push({ rooms: [...rooms], event, payload }); }
+                };
+                return builder;
+            }
+        };
+        const makeRes = () => {
+            const out = { status: 0, body: null };
+            return { out, status(s) { out.status = s; return this; }, json(b) { out.body = b; return this; } };
+        };
+        const app = { get: (k) => (k === 'io' ? spyIo : undefined) };
+
+        try {
+            Object.defineProperty(mongooseMod.connection, 'readyState', { value: 1, configurable: true, writable: true });
+            SettingMod.bumpVersion = async () => { bumpCalls += 1; return 700 + bumpCalls; };
+            NotificationMod.find = () => ({ sort: async () => [] });
+
+            // 1. markAsRead: modifiedCount > 0 -> 1 bump, targeted user room only
+            NotificationMod.updateMany = async () => ({ modifiedCount: 2 });
+            const rReadOk = makeRes();
+            await notifCtrl.markAsRead({ params: { userId: 'u1' }, user: { id: 'u1', role: 'user' }, app }, rReadOk);
+            assert.equal(rReadOk.out.status, 200);
+            assert.equal(bumpCalls, 1);
+            assert.equal(emitted.length, 1);
+            assert.deepEqual(emitted[0].rooms, ['user:u1']);
+            assert.equal(emitted[0].payload.event, 'NOTIFICATIONS_MARKED_READ');
+
+            // 2. markAsRead: modifiedCount === 0 -> 0 bumps, 0 emits
+            NotificationMod.updateMany = async () => ({ modifiedCount: 0 });
+            const rReadNoop = makeRes();
+            await notifCtrl.markAsRead({ params: { userId: 'u1' }, user: { id: 'u1', role: 'user' }, app }, rReadNoop);
+            assert.equal(rReadNoop.out.status, 200);
+            assert.equal(bumpCalls, 1);
+            assert.equal(emitted.length, 1);
+
+            // 3. markAsRead: unauthorized 403 -> 0 bumps, 0 emits
+            const rRead403 = makeRes();
+            await notifCtrl.markAsRead({ params: { userId: 'u2' }, user: { id: 'u1', role: 'user' }, app }, rRead403);
+            assert.equal(rRead403.out.status, 403);
+            assert.equal(bumpCalls, 1);
+            assert.equal(emitted.length, 1);
+
+            // 4. updateNotification: unauthorized 403 vs authorized mutation vs empty body
+            NotificationMod.findById = async () => ({ _id: 'n1', userId: 'u2', popupShown: false });
+            const rUpd403 = makeRes();
+            await notifCtrl.updateNotification({ params: { id: 'n1' }, user: { id: 'u1', role: 'user' }, body: { read: true }, app }, rUpd403);
+            assert.equal(rUpd403.out.status, 403);
+            assert.equal(emitted.length, 1);
+
+            NotificationMod.findByIdAndUpdate = async () => ({ _id: 'n1', userId: 'u2', read: true });
+            const rUpdEmpty = makeRes();
+            await notifCtrl.updateNotification({ params: { id: 'n1' }, user: { id: 'admin1', role: 'admin' }, body: {}, app }, rUpdEmpty);
+            assert.equal(rUpdEmpty.out.status, 200);
+            assert.equal(emitted.length, 1);
+
+            const rUpdOk = makeRes();
+            await notifCtrl.updateNotification({ params: { id: 'n1' }, user: { id: 'u2', role: 'user' }, body: { read: true }, app }, rUpdOk);
+            assert.equal(rUpdOk.out.status, 200);
+            assert.equal(bumpCalls, 2);
+            assert.equal(emitted.length, 2);
+            assert.deepEqual(emitted[1].rooms, ['user:u2']);
+            assert.equal(emitted[1].payload.event, 'NOTIFICATION_UPDATED');
+
+            // 5. deleteNotification
+            NotificationMod.findByIdAndDelete = async () => ({ _id: 'n1', userId: 'u2' });
+            const rDelOk = makeRes();
+            await notifCtrl.deleteNotification({ params: { id: 'n1' }, user: { id: 'u2', role: 'user' }, app }, rDelOk);
+            assert.equal(rDelOk.out.status, 200);
+            assert.equal(bumpCalls, 3);
+            assert.equal(emitted.length, 3);
+            assert.equal(emitted[2].payload.event, 'NOTIFICATION_DELETED');
+
+            // 6. bulkDeleteNotifications -> single batched emit for multiple users, 0 emits if deletedCount === 0
+            NotificationMod.find = () => ({ select: () => ({ lean: async () => [{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u1' }] }) });
+            NotificationMod.deleteMany = async () => ({ deletedCount: 3 });
+            const rBulkDelOk = makeRes();
+            await notifCtrl.bulkDeleteNotifications({ body: { ids: ['n1', 'n2', 'n3'] }, user: { id: 'admin1', role: 'admin' }, app }, rBulkDelOk);
+            assert.equal(rBulkDelOk.out.status, 200);
+            assert.equal(bumpCalls, 4);
+            assert.equal(emitted.length, 4);
+            assert.deepEqual(emitted[3].rooms.sort(), ['user:u1', 'user:u2']);
+            assert.equal(emitted[3].payload.event, 'NOTIFICATIONS_BULK_DELETED');
+
+            NotificationMod.deleteMany = async () => ({ deletedCount: 0 });
+            const rBulkDelZero = makeRes();
+            await notifCtrl.bulkDeleteNotifications({ body: { ids: ['n999'] }, user: { id: 'admin1', role: 'admin' }, app }, rBulkDelZero);
+            assert.equal(rBulkDelZero.out.status, 200);
+            assert.equal(bumpCalls, 4);
+            assert.equal(emitted.length, 4);
+
+            // 7. markPopupShown -> emits only on transition false -> true, not duplicate true -> true
+            NotificationMod.find = () => ({ sort: async () => [] });
+            const popupDoc = { _id: 'p1', userId: 'u1', popupShown: false, async save() { return this; } };
+            NotificationMod.findById = async () => popupDoc;
+            const rPopup1 = makeRes();
+            await notifCtrl.markPopupShown({ params: { id: 'p1' }, user: { id: 'u1', role: 'user' }, app }, rPopup1);
+            assert.equal(rPopup1.out.status, 200);
+            assert.equal(bumpCalls, 5);
+            assert.equal(emitted.length, 5);
+            assert.equal(emitted[4].payload.event, 'NOTIFICATION_POPUP_SHOWN');
+
+            const rPopup2 = makeRes();
+            await notifCtrl.markPopupShown({ params: { id: 'p1' }, user: { id: 'u1', role: 'user' }, app }, rPopup2);
+            assert.equal(rPopup2.out.status, 200);
+            assert.equal(bumpCalls, 5);
+            assert.equal(emitted.length, 5);
+        } finally {
+            NotificationMod.find = origFind;
+            NotificationMod.findById = origFindById;
+            NotificationMod.updateMany = origUpdateMany;
+            NotificationMod.findByIdAndUpdate = origFindByIdAndUpdate;
+            NotificationMod.findByIdAndDelete = origFindByIdAndDelete;
+            NotificationMod.deleteMany = origDeleteMany;
+            SettingMod.bumpVersion = origBump;
+            if (origReadyStateDesc) {
+                Object.defineProperty(mongooseMod.connection, 'readyState', origReadyStateDesc);
+            } else {
+                delete mongooseMod.connection.readyState;
+            }
+        }
+    });
+
+    await test('E24. Setting.bumpVersion failures never abort primary mutations across all 5 controllers', async () => {
+        const pmCtrl = await import('./backend/controllers/paymentMethodsController.js');
+        const prCtrl = await import('./backend/controllers/passwordResetRequestsController.js');
+        const dispCtrl = await import('./backend/controllers/disputesController.js');
+        const notifCtrl = await import('./backend/controllers/notificationsController.js');
+        const usersCtrl = await import('./backend/controllers/usersController.js');
+
+        const PaymentMethodMod = (await import('./backend/models/PaymentMethod.js')).default;
+        const PasswordResetMod = (await import('./backend/models/PasswordResetRequest.js')).default;
+        const DisputeMod = (await import('./backend/models/Dispute.js')).default;
+        const NotificationMod = (await import('./backend/models/Notification.js')).default;
+        const UserMod = (await import('./backend/models/User.js')).default;
+        const SettingMod = (await import('./backend/models/Setting.js')).default;
+        const mongooseMod = (await import('mongoose')).default;
+
+        const orig = {
+            pmCreate: PaymentMethodMod.create,
+            pmUpdate: PaymentMethodMod.findByIdAndUpdate,
+            prUpdate: PasswordResetMod.findByIdAndUpdate,
+            prDelete: PasswordResetMod.findByIdAndDelete,
+            prCreate: PasswordResetMod.create,
+            dispCreate: DisputeMod.create,
+            dispFindById: DisputeMod.findById,
+            dispUpdate: DisputeMod.findByIdAndUpdate,
+            notifCreate: NotificationMod.create,
+            notifInsertMany: NotificationMod.insertMany,
+            notifUpdateMany: NotificationMod.updateMany,
+            notifFind: NotificationMod.find,
+            userFindById: UserMod.findById,
+            userFindOne: UserMod.findOne,
+            userFind: UserMod.find,
+            bumpVersion: SettingMod.bumpVersion,
+            consoleError: console.error,
+            readyStateDesc: Object.getOwnPropertyDescriptor(mongooseMod.connection, 'readyState')
+        };
+
+        const loggedErrors = [];
+        const makeRes = () => {
+            const out = { status: 0, body: null };
+            return { out, status(s) { out.status = s; return this; }, json(b) { out.body = b; return this; } };
+        };
+        const app = { get: () => null };
+
+        try {
+            Object.defineProperty(mongooseMod.connection, 'readyState', { value: 1, configurable: true, writable: true });
+            SettingMod.bumpVersion = async () => { throw new Error('Simulated version store outage'); };
+            console.error = (...args) => { loggedErrors.push(args.map((a) => String(a?.message || a)).join(' ')); };
+
+            // 1. paymentMethodsController
+            PaymentMethodMod.create = async (d) => ({ _id: 'pm1', ...d });
+            PaymentMethodMod.findByIdAndUpdate = async (_id, d) => ({ _id: 'pm1', ...d });
+            const rPmCreate = makeRes();
+            await pmCtrl.createPaymentMethod({ body: { name: 'Bank', currency: 'USD', type: 'Deposit' }, app }, rPmCreate);
+            assert.equal(rPmCreate.out.status, 201);
+            assert.equal(rPmCreate.out.body.success, true);
+
+            const rPmUpd = makeRes();
+            await pmCtrl.updatePaymentMethod({ params: { id: 'pm1' }, body: { status: 'Disabled' }, app }, rPmUpd);
+            assert.equal(rPmUpd.out.status, 200);
+            assert.equal(rPmUpd.out.body.success, true);
+
+            // 2. passwordResetRequestsController
+            PasswordResetMod.findByIdAndUpdate = async () => ({ _id: 'pr1', status: 'Handled' });
+            PasswordResetMod.findByIdAndDelete = async () => ({ _id: 'pr1' });
+            const rPrUpd = makeRes();
+            await prCtrl.updatePasswordResetRequest({ params: { id: 'pr1' }, body: { status: 'Handled' }, app }, rPrUpd);
+            assert.equal(rPrUpd.out.status, 200);
+            assert.equal(rPrUpd.out.body.success, true);
+
+            const rPrDel = makeRes();
+            await prCtrl.deletePasswordResetRequest({ params: { id: 'pr1' }, app }, rPrDel);
+            assert.equal(rPrDel.out.status, 200);
+            assert.equal(rPrDel.out.body.success, true);
+
+            // 3. disputesController
+            UserMod.findById = async (id) => ({ _id: id, username: 'member1', status: 'Active', restrictions: {} });
+            UserMod.find = () => ({ select: async () => [] });
+            NotificationMod.create = async () => ({ _id: 'n1' });
+            DisputeMod.create = async (d) => ({ _id: 'd1', ...d });
+            DisputeMod.findById = async () => ({ _id: 'd1', userId: 'u1', creatorId: 'u1', messages: [], adminUnread: false, userUnread: false, async save() { return this; } });
+            DisputeMod.findByIdAndUpdate = async () => ({ _id: 'd1', userId: 'u1', creatorId: 'u1', adminUnread: false });
+
+            const rDispCreate = makeRes();
+            await dispCtrl.createDispute({ user: { id: 'u1', role: 'user' }, body: { type: 'Other', description: 'Issue' }, app }, rDispCreate);
+            assert.equal(rDispCreate.out.status, 201);
+            assert.equal(rDispCreate.out.body.success, true);
+
+            const rDispUpd = makeRes();
+            await dispCtrl.updateDispute({ params: { id: 'd1' }, user: { id: 'u1', role: 'user' }, body: { newMessage: 'Follow up' }, app }, rDispUpd);
+            assert.equal(rDispUpd.out.status, 200);
+            assert.equal(rDispUpd.out.body.success, true);
+
+            const rDispRead = makeRes();
+            await dispCtrl.markAsRead({ params: { id: 'd1' }, user: { id: 'u1', role: 'user' }, body: {}, app }, rDispRead);
+            assert.equal(rDispRead.out.status, 200);
+            assert.equal(rDispRead.out.body.success, true);
+
+            // 4. notificationsController
+            NotificationMod.insertMany = async (docs) => docs.map((d, idx) => ({ _id: `n${idx}`, ...d }));
+            NotificationMod.updateMany = async () => ({ modifiedCount: 1 });
+            NotificationMod.find = () => ({ sort: async () => [] });
+
+            const rNotifCreate = makeRes();
+            await notifCtrl.createNotification({ body: { userId: 'u1', message: 'Hello', subject: 'Hi' }, app }, rNotifCreate);
+            assert.equal(rNotifCreate.out.status, 201);
+            assert.equal(rNotifCreate.out.body.success, true);
+
+            const rNotifRead = makeRes();
+            await notifCtrl.markAsRead({ params: { userId: 'u1' }, user: { id: 'u1', role: 'user' }, app }, rNotifRead);
+            assert.equal(rNotifRead.out.status, 200);
+            assert.equal(rNotifRead.out.body.success, true);
+
+            // 5. usersController password reset handlers
+            const mockUserDoc = { _id: 'u1', email: 'u1@example.com', username: 'member1', async save() { return this; } };
+            UserMod.findOne = async () => mockUserDoc;
+            UserMod.findById = async () => mockUserDoc;
+            UserMod.find = async () => [];
+            PasswordResetMod.create = async () => ({ _id: 'pr1', async save() { return this; } });
+
+            const rResetReq = makeRes();
+            await usersCtrl.userRequestPasswordReset({ body: { email: 'u1@example.com' }, get: () => 'localhost', app }, rResetReq);
+            assert.equal(rResetReq.out.status, 200);
+            assert.equal(rResetReq.out.body.success, true);
+
+            const rAdminReset = makeRes();
+            await usersCtrl.adminInitiatePasswordReset({ params: { id: 'u1' }, get: () => 'localhost', app }, rAdminReset);
+            assert.equal(rAdminReset.out.status, 200);
+            assert.equal(rAdminReset.out.body.success, true);
+
+            assert.ok(loggedErrors.some((msg) => msg.includes('Simulated version store outage')));
+        } finally {
+            PaymentMethodMod.create = orig.pmCreate;
+            PaymentMethodMod.findByIdAndUpdate = orig.pmUpdate;
+            PasswordResetMod.findByIdAndUpdate = orig.prUpdate;
+            PasswordResetMod.findByIdAndDelete = orig.prDelete;
+            PasswordResetMod.create = orig.prCreate;
+            DisputeMod.create = orig.dispCreate;
+            DisputeMod.findById = orig.dispFindById;
+            DisputeMod.findByIdAndUpdate = orig.dispUpdate;
+            NotificationMod.create = orig.notifCreate;
+            NotificationMod.insertMany = orig.notifInsertMany;
+            NotificationMod.updateMany = orig.notifUpdateMany;
+            NotificationMod.find = orig.notifFind;
+            UserMod.findById = orig.userFindById;
+            UserMod.findOne = orig.userFindOne;
+            UserMod.find = orig.userFind;
+            SettingMod.bumpVersion = orig.bumpVersion;
+            console.error = orig.consoleError;
+            if (orig.readyStateDesc) {
+                Object.defineProperty(mongooseMod.connection, 'readyState', orig.readyStateDesc);
+            } else {
+                delete mongooseMod.connection.readyState;
+            }
+        }
     });
 
     console.log(`\nALL ${passed} PHASE 3 REALTIME & SECURITY TESTS PASSED.`);

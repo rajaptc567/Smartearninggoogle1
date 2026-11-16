@@ -242,16 +242,20 @@ export const createPaymentMethod = async (req, res) => {
 
         const method = await PaymentMethod.create(methodData);
         
-        // Update version for real-time sync and notify connected clients
-        const version = await Setting.bumpVersion();
-        const io = req.app.get('io');
-        if (io) {
-            emitRealtimeChange(io, {
-                scope: 'global',
-                datasets: ['paymentMethods'],
-                version,
-                event: 'PAYMENT_METHODS_UPDATED'
-            });
+        // Update version for real-time sync and notify connected clients (non-critical secondary side effect)
+        try {
+            const version = await Setting.bumpVersion();
+            const io = req.app.get('io');
+            if (io) {
+                emitRealtimeChange(io, {
+                    scope: 'global',
+                    datasets: ['paymentMethods'],
+                    version,
+                    event: 'PAYMENT_METHODS_UPDATED'
+                });
+            }
+        } catch (syncErr) {
+            console.error('Non-critical payment method realtime/version update failed:', syncErr);
         }
         
         res.status(201).json({ success: true, data: method });
@@ -346,16 +350,20 @@ export const updatePaymentMethod = async (req, res) => {
         const method = await PaymentMethod.findByIdAndUpdate(req.params.id, methodData, { new: true, runValidators: true });
         if (!method) return res.status(404).json({ success: false, error: 'Payment method not found' });
         
-        // Update version for real-time sync and notify connected clients
-        const version = await Setting.bumpVersion();
-        const io = req.app.get('io');
-        if (io) {
-            emitRealtimeChange(io, {
-                scope: 'global',
-                datasets: ['paymentMethods'],
-                version,
-                event: 'PAYMENT_METHODS_UPDATED'
-            });
+        // Update version for real-time sync and notify connected clients (non-critical secondary side effect)
+        try {
+            const version = await Setting.bumpVersion();
+            const io = req.app.get('io');
+            if (io) {
+                emitRealtimeChange(io, {
+                    scope: 'global',
+                    datasets: ['paymentMethods'],
+                    version,
+                    event: 'PAYMENT_METHODS_UPDATED'
+                });
+            }
+        } catch (syncErr) {
+            console.error('Non-critical payment method realtime/version update failed:', syncErr);
         }
         
         res.status(200).json({ success: true, data: method });
@@ -369,16 +377,20 @@ export const deletePaymentMethod = async (req, res) => {
         const method = await PaymentMethod.findByIdAndDelete(req.params.id);
         if (!method) return res.status(404).json({ success: false, error: 'Payment method not found' });
         
-        // Update version for real-time sync and notify connected clients
-        const version = await Setting.bumpVersion();
-        const io = req.app.get('io');
-        if (io) {
-            emitRealtimeChange(io, {
-                scope: 'global',
-                datasets: ['paymentMethods'],
-                version,
-                event: 'PAYMENT_METHODS_UPDATED'
-            });
+        // Update version for real-time sync and notify connected clients (non-critical secondary side effect)
+        try {
+            const version = await Setting.bumpVersion();
+            const io = req.app.get('io');
+            if (io) {
+                emitRealtimeChange(io, {
+                    scope: 'global',
+                    datasets: ['paymentMethods'],
+                    version,
+                    event: 'PAYMENT_METHODS_UPDATED'
+                });
+            }
+        } catch (syncErr) {
+            console.error('Non-critical payment method realtime/version update failed:', syncErr);
         }
         
         res.status(200).json({ success: true, data: {} });

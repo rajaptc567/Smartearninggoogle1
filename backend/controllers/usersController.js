@@ -13,7 +13,7 @@ import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import { emitRealtimeChange } from '../utils/socketRealtime.js';
+import { emitRealtimeChange, revokeUserSockets } from '../utils/socketRealtime.js';
 
 const escapeHtml = (str) => {
     if (typeof str !== 'string') return '';
@@ -775,6 +775,11 @@ export const updateUser = async (req, res) => {
             }
         }
 
+        // Capture pre-update privilege/access fields before mutating document
+        const prevRole = userToUpdate.role ? String(userToUpdate.role).trim().toLowerCase() : 'user';
+        const prevStatus = userToUpdate.status || 'Active';
+        const prevLoginBlocked = Boolean(userToUpdate.restrictions?.loginBlocked);
+
         // Apply filtered updates instead of raw req.body
         Object.assign(userToUpdate, filteredUpdate);
         let updatedUser = await userToUpdate.save();
@@ -796,6 +801,21 @@ export const updateUser = async (req, res) => {
             const unlockVars = { amount: releasedAmount.toFixed(2), currency: updatedUser.currency || 'USD' };
             sendTemplateNotification({ userId: updatedUser._id, templateKey: 'commission_unlocked_email', variables: unlockVars });
             sendTemplateNotification({ userId: updatedUser._id, templateKey: 'commission_unlocked_whatsapp', variables: unlockVars });
+        }
+
+        const nextRole = updatedUser.role ? String(updatedUser.role).trim().toLowerCase() : 'user';
+        const nextStatus = updatedUser.status || 'Active';
+        const nextLoginBlocked = Boolean(updatedUser.restrictions?.loginBlocked);
+        const isSessionTerminated = nextStatus === 'Blocked' || nextStatus === 'Banned' || nextLoginBlocked;
+        if (nextRole !== prevRole || nextStatus !== prevStatus || nextLoginBlocked !== prevLoginBlocked) {
+            try {
+                revokeUserSockets(req.app?.get('io'), updatedUser._id, {
+                    terminateSession: isSessionTerminated,
+                    reason: isSessionTerminated ? 'account_restricted' : 'privileges_changed'
+                });
+            } catch (socketRevokeErr) {
+                console.error('Failed to revoke user sockets after account update:', socketRevokeErr?.message || socketRevokeErr);
+            }
         }
         res.status(200).json({ success: true, data: updatedUser });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -922,8 +942,10 @@ export const bulkUpdateRestrictions = async (req, res) => {
         const usersToUpdate = await User.find(query);
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
+        const revokedUsers = [];
         for (const user of usersToUpdate) {
             let cur = user.restrictions || { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, loginBlocked: false, purchaseBlocked: false };
+            const prevLoginBlocked = Boolean(cur.loginBlocked);
             let changed = false; let checkRel = false;
             for (const key of Object.keys(restrictions)) {
                 if (restrictions[key]) { 
@@ -940,6 +962,23 @@ export const bulkUpdateRestrictions = async (req, res) => {
                     if (rel > 0) { user.walletBalance = Number((user.walletBalance + rel).toFixed(2)); await Notification.create({ userId: user._id, subject: 'Commission Unlocked 🔓', message: `Released ${user.currency}${rel.toFixed(2)}.` }); }
                 }
                 await user.save();
+                const nextLoginBlocked = Boolean(cur.loginBlocked);
+                if (nextLoginBlocked !== prevLoginBlocked) {
+                    revokedUsers.push({ userId: String(user._id), loginBlocked: nextLoginBlocked });
+                }
+            }
+        }
+        if (revokedUsers.length > 0) {
+            try {
+                const io = req.app?.get('io');
+                for (const item of revokedUsers) {
+                    revokeUserSockets(io, item.userId, {
+                        terminateSession: item.loginBlocked,
+                        reason: item.loginBlocked ? 'login_blocked' : 'restrictions_updated'
+                    });
+                }
+            } catch (socketRevokeErr) {
+                console.error('Failed to revoke user sockets after bulk restriction update:', socketRevokeErr?.message || socketRevokeErr);
             }
         }
         res.status(200).json({ success: true, message: `Bulk updated users.` });
@@ -949,12 +988,29 @@ export const bulkUpdateRestrictions = async (req, res) => {
 export const bulkDeleteUsers = async (req, res) => {
     try {
         const { ids } = req.body;
+        const targetIds = Array.isArray(ids) ? ids.map((id) => String(id)).filter(Boolean) : [];
+        const existingTargets = targetIds.length > 0
+            ? await User.find({ _id: { $in: targetIds } }).select('_id').lean()
+            : [];
         await Deposit.deleteMany({ userId: { $in: ids } });
         await Withdrawal.deleteMany({ userId: { $in: ids } });
         await Transaction.deleteMany({ userId: { $in: ids } });
         await Notification.deleteMany({ userId: { $in: ids } });
         await Transfer.deleteMany({ $or: [{ senderId: { $in: ids } }, { recipientId: { $in: ids } }] });
-        await User.deleteMany({ _id: { $in: ids } });
+        const deleteResult = await User.deleteMany({ _id: { $in: ids } });
+        if ((deleteResult?.deletedCount || 0) > 0 && existingTargets.length > 0) {
+            try {
+                const io = req.app?.get('io');
+                for (const target of existingTargets) {
+                    revokeUserSockets(io, target._id, {
+                        terminateSession: true,
+                        reason: 'account_deleted'
+                    });
+                }
+            } catch (socketRevokeErr) {
+                console.error('Failed to revoke user sockets after bulk deletion:', socketRevokeErr?.message || socketRevokeErr);
+            }
+        }
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -963,11 +1019,20 @@ export const deleteUser = async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: `User not found` });
+        const deletedUserId = String(user._id);
         await Deposit.deleteMany({ userId: user._id });
         await Withdrawal.deleteMany({ userId: user._id });
         await Transaction.deleteMany({ userId: user._id });
         await Notification.deleteMany({ userId: user._id });
         await User.findByIdAndDelete(req.params.id);
+        try {
+            revokeUserSockets(req.app?.get('io'), deletedUserId, {
+                terminateSession: true,
+                reason: 'account_deleted'
+            });
+        } catch (socketRevokeErr) {
+            console.error('Failed to revoke user sockets after user deletion:', socketRevokeErr?.message || socketRevokeErr);
+        }
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -1061,16 +1126,20 @@ export const userRequestPasswordReset = async (req, res) => {
                 console.error('Failed to dispatch password reset admin notifications:', notifErr);
             }
 
-            let resetVersion1;
-            if (mongoose.connection?.readyState === 1) {
-                resetVersion1 = await Setting.bumpVersion();
+            try {
+                let resetVersion1;
+                if (mongoose.connection?.readyState === 1) {
+                    resetVersion1 = await Setting.bumpVersion();
+                }
+                emitRealtimeChange(req.app?.get('io'), {
+                    scope: 'admin',
+                    datasets: ['passwordResetRequests', 'notifications'],
+                    version: resetVersion1,
+                    event: 'PASSWORD_RESET_REQUESTED'
+                });
+            } catch (rtErr) {
+                console.error('Failed to broadcast password reset request creation:', rtErr?.message || rtErr);
             }
-            emitRealtimeChange(req.app.get('io'), {
-                scope: 'admin',
-                datasets: ['passwordResetRequests', 'notifications'],
-                version: resetVersion1,
-                event: 'PASSWORD_RESET_REQUESTED'
-            });
             
             // Automatic Password Reset handling wrapped in localized try-catch so it won't crash DB writes
             try {
@@ -1118,16 +1187,20 @@ export const userRequestPasswordReset = async (req, res) => {
             } catch (autoErr) {
                 console.error('Automation failed during userRequestPasswordReset:', autoErr);
             }
-            let resetVersion2;
-            if (mongoose.connection?.readyState === 1) {
-                resetVersion2 = await Setting.bumpVersion();
+            try {
+                let resetVersion2;
+                if (mongoose.connection?.readyState === 1) {
+                    resetVersion2 = await Setting.bumpVersion();
+                }
+                emitRealtimeChange(req.app?.get('io'), {
+                    scope: 'admin',
+                    datasets: ['passwordResetRequests'],
+                    version: resetVersion2,
+                    event: 'PASSWORD_RESET_REQUESTS_UPDATED'
+                });
+            } catch (rtErr) {
+                console.error('Failed to broadcast password reset request update:', rtErr?.message || rtErr);
             }
-            emitRealtimeChange(req.app.get('io'), {
-                scope: 'admin',
-                datasets: ['passwordResetRequests'],
-                version: resetVersion2,
-                event: 'PASSWORD_RESET_REQUESTS_UPDATED'
-            });
         } else {
             console.warn(`userRequestPasswordReset: No registered user found for email "${emailInput}"`);
         }
@@ -1149,16 +1222,20 @@ export const adminInitiatePasswordReset = async (req, res) => {
         user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
         await user.save();
 
-        let resetVersion3;
-        if (mongoose.connection?.readyState === 1) {
-            resetVersion3 = await Setting.bumpVersion();
+        try {
+            let resetVersion3;
+            if (mongoose.connection?.readyState === 1) {
+                resetVersion3 = await Setting.bumpVersion();
+            }
+            emitRealtimeChange(req.app?.get('io'), {
+                scope: 'admin',
+                datasets: ['passwordResetRequests'],
+                version: resetVersion3,
+                event: 'PASSWORD_RESET_REQUESTS_UPDATED'
+            });
+        } catch (rtErr) {
+            console.error('Failed to broadcast admin password reset initiation:', rtErr?.message || rtErr);
         }
-        emitRealtimeChange(req.app.get('io'), {
-            scope: 'admin',
-            datasets: ['passwordResetRequests'],
-            version: resetVersion3,
-            event: 'PASSWORD_RESET_REQUESTS_UPDATED'
-        });
 
         // Also trigger automatic send via templates, wrapped in localized try-catch so it won't crash DB write
         try {

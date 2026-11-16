@@ -1261,6 +1261,66 @@ export const createRealtimeEventScheduler = ({
     };
 };
 
+const DEFINITIVE_SOCKET_AUTH_CODES = new Set([
+    'AUTH_MISSING_TOKEN',
+    'AUTH_INVALID_TOKEN',
+    'AUTH_USER_NOT_FOUND',
+    'AUTH_ACCOUNT_BLOCKED'
+]);
+
+export const isDefinitiveSocketAuthRejection = (error: unknown): boolean => {
+    if (!error || typeof error !== 'object') return false;
+    const anyErr = error as { message?: unknown; data?: { code?: unknown } };
+    const code = typeof anyErr.data?.code === 'string' ? anyErr.data.code.trim() : '';
+    if (DEFINITIVE_SOCKET_AUTH_CODES.has(code)) {
+        return true;
+    }
+    const msg = typeof anyErr.message === 'string' ? anyErr.message.trim() : '';
+    if (!msg) return false;
+    return /^(?:authentication required|invalid or expired token|account restricted or blocked|account not found)$/i.test(msg);
+};
+
+export interface SocketSessionInvalidationOptions {
+    clearScheduler: () => void;
+    disconnectSocket: () => void;
+    clearAllRetryTimers: () => void;
+    dispatch: React.Dispatch<Action>;
+    isSessionActive: () => boolean;
+    getPathname?: () => string;
+    redirectToLogin?: () => void;
+}
+
+export const invalidateSessionOnSocketAuthFailure = ({
+    clearScheduler,
+    disconnectSocket,
+    clearAllRetryTimers,
+    dispatch,
+    isSessionActive,
+    getPathname = () => (typeof window !== 'undefined' && window.location ? window.location.pathname : ''),
+    redirectToLogin = () => {
+        if (typeof window !== 'undefined' && window.location) {
+            window.location.href = '/login';
+        }
+    }
+}: SocketSessionInvalidationOptions): boolean => {
+    clearScheduler();
+    disconnectSocket();
+
+    if (!isSessionActive()) {
+        return false;
+    }
+
+    clearAllRetryTimers();
+    dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
+
+    const pathname = getPathname();
+    if (pathname.startsWith('/member') || pathname.startsWith('/admin')) {
+        redirectToLogin();
+    }
+
+    return true;
+};
+
 interface DataProviderProps {
   children: ReactNode;
 }
@@ -1485,6 +1545,14 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         let hasConnectedOnce = false;
         let sawDisconnect = false;
+        let didInvalidateSession = false;
+        let isCleaningUp = false;
+
+        const isCurrentSocketSession = () => (
+            isMountedRef.current &&
+            syncSessionEpochRef.current === effectSessionEpoch &&
+            activeUserIdRef.current === effectUserId
+        );
 
         // Connect with automatic reconnection controls optimized for Render free tier sleep cycles
         const socket = io(socketUrl, {
@@ -1505,14 +1573,31 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             hasConnectedOnce = true;
         });
 
-        socket.on('disconnect', () => {
+        socket.on('disconnect', (reason?: string) => {
             sawDisconnect = true;
             scheduler.clear();
+            if (
+                reason === 'io server disconnect' &&
+                !isCleaningUp &&
+                !didInvalidateSession &&
+                isCurrentSocketSession() &&
+                typeof localStorage !== 'undefined' &&
+                Boolean(localStorage.getItem('authToken'))
+            ) {
+                socket.connect();
+            }
         });
 
         socket.on('SESSION_EXPIRED', () => {
-            scheduler.clear();
-            socket.disconnect();
+            if (didInvalidateSession) return;
+            didInvalidateSession = true;
+            invalidateSessionOnSocketAuthFailure({
+                clearScheduler: () => scheduler.clear(),
+                disconnectSocket: () => socket.disconnect(),
+                clearAllRetryTimers,
+                dispatch,
+                isSessionActive: isCurrentSocketSession
+            });
         });
 
         // Listen for the master real-time trigger event (selective when validated, full-sync fallback otherwise)
@@ -1523,10 +1608,16 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         socket.on('connect_error', (error) => {
             console.warn("Connection difficulty detected. Socket-client will auto-retry.", error.message);
-            const msg = String(error?.message || '');
-            if (/authentication required|invalid or expired token|account restricted|account not found/i.test(msg)) {
-                scheduler.clear();
-                socket.disconnect();
+            if (isDefinitiveSocketAuthRejection(error)) {
+                if (didInvalidateSession) return;
+                didInvalidateSession = true;
+                invalidateSessionOnSocketAuthFailure({
+                    clearScheduler: () => scheduler.clear(),
+                    disconnectSocket: () => socket.disconnect(),
+                    clearAllRetryTimers,
+                    dispatch,
+                    isSessionActive: isCurrentSocketSession
+                });
             }
         });
 
@@ -1549,6 +1640,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         return () => {
             console.log('Cleaning up active socket connection and focus listeners...');
+            isCleaningUp = true;
             scheduler.clear();
             socket.disconnect();
             window.removeEventListener('focus', handleTabReturn);

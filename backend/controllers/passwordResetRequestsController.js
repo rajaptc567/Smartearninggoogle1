@@ -44,16 +44,20 @@ export const updatePasswordResetRequest = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Request not found' });
         }
         
-        let version;
-        if (mongoose.connection?.readyState === 1) {
-            version = await Setting.bumpVersion();
+        try {
+            let version;
+            if (mongoose.connection?.readyState === 1) {
+                version = await Setting.bumpVersion();
+            }
+            emitRealtimeChange(req.app.get('io'), {
+                scope: 'admin',
+                datasets: ['passwordResetRequests'],
+                version,
+                event: 'PASSWORD_RESET_REQUESTS_UPDATED'
+            });
+        } catch (syncErr) {
+            console.error('Non-critical password reset request realtime/version update failed:', syncErr);
         }
-        emitRealtimeChange(req.app.get('io'), {
-            scope: 'admin',
-            datasets: ['passwordResetRequests'],
-            version,
-            event: 'PASSWORD_RESET_REQUESTS_UPDATED'
-        });
         res.status(200).json({ success: true, data: request });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -68,16 +72,20 @@ export const deletePasswordResetRequest = async (req, res) => {
         if (!request) {
             return res.status(404).json({ success: false, error: 'Request not found' });
         }
-        let version;
-        if (mongoose.connection?.readyState === 1) {
-            version = await Setting.bumpVersion();
+        try {
+            let version;
+            if (mongoose.connection?.readyState === 1) {
+                version = await Setting.bumpVersion();
+            }
+            emitRealtimeChange(req.app.get('io'), {
+                scope: 'admin',
+                datasets: ['passwordResetRequests'],
+                version,
+                event: 'PASSWORD_RESET_REQUESTS_UPDATED'
+            });
+        } catch (syncErr) {
+            console.error('Non-critical password reset request realtime/version update failed:', syncErr);
         }
-        emitRealtimeChange(req.app.get('io'), {
-            scope: 'admin',
-            datasets: ['passwordResetRequests'],
-            version,
-            event: 'PASSWORD_RESET_REQUESTS_UPDATED'
-        });
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

@@ -169,7 +169,15 @@ export const registerSocketConnection = (socket) => {
 };
 
 export const sanitizeRealtimePayload = (options = {}) => {
-    const scope = ALLOWED_SCOPES.has(options.scope) ? options.scope : 'global';
+    if (!options || typeof options !== 'object' || Array.isArray(options)) {
+        return null;
+    }
+
+    if (typeof options.scope !== 'string' || !ALLOWED_SCOPES.has(options.scope)) {
+        return null;
+    }
+
+    const scope = options.scope;
     const rawDatasets = Array.isArray(options.datasets) ? options.datasets : [];
     const datasets = Array.from(new Set(
         rawDatasets
@@ -193,6 +201,10 @@ export const emitRealtimeChange = (io, options = {}) => {
     if (!io || typeof io.to !== 'function') return false;
 
     const payload = sanitizeRealtimePayload(options);
+    if (!payload) {
+        return false;
+    }
+
     const { scope } = payload;
 
     if (scope === 'admin') {
@@ -230,6 +242,36 @@ export const emitRealtimeChange = (io, options = {}) => {
         return true;
     }
 
-    io.to('authenticated').emit('DATA_CHANGED', payload);
-    return true;
+    if (scope === 'global') {
+        io.to('authenticated').emit('DATA_CHANGED', payload);
+        return true;
+    }
+
+    return false;
+};
+
+export const revokeUserSockets = (io, userId, options = {}) => {
+    const normalizedId = String(userId || '').trim();
+    if (!io || !normalizedId || typeof io.in !== 'function') {
+        return false;
+    }
+
+    const room = `user:${normalizedId}`;
+    const roomOperator = io.in(room);
+    if (!roomOperator) {
+        return false;
+    }
+
+    if (options.terminateSession === true && typeof roomOperator.emit === 'function') {
+        roomOperator.emit('SESSION_EXPIRED', {
+            reason: typeof options.reason === 'string' && options.reason ? options.reason : 'session_revoked'
+        });
+    }
+
+    if (typeof roomOperator.disconnectSockets === 'function') {
+        roomOperator.disconnectSockets(true);
+        return true;
+    }
+
+    return false;
 };
