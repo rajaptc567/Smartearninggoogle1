@@ -2755,61 +2755,138 @@ export const updateOfferwallProvider = async (req, res) => {
         }
 
         if (sanitizedUpdates.commissionMode !== undefined) {
-            const mode = String(sanitizedUpdates.commissionMode).trim().toLowerCase();
+            const mode = typeof sanitizedUpdates.commissionMode === 'string'
+                ? sanitizedUpdates.commissionMode.trim().toLowerCase()
+                : '';
             if (mode !== 'provider_managed' && mode !== 'smartexn_managed') {
                 return res.status(400).json({ success: false, error: "Invalid commissionMode: must be either 'provider_managed' or 'smartexn_managed'" });
             }
             sanitizedUpdates.commissionMode = mode;
         }
 
+        let skipGlobalShareNormalization = false;
+
         if (isOfferwallGgProvider) {
+            const parseStrictFiniteNumber = (val) => {
+                if (typeof val === 'number') {
+                    return Number.isFinite(val) ? val : NaN;
+                }
+                if (typeof val === 'string') {
+                    const trimmed = val.trim();
+                    if (!trimmed) return NaN;
+                    const parsed = Number(trimmed);
+                    return Number.isFinite(parsed) ? parsed : NaN;
+                }
+                return NaN;
+            };
+
             if (sanitizedUpdates.exchangeRateMultiplier !== undefined) {
-                const rawMult = sanitizedUpdates.exchangeRateMultiplier;
-                const parsedMult = (rawMult === null || rawMult === '') ? NaN : Number(rawMult);
+                const parsedMult = parseStrictFiniteNumber(sanitizedUpdates.exchangeRateMultiplier);
                 if (!Number.isFinite(parsedMult) || parsedMult <= 0) {
                     return res.status(400).json({
                         success: false,
-                        error: 'Invalid Offerwall.GG exchangeRateMultiplier: must be a positive finite number (100 required for Provider-Managed mode).'
+                        error: 'Invalid Offerwall.GG exchangeRateMultiplier: must be a positive finite number (100 for Provider-Managed mode, 70 for legacy SmartExn-Managed mode).'
                     });
                 }
                 sanitizedUpdates.exchangeRateMultiplier = parsedMult;
             }
 
-            const effectiveMode = sanitizedUpdates.commissionMode !== undefined
+            const rawEffectiveMode = sanitizedUpdates.commissionMode !== undefined
                 ? sanitizedUpdates.commissionMode
                 : (existingProviderRecord?.commissionMode || 'provider_managed');
+            const effectiveMode = typeof rawEffectiveMode === 'string'
+                ? rawEffectiveMode.trim().toLowerCase()
+                : '';
+            if (effectiveMode !== 'provider_managed' && effectiveMode !== 'smartexn_managed') {
+                return res.status(400).json({
+                    success: false,
+                    error: "Invalid Offerwall.GG commissionMode: must be 'provider_managed' or 'smartexn_managed'."
+                });
+            }
+
+            const effectiveMultRaw = sanitizedUpdates.exchangeRateMultiplier !== undefined
+                ? sanitizedUpdates.exchangeRateMultiplier
+                : existingProviderRecord?.exchangeRateMultiplier;
+            const effectiveMult = parseStrictFiniteNumber(effectiveMultRaw);
 
             if (effectiveMode === 'provider_managed') {
-                const effectiveMultRaw = sanitizedUpdates.exchangeRateMultiplier !== undefined
-                    ? sanitizedUpdates.exchangeRateMultiplier
-                    : existingProviderRecord?.exchangeRateMultiplier;
-                const effectiveMult = (effectiveMultRaw === null || effectiveMultRaw === undefined || effectiveMultRaw === '')
-                    ? NaN
-                    : Number(effectiveMultRaw);
                 if (!Number.isFinite(effectiveMult) || effectiveMult !== 100) {
                     return res.status(400).json({
                         success: false,
                         error: 'Offerwall.GG in Provider-Managed mode requires exchangeRateMultiplier === 100 (100 Coins = $1.00 USD user valuation).'
                     });
                 }
+
+                if (sanitizedUpdates.userRevenueSharePercent !== undefined) {
+                    const parsedUserShare = parseStrictFiniteNumber(sanitizedUpdates.userRevenueSharePercent);
+                    if (!Number.isFinite(parsedUserShare) || parsedUserShare !== 70) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Offerwall.GG in Provider-Managed mode enforces userRevenueSharePercent === 70.'
+                        });
+                    }
+                    sanitizedUpdates.userRevenueSharePercent = 70;
+                }
+
+                if (sanitizedUpdates.platformRevenueSharePercent !== undefined) {
+                    const parsedPlatformShare = parseStrictFiniteNumber(sanitizedUpdates.platformRevenueSharePercent);
+                    if (!Number.isFinite(parsedPlatformShare) || parsedPlatformShare !== 30) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Offerwall.GG in Provider-Managed mode enforces platformRevenueSharePercent === 30.'
+                        });
+                    }
+                    sanitizedUpdates.platformRevenueSharePercent = 30;
+                }
+
+                const effectiveUserShare = sanitizedUpdates.userRevenueSharePercent !== undefined
+                    ? sanitizedUpdates.userRevenueSharePercent
+                    : parseStrictFiniteNumber(existingProviderRecord?.userRevenueSharePercent);
+                const effectivePlatformShare = sanitizedUpdates.platformRevenueSharePercent !== undefined
+                    ? sanitizedUpdates.platformRevenueSharePercent
+                    : parseStrictFiniteNumber(existingProviderRecord?.platformRevenueSharePercent);
+
+                if (
+                    !Number.isFinite(effectiveUserShare) ||
+                    !Number.isFinite(effectivePlatformShare) ||
+                    effectiveUserShare !== 70 ||
+                    effectivePlatformShare !== 30 ||
+                    effectiveUserShare + effectivePlatformShare !== 100
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Offerwall.GG in Provider-Managed mode enforces a fixed 70/30 share split (userRevenueSharePercent === 70 and platformRevenueSharePercent === 30).'
+                    });
+                }
+
+                skipGlobalShareNormalization = true;
+            } else {
+                if (!Number.isFinite(effectiveMult) || effectiveMult !== 70) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Offerwall.GG in legacy SmartExn-Managed mode requires exchangeRateMultiplier === 70 (70 Coins = $1.00 USD).'
+                    });
+                }
             }
         } else if (sanitizedUpdates.exchangeRateMultiplier !== undefined) {
             sanitizedUpdates.exchangeRateMultiplier = Math.max(0, Number(sanitizedUpdates.exchangeRateMultiplier) || 1.0);
         }
-        if (sanitizedUpdates.platformRevenueSharePercent !== undefined && sanitizedUpdates.userRevenueSharePercent === undefined) {
-            const parsedRetained = Number(sanitizedUpdates.platformRevenueSharePercent);
-            if (isNaN(parsedRetained) || parsedRetained < 0 || parsedRetained > 100) {
-                return res.status(400).json({ success: false, error: 'Invalid platformRevenueSharePercent: must be a number between 0 and 100' });
+        if (!skipGlobalShareNormalization) {
+            if (sanitizedUpdates.platformRevenueSharePercent !== undefined && sanitizedUpdates.userRevenueSharePercent === undefined) {
+                const parsedRetained = Number(sanitizedUpdates.platformRevenueSharePercent);
+                if (isNaN(parsedRetained) || parsedRetained < 0 || parsedRetained > 100) {
+                    return res.status(400).json({ success: false, error: 'Invalid platformRevenueSharePercent: must be a number between 0 and 100' });
+                }
+                sanitizedUpdates.platformRevenueSharePercent = Math.round(parsedRetained * 100) / 100;
+                sanitizedUpdates.userRevenueSharePercent = Number((100 - sanitizedUpdates.platformRevenueSharePercent).toFixed(2));
+            } else if (sanitizedUpdates.userRevenueSharePercent !== undefined) {
+                const parsedUserShare = Number(sanitizedUpdates.userRevenueSharePercent);
+                if (isNaN(parsedUserShare) || parsedUserShare < 0 || parsedUserShare > 100) {
+                    return res.status(400).json({ success: false, error: 'Invalid userRevenueSharePercent: must be a number between 0 and 100' });
+                }
+                sanitizedUpdates.userRevenueSharePercent = Math.round(parsedUserShare * 100) / 100;
+                sanitizedUpdates.platformRevenueSharePercent = Number((100 - sanitizedUpdates.userRevenueSharePercent).toFixed(2));
             }
-            sanitizedUpdates.platformRevenueSharePercent = Math.round(parsedRetained * 100) / 100;
-            sanitizedUpdates.userRevenueSharePercent = Number((100 - sanitizedUpdates.platformRevenueSharePercent).toFixed(2));
-        } else if (sanitizedUpdates.userRevenueSharePercent !== undefined) {
-            const parsedUserShare = Number(sanitizedUpdates.userRevenueSharePercent);
-            if (isNaN(parsedUserShare) || parsedUserShare < 0 || parsedUserShare > 100) {
-                return res.status(400).json({ success: false, error: 'Invalid userRevenueSharePercent: must be a number between 0 and 100' });
-            }
-            sanitizedUpdates.userRevenueSharePercent = Math.round(parsedUserShare * 100) / 100;
-            sanitizedUpdates.platformRevenueSharePercent = Number((100 - sanitizedUpdates.userRevenueSharePercent).toFixed(2));
         }
 
         const provider = await OfferwallProvider.findOneAndUpdate(

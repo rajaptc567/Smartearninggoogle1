@@ -2141,6 +2141,378 @@ const runTest = async (name, fn) => {
         assert.equal(tx.platformRevenueAmount, 0.3);
     });
 
+    console.log('\n--- SECTION 8: Offerwall.GG Configuration Safety Validation (Mode/Multiplier Pairing & Fixed 70/30 Shares) ---');
+
+    const adminUser = { id: TEST_USER_ID, role: 'admin' };
+
+    await runTest('T71: provider_managed + 100 + 70/30 accepted and alias offerwallgg enforces identical rules', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        owProvider.commissionMode = 'smartexn_managed';
+        owProvider.exchangeRateMultiplier = 70;
+        owProvider.userRevenueSharePercent = 80;
+        owProvider.platformRevenueSharePercent = 20;
+
+        const res = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: {
+                commissionMode: 'provider_managed',
+                exchangeRateMultiplier: 100,
+                userRevenueSharePercent: 70,
+                platformRevenueSharePercent: 30
+            }
+        }, res);
+        assert.equal(res.statusCode, 200);
+        assert.equal(owProvider.commissionMode, 'provider_managed');
+        assert.equal(owProvider.exchangeRateMultiplier, 100);
+        assert.equal(owProvider.userRevenueSharePercent, 70);
+        assert.equal(owProvider.platformRevenueSharePercent, 30);
+
+        // Alias key offerwallgg also validates identically
+        db.providers.set('offerwallgg', owProvider);
+        const aliasRes = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwallgg' },
+            body: { enabled: true }
+        }, aliasRes);
+        assert.equal(aliasRes.statusCode, 200);
+    });
+
+    await runTest('T72: provider_managed + 70 rejected without mutating DB', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        const res = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 70, userRevenueSharePercent: 70, platformRevenueSharePercent: 30 }
+        }, res);
+        assert.equal(res.statusCode, 400);
+        assert.equal(owProvider.exchangeRateMultiplier, 100);
+    });
+
+    await runTest('T73: smartexn_managed + 70 accepted and preserves custom share split', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        const res = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: {
+                commissionMode: 'smartexn_managed',
+                exchangeRateMultiplier: 70,
+                userRevenueSharePercent: 80,
+                platformRevenueSharePercent: 20
+            }
+        }, res);
+        assert.equal(res.statusCode, 200);
+        assert.equal(owProvider.commissionMode, 'smartexn_managed');
+        assert.equal(owProvider.exchangeRateMultiplier, 70);
+        assert.equal(owProvider.userRevenueSharePercent, 80);
+        assert.equal(owProvider.platformRevenueSharePercent, 20);
+    });
+
+    await runTest('T74: smartexn_managed + 100 rejected without mutating DB (explicit and partial)', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        owProvider.commissionMode = 'smartexn_managed';
+        owProvider.exchangeRateMultiplier = 70;
+        owProvider.userRevenueSharePercent = 80;
+        owProvider.platformRevenueSharePercent = 20;
+
+        const res1 = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'smartexn_managed', exchangeRateMultiplier: 100 }
+        }, res1);
+        assert.equal(res1.statusCode, 400);
+        assert.equal(owProvider.exchangeRateMultiplier, 70);
+
+        // Partial multiplier update while already smartexn_managed
+        const res2 = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { exchangeRateMultiplier: 100 }
+        }, res2);
+        assert.equal(res2.statusCode, 400);
+        assert.equal(owProvider.exchangeRateMultiplier, 70);
+
+        // Partial mode switch from provider_managed(100) -> smartexn_managed without updating multiplier
+        const pmProvider = setupProviderManagedOfferwallGg();
+        const res3 = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'smartexn_managed' }
+        }, res3);
+        assert.equal(res3.statusCode, 400);
+        assert.equal(pmProvider.commissionMode, 'provider_managed');
+        assert.equal(pmProvider.exchangeRateMultiplier, 100);
+    });
+
+    await runTest('T75: Malformed, non-finite, empty, and wrongly-typed multiplier values rejected without coercion', async () => {
+        const badMultipliers = [null, '', '   ', 'abc', NaN, Infinity, -Infinity, true, false, [100], [70], { val: 100 }];
+
+        for (const mode of ['provider_managed', 'smartexn_managed']) {
+            for (const badMult of badMultipliers) {
+                const owProvider = setupProviderManagedOfferwallGg();
+                if (mode === 'smartexn_managed') {
+                    owProvider.commissionMode = 'smartexn_managed';
+                    owProvider.exchangeRateMultiplier = 70;
+                }
+                const res = createMockRes();
+                await updateOfferwallProvider({
+                    user: adminUser,
+                    params: { providerKey: 'offerwall_gg' },
+                    body: { commissionMode: mode, exchangeRateMultiplier: badMult }
+                }, res);
+                assert.equal(res.statusCode, 400, `Expected 400 for mode=${mode}, mult=${JSON.stringify(badMult)}`);
+                assert.equal(owProvider.exchangeRateMultiplier, mode === 'provider_managed' ? 100 : 70);
+            }
+        }
+
+        // Missing saved multiplier in DB rejected on partial update
+        const owMissing = setupProviderManagedOfferwallGg();
+        owMissing.exchangeRateMultiplier = undefined;
+        const missingRes = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { enabled: false }
+        }, missingRes);
+        assert.equal(missingRes.statusCode, 400);
+        assert.equal(owMissing.enabled, true, 'Rejected update must not mutate enabled');
+    });
+
+    await runTest('T76: provider_managed rejects 80/20 and 70/20 shares without silent coercion/overwrite', async () => {
+        const invalidSharePairs = [
+            { userRevenueSharePercent: 80, platformRevenueSharePercent: 20 },
+            { userRevenueSharePercent: 70, platformRevenueSharePercent: 20 },
+            { userRevenueSharePercent: 70, platformRevenueSharePercent: 40 },
+            { userRevenueSharePercent: 100, platformRevenueSharePercent: 0 },
+            { userRevenueSharePercent: 60, platformRevenueSharePercent: 30 },
+            { userRevenueSharePercent: 75 }
+        ];
+
+        for (const pair of invalidSharePairs) {
+            const owProvider = setupProviderManagedOfferwallGg();
+            const res = createMockRes();
+            await updateOfferwallProvider({
+                user: adminUser,
+                params: { providerKey: 'offerwall_gg' },
+                body: {
+                    commissionMode: 'provider_managed',
+                    exchangeRateMultiplier: 100,
+                    ...pair
+                }
+            }, res);
+            assert.equal(res.statusCode, 400, `Expected 400 for share pair ${JSON.stringify(pair)}`);
+            assert.equal(owProvider.userRevenueSharePercent, 70);
+            assert.equal(owProvider.platformRevenueSharePercent, 30);
+        }
+    });
+
+    await runTest('T77: Missing, malformed, non-finite, and wrongly-typed share values rejected in provider_managed', async () => {
+        const badShares = [null, '', '   ', 'abc', NaN, Infinity, -Infinity, true, false, [70], ['30'], {}];
+
+        for (const badShare of badShares) {
+            const owProvider = setupProviderManagedOfferwallGg();
+
+            const resUser = createMockRes();
+            await updateOfferwallProvider({
+                user: adminUser,
+                params: { providerKey: 'offerwall_gg' },
+                body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 100, userRevenueSharePercent: badShare, platformRevenueSharePercent: 30 }
+            }, resUser);
+            assert.equal(resUser.statusCode, 400, `Bad userShare ${JSON.stringify(badShare)} must return 400`);
+            assert.equal(owProvider.userRevenueSharePercent, 70);
+
+            const resPlatform = createMockRes();
+            await updateOfferwallProvider({
+                user: adminUser,
+                params: { providerKey: 'offerwall_gg' },
+                body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 100, userRevenueSharePercent: 70, platformRevenueSharePercent: badShare }
+            }, resPlatform);
+            assert.equal(resPlatform.statusCode, 400, `Bad platformShare ${JSON.stringify(badShare)} must return 400`);
+            assert.equal(owProvider.platformRevenueSharePercent, 30);
+        }
+
+        // Missing shares in DB during partial update in provider_managed mode
+        const owMissingShares = setupProviderManagedOfferwallGg();
+        owMissingShares.userRevenueSharePercent = undefined;
+        owMissingShares.platformRevenueSharePercent = undefined;
+        const missingRes = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 100 }
+        }, missingRes);
+        assert.equal(missingRes.statusCode, 400);
+        assert.equal(owMissingShares.userRevenueSharePercent, undefined);
+    });
+
+    await runTest('T78: Partial updates validate merged DB + incoming state for commissionMode & shares', async () => {
+        // DB is in smartexn_managed with 80/20 and mult 70
+        const owProvider = setupProviderManagedOfferwallGg();
+        owProvider.commissionMode = 'smartexn_managed';
+        owProvider.exchangeRateMultiplier = 70;
+        owProvider.userRevenueSharePercent = 80;
+        owProvider.platformRevenueSharePercent = 20;
+
+        // Switching to provider_managed + 100 WITHOUT updating 80/20 -> 70/30 must reject (no silent overwrite)
+        const switchWithoutShares = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 100 }
+        }, switchWithoutShares);
+        assert.equal(switchWithoutShares.statusCode, 400);
+        assert.equal(owProvider.commissionMode, 'smartexn_managed');
+        assert.equal(owProvider.exchangeRateMultiplier, 70);
+        assert.equal(owProvider.userRevenueSharePercent, 80);
+        assert.equal(owProvider.platformRevenueSharePercent, 20);
+
+        // Sending only userRevenueSharePercent: 70 while DB platformRevenueSharePercent is 20 -> reject (70/20 invalid)
+        const switchPartialShare = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 100, userRevenueSharePercent: 70 }
+        }, switchPartialShare);
+        assert.equal(switchPartialShare.statusCode, 400);
+        assert.equal(owProvider.commissionMode, 'smartexn_managed');
+        assert.equal(owProvider.platformRevenueSharePercent, 20);
+
+        // Sending complete valid target config succeeds
+        const validSwitch = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 100, userRevenueSharePercent: 70, platformRevenueSharePercent: 30 }
+        }, validSwitch);
+        assert.equal(validSwitch.statusCode, 200);
+        assert.equal(owProvider.commissionMode, 'provider_managed');
+        assert.equal(owProvider.exchangeRateMultiplier, 100);
+        assert.equal(owProvider.userRevenueSharePercent, 70);
+        assert.equal(owProvider.platformRevenueSharePercent, 30);
+
+        // Unrelated partial update when already valid succeeds
+        const unrelatedPatch = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { enabled: false }
+        }, unrelatedPatch);
+        assert.equal(unrelatedPatch.statusCode, 200);
+        assert.equal(owProvider.enabled, false);
+    });
+
+    await runTest('T79: Rejected Offerwall.GG config updates never mutate balances, transactions, or provider state', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 9.99;
+        user.taskWalletBalance = 9.99;
+        const txBefore = db.transactions.size;
+        const logBefore = db.logs.size;
+
+        const res = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 100, userRevenueSharePercent: 80, platformRevenueSharePercent: 20, enabled: false }
+        }, res);
+        assert.equal(res.statusCode, 400);
+        assert.equal(owProvider.enabled, true);
+        assert.equal(owProvider.userRevenueSharePercent, 70);
+        assert.equal(owProvider.platformRevenueSharePercent, 30);
+        assert.equal(user.taskEarningsBalance, 9.99);
+        assert.equal(user.taskWalletBalance, 9.99);
+        assert.equal(db.transactions.size, txBefore);
+        assert.equal(db.logs.size, logBefore);
+    });
+
+    await runTest('T80: Valid provider_managed accounting (70 Coins => $1.00 gross / $0.70 user / $0.30 platform) and legacy smartexn_managed accounting remain intact', async () => {
+        // 1. Provider-Managed saved via updateOfferwallProvider
+        const owProvider = setupProviderManagedOfferwallGg();
+        const pmSave = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 100, userRevenueSharePercent: 70, platformRevenueSharePercent: 30 }
+        }, pmSave);
+        assert.equal(pmSave.statusCode, 200);
+
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 0;
+        user.taskWalletBalance = 0;
+        const txPmId = 'ow_cfg_pm_70';
+        const pmRes = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txPmId, currencyAmount: '70', status: 'credited', signature: computeSignature(TEST_USER_ID, txPmId, '70') },
+            body: {},
+            headers: {}
+        }, pmRes);
+        assert.equal(pmRes.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 0.70);
+        const txPm = await Transaction.findOne({ idempotencyKey: `offerwall_gg_${txPmId}_credit` });
+        assert.equal(txPm.grossAmount, 1.0);
+        assert.equal(txPm.userRewardAmount, 0.7);
+        assert.equal(txPm.platformRevenueAmount, 0.3);
+
+        // 2. Legacy SmartExn-Managed saved via updateOfferwallProvider (70 multiplier + 80/20 shares)
+        const smSave = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'smartexn_managed', exchangeRateMultiplier: 70, userRevenueSharePercent: 80, platformRevenueSharePercent: 20 }
+        }, smSave);
+        assert.equal(smSave.statusCode, 200);
+
+        const txSmId = 'ow_cfg_sm_70';
+        const smRes = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txSmId, currencyAmount: '70', status: 'credited', signature: computeSignature(TEST_USER_ID, txSmId, '70') },
+            body: {},
+            headers: {}
+        }, smRes);
+        assert.equal(smRes.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 1.50); // 0.70 + 0.80
+        const txSm = await Transaction.findOne({ idempotencyKey: `offerwall_gg_${txSmId}_credit` });
+        assert.equal(txSm.grossAmount, 1.0);
+        assert.equal(txSm.userRewardAmount, 0.8);
+        assert.equal(txSm.platformRevenueAmount, 0.2);
+    });
+
+    await runTest('T81: Non-Offerwall.GG providers (cpx_research, theoremreach, adgem) remain unaffected by Offerwall.GG config rules', async () => {
+        const cpxProvider = db.providers.get('cpx_research');
+        const cpxRes = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'cpx_research' },
+            body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 1.0, userRevenueSharePercent: 100, platformRevenueSharePercent: 0 }
+        }, cpxRes);
+        assert.equal(cpxRes.statusCode, 200);
+        assert.equal(cpxProvider.userRevenueSharePercent, 100);
+        assert.equal(cpxProvider.platformRevenueSharePercent, 0);
+
+        const trProvider = db.providers.get('theoremreach');
+        const trRes = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'theoremreach' },
+            body: { commissionMode: 'smartexn_managed', exchangeRateMultiplier: 1.0, userRevenueSharePercent: 80, platformRevenueSharePercent: 20 }
+        }, trRes);
+        assert.equal(trRes.statusCode, 200);
+        assert.equal(trProvider.exchangeRateMultiplier, 1.0);
+        assert.equal(trProvider.userRevenueSharePercent, 80);
+        assert.equal(trProvider.platformRevenueSharePercent, 20);
+    });
+
     console.log(`\n========================================================`);
     console.log(`RESULTS: ${passedTests}/${totalTests} tests passed.`);
     console.log(`========================================================\n`);

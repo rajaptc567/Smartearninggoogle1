@@ -163,10 +163,36 @@ export const AdminOfferwalls: React.FC = () => {
             editingProvider.providerKey === 'offerwallgg' ||
             editingProvider.providerKey === 'offerwall.gg';
         const effectiveCommissionMode = editingProvider.commissionMode || 'provider_managed';
-        if (isOfferwallGg && effectiveCommissionMode === 'provider_managed') {
-            const mult = Number(editingProvider.exchangeRateMultiplier);
-            if (!Number.isFinite(mult) || mult !== 100) {
-                setSaveError('Offerwall.GG in Provider-Managed mode requires Exchange Multiplier to be exactly 100 (100 Coins = $1.00 USD user valuation).');
+        if (isOfferwallGg) {
+            const rawMult: unknown = editingProvider.exchangeRateMultiplier;
+            const mult = (typeof rawMult === 'number' || (typeof rawMult === 'string' && rawMult.trim() !== ''))
+                ? Number(rawMult)
+                : NaN;
+
+            if (effectiveCommissionMode === 'provider_managed') {
+                if (!Number.isFinite(mult) || mult !== 100) {
+                    setSaveError('Offerwall.GG in Provider-Managed mode requires Exchange Multiplier to be exactly 100 (100 Coins = $1.00 USD user valuation).');
+                    return;
+                }
+                const rawUserShare: unknown = editingProvider.userRevenueSharePercent;
+                const rawPlatformShare: unknown = editingProvider.platformRevenueSharePercent;
+                const userShare = (typeof rawUserShare === 'number' || (typeof rawUserShare === 'string' && rawUserShare.trim() !== ''))
+                    ? Number(rawUserShare)
+                    : NaN;
+                const platformShare = (typeof rawPlatformShare === 'number' || (typeof rawPlatformShare === 'string' && rawPlatformShare.trim() !== ''))
+                    ? Number(rawPlatformShare)
+                    : NaN;
+                if (!Number.isFinite(userShare) || !Number.isFinite(platformShare) || userShare !== 70 || platformShare !== 30 || userShare + platformShare !== 100) {
+                    setSaveError('Offerwall.GG in Provider-Managed mode enforces a fixed 70% User / 30% Platform revenue share split.');
+                    return;
+                }
+            } else if (effectiveCommissionMode === 'smartexn_managed') {
+                if (!Number.isFinite(mult) || mult !== 70) {
+                    setSaveError('Offerwall.GG in legacy SmartExn-Managed mode requires Exchange Multiplier to be exactly 70 (70 Coins = $1.00 USD).');
+                    return;
+                }
+            } else {
+                setSaveError("Invalid Offerwall.GG commission mode: must be 'provider_managed' or 'smartexn_managed'.");
                 return;
             }
         }
@@ -911,14 +937,68 @@ export const AdminOfferwalls: React.FC = () => {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="p-2.5 bg-emerald-950/20 rounded-xl border border-emerald-500/20 text-[11px] text-emerald-300 flex items-center gap-2">
-                                        <span>🛡️</span>
-                                        {(editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg' || editingProvider.providerKey === 'offerwall.gg') ? (
-                                            <span><strong>Zero Double-Deduction Protection Active (Offerwall.GG):</strong> External placement issues 70 Coins per $1.00 gross and SmartExn values 100 Coins = $1.00 USD. Worker is credited $0.7000 per $1.00 gross and SmartExn retains $0.3000 implicitly with no second deduction.</span>
-                                        ) : (
+                                    (editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg' || editingProvider.providerKey === 'offerwall.gg') ? (
+                                        <div className="space-y-3 pt-2 border-t border-slate-800/80">
+                                            <div className="p-2.5 bg-emerald-950/20 rounded-xl border border-emerald-500/20 text-[11px] text-emerald-300 flex items-center gap-2">
+                                                <span>🛡️</span>
+                                                <span><strong>Offerwall.GG Fixed 70/30 Accounting Active:</strong> Offerwall.GG Provider-Managed accounting enforces a fixed <strong>70% user / 30% platform</strong> split (70 Coins per $1.00 gross; SmartExn values 100 Coins = $1.00 USD, crediting $0.7000 to the user and retaining $0.3000 with no second deduction).</span>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                                                        User Revenue Share (%) — Fixed
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        value={editingProvider.userRevenueSharePercent ?? ''}
+                                                        readOnly
+                                                        disabled
+                                                        aria-label="Offerwall.GG Fixed User Revenue Share Percent"
+                                                        className="w-full bg-slate-900 border border-slate-800 text-emerald-300 rounded-xl p-2.5 text-xs font-bold cursor-not-allowed opacity-90"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                                                        Platform Revenue Share (%) — Fixed
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        value={editingProvider.platformRevenueSharePercent ?? ''}
+                                                        readOnly
+                                                        disabled
+                                                        aria-label="Offerwall.GG Fixed Platform Revenue Share Percent"
+                                                        className="w-full bg-slate-900 border border-slate-800 text-amber-300 rounded-xl p-2.5 text-xs font-bold cursor-not-allowed opacity-90"
+                                                    />
+                                                </div>
+                                            </div>
+                                            {(Number(editingProvider.userRevenueSharePercent) !== 70 || Number(editingProvider.platformRevenueSharePercent) !== 30) && (
+                                                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-center justify-between gap-3">
+                                                    <span>
+                                                        <strong>Warning:</strong> Current share values ({String(editingProvider.userRevenueSharePercent ?? 'unset')}% / {String(editingProvider.platformRevenueSharePercent ?? 'unset')}%) do not match Offerwall.GG&apos;s required fixed <strong>70% / 30%</strong> split.
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSaveError(null);
+                                                            setEditingProvider({
+                                                                ...editingProvider,
+                                                                userRevenueSharePercent: 70,
+                                                                platformRevenueSharePercent: 30
+                                                            });
+                                                        }}
+                                                        className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-[11px] font-bold whitespace-nowrap"
+                                                    >
+                                                        Apply Fixed 70/30
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="p-2.5 bg-emerald-950/20 rounded-xl border border-emerald-500/20 text-[11px] text-emerald-300 flex items-center gap-2">
+                                            <span>🛡️</span>
                                             <span><strong>Zero Double-Deduction Protection Active:</strong> 100% of reported reward is credited to worker. Platform retains 0%.</span>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )
                                 )}
                             </div>
 
@@ -946,7 +1026,9 @@ export const AdminOfferwalls: React.FC = () => {
                                         Exchange Multiplier {editingProvider.providerKey === 'adgem'
                                             ? '(AdGem Divisor: 100)'
                                             : (editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg' || editingProvider.providerKey === 'offerwall.gg')
-                                                ? '(Offerwall.GG User Coin Valuation: 100 Coins = $1.00 USD)'
+                                                ? ((editingProvider.commissionMode || 'provider_managed') === 'provider_managed'
+                                                    ? '(Offerwall.GG Provider-Managed: 100 required)'
+                                                    : '(Offerwall.GG Legacy SmartExn-Managed: 70 required)')
                                                 : '(1 USD = ? User $)'}
                                     </label>
                                     <input
@@ -977,17 +1059,32 @@ export const AdminOfferwalls: React.FC = () => {
                                     )}
                                     {(editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg' || editingProvider.providerKey === 'offerwall.gg') && (
                                         <>
-                                            {(editingProvider.commissionMode || 'provider_managed') === 'provider_managed' && Number(editingProvider.exchangeRateMultiplier) !== 100 ? (
-                                                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs mt-2 flex items-start gap-2">
-                                                    <span className="text-sm">⚠️</span>
-                                                    <span>
-                                                        <strong>Warning:</strong> Offerwall.GG in <strong>Provider-Managed</strong> mode requires an explicit Exchange Multiplier of <strong>100</strong> (100 Coins = $1.00 USD user valuation). Currently configured as <strong>{String(editingProvider.exchangeRateMultiplier)}</strong>. Backend postbacks fail closed until set to 100.
-                                                    </span>
-                                                </div>
+                                            {(editingProvider.commissionMode || 'provider_managed') === 'provider_managed' ? (
+                                                Number(editingProvider.exchangeRateMultiplier) !== 100 ? (
+                                                    <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs mt-2 flex items-start gap-2">
+                                                        <span className="text-sm">⚠️</span>
+                                                        <span>
+                                                            <strong>Warning:</strong> Offerwall.GG in <strong>Provider-Managed</strong> mode requires an explicit Exchange Multiplier of <strong>100</strong> (100 Coins = $1.00 USD user valuation). Currently configured as <strong>{String(editingProvider.exchangeRateMultiplier)}</strong>. Saving and backend postbacks require 100.
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-[10px] text-emerald-400 mt-1">
+                                                        Offerwall.GG Provider-Managed contract: Multiplier <strong>100</strong> required (100 Coins = $1.00 USD valuation). External wall pays <strong>70 Coins per $1.00 gross</strong>; SmartExn credits <code className="font-mono text-emerald-300">currencyAmount / 100</code> ($0.7000 per 70 Coins) with no second deduction.
+                                                    </p>
+                                                )
                                             ) : (
-                                                <p className="text-[10px] text-emerald-400 mt-1">
-                                                    Offerwall.GG Provider-Managed contract: External wall pays <strong>70 Coins per $1.00 gross</strong>; SmartExn credits <code className="font-mono text-emerald-300">currencyAmount / 100</code> ($0.7000 per 70 Coins) with no second deduction.
-                                                </p>
+                                                Number(editingProvider.exchangeRateMultiplier) !== 70 ? (
+                                                    <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs mt-2 flex items-start gap-2">
+                                                        <span className="text-sm">⚠️</span>
+                                                        <span>
+                                                            <strong>Warning:</strong> Offerwall.GG in legacy <strong>SmartExn-Managed</strong> mode requires an explicit Exchange Multiplier of <strong>70</strong> (70 Coins = $1.00 USD gross). Currently configured as <strong>{String(editingProvider.exchangeRateMultiplier)}</strong>.
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-[10px] text-amber-300 mt-1">
+                                                        Offerwall.GG legacy SmartExn-Managed contract: Multiplier <strong>70</strong> required (70 Coins = $1.00 USD gross before SmartExn share split).
+                                                    </p>
+                                                )
                                             )}
                                         </>
                                     )}
