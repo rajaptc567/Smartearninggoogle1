@@ -2513,6 +2513,41 @@ const runTest = async (name, fn) => {
         assert.equal(trProvider.platformRevenueSharePercent, 20);
     });
 
+    await runTest('T82: Offerwall.GG rejects non-string commissionMode strictly while non-Offerwall.GG providers retain String().trim().toLowerCase() normalization', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        const nonStringValues = [['provider_managed'], ['smartexn_managed'], { toString: () => 'provider_managed' }, 123, null];
+
+        for (const badMode of nonStringValues) {
+            const res = createMockRes();
+            await updateOfferwallProvider({
+                user: adminUser,
+                params: { providerKey: 'offerwall_gg' },
+                body: { commissionMode: badMode }
+            }, res);
+            assert.equal(res.statusCode, 400, `Offerwall.GG must reject non-string commissionMode ${JSON.stringify(badMode)}`);
+
+            const aliasRes = createMockRes();
+            await updateOfferwallProvider({
+                user: adminUser,
+                params: { providerKey: 'offerwallgg' },
+                body: { commissionMode: badMode }
+            }, aliasRes);
+            assert.equal(aliasRes.statusCode, 400, `Offerwall.GG alias offerwallgg must reject non-string commissionMode`);
+        }
+        assert.equal(owProvider.commissionMode, 'provider_managed');
+
+        // Non-Offerwall.GG providers retain previous String(value).trim().toLowerCase() behavior
+        const cpxProvider = db.providers.get('cpx_research');
+        const cpxNonStringRes = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'cpx_research' },
+            body: { commissionMode: [' SMARTEXN_MANAGED '] }
+        }, cpxNonStringRes);
+        assert.equal(cpxNonStringRes.statusCode, 200);
+        assert.equal(cpxProvider.commissionMode, 'smartexn_managed');
+    });
+
     console.log(`\n========================================================`);
     console.log(`RESULTS: ${passedTests}/${totalTests} tests passed.`);
     console.log(`========================================================\n`);

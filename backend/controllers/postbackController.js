@@ -2755,9 +2755,11 @@ export const updateOfferwallProvider = async (req, res) => {
         }
 
         if (sanitizedUpdates.commissionMode !== undefined) {
-            const mode = typeof sanitizedUpdates.commissionMode === 'string'
-                ? sanitizedUpdates.commissionMode.trim().toLowerCase()
-                : '';
+            const mode = isOfferwallGgProvider
+                ? (typeof sanitizedUpdates.commissionMode === 'string'
+                    ? sanitizedUpdates.commissionMode.trim().toLowerCase()
+                    : '')
+                : String(sanitizedUpdates.commissionMode).trim().toLowerCase();
             if (mode !== 'provider_managed' && mode !== 'smartexn_managed') {
                 return res.status(400).json({ success: false, error: "Invalid commissionMode: must be either 'provider_managed' or 'smartexn_managed'" });
             }
