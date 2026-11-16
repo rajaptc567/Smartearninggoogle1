@@ -984,13 +984,29 @@ const persistOfferwallGgLog = async (logDoc) => {
             errorMessage: src.errorMessage || '',
             clientIp: src.clientIp || '',
             signature: src.signature || '',
+            queryParams: src.queryParams || {},
+            rawBody: src.rawBody || {},
+            rawHeaders: src.rawHeaders || {},
             recordedAt: src.receivedAt || new Date()
         });
 
+        const appendHistory = (log, snapshot) => {
+            const history = Array.isArray(log.priorSecurityEvents) ? [...log.priorSecurityEvents] : [];
+            history.push(snapshot);
+            log.priorSecurityEvents = history.length > 20 ? history.slice(-20) : history;
+        };
+
+        // Fix A & B: Pre-processing failure replaced by a valid retry
         if (preProcessingStatuses.has(existingLog.status) && incomingIsFinalOutcome) {
-            const history = Array.isArray(existingLog.priorSecurityEvents) ? [...existingLog.priorSecurityEvents] : [];
-            history.push(buildSnapshot(existingLog));
-            existingLog.priorSecurityEvents = history;
+            appendHistory(existingLog, buildSnapshot(existingLog));
+            // Update current request evidence from the valid retry
+            existingLog.clientIp = logDoc.clientIp;
+            existingLog.signature = logDoc.signature;
+            existingLog.signatureStatus = logDoc.signatureStatus;
+            existingLog.queryParams = logDoc.queryParams;
+            existingLog.rawBody = logDoc.rawBody;
+            existingLog.rawHeaders = logDoc.rawHeaders;
+            // Update outcome fields
             existingLog.provider = logDoc.provider;
             existingLog.userId = logDoc.userId;
             existingLog.username = logDoc.username;
@@ -1000,7 +1016,6 @@ const persistOfferwallGgLog = async (logDoc) => {
             existingLog.offerId = logDoc.offerId;
             existingLog.offerName = logDoc.offerName;
             existingLog.status = logDoc.status;
-            existingLog.signatureStatus = logDoc.signatureStatus;
             existingLog.grossAmountUSD = logDoc.grossAmountUSD;
             existingLog.userRewardUSD = logDoc.userRewardUSD;
             existingLog.platformRevenueUSD = logDoc.platformRevenueUSD;
@@ -1013,14 +1028,28 @@ const persistOfferwallGgLog = async (logDoc) => {
             existingLog.riskStatus = logDoc.riskStatus;
             existingLog.riskReason = logDoc.riskReason;
             existingLog.transactionId = logDoc.transactionId;
-            existingLog.errorMessage = logDoc.errorMessage || `Processed after prior ${history[history.length - 1].status} event (security evidence preserved)`;
+            existingLog.errorMessage = logDoc.errorMessage || `Processed after prior failure (security evidence preserved)`;
             return await existingLog.save();
         }
 
+        // Fix C: Terminal status (Processed or Reversed) receives a later InvalidSignature probe
         if (terminalStatuses.has(existingLog.status) && logDoc.status === 'InvalidSignature') {
-            const history = Array.isArray(existingLog.priorSecurityEvents) ? [...existingLog.priorSecurityEvents] : [];
-            history.push(buildSnapshot(logDoc));
-            existingLog.priorSecurityEvents = history;
+            appendHistory(existingLog, buildSnapshot(logDoc));
+            // Do NOT downgrade status, do NOT alter transactionId, financial amounts, or balances.
+            // Preserve current successful request evidence.
+            return await existingLog.save();
+        }
+
+        // Pre-processing failure receives another invalid-signature probe
+        if (preProcessingStatuses.has(existingLog.status) && logDoc.status === 'InvalidSignature') {
+            appendHistory(existingLog, buildSnapshot(logDoc));
+            existingLog.clientIp = logDoc.clientIp;
+            existingLog.signature = logDoc.signature;
+            existingLog.signatureStatus = logDoc.signatureStatus;
+            existingLog.queryParams = logDoc.queryParams;
+            existingLog.rawBody = logDoc.rawBody;
+            existingLog.rawHeaders = logDoc.rawHeaders;
+            existingLog.errorMessage = logDoc.errorMessage;
             return await existingLog.save();
         }
 
