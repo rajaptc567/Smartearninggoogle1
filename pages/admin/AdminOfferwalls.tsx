@@ -82,6 +82,7 @@ export const AdminOfferwalls: React.FC = () => {
     const [editingProvider, setEditingProvider] = useState<OfferwallProvider | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
     const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
     // Simulator State
@@ -145,6 +146,7 @@ export const AdminOfferwalls: React.FC = () => {
     }, [activeTab, logProviderFilter, logStatusFilter]);
 
     const handleConfigureProvider = (p: OfferwallProvider) => {
+        setSaveError(null);
         if (p.providerKey === 'adgem' && (p.exchangeRateMultiplier === null || p.exchangeRateMultiplier === undefined)) {
             setEditingProvider({ ...p, exchangeRateMultiplier: 100 });
         } else {
@@ -155,6 +157,19 @@ export const AdminOfferwalls: React.FC = () => {
     const handleSaveProvider = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingProvider) return;
+        setSaveError(null);
+
+        const isOfferwallGg = editingProvider.providerKey === 'offerwall_gg' ||
+            editingProvider.providerKey === 'offerwallgg' ||
+            editingProvider.providerKey === 'offerwall.gg';
+        const effectiveCommissionMode = editingProvider.commissionMode || 'provider_managed';
+        if (isOfferwallGg && effectiveCommissionMode === 'provider_managed') {
+            const mult = Number(editingProvider.exchangeRateMultiplier);
+            if (!Number.isFinite(mult) || mult !== 100) {
+                setSaveError('Offerwall.GG in Provider-Managed mode requires Exchange Multiplier to be exactly 100 (100 Coins = $1.00 USD user valuation).');
+                return;
+            }
+        }
 
         setIsSaving(true);
         try {
@@ -186,10 +201,10 @@ export const AdminOfferwalls: React.FC = () => {
                 await fetchProviders();
                 setEditingProvider(null);
             } else {
-                alert(`Error saving provider: ${data.error}`);
+                setSaveError(data.error || 'Failed to save provider settings.');
             }
         } catch (err: any) {
-            alert(`Save failed: ${err.message}`);
+            setSaveError(err.message || 'Save failed.');
         } finally {
             setIsSaving(false);
         }
@@ -898,7 +913,11 @@ export const AdminOfferwalls: React.FC = () => {
                                 ) : (
                                     <div className="p-2.5 bg-emerald-950/20 rounded-xl border border-emerald-500/20 text-[11px] text-emerald-300 flex items-center gap-2">
                                         <span>🛡️</span>
-                                        <span><strong>Zero Double-Deduction Protection Active:</strong> 100% of reported reward is credited to worker. Platform retains 0%.</span>
+                                        {(editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg' || editingProvider.providerKey === 'offerwall.gg') ? (
+                                            <span><strong>Zero Double-Deduction Protection Active (Offerwall.GG):</strong> External placement issues 70 Coins per $1.00 gross and SmartExn values 100 Coins = $1.00 USD. Worker is credited $0.7000 per $1.00 gross and SmartExn retains $0.3000 implicitly with no second deduction.</span>
+                                        ) : (
+                                            <span><strong>Zero Double-Deduction Protection Active:</strong> 100% of reported reward is credited to worker. Platform retains 0%.</span>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -924,13 +943,20 @@ export const AdminOfferwalls: React.FC = () => {
 
                                 <div>
                                     <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                                        Exchange Multiplier {editingProvider.providerKey === 'adgem' ? '(AdGem Divisor: 100)' : '(1 USD = ? User $)'}
+                                        Exchange Multiplier {editingProvider.providerKey === 'adgem'
+                                            ? '(AdGem Divisor: 100)'
+                                            : (editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg' || editingProvider.providerKey === 'offerwall.gg')
+                                                ? '(Offerwall.GG User Coin Valuation: 100 Coins = $1.00 USD)'
+                                                : '(1 USD = ? User $)'}
                                     </label>
                                     <input
                                         type="number"
                                         step="0.05"
                                         value={editingProvider.exchangeRateMultiplier ?? (editingProvider.providerKey === 'adgem' ? 100 : 1.0)}
-                                        onChange={(e) => setEditingProvider({ ...editingProvider, exchangeRateMultiplier: Number(e.target.value) })}
+                                        onChange={(e) => {
+                                            setSaveError(null);
+                                            setEditingProvider({ ...editingProvider, exchangeRateMultiplier: Number(e.target.value) });
+                                        }}
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
                                     />
                                     {editingProvider.providerKey === 'adgem' && (
@@ -945,6 +971,22 @@ export const AdminOfferwalls: React.FC = () => {
                                             ) : (
                                                 <p className="text-[10px] text-emerald-400 mt-1">
                                                     SmartExn convention: 100 virtual units = $1.00 USD. Acts as conversion divisor (<code className="font-mono text-emerald-300">reward = amount / 100</code>).
+                                                </p>
+                                            )}
+                                        </>
+                                    )}
+                                    {(editingProvider.providerKey === 'offerwall_gg' || editingProvider.providerKey === 'offerwallgg' || editingProvider.providerKey === 'offerwall.gg') && (
+                                        <>
+                                            {(editingProvider.commissionMode || 'provider_managed') === 'provider_managed' && Number(editingProvider.exchangeRateMultiplier) !== 100 ? (
+                                                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs mt-2 flex items-start gap-2">
+                                                    <span className="text-sm">⚠️</span>
+                                                    <span>
+                                                        <strong>Warning:</strong> Offerwall.GG in <strong>Provider-Managed</strong> mode requires an explicit Exchange Multiplier of <strong>100</strong> (100 Coins = $1.00 USD user valuation). Currently configured as <strong>{String(editingProvider.exchangeRateMultiplier)}</strong>. Backend postbacks fail closed until set to 100.
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <p className="text-[10px] text-emerald-400 mt-1">
+                                                    Offerwall.GG Provider-Managed contract: External wall pays <strong>70 Coins per $1.00 gross</strong>; SmartExn credits <code className="font-mono text-emerald-300">currencyAmount / 100</code> ($0.7000 per 70 Coins) with no second deduction.
                                                 </p>
                                             )}
                                         </>
@@ -1345,7 +1387,7 @@ export const AdminOfferwalls: React.FC = () => {
                                             </h4>
                                         </div>
                                         <p className="text-[11px] text-slate-400 mt-1">
-                                            Placement ID: <code className="text-indigo-300 font-mono">9604</code> | Currency: <code className="text-emerald-300 font-mono">Coins</code> (70 Coins = $1.00 USD)
+                                            Placement ID: <code className="text-indigo-300 font-mono">9604</code> | External Wall Rate: <code className="text-emerald-300 font-mono">70 Coins per $1.00 publisher gross</code> | SmartExn Mode: <code className="text-emerald-300 font-mono">Provider-Managed</code> | Multiplier: <code className="text-emerald-300 font-mono">100</code> (100 Coins = $1.00 USD)
                                         </p>
                                     </div>
 
@@ -1406,14 +1448,20 @@ export const AdminOfferwalls: React.FC = () => {
                                     </div>
 
                                     {/* Accounting Details */}
-                                    <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-xs space-y-1">
+                                    <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-xs space-y-1.5">
                                         <div className="flex items-center gap-2 font-black text-emerald-400">
                                             <span>📊</span>
-                                            <span>SmartExn 70/30 Split Accounting</span>
+                                            <span>Offerwall.GG Provider-Managed Accounting (No Double Deduction)</span>
                                         </div>
-                                        <p className="text-[11px] text-slate-300">
-                                            70 Coins = $1.00 USD. For example, a $1.50 publisher payout credits $1.05 USD (70%) to worker <code className="text-emerald-300 font-mono">taskEarningsBalance</code> and retains $0.45 USD (30%) platform revenue.
-                                        </p>
+                                        <ul className="text-[11px] text-slate-300 space-y-1 list-disc list-inside">
+                                            <li>External Offerwall.GG placement awards <strong>70 Coins per $1.00 publisher gross</strong> (already net of 30% margin on the wall).</li>
+                                            <li>SmartExn Commission Mode must be <strong>Provider-Managed</strong> (<code className="text-emerald-300 font-mono">provider_managed</code>).</li>
+                                            <li>SmartExn <code className="text-emerald-300 font-mono">exchangeRateMultiplier</code> must be <strong>100</strong> (<strong>100 Coins = $1.00 USD</strong> user valuation).</li>
+                                            <li>User reward formula: <code className="text-emerald-300 font-mono">userRewardUSD = currencyAmount / 100</code> (credited to <code className="text-emerald-300 font-mono">taskEarningsBalance</code> &amp; <code className="text-emerald-300 font-mono">taskWalletBalance</code>).</li>
+                                            <li>Publisher gross formula: <code className="text-indigo-300 font-mono">grossUSD = currencyAmount / 70</code>.</li>
+                                            <li>Platform margin formula: <code className="text-indigo-300 font-mono">platformRevenueUSD = grossUSD - userRewardUSD</code> (for 70 Coins: $1.0000 gross, $0.7000 user, $0.3000 SmartExn).</li>
+                                            <li>No second 70% SmartExn commission deduction is applied in the backend.</li>
+                                        </ul>
                                     </div>
 
                                     {/* Secret Key Status */}
@@ -1438,10 +1486,19 @@ export const AdminOfferwalls: React.FC = () => {
                                 </div>
                             </div>
 
+                            {saveError && (
+                                <div className="p-3 bg-rose-500/10 border border-rose-500/40 rounded-xl text-rose-300 text-xs font-bold">
+                                    {saveError}
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                                 <button
                                     type="button"
-                                    onClick={() => setEditingProvider(null)}
+                                    onClick={() => {
+                                        setSaveError(null);
+                                        setEditingProvider(null);
+                                    }}
                                     className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all"
                                 >
                                     Cancel

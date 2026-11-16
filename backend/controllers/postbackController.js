@@ -1472,6 +1472,9 @@ export const handlePostback = async (req, res) => {
 
         // P8: Gross / User / Platform Split Calculation
         let grossUSD;
+        let userRewardUSD;
+        let platformRevenueUSD;
+        let userSharePct = 100;
         const absReward = Math.abs(normalized.rawReward);
         if (providerKey === 'theoremreach') {
             grossUSD = Number((absReward / (provider.exchangeRateMultiplier || 70.0)).toFixed(4));
@@ -1492,26 +1495,65 @@ export const handlePostback = async (req, res) => {
             // ayeT-Studios payout_usd is the actual publisher revenue/payout in USD
             grossUSD = Number(Math.abs(Number(rawParams.payout_usd)).toFixed(4));
         } else if (providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') {
-            // Offerwall.GG: Authoritative financial input is exclusively the signed currencyAmount (70 Coins = $1.00 USD).
+            // Offerwall.GG: Authoritative financial input is exclusively the signed currencyAmount.
             // Unsigned payoutUsd is strictly informational/diagnostic and must never determine user reward or reversal amount.
-            const multiplier = (typeof provider.exchangeRateMultiplier === 'number' && provider.exchangeRateMultiplier > 0)
-                ? provider.exchangeRateMultiplier
-                : 70.0;
-            grossUSD = Number((absReward / multiplier).toFixed(4));
             log.infoPayoutUsd = rawParams.payoutUsd !== undefined ? rawParams.payoutUsd : (rawParams.payout_usd || null);
+            const owCommissionMode = provider.commissionMode || 'provider_managed';
+            if (owCommissionMode === 'provider_managed') {
+                // Provider-Managed model:
+                // External Offerwall.GG placement pays 70 Coins per $1.00 gross publisher revenue.
+                // SmartExn values Offerwall.GG Coins at exchangeRateMultiplier === 100 (100 Coins = $1.00 USD user valuation).
+                // Result: 70 Coins -> $1.0000 grossUSD, $0.7000 userRewardUSD, $0.3000 platformRevenueUSD (no second deduction).
+                const rawMultiplier = provider.exchangeRateMultiplier;
+                const parsedMultiplier = (rawMultiplier === null || rawMultiplier === undefined || rawMultiplier === '')
+                    ? NaN
+                    : Number(rawMultiplier);
+                if (!Number.isFinite(parsedMultiplier) || parsedMultiplier !== 100) {
+                    if (isDryRun) {
+                        req.dryRunResult = {
+                            isDryRun: true,
+                            mutationsPerformed: false,
+                            provider: providerKey,
+                            validation: {
+                                status: 'FAILED',
+                                error: 'OFFERWALL_GG_MULTIPLIER_INVALID'
+                            }
+                        };
+                    } else {
+                        log.status = 'Error';
+                        log.errorMessage = `Offerwall.GG provider_managed mode requires exchangeRateMultiplier === 100 (got '${rawMultiplier}'); failing closed`;
+                        try { await log.save(); } catch (_) {}
+                    }
+                    return res.status(400).send('OFFERWALL_GG_MULTIPLIER_INVALID');
+                }
+                const OFFERWALL_GG_UNITS_PER_GROSS_USD = 70;
+                grossUSD = Number((absReward / OFFERWALL_GG_UNITS_PER_GROSS_USD).toFixed(4));
+                userRewardUSD = Number((absReward / parsedMultiplier).toFixed(4));
+                platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
+                userSharePct = 70;
+            } else {
+                // Compatibility path when explicitly configured as smartexn_managed
+                const multiplier = (typeof provider.exchangeRateMultiplier === 'number' && Number.isFinite(provider.exchangeRateMultiplier) && provider.exchangeRateMultiplier > 0)
+                    ? provider.exchangeRateMultiplier
+                    : 70.0;
+                grossUSD = Number((absReward / multiplier).toFixed(4));
+            }
         } else {
             grossUSD = Number((absReward * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
         }
-        let userRewardUSD = grossUSD;
-        let platformRevenueUSD = 0;
-        let userSharePct = 100;
 
-        if (provider.commissionMode === 'smartexn_managed') {
-            userSharePct = (typeof provider.userRevenueSharePercent === 'number' && provider.userRevenueSharePercent >= 0 && provider.userRevenueSharePercent <= 100)
-                ? provider.userRevenueSharePercent
-                : 100;
-            userRewardUSD = Number((grossUSD * (userSharePct / 100)).toFixed(4));
-            platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
+        if (!(providerKey === 'offerwall_gg' || providerKey === 'offerwallgg') || (provider.commissionMode || 'provider_managed') === 'smartexn_managed') {
+            userRewardUSD = grossUSD;
+            platformRevenueUSD = 0;
+            userSharePct = 100;
+
+            if (provider.commissionMode === 'smartexn_managed') {
+                userSharePct = (typeof provider.userRevenueSharePercent === 'number' && provider.userRevenueSharePercent >= 0 && provider.userRevenueSharePercent <= 100)
+                    ? provider.userRevenueSharePercent
+                    : 100;
+                userRewardUSD = Number((grossUSD * (userSharePct / 100)).toFixed(4));
+                platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
+            }
         }
 
         normalized.rewardUSD = userRewardUSD;
@@ -1631,7 +1673,9 @@ export const handlePostback = async (req, res) => {
 
                 if (newEarnings < 0) {
                     chargebackStatus = 'Liability_Owed';
-                    liabilityToAdd = Number(Math.abs(newEarnings).toFixed(2));
+                    liabilityToAdd = (providerKey === 'offerwall_gg' || providerKey === 'offerwallgg')
+                        ? Number(Math.abs(newEarnings).toFixed(4))
+                        : Number(Math.abs(newEarnings).toFixed(2));
                     deductionToApply = currentEarnings;
                 }
 
@@ -2691,11 +2735,20 @@ export const updateOfferwallProvider = async (req, res) => {
             }
         }
 
+        const normalizedProviderKey = String(providerKey || '').trim().toLowerCase();
+        const isOfferwallGgProvider = normalizedProviderKey === 'offerwall_gg' || normalizedProviderKey === 'offerwallgg';
+        let existingProviderRecord = null;
+        if ((sanitizedUpdates.customConfig !== undefined && typeof sanitizedUpdates.customConfig === 'object') || isOfferwallGgProvider) {
+            existingProviderRecord = await OfferwallProvider.findOne({ providerKey: normalizedProviderKey });
+            if (isOfferwallGgProvider && !existingProviderRecord) {
+                return res.status(404).json({ success: false, error: `Provider '${providerKey}' not found` });
+            }
+        }
+
         if (sanitizedUpdates.customConfig !== undefined && typeof sanitizedUpdates.customConfig === 'object') {
-            const existing = await OfferwallProvider.findOne({ providerKey: providerKey.toLowerCase() });
-            if (existing && existing.customConfig) {
+            if (existingProviderRecord && existingProviderRecord.customConfig) {
                 sanitizedUpdates.customConfig = {
-                    ...existing.customConfig,
+                    ...existingProviderRecord.customConfig,
                     ...sanitizedUpdates.customConfig
                 };
             }
@@ -2709,7 +2762,38 @@ export const updateOfferwallProvider = async (req, res) => {
             sanitizedUpdates.commissionMode = mode;
         }
 
-        if (sanitizedUpdates.exchangeRateMultiplier !== undefined) {
+        if (isOfferwallGgProvider) {
+            if (sanitizedUpdates.exchangeRateMultiplier !== undefined) {
+                const rawMult = sanitizedUpdates.exchangeRateMultiplier;
+                const parsedMult = (rawMult === null || rawMult === '') ? NaN : Number(rawMult);
+                if (!Number.isFinite(parsedMult) || parsedMult <= 0) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Invalid Offerwall.GG exchangeRateMultiplier: must be a positive finite number (100 required for Provider-Managed mode).'
+                    });
+                }
+                sanitizedUpdates.exchangeRateMultiplier = parsedMult;
+            }
+
+            const effectiveMode = sanitizedUpdates.commissionMode !== undefined
+                ? sanitizedUpdates.commissionMode
+                : (existingProviderRecord?.commissionMode || 'provider_managed');
+
+            if (effectiveMode === 'provider_managed') {
+                const effectiveMultRaw = sanitizedUpdates.exchangeRateMultiplier !== undefined
+                    ? sanitizedUpdates.exchangeRateMultiplier
+                    : existingProviderRecord?.exchangeRateMultiplier;
+                const effectiveMult = (effectiveMultRaw === null || effectiveMultRaw === undefined || effectiveMultRaw === '')
+                    ? NaN
+                    : Number(effectiveMultRaw);
+                if (!Number.isFinite(effectiveMult) || effectiveMult !== 100) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Offerwall.GG in Provider-Managed mode requires exchangeRateMultiplier === 100 (100 Coins = $1.00 USD user valuation).'
+                    });
+                }
+            }
+        } else if (sanitizedUpdates.exchangeRateMultiplier !== undefined) {
             sanitizedUpdates.exchangeRateMultiplier = Math.max(0, Number(sanitizedUpdates.exchangeRateMultiplier) || 1.0);
         }
         if (sanitizedUpdates.platformRevenueSharePercent !== undefined && sanitizedUpdates.userRevenueSharePercent === undefined) {
@@ -2729,7 +2813,7 @@ export const updateOfferwallProvider = async (req, res) => {
         }
 
         const provider = await OfferwallProvider.findOneAndUpdate(
-            { providerKey: providerKey.toLowerCase() },
+            { providerKey: normalizedProviderKey },
             { $set: sanitizedUpdates },
             { new: true, runValidators: true }
         );
@@ -3122,8 +3206,8 @@ export const seedVerifiedNetworks = async () => {
             integrationStatus: 'Not Started',
             appId: '9604',
             apiKey: '44e2f34845f41e2de70f39b9c3b5a543',
-            exchangeRateMultiplier: 70,
-            commissionMode: 'smartexn_managed',
+            exchangeRateMultiplier: 100,
+            commissionMode: 'provider_managed',
             userRevenueSharePercent: 70,
             platformRevenueSharePercent: 30,
             iframeUrlTemplate: 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={userId}',
@@ -3134,7 +3218,7 @@ export const seedVerifiedNetworks = async () => {
             badge: 'Active Placement',
             icon: '🎮',
             description: 'Leading gaming, app engagement, and multi-reward offerwall.',
-            complianceNotes: 'HMAC-SHA256 signature verification over userId:transactionId:currencyAmount using secret key. 70 Coins = $1.00 USD.'
+            complianceNotes: 'HMAC-SHA256 signature verification over userId:transactionId:currencyAmount using secret key. Offerwall.GG configured externally at 70 Coins/$1.00 gross; SmartExn Provider-Managed at 100 Coins = $1.00 USD user valuation (70 Coins = $0.70 user reward, $0.30 platform revenue).'
         },
         {
             providerKey: 'adgem',

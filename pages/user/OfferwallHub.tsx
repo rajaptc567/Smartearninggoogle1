@@ -456,10 +456,17 @@ export const OfferwallHub: React.FC = () => {
                                 </p>
                             </div>
 
-                            <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
-                                <span className="text-slate-400 font-bold">1 USD =</span>
-                                <span className="text-emerald-400 font-black">${prov.exchangeRateMultiplier || 1.0}</span>
-                            </div>
+                            {prov.providerKey === 'offerwall_gg' || prov.providerKey === 'offerwallgg' ? (
+                                <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
+                                    <span className="text-slate-400 font-bold">Reward Rate:</span>
+                                    <span className="text-emerald-400 font-black">70 Coins per $1.00 gross</span>
+                                </div>
+                            ) : (
+                                <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
+                                    <span className="text-slate-400 font-bold">1 USD =</span>
+                                    <span className="text-emerald-400 font-black">${prov.exchangeRateMultiplier || 1.0}</span>
+                                </div>
+                            )}
                         </button>
                     );
                 })}

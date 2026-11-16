@@ -143,6 +143,21 @@ const Transactions: React.FC = () => {
                                     <td className="px-4 py-3 text-sm">
                                         {tx.description}
                                         {tx.type === 'Commission' && tx.level && ` (Level ${tx.level})`}
+                                        {(() => {
+                                            const providerRaw = String((tx as any).offerwallProvider || '').toLowerCase();
+                                            const isOfferwallGg = (providerRaw === 'offerwall_gg' || providerRaw === 'offerwallgg')
+                                                && (tx.type === 'Offerwall Reward' || tx.type === 'Offerwall Reversal');
+                                            const usdVal = Math.abs(Number((tx as any).userRewardAmount ?? tx.amountUSD ?? tx.amount ?? 0));
+                                            if (!isOfferwallGg || !(usdVal > 0)) return null;
+                                            const isRev = tx.type === 'Offerwall Reversal';
+                                            const coins = Number((usdVal * 100).toFixed(4));
+                                            const usdFormatted = Number(usdVal.toFixed(2)) === usdVal ? usdVal.toFixed(2) : String(Number(usdVal.toFixed(4)));
+                                            return (
+                                                <span className="block text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                                                    {isRev ? `-${coins} Coins (-$${usdFormatted} USD)` : `${coins} Coins ($${usdFormatted} USD)`}
+                                                </span>
+                                            );
+                                        })()}
                                         {tx.originalAmount && tx.originalCurrency && (
                                             <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase mt-0.5">
                                                 (Orig: {formatCurrency(tx.originalAmount, tx.originalCurrency)}{tx.amountUSD ? ` ➔ $${Math.abs(tx.amountUSD).toFixed(2)} USD` : ''})
@@ -195,6 +210,21 @@ const Transactions: React.FC = () => {
                                                     {tx.description}
                                                     {tx.type === 'Commission' && tx.level && ` (Level ${tx.level})`}
                                                 </p>
+                                                {(() => {
+                                                    const providerRaw = String((tx as any).offerwallProvider || '').toLowerCase();
+                                                    const isOfferwallGg = (providerRaw === 'offerwall_gg' || providerRaw === 'offerwallgg')
+                                                        && (tx.type === 'Offerwall Reward' || tx.type === 'Offerwall Reversal');
+                                                    const usdVal = Math.abs(Number((tx as any).userRewardAmount ?? tx.amountUSD ?? tx.amount ?? 0));
+                                                    if (!isOfferwallGg || !(usdVal > 0)) return null;
+                                                    const isRev = tx.type === 'Offerwall Reversal';
+                                                    const coins = Number((usdVal * 100).toFixed(4));
+                                                    const usdFormatted = Number(usdVal.toFixed(2)) === usdVal ? usdVal.toFixed(2) : String(Number(usdVal.toFixed(4)));
+                                                    return (
+                                                        <span className="block text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-1">
+                                                            {isRev ? `-${coins} Coins (-$${usdFormatted} USD)` : `${coins} Coins ($${usdFormatted} USD)`}
+                                                        </span>
+                                                    );
+                                                })()}
                                                 {tx.originalAmount && tx.originalCurrency && (
                                                     <div className="mt-2 text-[9px] font-bold text-gray-500 dark:text-gray-400 border-t dark:border-gray-800 pt-1 uppercase">
                                                         Original: {formatCurrency(tx.originalAmount, tx.originalCurrency)}

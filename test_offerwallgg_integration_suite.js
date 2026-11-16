@@ -5,6 +5,7 @@ import {
     verifySignature, 
     seedVerifiedNetworks, 
     getOfferwallProviders, 
+    updateOfferwallProvider,
     acquirePostbackLock, 
     releasePostbackLock, 
     isLockStillOwned 
@@ -149,6 +150,18 @@ OfferwallProvider.findByIdAndUpdate = async (id, update) => {
         }
     }
     return null;
+};
+OfferwallProvider.findOneAndUpdate = async (query, update) => {
+    const targetKey = typeof query.providerKey === 'string' ? query.providerKey.toLowerCase() : null;
+    const provider = targetKey ? db.providers.get(targetKey) : null;
+    if (!provider) return null;
+    if (update.$set) {
+        Object.assign(provider, update.$set);
+    }
+    if (!provider.toObject) {
+        provider.toObject = function() { return { ...this }; };
+    }
+    return provider;
 };
 
 Transaction.findOne = async (query) => {
@@ -333,12 +346,13 @@ const runTest = async (name, fn) => {
         assert.equal(provider.enabled, false, 'enabled must be false by default');
     });
 
-    await runTest('T02: Default status is NOT_STARTED and approvalStatus is Pending', async () => {
+    await runTest('T02: Default status is NOT_STARTED and approvalStatus is Pending with Provider-Managed 100 valuation', async () => {
         const provider = db.providers.get('offerwall_gg');
         assert.equal(provider.status, 'NOT_STARTED', 'status must be NOT_STARTED');
         assert.equal(provider.approvalStatus, 'Pending', 'approvalStatus must be Pending');
         assert.equal(provider.integrationStatus, 'Not Started');
-        assert.equal(provider.exchangeRateMultiplier, 70);
+        assert.equal(provider.commissionMode, 'provider_managed');
+        assert.equal(provider.exchangeRateMultiplier, 100);
         assert.equal(provider.appId, '9604');
         assert.equal(provider.apiKey, '44e2f34845f41e2de70f39b9c3b5a543');
     });
@@ -979,21 +993,32 @@ const runTest = async (name, fn) => {
     console.log('\n--- SECTION 6: System Boundaries & Existing Provider Isolation ---');
 
     await runTest('T37: Core walletBalance remains 100% untouched across credits and reversals', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        if (owProvider) {
+            owProvider.enabled = true;
+            owProvider.status = 'ACTIVE';
+            owProvider.approvalStatus = 'Approved';
+        }
         const user = db.users.get(TEST_USER_ID);
         user.walletBalance = 500.00; // Main deposit capital
         user.taskEarningsBalance = 10.00;
+        user.taskWalletBalance = 10.00;
 
         // Perform a credit
         const txId = 'ow_tx_core_isolation';
         const sig = computeSignature(TEST_USER_ID, txId, '70');
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', signature: sig }, body: {}, headers: {} }, createMockRes());
+        const credRes = createMockRes();
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: sig }, body: {}, headers: {} }, credRes);
 
+        assert.equal(credRes.statusCode, 200);
         assert.equal(user.walletBalance, 500.00, 'Main deposit walletBalance must be 100% untouched on credit');
 
         // Perform a reversal
         const revSig = computeSignature(TEST_USER_ID, txId, '-70');
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '-70', signature: revSig }, body: {}, headers: {} }, createMockRes());
+        const revRes = createMockRes();
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '-70', status: 'reversed', signature: revSig }, body: {}, headers: {} }, revRes);
 
+        assert.equal(revRes.statusCode, 200);
         assert.equal(user.walletBalance, 500.00, 'Main deposit walletBalance must be 100% untouched on reversal');
     });
 
@@ -1004,8 +1029,10 @@ const runTest = async (name, fn) => {
 
         const txId = 'ow_tx_invest_isolation';
         const sig = computeSignature(TEST_USER_ID, txId, '70');
-        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', signature: sig }, body: {}, headers: {} }, createMockRes());
+        const credRes = createMockRes();
+        await handlePostback({ method: 'GET', params: { provider: 'offerwall_gg' }, query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: sig }, body: {}, headers: {} }, credRes);
 
+        assert.equal(credRes.statusCode, 200);
         assert.equal(user.activePlan, 'Gold Plan');
         assert.equal(user.activePlans.length, 1);
     });
@@ -1862,6 +1889,256 @@ const runTest = async (name, fn) => {
 
         assert.equal(res.statusCode, 200);
         assert.equal(res.body.launchUrl, `https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId=${TEST_USER_ID}`);
+    });
+
+    console.log('\n--- SECTION 7: Provider-Managed Accounting Matrix, Multiplier Guards & Reversal Precision ---');
+
+    const setupProviderManagedOfferwallGg = () => {
+        process.env.OFFERWALL_GG_SECRET_KEY = TEST_SECRET;
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.enabled = true;
+        owProvider.status = 'ACTIVE';
+        owProvider.approvalStatus = 'Approved';
+        owProvider.testMode = false;
+        owProvider.commissionMode = 'provider_managed';
+        owProvider.exchangeRateMultiplier = 100;
+        owProvider.userRevenueSharePercent = 70;
+        owProvider.platformRevenueSharePercent = 30;
+        return owProvider;
+    };
+
+    const matrixCases = [
+        { id: 'T62', coins: '70', gross: 1.0000, user: 0.7000, platform: 0.3000 },
+        { id: 'T63', coins: '140', gross: 2.0000, user: 1.4000, platform: 0.6000 },
+        { id: 'T64', coins: '35', gross: 0.5000, user: 0.3500, platform: 0.1500 },
+        { id: 'T65', coins: '23.1', gross: 0.3300, user: 0.2310, platform: 0.0990 }
+    ];
+
+    for (const tc of matrixCases) {
+        await runTest(`${tc.id}: Provider-Managed matrix ${tc.coins} Coins => gross $${tc.gross}, user $${tc.user}, platform $${tc.platform}`, async () => {
+            setupProviderManagedOfferwallGg();
+            const user = db.users.get(TEST_USER_ID);
+            user.taskEarningsBalance = 5.0;
+            user.taskWalletBalance = 5.0;
+            user.walletBalance = 250.0;
+
+            const txId = `ow_matrix_${tc.id}`;
+            const sig = computeSignature(TEST_USER_ID, txId, tc.coins);
+            const res = createMockRes();
+            await handlePostback({
+                method: 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: tc.coins, status: 'credited', signature: sig },
+                body: {},
+                headers: {}
+            }, res);
+
+            assert.equal(res.statusCode, 200);
+            assert.equal(res.body, 'OK');
+            assert.equal(user.taskEarningsBalance, Number((5.0 + tc.user).toFixed(4)));
+            assert.equal(user.taskWalletBalance, Number((5.0 + tc.user).toFixed(4)));
+            assert.equal(user.walletBalance, 250.0, 'walletBalance must remain untouched');
+
+            const tx = await Transaction.findOne({ idempotencyKey: `offerwall_gg_${txId}_credit` });
+            assert.ok(tx, 'Transaction must be created');
+            assert.equal(tx.grossAmount, tc.gross);
+            assert.equal(tx.userRewardAmount, tc.user);
+            assert.equal(tx.platformRevenueAmount, tc.platform);
+            assert.equal(tx.amountUSD, tc.user);
+
+            const lastLog = Array.from(db.logs.values()).pop();
+            assert.equal(lastLog.grossAmountUSD, tc.gross);
+            assert.equal(lastLog.userRewardUSD, tc.user);
+            assert.equal(lastLog.platformRevenueUSD, tc.platform);
+        });
+    }
+
+    await runTest('T66: Provider alias offerwallgg executes identical Provider-Managed accounting without second deduction', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        db.providers.set('offerwallgg', owProvider);
+
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 0;
+        user.taskWalletBalance = 0;
+
+        const txId = 'ow_alias_matrix_70';
+        const sig = computeSignature(TEST_USER_ID, txId, '70');
+        const res = createMockRes();
+        await handlePostback({
+            method: 'POST',
+            params: { provider: 'offerwallgg' },
+            query: {},
+            body: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: sig },
+            headers: {}
+        }, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 0.7);
+        assert.equal(user.taskWalletBalance, 0.7);
+
+        const tx = await Transaction.findOne({ idempotencyKey: `offerwallgg_${txId}_credit` });
+        assert.ok(tx);
+        assert.equal(tx.grossAmount, 1.0);
+        assert.equal(tx.userRewardAmount, 0.7);
+        assert.equal(tx.platformRevenueAmount, 0.3);
+    });
+
+    await runTest('T67: Invalid exchangeRateMultiplier in provider_managed mode fails closed with HTTP 400 and zero financial mutations', async () => {
+        const invalidValues = [undefined, null, 0, 1, 70, 'abc', NaN, Infinity, -100];
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 12.34;
+        user.taskWalletBalance = 12.34;
+
+        for (let idx = 0; idx < invalidValues.length; idx++) {
+            const badVal = invalidValues[idx];
+            const owProvider = setupProviderManagedOfferwallGg();
+            owProvider.exchangeRateMultiplier = badVal;
+
+            const txBefore = db.transactions.size;
+            const logBefore = db.logs.size;
+            const txId = `ow_invalid_mult_${idx}`;
+            const sig = computeSignature(TEST_USER_ID, txId, '70');
+            const res = createMockRes();
+
+            await handlePostback({
+                method: 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: sig },
+                body: {},
+                headers: {}
+            }, res);
+
+            assert.equal(res.statusCode, 400, `Multiplier '${String(badVal)}' must fail closed with 400`);
+            assert.equal(res.body, 'OFFERWALL_GG_MULTIPLIER_INVALID');
+            assert.equal(user.taskEarningsBalance, 12.34, 'taskEarningsBalance must not change on invalid multiplier');
+            assert.equal(user.taskWalletBalance, 12.34, 'taskWalletBalance must not change on invalid multiplier');
+            assert.equal(db.transactions.size, txBefore, 'No transaction may be created on invalid multiplier');
+            assert.equal(db.logs.size, logBefore + 1, 'Error log must be saved safely');
+            const lastLog = Array.from(db.logs.values()).pop();
+            assert.equal(lastLog.status, 'Error');
+        }
+    });
+
+    await runTest('T68: updateOfferwallProvider rejects invalid Offerwall.GG multipliers without 1.0 coercion and allows 100', async () => {
+        const owProvider = setupProviderManagedOfferwallGg();
+        owProvider.exchangeRateMultiplier = 70;
+        const adminUser = { id: TEST_USER_ID, role: 'admin' };
+
+        const rejectedPayloads = [
+            { commissionMode: 'provider_managed', exchangeRateMultiplier: 70 },
+            { commissionMode: 'provider_managed', exchangeRateMultiplier: 0 },
+            { commissionMode: 'provider_managed', exchangeRateMultiplier: null },
+            { commissionMode: 'provider_managed', exchangeRateMultiplier: 1 },
+            { commissionMode: 'provider_managed', exchangeRateMultiplier: 'abc' },
+            { commissionMode: 'provider_managed' } // partial update while stored multiplier is 70
+        ];
+
+        for (const payload of rejectedPayloads) {
+            const res = createMockRes();
+            await updateOfferwallProvider({ user: adminUser, params: { providerKey: 'offerwall_gg' }, body: payload }, res);
+            assert.equal(res.statusCode, 400, `Expected 400 for payload ${JSON.stringify(payload)}`);
+            assert.equal(owProvider.exchangeRateMultiplier, 70, 'Stored multiplier must NOT be mutated or coerced to 1.0');
+        }
+
+        // Valid save with 100 succeeds
+        const validRes = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwall_gg' },
+            body: { commissionMode: 'provider_managed', exchangeRateMultiplier: 100 }
+        }, validRes);
+        assert.equal(validRes.statusCode, 200);
+        assert.equal(owProvider.exchangeRateMultiplier, 100);
+        assert.equal(owProvider.commissionMode, 'provider_managed');
+
+        // Partial update with invalid multiplier while already provider_managed is rejected
+        const partialBadRes = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'offerwallgg' },
+            body: { exchangeRateMultiplier: 70 }
+        }, partialBadRes);
+        assert.equal(partialBadRes.statusCode, 400);
+        assert.equal(owProvider.exchangeRateMultiplier, 100);
+
+        // Other providers (e.g. cpx_research) remain completely unaffected
+        const cpxProvider = db.providers.get('cpx_research');
+        const cpxRes = createMockRes();
+        await updateOfferwallProvider({
+            user: adminUser,
+            params: { providerKey: 'cpx_research' },
+            body: { commissionMode: 'smartexn_managed', exchangeRateMultiplier: 1.0 }
+        }, cpxRes);
+        assert.equal(cpxRes.statusCode, 200);
+        assert.equal(cpxProvider.exchangeRateMultiplier, 1.0);
+    });
+
+    await runTest('T69: Fractional reversal (23.1 Coins = $0.231 USD) preserves $0.001 precision on deduction and chargebackLiabilityUSD', async () => {
+        setupProviderManagedOfferwallGg();
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 0;
+        user.taskWalletBalance = 0;
+        user.chargebackLiabilityUSD = 0;
+
+        const txId = 'ow_frac_rev_231';
+        const credSig = computeSignature(TEST_USER_ID, txId, '23.1');
+        const credRes = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '23.1', status: 'credited', signature: credSig },
+            body: {},
+            headers: {}
+        }, credRes);
+        assert.equal(credRes.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 0.231);
+
+        // Simulate partial withdrawal leaving $0.1000 so reversal incurs $0.1310 liability
+        user.taskEarningsBalance = 0.10;
+        user.taskWalletBalance = 0.10;
+
+        const revSig = computeSignature(TEST_USER_ID, txId, '-23.1');
+        const revRes = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '-23.1', status: 'reversed', signature: revSig },
+            body: {},
+            headers: {}
+        }, revRes);
+        assert.equal(revRes.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 0, 'Earnings balance floors cleanly at 0');
+        assert.equal(user.chargebackLiabilityUSD, 0.131, 'Liability preserves $0.001 precision (0.131, not truncated to 0.13)');
+
+        const revTx = await Transaction.findOne({ idempotencyKey: `offerwall_gg_${txId}_reversal` });
+        assert.ok(revTx);
+        assert.equal(revTx.amountUSD, 0.231);
+        assert.equal(revTx.chargebackStatus, 'Liability_Owed');
+    });
+
+    await runTest('T70: Unsigned payoutUsd is ignored in provider_managed mode', async () => {
+        setupProviderManagedOfferwallGg();
+        const user = db.users.get(TEST_USER_ID);
+        user.taskEarningsBalance = 0;
+        user.taskWalletBalance = 0;
+
+        const txId = 'ow_pm_tamper_payout';
+        const sig = computeSignature(TEST_USER_ID, txId, '70');
+        const res = createMockRes();
+        await handlePostback({
+            method: 'GET',
+            params: { provider: 'offerwall_gg' },
+            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '500.00', status: 'credited', signature: sig },
+            body: {},
+            headers: {}
+        }, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 0.70);
+        const tx = await Transaction.findOne({ idempotencyKey: `offerwall_gg_${txId}_credit` });
+        assert.equal(tx.grossAmount, 1.0);
+        assert.equal(tx.userRewardAmount, 0.7);
+        assert.equal(tx.platformRevenueAmount, 0.3);
     });
 
     console.log(`\n========================================================`);

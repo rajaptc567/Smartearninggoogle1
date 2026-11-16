@@ -448,13 +448,28 @@ const WorkAndEarnHistory: React.FC = () => {
                 const signedAmountUSD = isReversal ? -rewardUSD : rewardUSD;
                 const signedAmountBase = isReversal ? -rewardBase : rewardBase;
 
+                const providerRaw = String((t as any).offerwallProvider || '').toLowerCase();
+                const isOfferwallGg = (providerRaw === 'offerwall_gg' || providerRaw === 'offerwallgg')
+                    && (t.type === 'Offerwall Reward' || t.type === 'Offerwall Reversal');
+                const ggUsdFormatted = Number(rewardUSD.toFixed(2)) === rewardUSD
+                    ? rewardUSD.toFixed(2)
+                    : String(Number(rewardUSD.toFixed(4)));
+                const ggCoins = isOfferwallGg && rewardUSD > 0 ? Number((rewardUSD * 100).toFixed(4)) : null;
+                const ggCoinLabel = ggCoins !== null
+                    ? `${isReversal ? '-' : ''}${ggCoins} Coins (${isReversal ? '-' : ''}$${ggUsdFormatted} USD)`
+                    : null;
+
                 const providerName = (t as any).offerwallProvider || 'Offerwall';
                 const flowStr = isReversal ? 'Task Wallet ➔ Provider Reversal' : 'Task Escrow ➔ Task Wallet';
                 const typeLabelStr = isReversal ? 'Reward Reversed' : (t.type === 'Offerwall Reward' ? 'Offerwall Earned' : 'Task Earned');
                 const titleStr = t.description || (isReversal ? `Offerwall Reversal (${providerName})` : (t.type === 'Offerwall Reward' ? `Offerwall Reward: ${providerName}` : 'Micro Task Reward Credited'));
                 const subTitleStr = isReversal 
-                    ? `Deducted $${rewardUSD.toFixed(2)} USD (${rewardBase.toFixed(2)} ${userCurr}) due to provider reversal`
-                    : `Earned $${rewardUSD.toFixed(2)} USD (${rewardBase.toFixed(2)} ${userCurr})`;
+                    ? (ggCoinLabel
+                        ? `${ggCoinLabel} • Deducted $${ggUsdFormatted} USD (${rewardBase.toFixed(2)} ${userCurr}) due to provider reversal`
+                        : `Deducted $${rewardUSD.toFixed(2)} USD (${rewardBase.toFixed(2)} ${userCurr}) due to provider reversal`)
+                    : (ggCoinLabel
+                        ? `${ggCoinLabel} • Earned $${ggUsdFormatted} USD (${rewardBase.toFixed(2)} ${userCurr})`
+                        : `Earned $${rewardUSD.toFixed(2)} USD (${rewardBase.toFixed(2)} ${userCurr})`);
 
                 list.push({
                     id: txIdStr,
