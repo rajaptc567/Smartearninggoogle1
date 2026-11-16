@@ -1042,7 +1042,7 @@ const persistOfferwallGgLog = async (logDoc) => {
 
         // Pre-processing failure receives another invalid-signature probe
         if (preProcessingStatuses.has(existingLog.status) && logDoc.status === 'InvalidSignature') {
-            appendHistory(existingLog, buildSnapshot(logDoc));
+            appendHistory(existingLog, buildSnapshot(existingLog));
             existingLog.clientIp = logDoc.clientIp;
             existingLog.signature = logDoc.signature;
             existingLog.signatureStatus = logDoc.signatureStatus;

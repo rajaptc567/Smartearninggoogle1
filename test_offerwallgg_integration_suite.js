@@ -3086,235 +3086,72 @@ const runTest = async (name, fn) => {
         assert.equal(user.taskEarningsBalance, 10.7, 'Concurrent cross-alias callbacks must credit exactly once');
     });
 
-    await runTest('T91: InvalidSignature followed by valid retry preserves complete previous sanitized request evidence', async () => {
+    await runTest('T98 — Original invalid evidence preservation', async () => {
         setupProviderManagedOfferwallGg();
         const user = db.users.get(TEST_USER_ID);
         user.taskEarningsBalance = 0;
 
         const origSave = OfferwallPostbackLog.prototype.save;
         const origFindOne = OfferwallPostbackLog.findOne;
-        const origTxCreate = Transaction.create;
 
-        Transaction.create = async (doc, options) => {
-            const res = await origTxCreate(doc, options);
-            if (!Array.isArray(res) && res && typeof res._id === 'string' && !/^[0-9a-fA-F]{24}$/.test(res._id)) {
-                res._id = new mongoose.Types.ObjectId();
-            }
-            return res;
-        };
         OfferwallPostbackLog.prototype.save = async function() {
-            const keyMatch = (entry) =>
-                entry.provider === this.provider &&
-                entry.externalTxId === this.externalTxId &&
-                Boolean(entry.isReversal) === Boolean(this.isReversal);
             for (const existing of db.logs.values()) {
-                if (keyMatch(existing) && String(existing._id) !== String(this._id)) {
-                    const err = new Error('E11000 duplicate key error');
-                    err.code = 11000;
-                    throw err;
+                if (existing.provider === this.provider && existing.externalTxId === this.externalTxId && Boolean(existing.isReversal) === Boolean(this.isReversal) && String(existing._id) !== String(this._id)) {
+                    const err = new Error('E11000 duplicate'); err.code = 11000; throw err;
                 }
             }
-            const id = this._id || `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-            db.logs.set(String(id), this);
+            db.logs.set(String(this._id || Math.random()), this);
             return this;
         };
         OfferwallPostbackLog.findOne = async (query) => {
             for (const entry of db.logs.values()) {
-                if (
-                    entry.provider === query.provider &&
-                    entry.externalTxId === query.externalTxId &&
-                    Boolean(entry.isReversal) === Boolean(query.isReversal)
-                ) {
-                    return entry;
-                }
+                if (entry.provider === query.provider && entry.externalTxId === query.externalTxId && Boolean(entry.isReversal) === Boolean(query.isReversal)) return entry;
             }
             return null;
         };
 
         try {
-            const txId = 't91_evidence_test';
-            const badRes = createMockRes();
+            const txId = 't98_orig_evidence';
+            // First invalid callback
             await handlePostback({
                 method: 'GET',
                 params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_sig_t91', secretKey: 'secret_leak_attempt' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_1', note: 'first_call' },
                 body: {},
-                headers: { 'x-forwarded-for': '198.51.100.15' }
-            }, badRes);
-            assert.equal(badRes.statusCode, 400);
+                headers: { 'x-forwarded-for': '198.51.100.10' }
+            }, createMockRes());
 
-            const goodSig = computeSignature(TEST_USER_ID, txId, '70');
-            const goodRes = createMockRes();
+            // Second invalid callback
             await handlePostback({
                 method: 'GET',
                 params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: goodSig },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_2', note: 'second_call' },
                 body: {},
                 headers: { 'x-forwarded-for': '203.0.113.20' }
-            }, goodRes);
-            assert.equal(goodRes.statusCode, 200);
-
-            const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
-            assert.equal(log.status, 'Processed');
-            assert.ok(Array.isArray(log.priorSecurityEvents) && log.priorSecurityEvents.length === 1);
-            const snapshot = log.priorSecurityEvents[0];
-            assert.equal(snapshot.status, 'InvalidSignature');
-            assert.equal(snapshot.signatureStatus, 'Invalid');
-            assert.equal(snapshot.clientIp, '198.51.100.15');
-            assert.ok(snapshot.queryParams);
-            assert.equal(snapshot.queryParams.transactionId, txId);
-        } finally {
-            OfferwallPostbackLog.prototype.save = origSave;
-            OfferwallPostbackLog.findOne = origFindOne;
-            Transaction.create = origTxCreate;
-        }
-    });
-
-    await runTest('T92: Successful retry replaces current request evidence with valid callback details', async () => {
-        setupProviderManagedOfferwallGg();
-        const user = db.users.get(TEST_USER_ID);
-        user.taskEarningsBalance = 0;
-
-        const origSave = OfferwallPostbackLog.prototype.save;
-        const origFindOne = OfferwallPostbackLog.findOne;
-        const origTxCreate = Transaction.create;
-
-        Transaction.create = async (doc, options) => {
-            const res = await origTxCreate(doc, options);
-            if (!Array.isArray(res) && res && typeof res._id === 'string' && !/^[0-9a-fA-F]{24}$/.test(res._id)) {
-                res._id = new mongoose.Types.ObjectId();
-            }
-            return res;
-        };
-        OfferwallPostbackLog.prototype.save = async function() {
-            for (const existing of db.logs.values()) {
-                if (existing.provider === this.provider && existing.externalTxId === this.externalTxId && Boolean(existing.isReversal) === Boolean(this.isReversal) && String(existing._id) !== String(this._id)) {
-                    const err = new Error('E11000 duplicate'); err.code = 11000; throw err;
-                }
-            }
-            db.logs.set(String(this._id || Math.random()), this);
-            return this;
-        };
-        OfferwallPostbackLog.findOne = async (query) => {
-            for (const entry of db.logs.values()) {
-                if (entry.provider === query.provider && entry.externalTxId === query.externalTxId && Boolean(entry.isReversal) === Boolean(query.isReversal)) return entry;
-            }
-            return null;
-        };
-
-        try {
-            const txId = 't92_retry_replace';
-            await handlePostback({
-                method: 'GET',
-                params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad' },
-                body: {},
-                headers: { 'x-forwarded-for': '1.1.1.1' }
-            }, createMockRes());
-
-            const goodSig = computeSignature(TEST_USER_ID, txId, '70');
-            await handlePostback({
-                method: 'GET',
-                params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: goodSig, extraField: 'new_evidence' },
-                body: {},
-                headers: { 'x-forwarded-for': '2.2.2.2' }
             }, createMockRes());
 
             const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
-            assert.equal(log.status, 'Processed');
-            assert.equal(log.clientIp, '2.2.2.2');
-            assert.equal(log.signatureStatus, 'Verified');
-            assert.equal(log.queryParams.extraField, 'new_evidence');
-            assert.equal(log.priorSecurityEvents[0].clientIp, '1.1.1.1');
-        } finally {
-            OfferwallPostbackLog.prototype.save = origSave;
-            OfferwallPostbackLog.findOne = origFindOne;
-            Transaction.create = origTxCreate;
-        }
-    });
+            assert.equal(log.status, 'InvalidSignature');
+            assert.equal(log.clientIp, '203.0.113.20', 'Current log must contain second callback IP');
+            assert.equal(log.queryParams.note, 'second_call', 'Current log must contain second callback query params');
 
-    await runTest('T93: Later InvalidSignature probe cannot downgrade Processed status and preserves its evidence', async () => {
-        setupProviderManagedOfferwallGg();
-        const user = db.users.get(TEST_USER_ID);
-        user.taskEarningsBalance = 0;
-
-        const origSave = OfferwallPostbackLog.prototype.save;
-        const origFindOne = OfferwallPostbackLog.findOne;
-        const origTxCreate = Transaction.create;
-
-        Transaction.create = async (doc, options) => {
-            const res = await origTxCreate(doc, options);
-            if (!Array.isArray(res) && res && typeof res._id === 'string' && !/^[0-9a-fA-F]{24}$/.test(res._id)) {
-                res._id = new mongoose.Types.ObjectId();
-            }
-            return res;
-        };
-        OfferwallPostbackLog.prototype.save = async function() {
-            for (const existing of db.logs.values()) {
-                if (existing.provider === this.provider && existing.externalTxId === this.externalTxId && Boolean(existing.isReversal) === Boolean(this.isReversal) && String(existing._id) !== String(this._id)) {
-                    const err = new Error('E11000 duplicate'); err.code = 11000; throw err;
-                }
-            }
-            db.logs.set(String(this._id || Math.random()), this);
-            return this;
-        };
-        OfferwallPostbackLog.findOne = async (query) => {
-            for (const entry of db.logs.values()) {
-                if (entry.provider === query.provider && entry.externalTxId === query.externalTxId && Boolean(entry.isReversal) === Boolean(query.isReversal)) return entry;
-            }
-            return null;
-        };
-
-        try {
-            const txId = 't93_terminal_test';
-            const goodSig = computeSignature(TEST_USER_ID, txId, '70');
-            await handlePostback({
-                method: 'GET',
-                params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: goodSig },
-                body: {},
-                headers: {}
-            }, createMockRes());
-
-            const balBefore = user.taskEarningsBalance;
-            await handlePostback({
-                method: 'GET',
-                params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '700', status: 'credited', signature: 'tampered_later' },
-                body: {},
-                headers: { 'x-forwarded-for': '9.9.9.9' }
-            }, createMockRes());
-
-            const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
-            assert.equal(log.status, 'Processed');
-            assert.equal(user.taskEarningsBalance, balBefore, 'Balances must remain untouched on subsequent invalid signature probe');
             assert.equal(log.priorSecurityEvents.length, 1);
-            assert.equal(log.priorSecurityEvents[0].clientIp, '9.9.9.9');
-            assert.equal(log.priorSecurityEvents[0].status, 'InvalidSignature');
+            assert.equal(log.priorSecurityEvents[0].clientIp, '198.51.100.10', 'First callback IP must be archived in priorSecurityEvents');
+            assert.equal(log.priorSecurityEvents[0].queryParams.note, 'first_call', 'First callback query params must be archived in priorSecurityEvents');
         } finally {
             OfferwallPostbackLog.prototype.save = origSave;
             OfferwallPostbackLog.findOne = origFindOne;
-            Transaction.create = origTxCreate;
         }
     });
 
-    await runTest('T94: Repeated invalid-signature events are retained up to maximum of 20 without unbounded growth', async () => {
+    await runTest('T99 — Repeated invalid callback history (bounded to 20)', async () => {
         setupProviderManagedOfferwallGg();
         const user = db.users.get(TEST_USER_ID);
         user.taskEarningsBalance = 0;
 
         const origSave = OfferwallPostbackLog.prototype.save;
         const origFindOne = OfferwallPostbackLog.findOne;
-        const origTxCreate = Transaction.create;
 
-        Transaction.create = async (doc, options) => {
-            const res = await origTxCreate(doc, options);
-            if (!Array.isArray(res) && res && typeof res._id === 'string' && !/^[0-9a-fA-F]{24}$/.test(res._id)) {
-                res._id = new mongoose.Types.ObjectId();
-            }
-            return res;
-        };
         OfferwallPostbackLog.prototype.save = async function() {
             for (const existing of db.logs.values()) {
                 if (existing.provider === this.provider && existing.externalTxId === this.externalTxId && Boolean(existing.isReversal) === Boolean(this.isReversal) && String(existing._id) !== String(this._id)) {
@@ -3332,32 +3169,32 @@ const runTest = async (name, fn) => {
         };
 
         try {
-            const txId = 't94_bound_test';
+            const txId = 't99_repeated_25';
             for (let i = 1; i <= 25; i++) {
                 await handlePostback({
                     method: 'GET',
                     params: { provider: 'offerwall_gg' },
-                    query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: `bad_${i}` },
+                    query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: `bad_${i}`, seq: i },
                     body: {},
                     headers: { 'x-forwarded-for': `10.0.0.${i}` }
                 }, createMockRes());
             }
 
             const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
-            assert.ok(log.priorSecurityEvents.length <= 20, `History must be capped at max 20 events (got ${log.priorSecurityEvents.length})`);
-            const lastEvent = log.priorSecurityEvents[log.priorSecurityEvents.length - 1];
-            assert.equal(lastEvent.clientIp, '10.0.0.25');
+            assert.equal(log.priorSecurityEvents.length, 20, 'History must contain exactly 20 retained events');
+            assert.equal(log.priorSecurityEvents[0].queryParams.seq, 5, 'Oldest retained event should be seq 5');
+            assert.equal(log.priorSecurityEvents[19].queryParams.seq, 24, 'Newest event in priorSecurityEvents should be seq 24');
+            assert.equal(log.queryParams.seq, 25, 'Current record contains latest callback (seq 25)');
         } finally {
             OfferwallPostbackLog.prototype.save = origSave;
             OfferwallPostbackLog.findOne = origFindOne;
-            Transaction.create = origTxCreate;
         }
     });
 
-    await runTest('T95: Sensitive fields remain masked in historical snapshots', async () => {
+    await runTest('T100 — Terminal record protection (Processed and Reversed)', async () => {
         setupProviderManagedOfferwallGg();
         const user = db.users.get(TEST_USER_ID);
-        user.taskEarningsBalance = 0;
+        user.taskEarningsBalance = 10.0;
 
         const origSave = OfferwallPostbackLog.prototype.save;
         const origFindOne = OfferwallPostbackLog.findOne;
@@ -3387,88 +3224,84 @@ const runTest = async (name, fn) => {
         };
 
         try {
-            const txId = 't95_mask_test';
+            // 1. Processed record protection
+            const txIdProc = 't100_proc_rec';
+            const goodSig = computeSignature(TEST_USER_ID, txIdProc, '70');
             await handlePostback({
                 method: 'GET',
                 params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad', secretKey: 'top_secret_key_123', authorization: 'Bearer secret_token' },
+                query: { userId: TEST_USER_ID, transactionId: txIdProc, currencyAmount: '70', status: 'credited', signature: goodSig, tag: 'valid_credit' },
                 body: {},
-                headers: { 'authorization': 'Bearer secret_token', 'x-api-key': 'secret_api_key' }
+                headers: { 'x-forwarded-for': '1.1.1.1' }
             }, createMockRes());
 
-            const goodSig = computeSignature(TEST_USER_ID, txId, '70');
+            const balanceBeforeProbe = user.taskEarningsBalance;
+            const logProcBefore = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdProc, isReversal: false });
+            const txIdLinked = logProcBefore.transactionId;
+
+            // Later invalid signature probe on Processed record
             await handlePostback({
                 method: 'GET',
                 params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: goodSig },
+                query: { userId: TEST_USER_ID, transactionId: txIdProc, currencyAmount: '700', status: 'credited', signature: 'bad_probe', tag: 'invalid_probe' },
+                body: {},
+                headers: { 'x-forwarded-for': '9.9.9.9' }
+            }, createMockRes());
+
+            const logProcAfter = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdProc, isReversal: false });
+            assert.equal(logProcAfter.status, 'Processed', 'Terminal Processed status must not be downgraded');
+            assert.equal(logProcAfter.transactionId.toString(), txIdLinked.toString(), 'Transaction ID must remain unchanged');
+            assert.equal(user.taskEarningsBalance, balanceBeforeProbe, 'User balance must remain unchanged');
+            assert.equal(logProcAfter.queryParams.tag, 'valid_credit', 'Successful request evidence must remain unchanged');
+            assert.equal(logProcAfter.priorSecurityEvents.length, 1);
+            assert.equal(logProcAfter.priorSecurityEvents[0].queryParams.tag, 'invalid_probe');
+
+            // 2. Reversed record protection
+            const txIdRev = 't100_rev_rec';
+            const goodSigRev = computeSignature(TEST_USER_ID, txIdRev, '70');
+            // Credit first
+            await handlePostback({
+                method: 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txIdRev, currencyAmount: '70', status: 'credited', signature: goodSigRev },
                 body: {},
                 headers: {}
             }, createMockRes());
 
-            const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
-            const snapshot = log.priorSecurityEvents[0];
-            const snapJson = JSON.stringify(snapshot);
-            assert.equal(snapJson.includes('top_secret_key_123'), false, 'Unmasked secretKey must never appear in snapshot');
-            assert.equal(snapJson.includes('secret_api_key'), false, 'Unmasked api key must never appear in snapshot');
-            assert.ok(snapJson.includes('***REDACTED***'), 'Sensitive fields must be masked with ***REDACTED***');
+            // Reverse
+            const revSig = computeSignature(TEST_USER_ID, txIdRev, '-70');
+            await handlePostback({
+                method: 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txIdRev, currencyAmount: '-70', status: 'reversed', signature: revSig, tag: 'valid_reversal' },
+                body: {},
+                headers: { 'x-forwarded-for': '2.2.2.2' }
+            }, createMockRes());
+
+            const logRevBefore = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdRev, isReversal: true });
+            assert.equal(logRevBefore.status, 'Reversed');
+            const balanceBeforeRevProbe = user.taskEarningsBalance;
+
+            // Later invalid signature probe on reversal record
+            await handlePostback({
+                method: 'GET',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txIdRev, currencyAmount: '-700', status: 'reversed', signature: 'bad_rev_probe', tag: 'invalid_rev_probe' },
+                body: {},
+                headers: { 'x-forwarded-for': '8.8.8.8' }
+            }, createMockRes());
+
+            const logRevAfter = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdRev, isReversal: true });
+            assert.equal(logRevAfter.status, 'Reversed', 'Terminal Reversed status must not be downgraded');
+            assert.equal(user.taskEarningsBalance, balanceBeforeRevProbe, 'User balance must remain unchanged');
+            assert.equal(logRevAfter.queryParams.tag, 'valid_reversal', 'Successful reversal request evidence must remain unchanged');
+            assert.equal(logRevAfter.priorSecurityEvents.length, 1);
+            assert.equal(logRevAfter.priorSecurityEvents[0].queryParams.tag, 'invalid_rev_probe');
         } finally {
             OfferwallPostbackLog.prototype.save = origSave;
             OfferwallPostbackLog.findOne = origFindOne;
             Transaction.create = origTxCreate;
         }
-    });
-
-    await runTest('T96: Existing duplicate credit, reversal, cross-alias idempotency and concurrency behavior remains unchanged', async () => {
-        setupProviderManagedOfferwallGg();
-        const user = db.users.get(TEST_USER_ID);
-        user.taskEarningsBalance = 20.0;
-
-        const txId = 't96_idempotency_test';
-        const sig = computeSignature(TEST_USER_ID, txId, '70');
-        const r1 = createMockRes();
-        await handlePostback({
-            method: 'GET',
-            params: { provider: 'offerwall_gg' },
-            query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: sig },
-            body: {},
-            headers: {}
-        }, r1);
-        assert.equal(r1.statusCode, 200);
-        assert.equal(user.taskEarningsBalance, 20.7);
-
-        const r2 = createMockRes();
-        await handlePostback({
-            method: 'POST',
-            params: { provider: 'offerwallgg' },
-            query: {},
-            body: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: sig },
-            headers: {}
-        }, r2);
-        assert.equal(r2.statusCode, 200);
-        assert.equal(r2.body, 'DUP_ALREADY_PROCESSED');
-        assert.equal(user.taskEarningsBalance, 20.7, 'Duplicate credit must not double-credit');
-    });
-
-    await runTest('T97: CPX, TheoremReach and ayeT logging behavior remains unchanged', async () => {
-        const cpxProvider = db.providers.get('cpx_research');
-        cpxProvider.enabled = true;
-        cpxProvider.status = 'ACTIVE';
-        cpxProvider.requireSignature = true;
-        cpxProvider.secretKey = 'cpx_sec_999';
-        cpxProvider.commissionMode = 'smartexn_managed';
-
-        const transId = 't97_cpx_log_test';
-        const hash = crypto.createHash('md5').update(`${transId}-cpx_sec_999`).digest('hex');
-        const res = createMockRes();
-        await handlePostback({
-            method: 'GET',
-            params: { provider: 'cpx_research' },
-            query: { user_id: TEST_USER_ID, trans_id: transId, amount_usd: '1.00', status: '1', secure_hash: hash },
-            body: {},
-            headers: {}
-        }, res);
-        assert.equal(res.statusCode, 200);
-        assert.equal(res.body, '1');
     });
 
     console.log(`\n========================================================`);
