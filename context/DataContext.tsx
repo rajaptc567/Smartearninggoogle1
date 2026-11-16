@@ -1286,6 +1286,8 @@ export interface SocketSessionInvalidationOptions {
     clearAllRetryTimers: () => void;
     dispatch: React.Dispatch<Action>;
     isSessionActive: () => boolean;
+    capturedToken?: string | null;
+    getStoredToken?: () => string | null;
     getPathname?: () => string;
     redirectToLogin?: () => void;
 }
@@ -1296,6 +1298,8 @@ export const invalidateSessionOnSocketAuthFailure = ({
     clearAllRetryTimers,
     dispatch,
     isSessionActive,
+    capturedToken,
+    getStoredToken = () => (typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null),
     getPathname = () => (typeof window !== 'undefined' && window.location ? window.location.pathname : ''),
     redirectToLogin = () => {
         if (typeof window !== 'undefined' && window.location) {
@@ -1308,6 +1312,13 @@ export const invalidateSessionOnSocketAuthFailure = ({
 
     if (!isSessionActive()) {
         return false;
+    }
+
+    if (capturedToken !== undefined) {
+        const storedToken = getStoredToken();
+        if (storedToken !== null && storedToken !== capturedToken) {
+            return false;
+        }
     }
 
     clearAllRetryTimers();
@@ -1596,7 +1607,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 disconnectSocket: () => socket.disconnect(),
                 clearAllRetryTimers,
                 dispatch,
-                isSessionActive: isCurrentSocketSession
+                isSessionActive: isCurrentSocketSession,
+                capturedToken: token
             });
         });
 
@@ -1616,7 +1628,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     disconnectSocket: () => socket.disconnect(),
                     clearAllRetryTimers,
                     dispatch,
-                    isSessionActive: isCurrentSocketSession
+                    isSessionActive: isCurrentSocketSession,
+                    capturedToken: token
                 });
             }
         });

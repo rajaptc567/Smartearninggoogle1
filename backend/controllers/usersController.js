@@ -784,6 +784,21 @@ export const updateUser = async (req, res) => {
         Object.assign(userToUpdate, filteredUpdate);
         let updatedUser = await userToUpdate.save();
 
+        const nextRole = updatedUser.role ? String(updatedUser.role).trim().toLowerCase() : 'user';
+        const nextStatus = updatedUser.status || 'Active';
+        const nextLoginBlocked = Boolean(updatedUser.restrictions?.loginBlocked);
+        const isSessionTerminated = nextStatus === 'Blocked' || nextStatus === 'Banned' || nextLoginBlocked;
+        if (nextRole !== prevRole || nextStatus !== prevStatus || nextLoginBlocked !== prevLoginBlocked) {
+            try {
+                revokeUserSockets(req.app?.get('io'), updatedUser._id, {
+                    terminateSession: isSessionTerminated,
+                    reason: isSessionTerminated ? 'account_restricted' : 'privileges_changed'
+                });
+            } catch (socketRevokeErr) {
+                console.error('Failed to revoke user sockets after account update:', socketRevokeErr?.message || socketRevokeErr);
+            }
+        }
+
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });
@@ -803,20 +818,6 @@ export const updateUser = async (req, res) => {
             sendTemplateNotification({ userId: updatedUser._id, templateKey: 'commission_unlocked_whatsapp', variables: unlockVars });
         }
 
-        const nextRole = updatedUser.role ? String(updatedUser.role).trim().toLowerCase() : 'user';
-        const nextStatus = updatedUser.status || 'Active';
-        const nextLoginBlocked = Boolean(updatedUser.restrictions?.loginBlocked);
-        const isSessionTerminated = nextStatus === 'Blocked' || nextStatus === 'Banned' || nextLoginBlocked;
-        if (nextRole !== prevRole || nextStatus !== prevStatus || nextLoginBlocked !== prevLoginBlocked) {
-            try {
-                revokeUserSockets(req.app?.get('io'), updatedUser._id, {
-                    terminateSession: isSessionTerminated,
-                    reason: isSessionTerminated ? 'account_restricted' : 'privileges_changed'
-                });
-            } catch (socketRevokeErr) {
-                console.error('Failed to revoke user sockets after account update:', socketRevokeErr?.message || socketRevokeErr);
-            }
-        }
         res.status(200).json({ success: true, data: updatedUser });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -942,7 +943,6 @@ export const bulkUpdateRestrictions = async (req, res) => {
         const usersToUpdate = await User.find(query);
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
-        const revokedUsers = [];
         for (const user of usersToUpdate) {
             let cur = user.restrictions || { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, loginBlocked: false, purchaseBlocked: false };
             const prevLoginBlocked = Boolean(cur.loginBlocked);
@@ -964,21 +964,15 @@ export const bulkUpdateRestrictions = async (req, res) => {
                 await user.save();
                 const nextLoginBlocked = Boolean(cur.loginBlocked);
                 if (nextLoginBlocked !== prevLoginBlocked) {
-                    revokedUsers.push({ userId: String(user._id), loginBlocked: nextLoginBlocked });
+                    try {
+                        revokeUserSockets(req.app?.get('io'), user._id, {
+                            terminateSession: nextLoginBlocked,
+                            reason: nextLoginBlocked ? 'login_blocked' : 'restrictions_updated'
+                        });
+                    } catch (socketRevokeErr) {
+                        console.error('Failed to revoke user sockets after restriction update:', socketRevokeErr?.message || socketRevokeErr);
+                    }
                 }
-            }
-        }
-        if (revokedUsers.length > 0) {
-            try {
-                const io = req.app?.get('io');
-                for (const item of revokedUsers) {
-                    revokeUserSockets(io, item.userId, {
-                        terminateSession: item.loginBlocked,
-                        reason: item.loginBlocked ? 'login_blocked' : 'restrictions_updated'
-                    });
-                }
-            } catch (socketRevokeErr) {
-                console.error('Failed to revoke user sockets after bulk restriction update:', socketRevokeErr?.message || socketRevokeErr);
             }
         }
         res.status(200).json({ success: true, message: `Bulk updated users.` });

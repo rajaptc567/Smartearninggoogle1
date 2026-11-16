@@ -622,6 +622,79 @@ async function runTests() {
                 await wait(80);
                 assert.equal(bBulkExpired, true);
                 assert.equal(bBulkDisconnected, true);
+
+                // 5) Fix A: Unchanged access fields (fullName only) do NOT revoke sockets;
+                //    AND changed role/status revokes immediately after save even if commission check throws later
+                userStore.set('user-a', { ...origUserA });
+                userStore.set('user-b', { ...origUserB });
+                const [cA5, cB5] = await Promise.all([
+                    connectClient(baseUrl, { auth: { token: jwt.sign({ id: 'user-a', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' }) } }),
+                    connectClient(baseUrl, { auth: { token: jwt.sign({ id: 'user-b', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' }) } })
+                ]);
+                assert.ok(cA5.ok && cB5.ok);
+                let a5Disconnected = false;
+                let b5Disconnected = false;
+                cA5.socket.on('disconnect', () => { a5Disconnected = true; });
+                cB5.socket.on('disconnect', () => { b5Disconnected = true; });
+
+                const rUnchanged = makeRes();
+                await usersCtrl.updateUser({
+                    params: { id: 'user-a' },
+                    user: { id: 'admin-1', role: 'admin' },
+                    body: { fullName: 'Updated Name Only' },
+                    app: mockApp
+                }, rUnchanged);
+                assert.equal(rUnchanged.out.status, 200);
+                await wait(60);
+                assert.equal(a5Disconnected, false);
+                assert.equal(b5Disconnected, false);
+
+                let a5ExpiredAfterPostSaveErr = false;
+                cA5.socket.on('SESSION_EXPIRED', () => { a5ExpiredAfterPostSaveErr = true; });
+                SettingMod.getSettings = async () => { throw new Error('Simulated commission lookup outage'); };
+                const rEarlyFail = makeRes();
+                await usersCtrl.updateUser({
+                    params: { id: 'user-a' },
+                    user: { id: 'admin-1', role: 'admin' },
+                    body: { status: 'Blocked' },
+                    app: mockApp
+                }, rEarlyFail);
+                assert.equal(rEarlyFail.out.status, 400);
+                await wait(80);
+                assert.equal(a5ExpiredAfterPostSaveErr, true);
+                assert.equal(a5Disconnected, true);
+                assert.equal(b5Disconnected, false);
+                SettingMod.getSettings = async () => ({});
+
+                // 6) Fix B: bulkUpdateRestrictions revokes user #1 immediately upon save even if user #2 fails later in batch
+                userStore.set('user-a', { ...origUserA });
+                userStore.set('user-b', { ...origUserB });
+                const cA6 = await connectClient(baseUrl, { auth: { token: jwt.sign({ id: 'user-a', role: 'user' }, TEST_JWT_SECRET, { expiresIn: '1h' }) } });
+                assert.equal(cA6.ok, true);
+                let a6Expired = false;
+                let a6Disconnected = false;
+                let b6Disconnected = false;
+                cA6.socket.on('SESSION_EXPIRED', () => { a6Expired = true; });
+                cA6.socket.on('disconnect', () => { a6Disconnected = true; });
+                cB5.socket.on('disconnect', () => { b6Disconnected = true; });
+
+                const failingUser2Doc = {
+                    _id: 'user-fail-batch',
+                    restrictions: { loginBlocked: false },
+                    async save() { throw new Error('Simulated save failure on second batch user'); }
+                };
+                UserMod.find = async () => [mkDoc('user-a'), failingUser2Doc];
+                const rBulkPartialFail = makeRes();
+                await usersCtrl.bulkUpdateRestrictions({
+                    body: { targetType: 'single', targetIds: ['user-a', 'user-fail-batch'], restrictions: { loginBlocked: true }, action: 'enable' },
+                    app: mockApp
+                }, rBulkPartialFail);
+                assert.equal(rBulkPartialFail.out.status, 400);
+                await wait(80);
+                assert.equal(a6Expired, true);
+                assert.equal(a6Disconnected, true);
+                assert.equal(b6Disconnected, false);
+                cB5.socket.disconnect();
             } finally {
                 UserMod.findById = orig.userFindById;
                 UserMod.find = orig.userFind;
@@ -1054,6 +1127,43 @@ async function runTests() {
         });
         assert.equal(ranStale, false);
         assert.equal(staleDispatches.length, 0);
+
+        // Fix E: Same user with unchanged token -> invalidates session and redirects
+        const sameTokCalls = [];
+        const sameTokDispatches = [];
+        const ranSameTok = dcMod.invalidateSessionOnSocketAuthFailure({
+            clearScheduler: () => sameTokCalls.push('clearScheduler'),
+            disconnectSocket: () => sameTokCalls.push('disconnectSocket'),
+            clearAllRetryTimers: () => sameTokCalls.push('clearTimers'),
+            dispatch: (a) => sameTokDispatches.push(a),
+            isSessionActive: () => true,
+            capturedToken: 'tok-v1',
+            getStoredToken: () => 'tok-v1',
+            getPathname: () => '/admin/users',
+            redirectToLogin: () => sameTokCalls.push('redirect:/login')
+        });
+        assert.equal(ranSameTok, true);
+        assert.deepEqual(sameTokDispatches, [{ type: 'SET_CURRENT_USER', payload: { user: null } }]);
+        assert.deepEqual(sameTokCalls, ['clearScheduler', 'disconnectSocket', 'clearTimers', 'redirect:/login']);
+
+        // Fix E: Same user, newer refreshed token stored -> stale socket does NOT clear newer session or redirect
+        localStorage.setItem('authToken', 'tok-v2-refreshed');
+        const staleTokCalls = [];
+        const staleTokDispatches = [];
+        const ranNewerTok = dcMod.invalidateSessionOnSocketAuthFailure({
+            clearScheduler: () => staleTokCalls.push('clearScheduler'),
+            disconnectSocket: () => staleTokCalls.push('disconnectSocket'),
+            clearAllRetryTimers: () => staleTokCalls.push('clearTimers'),
+            dispatch: (a) => staleTokDispatches.push(a),
+            isSessionActive: () => true,
+            capturedToken: 'tok-v1-stale',
+            getPathname: () => '/member/dashboard',
+            redirectToLogin: () => { throw new Error('Newer token session must not redirect'); }
+        });
+        assert.equal(ranNewerTok, false);
+        assert.deepEqual(staleTokCalls, ['clearScheduler', 'disconnectSocket']);
+        assert.equal(staleTokDispatches.length, 0);
+        assert.equal(localStorage.getItem('authToken'), 'tok-v2-refreshed');
     });
 
     await test('C23. notificationsController emits targeted user events only on actual mutation and never on no-ops or 403', async () => {
@@ -1140,6 +1250,22 @@ async function runTests() {
             assert.deepEqual(emitted[1].rooms, ['user:u2']);
             assert.equal(emitted[1].payload.event, 'NOTIFICATION_UPDATED');
 
+            // 4b. Fix C: Same identical values submitted again -> no DB update, 0 version bumps, 0 socket emits
+            let updateDbCalls = 0;
+            NotificationMod.findById = async () => ({ _id: 'n1', userId: 'u2', read: true, popupShown: false, isPopup: false, message: 'Hello', subject: 'Hi' });
+            NotificationMod.findByIdAndUpdate = async () => { updateDbCalls += 1; return { _id: 'n1', userId: 'u2', read: true }; };
+            const rUpdNoop = makeRes();
+            await notifCtrl.updateNotification({
+                params: { id: 'n1' },
+                user: { id: 'u2', role: 'user' },
+                body: { read: true, popupShown: false, message: 'Hello', subject: 'Hi' },
+                app
+            }, rUpdNoop);
+            assert.equal(rUpdNoop.out.status, 200);
+            assert.equal(updateDbCalls, 0);
+            assert.equal(bumpCalls, 2);
+            assert.equal(emitted.length, 2);
+
             // 5. deleteNotification
             NotificationMod.findByIdAndDelete = async () => ({ _id: 'n1', userId: 'u2' });
             const rDelOk = makeRes();
@@ -1167,6 +1293,62 @@ async function runTests() {
             assert.equal(bumpCalls, 4);
             assert.equal(emitted.length, 4);
 
+            // 6b. Fix D: Failed preliminary lookup + successful deletion -> safe fallback event without leaking content/IDs
+            NotificationMod.find = () => { throw new Error('Simulated lookup timeout'); };
+            NotificationMod.deleteMany = async () => ({ deletedCount: 2 });
+            const rBulkFallbackAdmin = makeRes();
+            await notifCtrl.bulkDeleteNotifications({ body: { ids: ['n10', 'n11'] }, user: { id: 'admin1', role: 'admin' }, app }, rBulkFallbackAdmin);
+            assert.equal(rBulkFallbackAdmin.out.status, 200);
+            assert.equal(bumpCalls, 5);
+            assert.equal(emitted.length, 5);
+            assert.deepEqual(emitted[4].rooms, ['authenticated']);
+            assert.deepEqual(emitted[4].payload.datasets, ['notifications']);
+            assert.equal(emitted[4].payload.event, 'NOTIFICATIONS_BULK_DELETED');
+            assert.equal('userId' in emitted[4].payload, false);
+            assert.equal('message' in emitted[4].payload, false);
+
+            // Failed lookup + zero deleted -> NO fallback emit and NO version bump
+            NotificationMod.deleteMany = async () => ({ deletedCount: 0 });
+            const rBulkFallbackZero = makeRes();
+            await notifCtrl.bulkDeleteNotifications({ body: { ids: ['n999'] }, user: { id: 'admin1', role: 'admin' }, app }, rBulkFallbackZero);
+            assert.equal(rBulkFallbackZero.out.status, 200);
+            assert.equal(bumpCalls, 5);
+            assert.equal(emitted.length, 5);
+
+            // Failed deletion -> 400, NO emit, NO version bump
+            NotificationMod.deleteMany = async () => { throw new Error('Simulated delete failure'); };
+            const rBulkDeleteErr = makeRes();
+            await notifCtrl.bulkDeleteNotifications({ body: { ids: ['n1'] }, user: { id: 'admin1', role: 'admin' }, app }, rBulkDeleteErr);
+            assert.equal(rBulkDeleteErr.out.status, 400);
+            assert.equal(bumpCalls, 5);
+            assert.equal(emitted.length, 5);
+
+            // Non-admin route authorization rejection (403) + filtered empty delete -> NO emit
+            const { authorize } = await import('./backend/middleware/authMiddleware.js');
+            const authMw = authorize(['admin', 'super_admin']);
+            const UserMod = (await import('./backend/models/User.js')).default;
+            const origUserFindById = UserMod.findById;
+            try {
+                UserMod.findById = () => ({ select: () => ({ lean: async () => ({ _id: 'u1', role: 'user', status: 'Active', restrictions: {} }) }) });
+                const prevSecret = process.env.JWT_SECRET;
+                process.env.JWT_SECRET = TEST_JWT_SECRET;
+                try {
+                    const userJwt = jwt.sign({ id: 'u1', role: 'user' }, TEST_JWT_SECRET);
+                    const rAuth403 = makeRes();
+                    let nextCalled = false;
+                    await authMw({ headers: { authorization: `Bearer ${userJwt}` } }, rAuth403, () => { nextCalled = true; });
+                    assert.equal(nextCalled, false);
+                    assert.equal(rAuth403.out.status, 403);
+                    assert.equal(bumpCalls, 5);
+                    assert.equal(emitted.length, 5);
+                } finally {
+                    if (prevSecret === undefined) delete process.env.JWT_SECRET;
+                    else process.env.JWT_SECRET = prevSecret;
+                }
+            } finally {
+                UserMod.findById = origUserFindById;
+            }
+
             // 7. markPopupShown -> emits only on transition false -> true, not duplicate true -> true
             NotificationMod.find = () => ({ sort: async () => [] });
             const popupDoc = { _id: 'p1', userId: 'u1', popupShown: false, async save() { return this; } };
@@ -1174,15 +1356,15 @@ async function runTests() {
             const rPopup1 = makeRes();
             await notifCtrl.markPopupShown({ params: { id: 'p1' }, user: { id: 'u1', role: 'user' }, app }, rPopup1);
             assert.equal(rPopup1.out.status, 200);
-            assert.equal(bumpCalls, 5);
-            assert.equal(emitted.length, 5);
-            assert.equal(emitted[4].payload.event, 'NOTIFICATION_POPUP_SHOWN');
+            assert.equal(bumpCalls, 6);
+            assert.equal(emitted.length, 6);
+            assert.equal(emitted[5].payload.event, 'NOTIFICATION_POPUP_SHOWN');
 
             const rPopup2 = makeRes();
             await notifCtrl.markPopupShown({ params: { id: 'p1' }, user: { id: 'u1', role: 'user' }, app }, rPopup2);
             assert.equal(rPopup2.out.status, 200);
-            assert.equal(bumpCalls, 5);
-            assert.equal(emitted.length, 5);
+            assert.equal(bumpCalls, 6);
+            assert.equal(emitted.length, 6);
         } finally {
             NotificationMod.find = origFind;
             NotificationMod.findById = origFindById;

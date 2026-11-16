@@ -283,6 +283,9 @@ export const updateNotification = async (req, res) => {
         }
 
         const { read, popupShown, message, subject, isPopup } = req.body;
+        const normalizeBoolInput = (val) => (
+            typeof val === 'boolean' ? val : (val === 'true' ? true : (val === 'false' ? false : val))
+        );
         const updateData = {};
         if (read !== undefined) updateData.read = read;
         if (popupShown !== undefined) updateData.popupShown = popupShown;
@@ -290,12 +293,24 @@ export const updateNotification = async (req, res) => {
         if (subject !== undefined) updateData.subject = subject;
         if (isPopup !== undefined) updateData.isPopup = isPopup;
 
+        const hasActualChange = (
+            (read !== undefined && normalizeBoolInput(read) !== Boolean(existing.read)) ||
+            (popupShown !== undefined && normalizeBoolInput(popupShown) !== Boolean(existing.popupShown)) ||
+            (isPopup !== undefined && normalizeBoolInput(isPopup) !== Boolean(existing.isPopup)) ||
+            (message !== undefined && message !== existing.message) ||
+            (subject !== undefined && subject !== existing.subject)
+        );
+
+        if (!hasActualChange) {
+            return res.status(200).json({ success: true, data: existing });
+        }
+
         const notification = await Notification.findByIdAndUpdate(
             req.params.id,
             updateData,
             { new: true }
         );
-        if (notification && Object.keys(updateData).length > 0) {
+        if (notification) {
             await notifyNotificationRealtime(req, [notification.userId || existing.userId], 'NOTIFICATION_UPDATED');
         }
         res.status(200).json({ success: true, data: notification });
@@ -337,16 +352,46 @@ export const bulkDeleteNotifications = async (req, res) => {
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         const deleteQuery = isAdmin ? { _id: { $in: ids } } : { _id: { $in: ids }, userId: req.user?.id };
         let matchingDocs = [];
+        let lookupFailed = false;
         try {
             matchingDocs = await Notification.find(deleteQuery).select('userId').lean();
         } catch (lookupErr) {
+            lookupFailed = true;
             matchingDocs = [];
         }
         const result = await Notification.deleteMany(deleteQuery);
         if ((result?.deletedCount || 0) > 0) {
-            const affectedUserIds = matchingDocs.map((doc) => doc?.userId).filter(Boolean);
+            const affectedUserIds = Array.isArray(matchingDocs)
+                ? matchingDocs.map((doc) => doc?.userId).filter(Boolean)
+                : [];
             if (affectedUserIds.length > 0) {
                 await notifyNotificationRealtime(req, affectedUserIds, 'NOTIFICATIONS_BULK_DELETED');
+            } else if (lookupFailed) {
+                if (!isAdmin && req.user?.id) {
+                    await notifyNotificationRealtime(req, [req.user.id], 'NOTIFICATIONS_BULK_DELETED');
+                } else if (isAdmin) {
+                    let version;
+                    try {
+                        if (mongoose.connection?.readyState === 1) {
+                            version = await Setting.bumpVersion();
+                        }
+                    } catch (versionErr) {
+                        console.error('Non-critical notification version bump failed:', versionErr);
+                    }
+                    try {
+                        const io = req?.app?.get('io');
+                        if (io) {
+                            emitRealtimeChange(io, {
+                                scope: 'global',
+                                datasets: ['notifications'],
+                                version,
+                                event: 'NOTIFICATIONS_BULK_DELETED'
+                            });
+                        }
+                    } catch (socketErr) {
+                        console.error('Non-critical notification realtime emit failed:', socketErr);
+                    }
+                }
             }
         }
         res.status(200).json({ success: true, message: `${result.deletedCount ?? ids.length} notifications deleted successfully.` });
