@@ -2924,7 +2924,7 @@ const runTest = async (name, fn) => {
             await handlePostback({
                 method: 'GET',
                 params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'tampered_bad_sig' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'tampered_bad_sig', initialProbeNote: 'initial_invalid_evidence' },
                 body: {},
                 headers: { 'x-forwarded-for': '203.0.113.9' }
             }, badRes);
@@ -2952,6 +2952,7 @@ const runTest = async (name, fn) => {
             const updatedLog = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
             assert.equal(updatedLog.status, 'Processed');
             assert.equal(updatedLog.clientIp, '198.51.100.88', 'Current log must contain successful retry clientIp');
+            assert.equal(updatedLog.rawHeaders['x-forwarded-for'], '198.51.100.88', 'Current rawHeaders x-forwarded-for must equal 198.51.100.88');
             assert.equal(updatedLog.queryParams.distinctTag, 'valid_retry_distinct', 'Current log must contain successful retry queryParams');
             assert.equal(updatedLog.rawBody.retryPayloadKey, 'retry_payload_val', 'Current log must contain successful retry rawBody');
             assert.ok(updatedLog.rawHeaders, 'Current log must contain rawHeaders');
@@ -2960,7 +2961,30 @@ const runTest = async (name, fn) => {
             assert.equal(updatedLog.userRewardUSD, 0.7);
             assert.ok(Array.isArray(updatedLog.priorSecurityEvents) && updatedLog.priorSecurityEvents.length === 1);
             assert.equal(updatedLog.priorSecurityEvents[0].status, 'InvalidSignature');
+            assert.equal(updatedLog.priorSecurityEvents[0].signatureStatus, 'Invalid');
+            assert.equal(updatedLog.priorSecurityEvents[0].signature, '***REDACTED***', 'Previous InvalidSignature signature is masked in historical snapshot');
             assert.equal(updatedLog.priorSecurityEvents[0].clientIp, '203.0.113.9');
+            assert.equal(updatedLog.priorSecurityEvents[0].rawHeaders['x-forwarded-for'], '203.0.113.9', 'Historical rawHeaders x-forwarded-for must equal 203.0.113.9');
+            assert.equal(updatedLog.priorSecurityEvents[0].queryParams.initialProbeNote, 'initial_invalid_evidence', 'Previous InvalidSignature request evidence remains archived in queryParams');
+
+            // Confirm no duplicate transaction, duplicate log or second balance credit occurs on retry replay
+            const retryReplayRes = createMockRes();
+            await handlePostback({
+                method: 'POST',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: goodSig, distinctTag: 'valid_retry_distinct' },
+                body: { retryPayloadKey: 'retry_payload_val' },
+                headers: { 'x-forwarded-for': '198.51.100.88' }
+            }, retryReplayRes);
+            assert.equal(retryReplayRes.statusCode, 200);
+            assert.equal(user.taskEarningsBalance, 0.7, 'No second balance credit on duplicate retry');
+            assert.equal(db.logs.size, totalLogsAfterBad, 'No duplicate log on replay');
+
+            let matchingTxCount = 0;
+            for (const t of db.transactions.values()) {
+                if (t.externalTransactionId === txId && t.offerwallProvider === 'offerwall_gg') matchingTxCount++;
+            }
+            assert.equal(matchingTxCount, 1, 'Exactly one transaction record must exist for this externalTxId');
 
             // Subsequent InvalidSignature tamper attempt after Processed must not downgrade Processed status
             const postTamperRes = createMockRes();
@@ -2975,6 +2999,7 @@ const runTest = async (name, fn) => {
             assert.equal(updatedLog.status, 'Processed', 'Processed terminal log status must not downgrade on later invalid-sig probe');
             assert.equal(updatedLog.priorSecurityEvents.length, 2);
             assert.equal(updatedLog.priorSecurityEvents[1].status, 'InvalidSignature');
+            assert.equal(user.taskEarningsBalance, 0.7, 'Balance must remain unchanged after post-Processed tamper probe');
         } finally {
             OfferwallPostbackLog.prototype.save = origSave;
             OfferwallPostbackLog.findOne = origFindOne;
@@ -3241,14 +3266,18 @@ const runTest = async (name, fn) => {
 
             const logProcBefore = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdProc, isReversal: false });
             
-            // Assert applicable financial fields contain valid expected values before comparing
+            // Assert applicable financial fields contain exact expected accounting values before comparing
             assert.equal(logProcBefore.status, 'Processed');
             assert.ok(logProcBefore.transactionId, 'Processed record must reference transactionId');
-            assert.ok(logProcBefore.rewardUSD >= 0, 'rewardUSD must be valid');
-            assert.ok(logProcBefore.grossAmountUSD > 0, 'grossAmountUSD must be positive');
-            assert.ok(logProcBefore.userRewardUSD > 0, 'userRewardUSD must be positive');
-            assert.ok(logProcBefore.platformRevenueUSD > 0, 'platformRevenueUSD must be positive');
-            assert.equal(logProcBefore.reversedAmountUSD, 0);
+            assert.equal(logProcBefore.grossAmountUSD, 1.00, 'grossAmountUSD must be 1.00');
+            assert.equal(logProcBefore.userRewardUSD, 0.70, 'userRewardUSD must be 0.70');
+            assert.equal(logProcBefore.platformRevenueUSD, 0.30, 'platformRevenueUSD must be 0.30');
+            assert.equal(logProcBefore.rewardUSD, 0.70, 'rewardUSD must be 0.70');
+            assert.equal(logProcBefore.reversedAmountUSD, 0, 'reversedAmountUSD must be 0 before reversal');
+
+            const procTx = await Transaction.findOne({ externalTransactionId: txIdProc, offerwallProvider: 'offerwall_gg', type: 'Offerwall Reward' });
+            assert.ok(procTx, 'Original credit transaction must exist for processed record');
+            assert.equal(procTx.amount, 0.70, 'Transaction amount must be 0.70');
 
             const beforeProc = {
                 status: logProcBefore.status,
@@ -3301,6 +3330,7 @@ const runTest = async (name, fn) => {
 
             // 2. Reversed record protection & before/after capture
             const txIdRev = 't100_rev_rec';
+            const balanceBeforeCredit = user.taskEarningsBalance;
             const goodSigRev = computeSignature(TEST_USER_ID, txIdRev, '70');
             // Credit first
             await handlePostback({
@@ -3311,8 +3341,12 @@ const runTest = async (name, fn) => {
                 headers: {}
             }, createMockRes());
 
+            const balanceAfterCredit = user.taskEarningsBalance;
+            assert.equal(Number((balanceAfterCredit - balanceBeforeCredit).toFixed(2)), 0.70, 'Credit must increase balance by 0.70');
+
             const creditTx = await Transaction.findOne({ externalTransactionId: txIdRev, offerwallProvider: 'offerwall_gg', type: 'Offerwall Reward' });
             assert.ok(creditTx, 'Original credit transaction must exist');
+            assert.equal(creditTx.amount, 0.70, 'Original credit amount must be 0.70');
 
             // Reverse
             const revSig = computeSignature(TEST_USER_ID, txIdRev, '-70');
@@ -3324,13 +3358,24 @@ const runTest = async (name, fn) => {
                 headers: { 'x-forwarded-for': '2.2.2.2' }
             }, createMockRes());
 
+            const balanceAfterReversal = user.taskEarningsBalance;
+            assert.equal(balanceAfterReversal, balanceBeforeCredit, 'User balance after reversal must return to balance before credit');
+            assert.equal(Number((balanceAfterCredit - balanceAfterReversal).toFixed(2)), 0.70, 'Reversal amount must match actual user deduction ($0.70)');
+
+            const revTx = await Transaction.findOne({ externalTransactionId: txIdRev, offerwallProvider: 'offerwall_gg', type: 'Offerwall Reversal' });
+            assert.ok(revTx, 'Reversal transaction must exist');
+            assert.equal(revTx.amount, 0.70, 'Reversal transaction amount must match expected user deduction ($0.70)');
+            assert.equal(String(revTx.reversalReferenceId), String(creditTx._id), 'Reversal transaction must reference original credit transaction ID');
+
             const logRevBefore = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdRev, isReversal: true });
             
             assert.equal(logRevBefore.status, 'Reversed');
             assert.ok(logRevBefore.transactionId, 'Reversed record must reference transactionId');
             assert.ok(logRevBefore.reversalReferenceTxId, 'Reversal log must reference reversalReferenceTxId');
             assert.equal(String(logRevBefore.reversalReferenceTxId), String(creditTx._id), 'reversalReferenceTxId must match original credit transaction id');
-            assert.ok(logRevBefore.reversedAmountUSD > 0, 'reversedAmountUSD must be positive');
+            assert.equal(logRevBefore.reversedAmountUSD, 0.70, 'reversedAmountUSD must be 0.70');
+            assert.equal(logRevBefore.userRewardUSD, 0.70, 'userRewardUSD must match credited user reward');
+            assert.ok(logRevBefore.reversedAmountUSD <= creditTx.amount, 'Reversal does not exceed the original credited reward');
             assert.equal(logRevBefore.reversedAmountUSD, logRevBefore.userRewardUSD, 'reversedAmountUSD must be consistent with userRewardUSD');
 
             const beforeRev = {
@@ -3416,8 +3461,14 @@ const runTest = async (name, fn) => {
                 method: 'POST',
                 params: { provider: 'offerwall_gg' },
                 query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_sig_1', secret: 'secret_val_1', token: 'token_val_1' },
-                body: { secretKey: 'secret_key_xyz_1', apiKey: 'api_key_123_1', auth: 'bearer_token_abc_1', authorization: 'auth_header_1' },
-                headers: { authorization: 'header_auth_1' }
+                body: { secretKey: 'secret_key_xyz_1', apiKey: 'api_key_123_1', auth: 'bearer_token_abc_1', authorization: 'auth_body_1' },
+                headers: {
+                    'x-forwarded-for': '198.51.100.21',
+                    'user-agent': 'AgentOne/1.0',
+                    'content-type': 'application/json',
+                    'authorization': 'Bearer header_auth_1',
+                    'x-api-key': 'header_api_key_1'
+                }
             }, createMockRes());
 
             // Second attempt with sensitive fields in query, body, and headers (bad signature)
@@ -3425,24 +3476,47 @@ const runTest = async (name, fn) => {
                 method: 'POST',
                 params: { provider: 'offerwall_gg' },
                 query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_sig_2', secret: 'secret_val_2', token: 'token_val_2' },
-                body: { secretKey: 'secret_key_xyz_2', apiKey: 'api_key_123_2', auth: 'bearer_token_abc_2', authorization: 'auth_header_2' },
-                headers: { authorization: 'header_auth_2' }
+                body: { secretKey: 'secret_key_xyz_2', apiKey: 'api_key_123_2', auth: 'bearer_token_abc_2', authorization: 'auth_body_2' },
+                headers: {
+                    'x-forwarded-for': '203.0.113.42',
+                    'user-agent': 'AgentTwo/2.0',
+                    'content-type': 'application/json',
+                    'authorization': 'Bearer header_auth_2',
+                    'x-api-key': 'header_api_key_2'
+                }
             }, createMockRes());
 
             const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
             assert.ok(log);
             
-            // Verify current request evidence is masked
+            // Verify current safe header evidence is retained and sensitive headers are not stored
+            assert.equal(log.rawHeaders['x-forwarded-for'], '203.0.113.42', 'Current rawHeaders x-forwarded-for retained');
+            assert.equal(log.rawHeaders['user-agent'], 'AgentTwo/2.0', 'Current rawHeaders user-agent retained');
+            assert.equal(log.rawHeaders['content-type'], 'application/json', 'Current rawHeaders content-type retained');
+            assert.equal(log.rawHeaders['authorization'], undefined, 'Sensitive header authorization must not be stored in current rawHeaders');
+            assert.equal(log.rawHeaders['x-api-key'], undefined, 'Sensitive header x-api-key must not be stored in current rawHeaders');
+
+            // Verify current queryParams and rawBody sensitive fields are masked
             assert.equal(log.rawBody.secretKey, '***REDACTED***');
             assert.equal(log.rawBody.apiKey, '***REDACTED***');
             assert.equal(log.rawBody.auth, '***REDACTED***');
             assert.equal(log.rawBody.authorization, '***REDACTED***');
             assert.equal(log.queryParams.secret, '***REDACTED***');
             assert.equal(log.queryParams.token, '***REDACTED***');
+            assert.equal(log.queryParams.signature, '***REDACTED***');
 
             // Explicitly inspect priorSecurityEvents snapshots without conditional skip
             assert.ok(Array.isArray(log.priorSecurityEvents) && log.priorSecurityEvents.length === 1);
             const ev = log.priorSecurityEvents[0];
+            
+            // Verify historical safe header evidence is retained and sensitive headers are not stored
+            assert.equal(ev.rawHeaders['x-forwarded-for'], '198.51.100.21', 'Historical rawHeaders x-forwarded-for retained');
+            assert.equal(ev.rawHeaders['user-agent'], 'AgentOne/1.0', 'Historical rawHeaders user-agent retained');
+            assert.equal(ev.rawHeaders['content-type'], 'application/json', 'Historical rawHeaders content-type retained');
+            assert.equal(ev.rawHeaders['authorization'], undefined, 'Sensitive header authorization must not be stored in historical rawHeaders');
+            assert.equal(ev.rawHeaders['x-api-key'], undefined, 'Sensitive header x-api-key must not be stored in historical rawHeaders');
+
+            // Verify historical queryParams and rawBody sensitive fields are masked
             assert.equal(ev.queryParams.secret, '***REDACTED***');
             assert.equal(ev.queryParams.token, '***REDACTED***');
             assert.equal(ev.queryParams.signature, '***REDACTED***');
@@ -3459,8 +3533,9 @@ const runTest = async (name, fn) => {
                 'secret_key_xyz_1', 'secret_key_xyz_2',
                 'api_key_123_1', 'api_key_123_2',
                 'bearer_token_abc_1', 'bearer_token_abc_2',
-                'auth_header_1', 'auth_header_2',
+                'auth_body_1', 'auth_body_2',
                 'header_auth_1', 'header_auth_2',
+                'header_api_key_1', 'header_api_key_2',
                 'bad_sig_1', 'bad_sig_2'
             ];
             for (const val of sensitiveValues) {
