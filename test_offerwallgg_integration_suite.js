@@ -3191,7 +3191,7 @@ const runTest = async (name, fn) => {
         }
     });
 
-    await runTest('T100 — Terminal record protection (Processed and Reversed) with before/after state capture', async () => {
+    await runTest('T100 — Terminal record protection (Processed and Reversed) with before/after state capture and pre-comparison value assertions', async () => {
         setupProviderManagedOfferwallGg();
         const user = db.users.get(TEST_USER_ID);
         user.taskEarningsBalance = 10.0;
@@ -3236,6 +3236,16 @@ const runTest = async (name, fn) => {
             }, createMockRes());
 
             const logProcBefore = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdProc, isReversal: false });
+            
+            // Assert applicable financial fields contain valid expected values before comparing
+            assert.equal(logProcBefore.status, 'Processed');
+            assert.ok(logProcBefore.transactionId, 'Processed record must reference transactionId');
+            assert.ok(logProcBefore.rewardUSD >= 0, 'rewardUSD must be valid');
+            assert.ok(logProcBefore.grossAmountUSD > 0, 'grossAmountUSD must be positive');
+            assert.ok(logProcBefore.userRewardUSD > 0, 'userRewardUSD must be positive');
+            assert.ok(logProcBefore.platformRevenueUSD > 0, 'platformRevenueUSD must be positive');
+            assert.equal(logProcBefore.reversedAmountUSD, 0);
+
             const beforeProc = {
                 status: logProcBefore.status,
                 transactionId: logProcBefore.transactionId,
@@ -3308,6 +3318,11 @@ const runTest = async (name, fn) => {
             }, createMockRes());
 
             const logRevBefore = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txIdRev, isReversal: true });
+            
+            assert.equal(logRevBefore.status, 'Reversed');
+            assert.ok(logRevBefore.transactionId, 'Reversed record must reference transactionId');
+            assert.ok(logRevBefore.reversedAmountUSD > 0, 'reversedAmountUSD must be positive');
+
             const beforeRev = {
                 status: logRevBefore.status,
                 transactionId: logRevBefore.transactionId,
@@ -3363,33 +3378,72 @@ const runTest = async (name, fn) => {
         }
     });
 
-    await runTest('T101 — Sensitive-field masking assertions in postback logs', async () => {
+    await runTest('T101 — Historical sensitive-field masking in current request evidence and priorSecurityEvents snapshots', async () => {
         setupProviderManagedOfferwallGg();
+        const origSave = OfferwallPostbackLog.prototype.save;
         const origFindOne = OfferwallPostbackLog.findOne;
+
+        OfferwallPostbackLog.prototype.save = async function() {
+            for (const existing of db.logs.values()) {
+                if (existing.provider === this.provider && existing.externalTxId === this.externalTxId && Boolean(existing.isReversal) === Boolean(this.isReversal) && String(existing._id) !== String(this._id)) {
+                    const err = new Error('E11000 duplicate'); err.code = 11000; throw err;
+                }
+            }
+            db.logs.set(String(this._id || Math.random()), this);
+            return this;
+        };
         OfferwallPostbackLog.findOne = async (query) => {
             for (const entry of db.logs.values()) {
-                if (entry.provider === query.provider && entry.externalTxId === query.externalTxId) return entry;
+                if (entry.provider === query.provider && entry.externalTxId === query.externalTxId && Boolean(entry.isReversal) === Boolean(query.isReversal)) return entry;
             }
             return null;
         };
 
         try {
             const txId = 't101_masking';
-            const sig = computeSignature(TEST_USER_ID, txId, '70');
+            // First invalid attempt with sensitive fields and bad signature
             await handlePostback({
                 method: 'POST',
                 params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: sig },
-                body: { secret: 'secret_key_xyz', apiKey: 'api_key_123', auth: 'bearer_token_abc' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_sig_1', secret: 'bad_secret_1' },
+                body: { secretKey: 'secret_key_xyz', apiKey: 'api_key_123', auth: 'bearer_token_abc' },
                 headers: {}
             }, createMockRes());
 
-            const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId });
+            // Second invalid attempt with sensitive fields and bad signature
+            await handlePostback({
+                method: 'POST',
+                params: { provider: 'offerwall_gg' },
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_sig_2', secret: 'bad_secret_2' },
+                body: { secretKey: 'secret_key_xyz_2', apiKey: 'api_key_123_2', auth: 'bearer_token_abc_2' },
+                headers: {}
+            }, createMockRes());
+
+            const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
             assert.ok(log);
-            assert.equal(log.rawBody.secret, '***REDACTED***');
+            
+            // Verify current request evidence is masked
+            assert.equal(log.rawBody.secretKey, '***REDACTED***');
             assert.equal(log.rawBody.apiKey, '***REDACTED***');
             assert.equal(log.rawBody.auth, '***REDACTED***');
+            assert.equal(log.queryParams.secret, '***REDACTED***');
+
+            // Verify priorSecurityEvents snapshots are masked
+            assert.ok(Array.isArray(log.priorSecurityEvents) && log.priorSecurityEvents.length > 0);
+            for (const ev of log.priorSecurityEvents) {
+                if (ev.queryParams && ev.queryParams.secret) {
+                    assert.equal(ev.queryParams.secret, '***REDACTED***');
+                }
+            }
+
+            // Assert original secret values do not appear anywhere in serialized historical snapshots or log object
+            const serialized = JSON.stringify(log);
+            assert.equal(serialized.includes('secret_key_xyz'), false);
+            assert.equal(serialized.includes('api_key_123'), false);
+            assert.equal(serialized.includes('bearer_token_abc'), false);
+            assert.equal(serialized.includes('bad_secret_1'), false);
         } finally {
+            OfferwallPostbackLog.prototype.save = origSave;
             OfferwallPostbackLog.findOne = origFindOne;
         }
     });
