@@ -71,19 +71,44 @@ interface PostbackLog {
     reversedAmountUSD?: number;
 }
 
+interface PendingRiskReview {
+    _id: string;
+    userId: string;
+    username: string;
+    userEmail?: string;
+    userStatus?: string;
+    userRestrictions?: any;
+    provider: string;
+    externalTransactionId: string;
+    amountUSD: number;
+    grossAmountUSD: number;
+    riskReason: string;
+    description: string;
+    createdAt: string;
+}
+
 export const AdminOfferwalls: React.FC = () => {
     const { state } = useData();
     const { users } = state;
 
     const [providers, setProviders] = useState<OfferwallProvider[]>([]);
     const [logs, setLogs] = useState<PostbackLog[]>([]);
-    const [activeTab, setActiveTab] = useState<'networks' | 'logs' | 'simulator' | 'matrix' | 'placements'>('networks');
+    const [activeTab, setActiveTab] = useState<'networks' | 'logs' | 'simulator' | 'matrix' | 'placements' | 'riskReview'>('networks');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [editingProvider, setEditingProvider] = useState<OfferwallProvider | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+
+    // Risk Review State
+    const [pendingReviews, setPendingReviews] = useState<PendingRiskReview[]>([]);
+    const [isReviewsLoading, setIsReviewsLoading] = useState(false);
+    const [actionModalTx, setActionModalTx] = useState<{ tx: PendingRiskReview; action: 'approve' | 'reject' } | null>(null);
+    const [reviewNote, setReviewNote] = useState('');
+    const [reviewActionLoading, setReviewActionLoading] = useState(false);
+    const [reviewActionError, setReviewActionError] = useState<string | null>(null);
+    const [reviewActionSuccess, setReviewActionSuccess] = useState<string | null>(null);
 
     // Simulator State
     const [simProvider, setSimProvider] = useState<string>('torox');
@@ -130,10 +155,61 @@ export const AdminOfferwalls: React.FC = () => {
         }
     };
 
+    const fetchPendingReviews = async () => {
+        setIsReviewsLoading(true);
+        try {
+            const res = await fetch('/api/v1/transactions/risk-review', {
+                headers: getHeaders()
+            });
+            const data = await res.json();
+            if (data.success && Array.isArray(data.data)) {
+                setPendingReviews(data.data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch pending risk reviews:', err);
+        } finally {
+            setIsReviewsLoading(false);
+        }
+    };
+
+    const handleReviewAction = async () => {
+        if (!actionModalTx) return;
+        if (!reviewNote.trim()) {
+            setReviewActionError('Review note/reason is mandatory.');
+            return;
+        }
+        setReviewActionLoading(true);
+        setReviewActionError(null);
+        setReviewActionSuccess(null);
+        try {
+            const endpoint = actionModalTx.action === 'approve'
+                ? `/api/v1/transactions/${actionModalTx.tx._id}/approve-offerwall-review`
+                : `/api/v1/transactions/${actionModalTx.tx._id}/reject-offerwall-review`;
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ reviewNote: reviewNote.trim() })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setReviewActionSuccess(data.message || `Transaction ${actionModalTx.action}d successfully`);
+                setActionModalTx(null);
+                setReviewNote('');
+                await fetchPendingReviews();
+            } else {
+                setReviewActionError(data.error || `Failed to ${actionModalTx.action} transaction`);
+            }
+        } catch (err: any) {
+            setReviewActionError(err.message || 'Network error performing review action');
+        } finally {
+            setReviewActionLoading(false);
+        }
+    };
+
     useEffect(() => {
         const init = async () => {
             setIsLoading(true);
-            await Promise.all([fetchProviders(), fetchLogs()]);
+            await Promise.all([fetchProviders(), fetchLogs(), fetchPendingReviews()]);
             setIsLoading(false);
         };
         init();
@@ -142,6 +218,8 @@ export const AdminOfferwalls: React.FC = () => {
     useEffect(() => {
         if (activeTab === 'logs') {
             fetchLogs();
+        } else if (activeTab === 'riskReview') {
+            fetchPendingReviews();
         }
     }, [activeTab, logProviderFilter, logStatusFilter]);
 
@@ -363,6 +441,21 @@ export const AdminOfferwalls: React.FC = () => {
                     }`}
                 >
                     📍 Provider Placement Manager
+                </button>
+                <button
+                    onClick={() => setActiveTab('riskReview')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                        activeTab === 'riskReview'
+                            ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+                            : 'text-rose-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                >
+                    <span>🛡️ Risk Review Queue</span>
+                    {pendingReviews.length > 0 && (
+                        <span className="px-1.5 py-0.2 bg-rose-500 text-white rounded-full text-[10px] font-black">
+                            {pendingReviews.length}
+                        </span>
+                    )}
                 </button>
             </div>
 
@@ -764,6 +857,237 @@ export const AdminOfferwalls: React.FC = () => {
 
                         <div className="mt-4 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-xs text-indigo-300">
                             💡 <strong>Dry-Run Simulation Mode:</strong> Simulated postbacks validate credentials, provider status, signatures, and revenue calculations without modifying real user balances, creating transaction records, or altering provider metrics.
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TAB 6: RISK REVIEW QUEUE */}
+            {activeTab === 'riskReview' && (
+                <div className="space-y-6">
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                                    <span>🛡️ Offerwall Risk Review Queue</span>
+                                    <span className="px-2 py-0.5 text-xs bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-full">
+                                        Spendable Balances Withheld
+                                    </span>
+                                </h2>
+                                <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+                                    Pending offerwall reward transactions flagged by high-gross threshold or conversion velocity checks. Reviewing admin can inspect details and either Approve (atomically credits spendable balance) or Reject (leaves balance untouched).
+                                </p>
+                            </div>
+                            <button
+                                onClick={fetchPendingReviews}
+                                disabled={isReviewsLoading}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all shrink-0"
+                            >
+                                {isReviewsLoading ? 'Refreshing...' : '🔄 Refresh Queue'}
+                            </button>
+                        </div>
+
+                        {reviewActionSuccess && (
+                            <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs font-bold flex items-center justify-between">
+                                <span>{reviewActionSuccess}</span>
+                                <button onClick={() => setReviewActionSuccess(null)} className="text-slate-400 hover:text-white">✕</button>
+                            </div>
+                        )}
+
+                        {reviewActionError && (
+                            <div className="mt-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs font-bold flex items-center justify-between">
+                                <span>{reviewActionError}</span>
+                                <button onClick={() => setReviewActionError(null)} className="text-slate-400 hover:text-white">✕</button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                        {isReviewsLoading ? (
+                            <div className="p-12 text-center text-slate-400 font-bold text-xs">
+                                <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                                Loading pending review queue...
+                            </div>
+                        ) : pendingReviews.length === 0 ? (
+                            <div className="p-12 text-center max-w-md mx-auto">
+                                <span className="text-4xl mb-3 block">✅</span>
+                                <h3 className="text-base font-black text-white mb-1">Queue is Clear</h3>
+                                <p className="text-xs text-slate-400">
+                                    No offerwall transactions currently flagged for risk review. All standard rewards have been verified and processed.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] font-black border-b border-slate-800">
+                                        <tr>
+                                            <th className="p-4">User</th>
+                                            <th className="p-4">Provider / External Tx</th>
+                                            <th className="p-4">Reward Amount</th>
+                                            <th className="p-4">Risk Trigger</th>
+                                            <th className="p-4">Date / Time</th>
+                                            <th className="p-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/60 font-medium">
+                                        {pendingReviews.map((rev) => (
+                                            <tr key={rev._id} className="hover:bg-slate-800/30 transition-colors">
+                                                <td className="p-4">
+                                                    <div className="font-bold text-white">{rev.username}</div>
+                                                    <div className="text-[10px] text-slate-500">{rev.userEmail || rev.userId}</div>
+                                                    {rev.userStatus === 'Blocked' && (
+                                                        <span className="inline-block mt-1 px-1.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded text-[9px] font-black uppercase">
+                                                            Blocked
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className="font-bold text-indigo-400 uppercase">{rev.provider}</span>
+                                                    <div className="font-mono text-[10px] text-slate-400 mt-0.5 break-all max-w-[180px]">
+                                                        {rev.externalTransactionId}
+                                                    </div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="font-black text-emerald-400 text-sm">
+                                                        +${Number(rev.amountUSD).toFixed(2)} USD
+                                                    </div>
+                                                    {rev.grossAmountUSD > 0 && (
+                                                        <div className="text-[10px] text-slate-500">
+                                                            Gross: ${Number(rev.grossAmountUSD).toFixed(2)}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="p-4 max-w-xs">
+                                                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-[10px] font-bold block leading-relaxed">
+                                                        ⚠️ {rev.riskReason}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 text-slate-400 text-[11px] whitespace-nowrap">
+                                                    {new Date(rev.createdAt).toLocaleString()}
+                                                </td>
+                                                <td className="p-4 text-right whitespace-nowrap">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                setActionModalTx({ tx: rev, action: 'approve' });
+                                                                setReviewNote('');
+                                                                setReviewActionError(null);
+                                                            }}
+                                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20"
+                                                        >
+                                                            ✓ Approve
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setActionModalTx({ tx: rev, action: 'reject' });
+                                                                setReviewNote('');
+                                                                setReviewActionError(null);
+                                                            }}
+                                                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/20"
+                                                        >
+                                                            ✕ Reject
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ACTION MODAL: APPROVE / REJECT */}
+            {actionModalTx && (
+                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                            <h3 className="text-base font-black text-white flex items-center gap-2">
+                                {actionModalTx.action === 'approve' ? (
+                                    <>
+                                        <span className="text-emerald-400">✓</span>
+                                        <span>Approve Pending Reward & Credit User</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="text-rose-400">✕</span>
+                                        <span>Reject Pending Reward (No Credit)</span>
+                                    </>
+                                )}
+                            </h3>
+                            <button
+                                onClick={() => setActionModalTx(null)}
+                                className="text-slate-400 hover:text-white font-bold"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-xs space-y-2">
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-bold">Worker:</span>
+                                <span className="text-white font-bold">{actionModalTx.tx.username}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-bold">Provider:</span>
+                                <span className="text-indigo-400 font-mono font-bold uppercase">{actionModalTx.tx.provider}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-bold">Ref Tx ID:</span>
+                                <span className="font-mono text-slate-300">{actionModalTx.tx.externalTransactionId}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-bold">Reward to Credit:</span>
+                                <span className="text-emerald-400 font-black text-sm">+${Number(actionModalTx.tx.amountUSD).toFixed(2)} USD</span>
+                            </div>
+                            <div className="pt-2 border-t border-slate-800 text-[11px] text-amber-300 font-medium">
+                                <strong>Risk Flag:</strong> {actionModalTx.tx.riskReason}
+                            </div>
+                        </div>
+
+                        {reviewActionError && (
+                            <div className="p-3 bg-rose-500/10 border border-rose-500/40 rounded-xl text-rose-300 text-xs font-bold">
+                                {reviewActionError}
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-400 mb-1.5">
+                                Mandatory Review Note / Decision Reason <span className="text-rose-400">*</span>
+                            </label>
+                            <textarea
+                                value={reviewNote}
+                                onChange={(e) => setReviewNote(e.target.value)}
+                                placeholder={actionModalTx.action === 'approve'
+                                    ? 'e.g. Verified genuine completion with external provider logs.'
+                                    : 'e.g. Rejected due to VPN/proxy usage and velocity abuse pattern.'}
+                                rows={3}
+                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                            <button
+                                type="button"
+                                onClick={() => setActionModalTx(null)}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={reviewActionLoading || !reviewNote.trim()}
+                                onClick={handleReviewAction}
+                                className={`px-5 py-2 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 ${
+                                    actionModalTx.action === 'approve'
+                                        ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/30'
+                                        : 'bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30'
+                                }`}
+                            >
+                                {reviewActionLoading ? 'Processing...' : (actionModalTx.action === 'approve' ? 'Confirm Approval' : 'Confirm Rejection')}
+                            </button>
                         </div>
                     </div>
                 </div>

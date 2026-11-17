@@ -152,6 +152,23 @@ const TransactionSchema = new mongoose.Schema({
     relatedTransactionId: {
         type: mongoose.Schema.ObjectId,
         ref: 'Transaction'
+    },
+    riskReason: {
+        type: String
+    },
+    reviewedBy: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User'
+    },
+    reviewedAt: {
+        type: Date
+    },
+    reviewDecision: {
+        type: String,
+        enum: ['Approved', 'Rejected']
+    },
+    reviewNote: {
+        type: String
     }
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }

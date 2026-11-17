@@ -43,7 +43,7 @@ const OfferwallPostbackLogSchema = new mongoose.Schema({
             'Processed', 'Duplicate', 'Rejected', 'Reversed', 'UserNotFound', 'InvalidSignature', 
             'IPBlocked', 'Error', 'IgnoredUnmatchedReversal', 'IgnoredUnmatchedReversalWithMarker', 
             'PreReversed', 'TestCallback', 'Skipped', 'CriticalInconsistency', 'CriticalCompensationFailure', 
-            'Compensated', 'UserRestricted',
+            'Compensated', 'UserRestricted', 'PendingReview',
             'PlayerSuspended', 'PlayerUnsuspended', 'DuplicateEvent', 'SecurityRejected'
         ],
         default: 'Processed',

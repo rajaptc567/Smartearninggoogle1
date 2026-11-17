@@ -1949,6 +1949,70 @@ export const handlePostback = async (req, res) => {
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
+                // If original reward is Pending (e.g. held in Risk Review), funds were never credited.
+                // Do not deduct user spendable balance, do not create liability, close pending reward,
+                // and persist linked reversal record with 0 user deduction.
+                if (origTx && origTx.status === 'Pending') {
+                    try {
+                        await Transaction.findByIdAndUpdate(origTx._id, {
+                            $set: {
+                                status: 'Rejected',
+                                reviewDecision: 'Rejected',
+                                reviewNote: 'Automatically closed due to provider reversal while pending risk review',
+                                reviewedAt: new Date()
+                            }
+                        });
+                    } catch (closeErr) {
+                        console.warn('[Pending Reversal Close Warning]:', closeErr.message);
+                    }
+
+                    let revTx;
+                    try {
+                        revTx = await Transaction.create({
+                            userId: user._id,
+                            userName: user.username,
+                            currency: 'USD',
+                            type: 'Offerwall Reversal',
+                            amount: 0,
+                            amountUSD: 0,
+                            grossAmount: origTx.grossAmount || grossUSD,
+                            userRewardAmount: 0,
+                            platformRevenueAmount: origTx.platformRevenueAmount || 0,
+                            balanceBefore: user.taskEarningsBalance || 0,
+                            balanceAfter: user.taskEarningsBalance || 0,
+                            idempotencyKey: reversalKey,
+                            chargebackStatus: 'Settled',
+                            reversalReferenceId: origTx._id,
+                            description: `Offerwall Reversal (Original reward was Pending in Risk Review): ${provider.name} (${normalized.offerName})`,
+                            status: 'Approved',
+                            sourceWallet: 'TaskEarnings',
+                            destinationWallet: 'External',
+                            offerwallProvider: providerKey,
+                            externalTransactionId: normalized.externalTxId
+                        });
+                    } catch (revErr) {
+                        if (revErr.code === 11000) {
+                            log.status = 'Duplicate';
+                            log.errorMessage = 'Duplicate reversal callback received; already reversed.';
+                            try { await saveLogSafely(log); } catch (_) {}
+                            return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
+                        }
+                        throw revErr;
+                    }
+
+                    log.status = 'Reversed';
+                    log.transactionId = revTx._id;
+                    log.reversalReferenceTxId = origTx._id;
+                    log.reversedAmountUSD = 0;
+                    log.rewardUSD = 0;
+                    log.chargebackStatus = 'Settled';
+                    log.userBalanceBefore = user.taskEarningsBalance || 0;
+                    log.userBalanceAfter = user.taskEarningsBalance || 0;
+                    try { await saveLogSafely(log); } catch (_) {}
+
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
+                }
+
                 // Re-verify lock ownership immediately before reversal balance deduction
                 if (lockOwnerToken && !(await isLockStillOwned(lockProviderKey, normalized.externalTxId, lockOwnerToken))) {
                     throw new Error(`Postback lock expired or taken over before reversal balance deduction: ${lockProviderKey}:${normalized.externalTxId}`);
@@ -2267,7 +2331,9 @@ export const handlePostback = async (req, res) => {
                 }
 
                 const balanceBefore = user.taskEarningsBalance || 0;
-                const balanceAfter = Number((balanceBefore + userRewardUSD).toFixed(4));
+                const balanceAfter = riskStatus === 'REVIEW'
+                    ? balanceBefore
+                    : Number((balanceBefore + userRewardUSD).toFixed(4));
 
                 // Re-verify lock ownership immediately before transaction creation
                 if (lockOwnerToken && !(await isLockStillOwned(lockProviderKey, normalized.externalTxId, lockOwnerToken))) {
@@ -2292,6 +2358,7 @@ export const handlePostback = async (req, res) => {
                         balanceAfter,
                         status: riskStatus === 'REVIEW' ? 'Pending' : 'Approved',
                         riskStatus,
+                        riskReason: riskStatus === 'REVIEW' ? riskReason : undefined,
                         description: providerKey === 'cpx_research' && normalized.eventType === 'out'
                             ? `${provider.name} Screenout Consolation: ${normalized.offerName}`
                             : providerKey === 'cpx_research' && normalized.eventType === 'bonus'
@@ -2310,6 +2377,61 @@ export const handlePostback = async (req, res) => {
                         return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'DUP_ALREADY_PROCESSED');
                     }
                     throw err;
+                }
+
+                if (riskStatus === 'REVIEW') {
+                    // FIX 1: Withhold spendable balance. Do NOT increment taskEarningsBalance or taskWalletBalance.
+                    log.status = 'PendingReview';
+                    log.transactionId = tx._id;
+                    log.userBalanceBefore = balanceBefore;
+                    log.userBalanceAfter = balanceBefore;
+                    try { await saveLogSafely(log); } catch (_) {}
+
+                    // Notify Worker in Inbox that reward is awaiting security review
+                    try {
+                        await Notification.create({
+                            userId: user._id,
+                            subject: `Offerwall Reward Pending Security Review ⏳ ($${userRewardUSD.toFixed(2)})`,
+                            message: `Your reward of $${userRewardUSD.toFixed(2)} from ${provider.name} (${normalized.offerName}) is currently awaiting security review. Once approved, the funds will be credited to your Task Balance.`,
+                            senderType: 'System'
+                        });
+                    } catch (notifErr) {
+                        console.warn('[Notification Warning] Failed to create pending review notification:', notifErr.message);
+                    }
+
+                    // Admin Notification
+                    try {
+                        const adminUsers = await getAdminUsersForNotification();
+                        if (adminUsers && adminUsers.length > 0) {
+                            const adminSubject = `[RISK REVIEW REQUIRED] Offerwall Reward: ${user.username} ($${userRewardUSD.toFixed(2)}) ⚠️`;
+                            const adminMessage = `Reward of $${userRewardUSD.toFixed(2)} from ${provider.name} for user ${user.username} held for review. Reason: ${riskReason}. Transaction ID: ${tx._id}.`;
+                            for (const admin of adminUsers) {
+                                await Notification.create({
+                                    userId: admin._id,
+                                    subject: adminSubject,
+                                    message: adminMessage,
+                                    senderType: 'System'
+                                });
+                            }
+                        }
+                    } catch (adminNotifErr) {
+                        console.error('[Admin Notification Warning] Failed to dispatch review notification to admins:', adminNotifErr.message);
+                    }
+
+                    // Real-time synchronization
+                    try {
+                        const io = req.app?.get('io');
+                        if (io) io.emit('DATA_CHANGED');
+                    } catch (_) {}
+
+                    // Return provider-expected success body to prevent retry storms
+                    if (providerKey === 'torox' || providerKey === 'cpx_research' || providerKey === 'lootably') {
+                        return res.status(200).send('1');
+                    }
+                    if (providerKey === 'wannads' || providerKey === 'notik' || providerKey === 'bitlabs') {
+                        return res.status(200).send('OK');
+                    }
+                    return res.status(200).send('OK');
                 }
 
                 // Re-verify lock ownership immediately before conditional balance update
@@ -2743,6 +2865,102 @@ export const constructAdGemEntryUrl = (provider, userId) => {
     return { url, error: null };
 };
 
+/**
+ * Constructs a secure, HMAC-SHA256-signed Offerwall.GG entry URL according to official specifications.
+ * 
+ * Official contract:
+ * - Hosted wall URL: https://offerwall.gg/wall/{PUBLIC_KEY}
+ * - Public key is strictly the 32-character key in the wall URL path.
+ * - Numeric dashboard Placement ID 9604 is a separate identifier and must NEVER be used as the public key.
+ * - Signature: HMAC-SHA256 over sorted canonical query parameters:
+ *   appId = wall public key
+ *   userId = authenticated SmartExn user ID
+ *   ts = unix timestamp (if expiring links explicitly enabled)
+ * - Returns { url, error, canonicalString, signature, publicKey }
+ */
+export const constructOfferwallGgEntryUrl = (provider, authenticatedUserId, options = {}) => {
+    if (!authenticatedUserId) {
+        return { url: '', error: 'Authenticated user session is required to launch Offerwall.GG.' };
+    }
+
+    const userId = String(authenticatedUserId).trim();
+    if (!userId) {
+        return { url: '', error: 'Authenticated user identifier is required to launch Offerwall.GG.' };
+    }
+
+    // 1. Validate Secret Key
+    const envSecret = process.env.OFFERWALL_GG_SECRET_KEY;
+    const secret = (envSecret && envSecret.trim()) ? envSecret.trim() : (provider?.secretKey ? String(provider.secretKey).trim() : '');
+    if (!secret) {
+        return { url: '', error: 'Offerwall.GG secret key is not configured.' };
+    }
+
+    // 2. Validate Template & Extract 32-character Public Key
+    const template = (provider?.iframeUrlTemplate || '').trim() || 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={userId}';
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(template);
+    } catch (_) {
+        return { url: '', error: 'Offerwall.GG wall URL template is malformed.' };
+    }
+
+    if (parsedUrl.protocol !== 'https:') {
+        return { url: '', error: 'Offerwall.GG wall URL template must use HTTPS protocol.' };
+    }
+
+    const host = parsedUrl.hostname.toLowerCase().trim();
+    if (host !== 'offerwall.gg' && host !== 'www.offerwall.gg') {
+        return { url: '', error: 'Offerwall.GG wall URL template has invalid or untrusted host.' };
+    }
+
+    // Public key is strictly the 32-character hex/alphanumeric key in the path: /wall/{PUBLIC_KEY}
+    // Placement ID 9604 is a separate numeric identifier and must NEVER be used as the public key.
+    const pathMatch = parsedUrl.pathname.match(/^\/wall\/([a-zA-Z0-9]{32})(?:\/)?$/);
+    if (!pathMatch) {
+        return { url: '', error: 'Offerwall.GG wall URL template is missing valid 32-character public key in path.' };
+    }
+
+    const publicKey = pathMatch[1];
+
+    // 3. Build Canonical Query Parameters
+    const params = {
+        appId: publicKey,
+        userId: userId
+    };
+
+    // Check if expiring links enabled (explicit configuration only)
+    const enableExpiry = Boolean(
+        options.enableExpiry ||
+        options.ts !== undefined ||
+        provider?.customConfig?.enableExpiryTimestamp === true ||
+        provider?.customConfig?.expiringLinks === true ||
+        provider?.enableExpiryTimestamp === true
+    );
+
+    if (enableExpiry) {
+        const ts = options.ts !== undefined ? Number(options.ts) : Math.floor(Date.now() / 1000);
+        params.ts = String(ts);
+    }
+
+    // 4. Sort parameter names alphabetically and construct canonical string
+    const sortedKeys = Object.keys(params).sort();
+    const canonicalString = sortedKeys.map(k => `${k}=${params[k]}`).join('&');
+
+    // 5. Calculate HMAC-SHA256 signature
+    const signature = crypto.createHmac('sha256', secret).update(canonicalString).digest('hex');
+
+    // 6. Build final signed wall URL
+    const url = `https://offerwall.gg/wall/${publicKey}?${canonicalString}&signature=${signature}`;
+
+    return {
+        url,
+        error: null,
+        canonicalString,
+        signature,
+        publicKey
+    };
+};
+
 export const getOfferwallProviders = async (req, res) => {
     try {
         const isAdmin = isAuthorizedAdmin(req.user);
@@ -2832,6 +3050,18 @@ export const getOfferwallProviders = async (req, res) => {
                             obj.iframeUrl = '';
                             obj.configurationError = adgemResult.error;
                         }
+                    }
+                } else {
+                    obj.iframeUrl = '';
+                }
+            } else if (p.providerKey === 'offerwall_gg' || p.providerKey === 'offerwallgg') {
+                if (req.user?.id) {
+                    const owResult = constructOfferwallGgEntryUrl(p, req.user.id);
+                    if (owResult.url) {
+                        obj.iframeUrl = owResult.url;
+                    } else {
+                        obj.iframeUrl = '';
+                        obj.configurationError = owResult.error;
                     }
                 } else {
                     obj.iframeUrl = '';

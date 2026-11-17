@@ -1,10 +1,13 @@
 
+import mongoose from 'mongoose';
 import Transaction from '../models/Transaction.js';
 import User from '../models/User.js';
 import UserTaskSubmission from '../models/UserTaskSubmission.js';
 import Deposit from '../models/Deposit.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
+import OfferwallPostbackLog from '../models/OfferwallPostbackLog.js';
+import Notification from '../models/Notification.js';
 
 export const getTransactions = async (req, res) => {
     try {
@@ -124,4 +127,316 @@ export const getReconciliationReport = async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 };
+
+/**
+ * Admin: Get all Pending Offerwall Reward transactions flagged for Risk REVIEW
+ */
+export const getPendingOfferwallRiskReviews = async (req, res) => {
+    try {
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+        if (!isAdmin) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Admin access required.' });
+        }
+
+        const query = {
+            type: 'Offerwall Reward',
+            status: 'Pending',
+            riskStatus: 'REVIEW'
+        };
+
+        const pending = await Transaction.find(query)
+            .sort({ date: -1 })
+            .lean();
+
+        // Populate user details safely
+        const userIds = [...new Set(pending.map(t => String(t.userId)).filter(Boolean))];
+        const users = await User.find({ _id: { $in: userIds } }).select('_id username email status restrictions').lean();
+        const userMap = new Map(users.map(u => [String(u._id), u]));
+
+        const data = pending.map(t => {
+            const u = userMap.get(String(t.userId));
+            return {
+                _id: t._id,
+                userId: t.userId,
+                username: t.userName || u?.username || 'Unknown',
+                userEmail: u?.email || '',
+                userStatus: u?.status || 'Active',
+                userRestrictions: u?.restrictions || {},
+                provider: t.offerwallProvider,
+                externalTransactionId: t.externalTransactionId,
+                amountUSD: t.userRewardAmount ?? t.amountUSD ?? t.amount,
+                grossAmountUSD: t.grossAmount || 0,
+                riskReason: t.riskReason || 'Flagged for security review',
+                description: t.description,
+                createdAt: t.date || t.createdAt
+            };
+        });
+
+        return res.status(200).json({ success: true, count: data.length, data });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+/**
+ * Admin: Approve Pending Offerwall Reward transaction and credit spendable wallet balance
+ */
+export const approveOfferwallRiskReview = async (req, res) => {
+    const { id } = req.params;
+    const { reviewNote } = req.body || {};
+
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+    if (!isAdmin) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    if (!reviewNote || !String(reviewNote).trim()) {
+        return res.status(400).json({ success: false, error: 'Mandatory review note is required to approve pending reward.' });
+    }
+
+    let session = null;
+    let sessionStarted = false;
+    try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+        sessionStarted = true;
+    } catch (_) {
+        session = null;
+        sessionStarted = false;
+    }
+
+    try {
+        // Query to match only eligible Pending REVIEW Offerwall Reward
+        const txQuery = {
+            _id: id,
+            type: 'Offerwall Reward',
+            status: 'Pending',
+            riskStatus: 'REVIEW'
+        };
+
+        const existingTx = await Transaction.findOne(txQuery);
+        if (!existingTx) {
+            if (sessionStarted) await session.abortTransaction();
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found or not eligible for approval (must be Offerwall Reward in Pending REVIEW state).'
+            });
+        }
+
+        // Verify target user is NOT Blocked and earning is not restricted
+        const targetUser = await User.findById(existingTx.userId);
+        if (!targetUser) {
+            if (sessionStarted) await session.abortTransaction();
+            return res.status(404).json({ success: false, error: 'Target user account not found.' });
+        }
+        if (targetUser.status === 'Blocked' || targetUser.restrictions?.earning === true) {
+            if (sessionStarted) await session.abortTransaction();
+            return res.status(403).json({
+                success: false,
+                error: 'User account is Blocked or earning-restricted; approval rejected.'
+            });
+        }
+
+        const rewardToCredit = Number(existingTx.userRewardAmount ?? existingTx.amountUSD ?? existingTx.amount);
+        const balanceBefore = Number(targetUser.taskEarningsBalance || 0);
+        const balanceAfter = Number((balanceBefore + rewardToCredit).toFixed(4));
+
+        // Atomically transition transaction status
+        const updatedTx = await Transaction.findOneAndUpdate(
+            txQuery,
+            {
+                $set: {
+                    status: 'Approved',
+                    balanceBefore,
+                    balanceAfter,
+                    reviewedBy: req.user?._id || req.user?.id,
+                    reviewedAt: new Date(),
+                    reviewDecision: 'Approved',
+                    reviewNote: String(reviewNote).trim()
+                }
+            },
+            { new: true, session: session || undefined }
+        );
+
+        if (!updatedTx) {
+            if (sessionStarted) await session.abortTransaction();
+            return res.status(409).json({
+                success: false,
+                error: 'Transaction was already reviewed or modified concurrently.'
+            });
+        }
+
+        // Atomically credit user task earnings balance
+        const updatedUser = await User.findOneAndUpdate(
+            {
+                _id: targetUser._id,
+                status: { $ne: 'Blocked' },
+                'restrictions.earning': { $ne: true }
+            },
+            {
+                $inc: {
+                    taskEarningsBalance: rewardToCredit,
+                    taskWalletBalance: rewardToCredit
+                }
+            },
+            { new: true, session: session || undefined }
+        );
+
+        if (!updatedUser) {
+            if (sessionStarted) {
+                await session.abortTransaction();
+            } else {
+                // Roll back transaction update if standalone Mongo
+                await Transaction.findByIdAndUpdate(id, {
+                    $set: {
+                        status: 'Pending',
+                        reviewedBy: undefined,
+                        reviewedAt: undefined,
+                        reviewDecision: undefined,
+                        reviewNote: undefined
+                    }
+                });
+            }
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to update user wallet balance during approval; failed closed.'
+            });
+        }
+
+        // Update linked OfferwallPostbackLog
+        try {
+            await OfferwallPostbackLog.findOneAndUpdate(
+                { transactionId: updatedTx._id },
+                {
+                    $set: {
+                        status: 'Processed',
+                        userBalanceBefore: balanceBefore,
+                        userBalanceAfter: balanceAfter
+                    }
+                },
+                { session: session || undefined }
+            );
+        } catch (_) {}
+
+        if (sessionStarted) {
+            await session.commitTransaction();
+        }
+
+        // User Notification
+        try {
+            await Notification.create({
+                userId: targetUser._id,
+                subject: `Offerwall Reward Approved & Credited! 🎁 (+$${rewardToCredit.toFixed(2)})`,
+                message: `Your pending offerwall reward of $${rewardToCredit.toFixed(2)} has been approved by security review and credited to your Task Balance. Note: ${String(reviewNote).trim()}`,
+                senderType: 'System'
+            });
+        } catch (_) {}
+
+        // Socket sync
+        try {
+            const io = req.app?.get('io');
+            if (io) io.emit('DATA_CHANGED');
+        } catch (_) {}
+
+        return res.status(200).json({
+            success: true,
+            message: 'Offerwall reward approved and balance credited successfully.',
+            data: updatedTx
+        });
+    } catch (err) {
+        if (sessionStarted) {
+            try { await session.abortTransaction(); } catch (_) {}
+        }
+        return res.status(500).json({ success: false, error: err.message });
+    } finally {
+        if (session) {
+            try { session.endSession(); } catch (_) {}
+        }
+    }
+};
+
+/**
+ * Admin: Reject Pending Offerwall Reward transaction with zero balance credit/deduction
+ */
+export const rejectOfferwallRiskReview = async (req, res) => {
+    const { id } = req.params;
+    const { reviewNote } = req.body || {};
+
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+    if (!isAdmin) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    if (!reviewNote || !String(reviewNote).trim()) {
+        return res.status(400).json({ success: false, error: 'Mandatory review note is required to reject pending reward.' });
+    }
+
+    try {
+        const txQuery = {
+            _id: id,
+            type: 'Offerwall Reward',
+            status: 'Pending',
+            riskStatus: 'REVIEW'
+        };
+
+        const updatedTx = await Transaction.findOneAndUpdate(
+            txQuery,
+            {
+                $set: {
+                    status: 'Rejected',
+                    reviewedBy: req.user?._id || req.user?.id,
+                    reviewedAt: new Date(),
+                    reviewDecision: 'Rejected',
+                    reviewNote: String(reviewNote).trim()
+                }
+            },
+            { new: true }
+        );
+
+        if (!updatedTx) {
+            return res.status(404).json({
+                success: false,
+                error: 'Transaction not found or not eligible for rejection (must be Offerwall Reward in Pending REVIEW state).'
+            });
+        }
+
+        // Update linked OfferwallPostbackLog
+        try {
+            await OfferwallPostbackLog.findOneAndUpdate(
+                { transactionId: updatedTx._id },
+                {
+                    $set: {
+                        status: 'Rejected',
+                        errorMessage: `Risk review rejected: ${String(reviewNote).trim()}`
+                    }
+                }
+            );
+        } catch (_) {}
+
+        // Notify User
+        try {
+            await Notification.create({
+                userId: updatedTx.userId,
+                subject: `Offerwall Reward Security Review Notice ❌`,
+                message: `Your pending offerwall reward of $${(updatedTx.userRewardAmount ?? updatedTx.amountUSD ?? updatedTx.amount).toFixed(2)} was not approved following security review. Reason: ${String(reviewNote).trim()}`,
+                senderType: 'System'
+            });
+        } catch (_) {}
+
+        // Socket sync
+        try {
+            const io = req.app?.get('io');
+            if (io) io.emit('DATA_CHANGED');
+        } catch (_) {}
+
+        return res.status(200).json({
+            success: true,
+            message: 'Offerwall reward rejected successfully with zero wallet balance mutation.',
+            data: updatedTx
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+};
+
 

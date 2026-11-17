@@ -5,7 +5,7 @@ import OfferwallProvider from '../models/OfferwallProvider.js';
 import User from '../models/User.js';
 import Setting from '../models/Setting.js';
 import { evaluatePlacementEligibility } from '../utils/providerPlacementEligibility.js';
-import { constructTheoremReachEntryUrl, constructCpxEntryUrl, constructAdGemEntryUrl } from './postbackController.js';
+import { constructTheoremReachEntryUrl, constructCpxEntryUrl, constructAdGemEntryUrl, constructOfferwallGgEntryUrl } from './postbackController.js';
 
 /**
  * Validates and normalizes a hostname entry.
@@ -336,6 +336,13 @@ export const launchProviderPlacement = async (req, res) => {
                 launchUrl = adgemResult.url;
             } else {
                 return res.status(400).json({ success: false, error: adgemResult.error || 'AdGem configuration incomplete' });
+            }
+        } else if (placement.providerKey === 'offerwall_gg' || placement.providerKey === 'offerwallgg') {
+            const owResult = constructOfferwallGgEntryUrl(provider, user._id.toString());
+            if (owResult.url) {
+                launchUrl = owResult.url;
+            } else {
+                return res.status(400).json({ success: false, error: owResult.error || 'Offerwall.GG configuration incomplete' });
             }
         } else if (placement.providerKey === 'torox') {
             // Torox fails closed in the new placement system until secure reuse of existing session flow is implemented.

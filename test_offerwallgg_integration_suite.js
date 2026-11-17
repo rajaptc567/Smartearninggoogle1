@@ -9,9 +9,15 @@ import {
     simulatePostback,
     acquirePostbackLock, 
     releasePostbackLock, 
-    isLockStillOwned 
+    isLockStillOwned,
+    constructOfferwallGgEntryUrl
 } from './backend/controllers/postbackController.js';
 import { launchProviderPlacement, getAvailablePlacements } from './backend/controllers/providerPlacementController.js';
+import {
+    getPendingOfferwallRiskReviews,
+    approveOfferwallRiskReview,
+    rejectOfferwallRiskReview
+} from './backend/controllers/transactionsController.js';
 import User from './backend/models/User.js';
 import Transaction from './backend/models/Transaction.js';
 import OfferwallProvider from './backend/models/OfferwallProvider.js';
@@ -169,6 +175,16 @@ Transaction.findOne = async (query) => {
     if (query.idempotencyKey) {
         return db.transactions.get(query.idempotencyKey) || null;
     }
+    if (query._id) {
+        for (const tx of db.transactions.values()) {
+            if (String(tx._id) === String(query._id)) {
+                if (query.type && tx.type !== query.type) continue;
+                if (query.status && tx.status !== query.status) continue;
+                if (query.riskStatus && tx.riskStatus !== query.riskStatus) continue;
+                return tx;
+            }
+        }
+    }
     if (query.externalTransactionId) {
         for (const tx of db.transactions.values()) {
             if (tx.externalTransactionId === query.externalTransactionId && tx.offerwallProvider === query.offerwallProvider) {
@@ -177,6 +193,62 @@ Transaction.findOne = async (query) => {
         }
     }
     return null;
+};
+Transaction.findById = async (id) => {
+    for (const tx of db.transactions.values()) {
+        if (String(tx._id) === String(id)) return tx;
+    }
+    return null;
+};
+Transaction.findByIdAndUpdate = async (id, update) => {
+    for (const tx of db.transactions.values()) {
+        if (String(tx._id) === String(id)) {
+            if (update.$set) {
+                Object.assign(tx, update.$set);
+            }
+            return tx;
+        }
+    }
+    return null;
+};
+Transaction.findOneAndUpdate = async (query, update, options) => {
+    let matchedTx = null;
+    for (const tx of db.transactions.values()) {
+        let match = true;
+        if (query._id && String(tx._id) !== String(query._id)) match = false;
+        if (query.type && tx.type !== query.type) match = false;
+        if (query.status && tx.status !== query.status) match = false;
+        if (query.riskStatus && tx.riskStatus !== query.riskStatus) match = false;
+        if (match) {
+            matchedTx = tx;
+            break;
+        }
+    }
+    if (!matchedTx) return null;
+    if (update.$set) {
+        Object.assign(matchedTx, update.$set);
+    }
+    return matchedTx;
+};
+Transaction.find = (query = {}) => {
+    const all = Array.from(db.transactions.values());
+    const filter = (items) => {
+        let res = items;
+        if (query.type) res = res.filter(t => t.type === query.type);
+        if (query.status) res = res.filter(t => t.status === query.status);
+        if (query.riskStatus) res = res.filter(t => t.riskStatus === query.riskStatus);
+        if (query.userId) res = res.filter(t => String(t.userId) === String(query.userId));
+        if (query.offerwallProvider) res = res.filter(t => t.offerwallProvider === query.offerwallProvider);
+        if (query.externalTransactionId) res = res.filter(t => t.externalTransactionId === query.externalTransactionId);
+        return res;
+    };
+    const queryObj = {
+        sort: () => queryObj,
+        populate: () => queryObj,
+        lean: async () => filter(all),
+        then: (resolve, reject) => Promise.resolve(filter(all)).then(resolve, reject)
+    };
+    return queryObj;
 };
 Transaction.create = async (doc, options) => {
     if (Array.isArray(doc)) {
@@ -210,7 +282,25 @@ Transaction.deleteOne = async (query) => {
     return { deletedCount: 0 };
 };
 
-OfferwallPostbackLog.countDocuments = async (query) => 0;
+OfferwallPostbackLog.countDocuments = async (query) => {
+    if (db.mockLogCount !== undefined) {
+        return db.mockLogCount;
+    }
+    return 0;
+};
+OfferwallPostbackLog.findOneAndUpdate = async (query, update) => {
+    for (const log of db.logs.values()) {
+        let match = true;
+        if (query.transactionId && String(log.transactionId) !== String(query.transactionId)) match = false;
+        if (match) {
+            if (update.$set) {
+                Object.assign(log, update.$set);
+            }
+            return log;
+        }
+    }
+    return null;
+};
 OfferwallPostbackLog.prototype.save = async function() {
     const id = this._id || `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     db.logs.set(String(id), this);
@@ -1700,6 +1790,7 @@ const runTest = async (name, fn) => {
         owProvider.status = 'ACTIVE';
         owProvider.approvalStatus = 'Approved';
         owProvider.appId = '9604';
+        owProvider.secretKey = TEST_SECRET;
         owProvider.iframeUrlTemplate = 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={user_id}';
 
         const req = { user: { id: TEST_USER_ID } };
@@ -1709,7 +1800,9 @@ const runTest = async (name, fn) => {
         assert.equal(res.statusCode, 200);
         const found = res.body?.data?.find(p => p.providerKey === 'offerwall_gg');
         assert.ok(found, 'Approved Offerwall.GG must be included in public worker response');
-        assert.equal(found.iframeUrl, `https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId=${TEST_USER_ID}`, '{user_id} macro resolved correctly in public worker view');
+        assert.ok(found.iframeUrl.startsWith('https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543'), 'Signed wall URL returned');
+        assert.ok(found.iframeUrl.includes(`userId=${TEST_USER_ID}`), 'User ID parameter present');
+        assert.ok(found.iframeUrl.includes('signature='), 'HMAC signature present in URL');
     });
 
     await runTest('T56: Public getOfferwallProviders excludes Offerwall.GG when approvalStatus is Pending', async () => {
@@ -1773,6 +1866,7 @@ const runTest = async (name, fn) => {
         owProvider.status = 'ACTIVE';
         owProvider.approvalStatus = 'Approved';
         owProvider.appId = '9604';
+        owProvider.secretKey = TEST_SECRET;
         owProvider.iframeUrlTemplate = 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={user_id}&app={appId}';
 
         const pId = '64f1a2b3c4d5e6f7a8b9c0e1';
@@ -1795,9 +1889,10 @@ const runTest = async (name, fn) => {
         await launchProviderPlacement(req, res);
 
         assert.equal(res.statusCode, 200);
-        assert.equal(res.body.launchUrl, `https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId=${TEST_USER_ID}&app=9604`);
-        assert.equal(res.body.launchUrl.includes(TEST_USER_ID), true);
-        assert.equal(res.body.launchUrl.includes('{user_id}'), false);
+        assert.ok(res.body.launchUrl.startsWith('https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543'));
+        assert.ok(res.body.launchUrl.includes(`userId=${TEST_USER_ID}`));
+        assert.ok(res.body.launchUrl.includes('signature='));
+        assert.equal(res.body.launchUrl.includes(TEST_SECRET), false, 'Secret must never be exposed');
     });
 
     await runTest('T59: placementEnabled=false or availableTasksVisibility=false excludes placement from getAvailablePlacements', async () => {
@@ -1870,6 +1965,7 @@ const runTest = async (name, fn) => {
         owProvider.status = 'ACTIVE';
         owProvider.approvalStatus = 'Approved';
         owProvider.appId = '9604';
+        owProvider.secretKey = TEST_SECRET;
         owProvider.iframeUrlTemplate = 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={user_id}';
 
         const pId = '64f1a2b3c4d5e6f7a8b9c0e5';
@@ -1889,7 +1985,9 @@ const runTest = async (name, fn) => {
         await launchProviderPlacement(req, res);
 
         assert.equal(res.statusCode, 200);
-        assert.equal(res.body.launchUrl, `https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId=${TEST_USER_ID}`);
+        assert.ok(res.body.launchUrl.startsWith('https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543'));
+        assert.ok(res.body.launchUrl.includes(`userId=${TEST_USER_ID}`));
+        assert.ok(res.body.launchUrl.includes('signature='));
     });
 
     console.log('\n--- SECTION 7: Provider-Managed Accounting Matrix, Multiplier Guards & Reversal Precision ---');
