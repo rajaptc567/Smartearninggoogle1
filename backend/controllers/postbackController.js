@@ -1949,10 +1949,11 @@ export const handlePostback = async (req, res) => {
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                 }
 
-                // If original reward is Pending (e.g. held in Risk Review), funds were never credited.
+                // If original reward is Pending or riskStatus is REVIEW (e.g. held in Risk Review), funds were never credited.
                 // Do not deduct user spendable balance, do not create liability, close pending reward,
                 // and persist linked reversal record with 0 user deduction.
-                if (origTx && origTx.status === 'Pending') {
+                if (origTx && (origTx.status === 'Pending' || origTx.riskStatus === 'REVIEW')) {
+                    console.log('ENTERED PENDING REVERSAL BLOCK:', origTx.status);
                     try {
                         await Transaction.findByIdAndUpdate(origTx._id, {
                             $set: {
@@ -1963,7 +1964,7 @@ export const handlePostback = async (req, res) => {
                             }
                         });
                     } catch (closeErr) {
-                        console.warn('[Pending Reversal Close Warning]:', closeErr.message);
+                        console.error('[Pending Reversal Close Error]:', closeErr);
                     }
 
                     let revTx;
@@ -2895,8 +2896,12 @@ export const constructOfferwallGgEntryUrl = (provider, authenticatedUserId, opti
         return { url: '', error: 'Offerwall.GG secret key is not configured.' };
     }
 
-    // 2. Validate Template & Extract 32-character Public Key
-    const template = (provider?.iframeUrlTemplate || '').trim() || 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={userId}';
+    // 2. Validate Template & Extract 32-character lowercase hex Public Key (NO hardcoded fallback)
+    const template = (provider?.iframeUrlTemplate || '').trim();
+    if (!template) {
+        return { url: '', error: 'Offerwall.GG wall URL template is not configured.' };
+    }
+
     let parsedUrl;
     try {
         parsedUrl = new URL(template);
@@ -2913,17 +2918,20 @@ export const constructOfferwallGgEntryUrl = (provider, authenticatedUserId, opti
         return { url: '', error: 'Offerwall.GG wall URL template has invalid or untrusted host.' };
     }
 
-    // Public key is strictly the 32-character hex/alphanumeric key in the path: /wall/{PUBLIC_KEY}
-    // Placement ID 9604 is a separate numeric identifier and must NEVER be used as the public key.
+    // Public key is strictly the 32-character lowercase hexadecimal key in the path: /wall/{PUBLIC_KEY}
     const pathMatch = parsedUrl.pathname.match(/^\/wall\/([a-zA-Z0-9]{32})(?:\/)?$/);
     if (!pathMatch) {
         return { url: '', error: 'Offerwall.GG wall URL template is missing valid 32-character public key in path.' };
     }
 
-    const publicKey = pathMatch[1];
+    const rawPublicKey = pathMatch[1];
+    if (!/^[a-f0-9]{32}$/.test(rawPublicKey)) {
+        return { url: '', error: 'Offerwall.GG wall URL template public key must be strictly 32-character lowercase hexadecimal.' };
+    }
+    const publicKey = rawPublicKey;
 
-    // 3. Build Canonical Query Parameters
-    const params = {
+    // 3. Build Canonical Query Parameters for signature (including appId, userId, and ts if enabled)
+    const canonicalParams = {
         appId: publicKey,
         userId: userId
     };
@@ -2939,18 +2947,31 @@ export const constructOfferwallGgEntryUrl = (provider, authenticatedUserId, opti
 
     if (enableExpiry) {
         const ts = options.ts !== undefined ? Number(options.ts) : Math.floor(Date.now() / 1000);
-        params.ts = String(ts);
+        if (!Number.isFinite(ts) || ts <= 0) {
+            return { url: '', error: 'Offerwall.GG expiry timestamp must be a valid positive integer.' };
+        }
+        canonicalParams.ts = String(ts);
     }
 
-    // 4. Sort parameter names alphabetically and construct canonical string
-    const sortedKeys = Object.keys(params).sort();
-    const canonicalString = sortedKeys.map(k => `${k}=${params[k]}`).join('&');
+    // 4. Sort canonical parameter names alphabetically and construct canonical string
+    const sortedKeys = Object.keys(canonicalParams).sort();
+    const canonicalString = sortedKeys.map(k => `${k}=${canonicalParams[k]}`).join('&');
 
     // 5. Calculate HMAC-SHA256 signature
     const signature = crypto.createHmac('sha256', secret).update(canonicalString).digest('hex');
 
-    // 6. Build final signed wall URL
-    const url = `https://offerwall.gg/wall/${publicKey}?${canonicalString}&signature=${signature}`;
+    // 6. Build final signed wall URL without appId in query (since appId/public key is in the path)
+    const queryParams = {
+        userId: userId
+    };
+    if (enableExpiry) {
+        queryParams.ts = canonicalParams.ts;
+    }
+    queryParams.signature = signature;
+
+    const sortedQueryKeys = Object.keys(queryParams).sort();
+    const queryString = sortedQueryKeys.map(k => `${k}=${queryParams[k]}`).join('&');
+    const url = `https://offerwall.gg/wall/${publicKey}?${queryString}`;
 
     return {
         url,

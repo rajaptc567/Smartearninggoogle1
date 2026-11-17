@@ -205,6 +205,14 @@ export const approveOfferwallRiskReview = async (req, res) => {
         sessionStarted = false;
     }
 
+    // Never approve a financial reward without a working MongoDB transaction
+    if (!sessionStarted || !session) {
+        return res.status(503).json({
+            success: false,
+            error: 'MongoDB transaction support is unavailable. Reward approval failed closed and remains Pending.'
+        });
+    }
+
     try {
         // Query to match only eligible Pending REVIEW Offerwall Reward
         const txQuery = {
@@ -214,23 +222,38 @@ export const approveOfferwallRiskReview = async (req, res) => {
             riskStatus: 'REVIEW'
         };
 
-        const existingTx = await Transaction.findOne(txQuery);
+        const existingTx = await Transaction.findOne(txQuery).session(session);
         if (!existingTx) {
-            if (sessionStarted) await session.abortTransaction();
+            await session.abortTransaction();
             return res.status(404).json({
                 success: false,
                 error: 'Transaction not found or not eligible for approval (must be Offerwall Reward in Pending REVIEW state).'
             });
         }
 
-        // Verify target user is NOT Blocked and earning is not restricted
-        const targetUser = await User.findById(existingTx.userId);
+        // Check for an existing reversal record/marker for the same provider and external transaction ID (race-safe)
+        const existingReversal = await Transaction.findOne({
+            offerwallProvider: existingTx.offerwallProvider,
+            externalTransactionId: existingTx.externalTransactionId,
+            type: 'Offerwall Reversal'
+        }).session(session);
+
+        if (existingReversal) {
+            await session.abortTransaction();
+            return res.status(409).json({
+                success: false,
+                error: 'Cannot approve reward: a reversal has already been processed for this transaction.'
+            });
+        }
+
+        // Verify target user is NOT Blocked and earning is not restricted (within transaction)
+        const targetUser = await User.findById(existingTx.userId).session(session);
         if (!targetUser) {
-            if (sessionStarted) await session.abortTransaction();
+            await session.abortTransaction();
             return res.status(404).json({ success: false, error: 'Target user account not found.' });
         }
         if (targetUser.status === 'Blocked' || targetUser.restrictions?.earning === true) {
-            if (sessionStarted) await session.abortTransaction();
+            await session.abortTransaction();
             return res.status(403).json({
                 success: false,
                 error: 'User account is Blocked or earning-restricted; approval rejected.'
@@ -238,6 +261,11 @@ export const approveOfferwallRiskReview = async (req, res) => {
         }
 
         const rewardToCredit = Number(existingTx.userRewardAmount ?? existingTx.amountUSD ?? existingTx.amount);
+        if (!Number.isFinite(rewardToCredit) || rewardToCredit <= 0) {
+            await session.abortTransaction();
+            return res.status(400).json({ success: false, error: 'Invalid or non-positive reward amount.' });
+        }
+
         const balanceBefore = Number(targetUser.taskEarningsBalance || 0);
         const balanceAfter = Number((balanceBefore + rewardToCredit).toFixed(4));
 
@@ -255,11 +283,11 @@ export const approveOfferwallRiskReview = async (req, res) => {
                     reviewNote: String(reviewNote).trim()
                 }
             },
-            { new: true, session: session || undefined }
+            { new: true, session }
         );
 
         if (!updatedTx) {
-            if (sessionStarted) await session.abortTransaction();
+            await session.abortTransaction();
             return res.status(409).json({
                 success: false,
                 error: 'Transaction was already reviewed or modified concurrently.'
@@ -279,28 +307,35 @@ export const approveOfferwallRiskReview = async (req, res) => {
                     taskWalletBalance: rewardToCredit
                 }
             },
-            { new: true, session: session || undefined }
+            { new: true, session }
         );
 
         if (!updatedUser) {
-            if (sessionStarted) {
-                await session.abortTransaction();
-            } else {
-                // Roll back transaction update if standalone Mongo
-                await Transaction.findByIdAndUpdate(id, {
-                    $set: {
-                        status: 'Pending',
-                        reviewedBy: undefined,
-                        reviewedAt: undefined,
-                        reviewDecision: undefined,
-                        reviewNote: undefined
-                    }
-                });
-            }
+            await session.abortTransaction();
             return res.status(500).json({
                 success: false,
-                error: 'Failed to update user wallet balance during approval; failed closed.'
+                error: 'Failed to update user wallet balance during approval; transaction aborted.'
             });
+        }
+
+        // Update provider metrics exactly once in the same transaction
+        if (existingTx.offerwallProvider) {
+            try {
+                await OfferwallProvider.findOneAndUpdate(
+                    { providerKey: existingTx.offerwallProvider },
+                    {
+                        $inc: {
+                            totalGrossPayoutUSD: existingTx.grossAmount || 0,
+                            totalUserPayoutUSD: rewardToCredit,
+                            totalPlatformRevenueUSD: existingTx.platformRevenueAmount || 0,
+                            totalPostbackCount: 1
+                        }
+                    },
+                    { session }
+                );
+            } catch (metricsErr) {
+                console.warn('[Offerwall Metrics Warning] Failed to update provider statistics on approval:', metricsErr.message);
+            }
         }
 
         // Update linked OfferwallPostbackLog
@@ -314,13 +349,11 @@ export const approveOfferwallRiskReview = async (req, res) => {
                         userBalanceAfter: balanceAfter
                     }
                 },
-                { session: session || undefined }
+                { session }
             );
         } catch (_) {}
 
-        if (sessionStarted) {
-            await session.commitTransaction();
-        }
+        await session.commitTransaction();
 
         // User Notification
         try {

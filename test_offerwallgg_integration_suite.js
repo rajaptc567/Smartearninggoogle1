@@ -3645,6 +3645,119 @@ const runTest = async (name, fn) => {
         }
     });
 
+    await runTest('T102: constructOfferwallGgEntryUrl enforces strict 32-char lowercase hex public key and omits appId from query while signing canonical query', async () => {
+        const provider = {
+            secretKey: 'test_secret_key_123',
+            iframeUrlTemplate: 'https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?userId={userId}'
+        };
+
+        const res = constructOfferwallGgEntryUrl(provider, 'user_123');
+        assert.equal(res.error, null);
+        assert.ok(res.url.startsWith('https://offerwall.gg/wall/44e2f34845f41e2de70f39b9c3b5a543?'));
+        assert.equal(res.url.includes('appId='), false, 'appId must be omitted from final URL query string');
+        assert.ok(res.url.includes('userId=user_123'));
+        assert.ok(res.url.includes('signature='));
+
+        const badProviderUppercase = {
+            secretKey: 'test_secret_key_123',
+            iframeUrlTemplate: 'https://offerwall.gg/wall/44E2F34845F41E2DE70F39B9C3B5A543?userId={userId}'
+        };
+        const resUpper = constructOfferwallGgEntryUrl(badProviderUppercase, 'user_123');
+        assert.notEqual(resUpper.error, null, 'Uppercase public key must be rejected');
+
+        const badProviderShort = {
+            secretKey: 'test_secret_key_123',
+            iframeUrlTemplate: 'https://offerwall.gg/wall/44e2f348?userId={userId}'
+        };
+        const resShort = constructOfferwallGgEntryUrl(badProviderShort, 'user_123');
+        assert.notEqual(resShort.error, null, 'Non-32-character public key must be rejected');
+    });
+
+    await runTest('T103: approveOfferwallRiskReview fails closed if MongoDB session/transaction start fails', async () => {
+        const origStartSession = mongoose.startSession;
+        mongoose.startSession = async () => {
+            throw new Error('Transaction system offline');
+        };
+
+        const req = {
+            user: { id: 'admin_1', role: 'admin' },
+            params: { transactionId: 'some_tx_id' },
+            body: { reviewNote: 'Looks good' }
+        };
+        const res = createMockRes();
+
+        try {
+            await approveOfferwallRiskReview(req, res);
+            assert.equal(res.statusCode, 503, 'Must fail closed with HTTP 503 when transaction session fails');
+            assert.equal(res.body.success, false);
+        } finally {
+            mongoose.startSession = origStartSession;
+        }
+    });
+
+    await runTest('T104: pending risk review reversal matching riskStatus REVIEW closes pending reward with zero deduction', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        if (owProvider) {
+            owProvider.enabled = true;
+            owProvider.status = 'ACTIVE';
+            owProvider.approvalStatus = 'Approved';
+            owProvider.secretKey = TEST_SECRET;
+        }
+
+        const uId = TEST_USER_ID;
+        const user = {
+            _id: uId,
+            username: 'RiskReviewUser',
+            taskEarningsBalance: 50.00,
+            taskWalletBalance: 50.00,
+            chargebackLiabilityUSD: 0,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_risk_review_pending_1';
+        const origTx = {
+            _id: txId,
+            userId: user._id,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: 'ext_review_tx_unique_104',
+            idempotencyKey: 'offerwall_gg_ext_review_tx_unique_104_credit',
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set('offerwall_gg_ext_review_tx_unique_104_credit', origTx);
+
+        const revParams = {
+            userId: uId,
+            transactionId: 'ext_review_tx_unique_104',
+            currencyAmount: '-70',
+            status: 'reversed',
+            signature: crypto.createHmac('sha256', TEST_SECRET).update(`${uId}:ext_review_tx_unique_104:-70`).digest('hex')
+        };
+
+        const req = {
+            method: 'POST',
+            params: { provider: 'offerwall_gg' },
+            query: revParams,
+            body: {},
+            headers: { 'x-forwarded-for': '127.0.0.1' }
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 50.00, 'User earnings must not be deducted when reversing pending review transaction');
+        const updatedOrig = db.transactions.get(txId);
+        assert.equal(updatedOrig.status, 'Rejected', 'Original pending transaction must be marked Rejected');
+    });
+
     console.log(`\n========================================================`);
     console.log(`RESULTS: ${passedTests}/${totalTests} tests passed.`);
     console.log(`========================================================\n`);
