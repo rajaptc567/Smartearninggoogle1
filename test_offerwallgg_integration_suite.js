@@ -2935,15 +2935,15 @@ const runTest = async (name, fn) => {
             assert.equal(afterBadLog.status, 'InvalidSignature');
             const totalLogsAfterBad = db.logs.size;
 
-            // Valid retry for the exact same externalTxId + provider + isReversal
+            // Valid retry with distinct client IP, distinct query parameters, rawBody, and rawHeaders
             const goodSig = computeSignature(TEST_USER_ID, txId, '70');
             const goodRes = createMockRes();
             await handlePostback({
-                method: 'GET',
+                method: 'POST',
                 params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: goodSig },
-                body: {},
-                headers: {}
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', payoutUsd: '1.00', status: 'credited', signature: goodSig, distinctTag: 'valid_retry_distinct' },
+                body: { retryPayloadKey: 'retry_payload_val' },
+                headers: { 'x-forwarded-for': '198.51.100.88', 'x-custom-retry-header': 'retry_header_val' }
             }, goodRes);
             assert.equal(goodRes.statusCode, 200);
             assert.equal(user.taskEarningsBalance, 0.7);
@@ -2951,6 +2951,10 @@ const runTest = async (name, fn) => {
 
             const updatedLog = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
             assert.equal(updatedLog.status, 'Processed');
+            assert.equal(updatedLog.clientIp, '198.51.100.88', 'Current log must contain successful retry clientIp');
+            assert.equal(updatedLog.queryParams.distinctTag, 'valid_retry_distinct', 'Current log must contain successful retry queryParams');
+            assert.equal(updatedLog.rawBody.retryPayloadKey, 'retry_payload_val', 'Current log must contain successful retry rawBody');
+            assert.ok(updatedLog.rawHeaders, 'Current log must contain rawHeaders');
             assert.ok(updatedLog.transactionId, 'Final log must store linked transactionId');
             assert.equal(updatedLog.infoPayoutUsd, '1.00');
             assert.equal(updatedLog.userRewardUSD, 0.7);
@@ -3307,6 +3311,9 @@ const runTest = async (name, fn) => {
                 headers: {}
             }, createMockRes());
 
+            const creditTx = await Transaction.findOne({ externalTransactionId: txIdRev, offerwallProvider: 'offerwall_gg', type: 'Offerwall Reward' });
+            assert.ok(creditTx, 'Original credit transaction must exist');
+
             // Reverse
             const revSig = computeSignature(TEST_USER_ID, txIdRev, '-70');
             await handlePostback({
@@ -3321,7 +3328,10 @@ const runTest = async (name, fn) => {
             
             assert.equal(logRevBefore.status, 'Reversed');
             assert.ok(logRevBefore.transactionId, 'Reversed record must reference transactionId');
+            assert.ok(logRevBefore.reversalReferenceTxId, 'Reversal log must reference reversalReferenceTxId');
+            assert.equal(String(logRevBefore.reversalReferenceTxId), String(creditTx._id), 'reversalReferenceTxId must match original credit transaction id');
             assert.ok(logRevBefore.reversedAmountUSD > 0, 'reversedAmountUSD must be positive');
+            assert.equal(logRevBefore.reversedAmountUSD, logRevBefore.userRewardUSD, 'reversedAmountUSD must be consistent with userRewardUSD');
 
             const beforeRev = {
                 status: logRevBefore.status,
@@ -3401,22 +3411,22 @@ const runTest = async (name, fn) => {
 
         try {
             const txId = 't101_masking';
-            // First invalid attempt with sensitive fields and bad signature
+            // First attempt with sensitive fields in query, body, and headers (bad signature)
             await handlePostback({
                 method: 'POST',
                 params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_sig_1', secret: 'bad_secret_1' },
-                body: { secretKey: 'secret_key_xyz', apiKey: 'api_key_123', auth: 'bearer_token_abc' },
-                headers: {}
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_sig_1', secret: 'secret_val_1', token: 'token_val_1' },
+                body: { secretKey: 'secret_key_xyz_1', apiKey: 'api_key_123_1', auth: 'bearer_token_abc_1', authorization: 'auth_header_1' },
+                headers: { authorization: 'header_auth_1' }
             }, createMockRes());
 
-            // Second invalid attempt with sensitive fields and bad signature
+            // Second attempt with sensitive fields in query, body, and headers (bad signature)
             await handlePostback({
                 method: 'POST',
                 params: { provider: 'offerwall_gg' },
-                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_sig_2', secret: 'bad_secret_2' },
-                body: { secretKey: 'secret_key_xyz_2', apiKey: 'api_key_123_2', auth: 'bearer_token_abc_2' },
-                headers: {}
+                query: { userId: TEST_USER_ID, transactionId: txId, currencyAmount: '70', status: 'credited', signature: 'bad_sig_2', secret: 'secret_val_2', token: 'token_val_2' },
+                body: { secretKey: 'secret_key_xyz_2', apiKey: 'api_key_123_2', auth: 'bearer_token_abc_2', authorization: 'auth_header_2' },
+                headers: { authorization: 'header_auth_2' }
             }, createMockRes());
 
             const log = await OfferwallPostbackLog.findOne({ provider: 'offerwall_gg', externalTxId: txId, isReversal: false });
@@ -3426,22 +3436,36 @@ const runTest = async (name, fn) => {
             assert.equal(log.rawBody.secretKey, '***REDACTED***');
             assert.equal(log.rawBody.apiKey, '***REDACTED***');
             assert.equal(log.rawBody.auth, '***REDACTED***');
+            assert.equal(log.rawBody.authorization, '***REDACTED***');
             assert.equal(log.queryParams.secret, '***REDACTED***');
+            assert.equal(log.queryParams.token, '***REDACTED***');
 
-            // Verify priorSecurityEvents snapshots are masked
-            assert.ok(Array.isArray(log.priorSecurityEvents) && log.priorSecurityEvents.length > 0);
-            for (const ev of log.priorSecurityEvents) {
-                if (ev.queryParams && ev.queryParams.secret) {
-                    assert.equal(ev.queryParams.secret, '***REDACTED***');
-                }
-            }
+            // Explicitly inspect priorSecurityEvents snapshots without conditional skip
+            assert.ok(Array.isArray(log.priorSecurityEvents) && log.priorSecurityEvents.length === 1);
+            const ev = log.priorSecurityEvents[0];
+            assert.equal(ev.queryParams.secret, '***REDACTED***');
+            assert.equal(ev.queryParams.token, '***REDACTED***');
+            assert.equal(ev.queryParams.signature, '***REDACTED***');
+            assert.equal(ev.rawBody.secretKey, '***REDACTED***');
+            assert.equal(ev.rawBody.apiKey, '***REDACTED***');
+            assert.equal(ev.rawBody.auth, '***REDACTED***');
+            assert.equal(ev.rawBody.authorization, '***REDACTED***');
 
-            // Assert original secret values do not appear anywhere in serialized historical snapshots or log object
+            // Assert original secret/sensitive values do not appear anywhere in serialized current and historical log data
             const serialized = JSON.stringify(log);
-            assert.equal(serialized.includes('secret_key_xyz'), false);
-            assert.equal(serialized.includes('api_key_123'), false);
-            assert.equal(serialized.includes('bearer_token_abc'), false);
-            assert.equal(serialized.includes('bad_secret_1'), false);
+            const sensitiveValues = [
+                'secret_val_1', 'secret_val_2',
+                'token_val_1', 'token_val_2',
+                'secret_key_xyz_1', 'secret_key_xyz_2',
+                'api_key_123_1', 'api_key_123_2',
+                'bearer_token_abc_1', 'bearer_token_abc_2',
+                'auth_header_1', 'auth_header_2',
+                'header_auth_1', 'header_auth_2',
+                'bad_sig_1', 'bad_sig_2'
+            ];
+            for (const val of sensitiveValues) {
+                assert.equal(serialized.includes(val), false, `Sensitive value ${val} must be absent from serialized log`);
+            }
         } finally {
             OfferwallPostbackLog.prototype.save = origSave;
             OfferwallPostbackLog.findOne = origFindOne;
