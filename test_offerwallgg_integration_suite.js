@@ -62,28 +62,81 @@ class MockDb {
         this.userLookupCalls = [];
     }
 }
-
 const db = new MockDb();
 
-// Setup Mongoose model mocks
-User.findById = async (id) => {
-    db.userLookupCalls.push({ method: 'findById', id });
-    return db.users.get(String(id)) || null;
+let currentTxSnapshot = null;
+let currentUserSnapshot = null;
+let currentProviderSnapshot = null;
+
+mongoose.startSession = async () => {
+    let active = false;
+    return {
+        startTransaction: () => {
+            active = true;
+            currentTxSnapshot = new Map();
+            for (const [k, v] of db.transactions.entries()) {
+                currentTxSnapshot.set(k, { ...v });
+            }
+            currentUserSnapshot = new Map();
+            for (const [k, v] of db.users.entries()) {
+                currentUserSnapshot.set(k, { ...v });
+            }
+            currentProviderSnapshot = new Map();
+            for (const [k, v] of db.providers.entries()) {
+                currentProviderSnapshot.set(k, { ...v });
+            }
+        },
+        commitTransaction: async () => {
+            active = false;
+            currentTxSnapshot = null;
+            currentUserSnapshot = null;
+            currentProviderSnapshot = null;
+        },
+        abortTransaction: async () => {
+            if (active && currentTxSnapshot) {
+                db.transactions.clear();
+                for (const [k, v] of currentTxSnapshot.entries()) {
+                    db.transactions.set(k, { ...v });
+                }
+                db.users.clear();
+                for (const [k, v] of currentUserSnapshot.entries()) {
+                    db.users.set(k, { ...v });
+                }
+                db.providers.clear();
+                for (const [k, v] of currentProviderSnapshot.entries()) {
+                    db.providers.set(k, { ...v });
+                }
+            }
+            active = false;
+        },
+        endSession: async () => {},
+        inTransaction: () => active
+    };
 };
-User.findOne = async (query) => {
+User.findById = (id) => {
+    db.userLookupCalls.push({ method: 'findById', id });
+    const p = Promise.resolve(db.users.get(String(id)) || null);
+    p.session = () => p;
+    p.select = () => p;
+    return p;
+};
+User.findOne = (query) => {
     db.userLookupCalls.push({ method: 'findOne', query });
-    if (query._id) return db.users.get(String(query._id)) || null;
-    if (query.username) {
+    let res = null;
+    if (query._id) res = db.users.get(String(query._id)) || null;
+    else if (query.username) {
         for (const u of db.users.values()) {
-            if (u.username === query.username) return u;
+            if (u.username === query.username) { res = u; break; }
+        }
+    } else if (query.email) {
+        for (const u of db.users.values()) {
+            if (u.email === query.email) { res = u; break; }
         }
     }
-    if (query.email) {
-        for (const u of db.users.values()) {
-            if (u.email === query.email) return u;
-        }
-    }
-    return null;
+    const p = Promise.resolve(res);
+    p.session = () => p;
+    p.select = () => p;
+    return p;
 };
 User.findOneAndUpdate = async (filter, update) => {
     const user = await User.findById(filter._id);
@@ -159,11 +212,27 @@ OfferwallProvider.findByIdAndUpdate = async (id, update) => {
     return null;
 };
 OfferwallProvider.findOneAndUpdate = async (query, update) => {
-    const targetKey = typeof query.providerKey === 'string' ? query.providerKey.toLowerCase() : null;
+    let targetKey = typeof query.providerKey === 'string' ? query.providerKey.toLowerCase() : null;
+    if (!targetKey && query.providerKey && Array.isArray(query.providerKey.$in)) {
+        for (const k of query.providerKey.$in) {
+            if (typeof k === 'string' && db.providers.has(k.toLowerCase())) {
+                targetKey = k.toLowerCase();
+                break;
+            }
+        }
+        if (!targetKey && query.providerKey.$in[0]) {
+            targetKey = String(query.providerKey.$in[0]).toLowerCase();
+        }
+    }
     const provider = targetKey ? db.providers.get(targetKey) : null;
     if (!provider) return null;
     if (update.$set) {
         Object.assign(provider, update.$set);
+    }
+    if (update.$inc) {
+        for (const [k, v] of Object.entries(update.$inc)) {
+            provider[k] = Number(((provider[k] || 0) + v).toFixed(4));
+        }
     }
     if (!provider.toObject) {
         provider.toObject = function() { return { ...this }; };
@@ -171,34 +240,65 @@ OfferwallProvider.findOneAndUpdate = async (query, update) => {
     return provider;
 };
 
-Transaction.findOne = async (query) => {
-    if (query.idempotencyKey) {
-        return db.transactions.get(query.idempotencyKey) || null;
-    }
-    if (query._id) {
+Transaction.findOne = (query) => {
+    let res = null;
+    if (query.$or && Array.isArray(query.$or)) {
+        for (const sub of query.$or) {
+            for (const tx of db.transactions.values()) {
+                let match = true;
+                if (sub.offerwallProvider) {
+                    if (sub.offerwallProvider.$in) {
+                        if (!sub.offerwallProvider.$in.includes(tx.offerwallProvider)) match = false;
+                    } else if (tx.offerwallProvider !== sub.offerwallProvider) match = false;
+                }
+                if (sub.externalTransactionId && tx.externalTransactionId !== sub.externalTransactionId) match = false;
+                if (sub.reversalReferenceId && String(tx.reversalReferenceId) !== String(sub.reversalReferenceId)) match = false;
+                if (sub.type && tx.type !== sub.type) match = false;
+                if (match) { res = tx; break; }
+            }
+            if (res) break;
+        }
+    } else if (query.idempotencyKey) {
+        res = db.transactions.get(query.idempotencyKey) || null;
+    } else if (query._id) {
         for (const tx of db.transactions.values()) {
             if (String(tx._id) === String(query._id)) {
                 if (query.type && tx.type !== query.type) continue;
                 if (query.status && tx.status !== query.status) continue;
                 if (query.riskStatus && tx.riskStatus !== query.riskStatus) continue;
-                return tx;
+                res = tx;
+                break;
             }
         }
-    }
-    if (query.externalTransactionId) {
+    } else if (query.externalTransactionId) {
         for (const tx of db.transactions.values()) {
             if (tx.externalTransactionId === query.externalTransactionId && tx.offerwallProvider === query.offerwallProvider) {
-                if (!query.type || tx.type === query.type) return tx;
+                if (!query.type || tx.type === query.type) { res = tx; break; }
+            }
+        }
+    } else if (query.reversalReferenceId) {
+        for (const tx of db.transactions.values()) {
+            if (String(tx.reversalReferenceId) === String(query.reversalReferenceId)) {
+                if (!query.type || tx.type === query.type) { res = tx; break; }
             }
         }
     }
-    return null;
+    const p = Promise.resolve(res);
+    p.session = () => p;
+    p.select = () => p;
+    p.lean = () => p;
+    p.sort = () => p;
+    return p;
 };
-Transaction.findById = async (id) => {
+Transaction.findById = (id) => {
+    let res = null;
     for (const tx of db.transactions.values()) {
-        if (String(tx._id) === String(id)) return tx;
+        if (String(tx._id) === String(id)) { res = tx; break; }
     }
-    return null;
+    const p = Promise.resolve(res);
+    p.session = () => p;
+    p.select = () => p;
+    return p;
 };
 Transaction.findByIdAndUpdate = async (id, update) => {
     for (const tx of db.transactions.values()) {
@@ -263,10 +363,12 @@ Transaction.create = async (doc, options) => {
         err.code = 11000;
         throw err;
     }
-    const id = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const tx = { _id: id, ...doc };
+    const id = doc._id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const tx = { ...doc, _id: id };
     if (doc.idempotencyKey) {
         db.transactions.set(doc.idempotencyKey, tx);
+    } else {
+        db.transactions.set(String(id), tx);
     }
     return tx;
 };
@@ -3756,6 +3858,913 @@ const runTest = async (name, fn) => {
         assert.equal(user.taskEarningsBalance, 50.00, 'User earnings must not be deducted when reversing pending review transaction');
         const updatedOrig = db.transactions.get(txId);
         assert.equal(updatedOrig.status, 'Rejected', 'Original pending transaction must be marked Rejected');
+    });
+
+    const makeHexUserId = (num) => '64f1a2b3c4d5e6f7a8' + String(num).padStart(6, '0');
+
+    await runTest('T105: Pending Risk Review reversal does not deduct wallet balance', async () => {
+        const uId = makeHexUserId(105);
+        const user = {
+            _id: uId,
+            username: 'User105',
+            taskEarningsBalance: 25.00,
+            taskWalletBalance: 25.00,
+            chargebackLiabilityUSD: 0,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_105_' + Date.now();
+        const extId = 'ext_105_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const revParams = {
+            userId: uId,
+            transactionId: extId,
+            currencyAmount: '-70',
+            status: 'reversed',
+            signature: crypto.createHmac('sha256', TEST_SECRET).update(`${uId}:${extId}:-70`).digest('hex')
+        };
+        const req = {
+            method: 'POST',
+            params: { provider: 'offerwall_gg' },
+            query: revParams,
+            body: {},
+            headers: { 'x-forwarded-for': '127.0.0.1' }
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body, 'OK');
+        assert.equal(user.taskEarningsBalance, 25.00, 'taskEarningsBalance must remain unchanged');
+        assert.equal(user.taskWalletBalance, 25.00, 'taskWalletBalance must remain unchanged');
+        assert.equal(user.chargebackLiabilityUSD, 0, 'chargebackLiabilityUSD must remain 0');
+    });
+
+    await runTest('T106: Pending original reward and zero-deduction reversal marker are both persisted', async () => {
+        const uId = makeHexUserId(106);
+        const user = {
+            _id: uId,
+            username: 'User106',
+            taskEarningsBalance: 30.00,
+            taskWalletBalance: 30.00,
+            chargebackLiabilityUSD: 0,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_106_' + Date.now();
+        const extId = 'ext_106_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            grossAmount: 1.00,
+            platformRevenueAmount: 0.30,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const revParams = {
+            userId: uId,
+            transactionId: extId,
+            currencyAmount: '-70',
+            status: 'reversed',
+            signature: crypto.createHmac('sha256', TEST_SECRET).update(`${uId}:${extId}:-70`).digest('hex')
+        };
+        const req = {
+            method: 'POST',
+            params: { provider: 'offerwall_gg' },
+            query: revParams,
+            body: {},
+            headers: { 'x-forwarded-for': '127.0.0.1' }
+        };
+        const res = createMockRes();
+        await handlePostback(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body, 'OK');
+        const updatedOrig = db.transactions.get(txId);
+        assert.equal(updatedOrig.status, 'Rejected');
+        assert.equal(updatedOrig.reviewDecision, 'Rejected');
+
+        const revKey = `offerwall_gg_${extId}_reversal`;
+        const revMarker = db.transactions.get(revKey);
+        assert.ok(revMarker, 'Zero-deduction reversal marker must be persisted');
+        assert.equal(revMarker.type, 'Offerwall Reversal');
+        assert.equal(revMarker.amount, 0);
+        assert.equal(revMarker.userRewardAmount, 0);
+        assert.equal(revMarker.status, 'Approved');
+        assert.equal(String(revMarker.reversalReferenceId), String(txId));
+    });
+
+    await runTest('T107: Reversal marker creation failure rolls back original status change', async () => {
+        const uId = makeHexUserId(107);
+        const user = {
+            _id: uId,
+            username: 'User107',
+            taskEarningsBalance: 15.00,
+            taskWalletBalance: 15.00,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_107_' + Date.now();
+        const extId = 'ext_107_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const origCreate = Transaction.create;
+        Transaction.create = async (doc, options) => {
+            if (options?.session) {
+                throw new Error('Database disk error during marker creation');
+            }
+            return origCreate(doc, options);
+        };
+
+        const revParams = {
+            userId: uId,
+            transactionId: extId,
+            currencyAmount: '-70',
+            status: 'reversed',
+            signature: crypto.createHmac('sha256', TEST_SECRET).update(`${uId}:${extId}:-70`).digest('hex')
+        };
+        const req = {
+            method: 'POST',
+            params: { provider: 'offerwall_gg' },
+            query: revParams,
+            body: {},
+            headers: { 'x-forwarded-for': '127.0.0.1' }
+        };
+        const res = createMockRes();
+        try {
+            await handlePostback(req, res);
+            assert.equal(res.statusCode, 500, 'Must return 500 on marker creation error');
+            assert.ok(res.body.includes('Database disk error'), 'Response must mention disk error');
+        } finally {
+            Transaction.create = origCreate;
+        }
+
+        const freshOrig = db.transactions.get(txId);
+        assert.equal(freshOrig.status, 'Pending', 'Original status must be rolled back to Pending');
+        assert.equal(freshOrig.riskStatus, 'REVIEW', 'Original riskStatus must be rolled back to REVIEW');
+    });
+
+    await runTest('T108: MongoDB session startup failure during pending reversal causes no writes', async () => {
+        const uId = makeHexUserId(108);
+        const user = {
+            _id: uId,
+            username: 'User108',
+            taskEarningsBalance: 40.00,
+            taskWalletBalance: 40.00,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_108_' + Date.now();
+        const extId = 'ext_108_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const origStartSession = mongoose.startSession;
+        mongoose.startSession = async () => {
+            throw new Error('Mongo session failed to start');
+        };
+
+        const revParams = {
+            userId: uId,
+            transactionId: extId,
+            currencyAmount: '-70',
+            status: 'reversed',
+            signature: crypto.createHmac('sha256', TEST_SECRET).update(`${uId}:${extId}:-70`).digest('hex')
+        };
+        const req = {
+            method: 'POST',
+            params: { provider: 'offerwall_gg' },
+            query: revParams,
+            body: {},
+            headers: { 'x-forwarded-for': '127.0.0.1' }
+        };
+        const res = createMockRes();
+        try {
+            await handlePostback(req, res);
+            assert.equal(res.statusCode, 503, 'Must return 503 when MongoDB session start fails');
+        } finally {
+            mongoose.startSession = origStartSession;
+        }
+
+        const freshOrig = db.transactions.get(txId);
+        assert.equal(freshOrig.status, 'Pending', 'Original transaction must remain Pending');
+        assert.equal(user.taskEarningsBalance, 40.00, 'User balance must remain unchanged');
+    });
+
+    await runTest('T109: Repeated pending reversal callback creates no duplicate marker', async () => {
+        const uId = makeHexUserId(109);
+        const user = {
+            _id: uId,
+            username: 'User109',
+            taskEarningsBalance: 12.00,
+            taskWalletBalance: 12.00,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_109_' + Date.now();
+        const extId = 'ext_109_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const revParams = {
+            userId: uId,
+            transactionId: extId,
+            currencyAmount: '-70',
+            status: 'reversed',
+            signature: crypto.createHmac('sha256', TEST_SECRET).update(`${uId}:${extId}:-70`).digest('hex')
+        };
+        const req = {
+            method: 'POST',
+            params: { provider: 'offerwall_gg' },
+            query: revParams,
+            body: {},
+            headers: { 'x-forwarded-for': '127.0.0.1' }
+        };
+
+        const res1 = createMockRes();
+        await handlePostback(req, res1);
+        assert.equal(res1.statusCode, 200);
+        assert.equal(res1.body, 'OK');
+
+        const txCountBefore = db.transactions.size;
+
+        const res2 = createMockRes();
+        await handlePostback(req, res2);
+        assert.equal(res2.statusCode, 200);
+        assert.equal(res2.body, 'OK');
+        assert.equal(db.transactions.size, txCountBefore, 'No duplicate transaction markers must be added');
+    });
+
+    await runTest('T110: Admin approval after a completed pending reversal is rejected', async () => {
+        const uId = makeHexUserId(110);
+        const user = {
+            _id: uId,
+            username: 'User110',
+            taskEarningsBalance: 50.00,
+            taskWalletBalance: 50.00,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_110_' + Date.now();
+        const extId = 'ext_110_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            status: 'Rejected',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const revMarker = {
+            _id: 'tx_rev_110_' + Date.now(),
+            userId: uId,
+            type: 'Offerwall Reversal',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_reversal`,
+            status: 'Approved'
+        };
+        db.transactions.set(revMarker._id, revMarker);
+        db.transactions.set(revMarker.idempotencyKey, revMarker);
+
+        const req = {
+            user: { id: 'admin_1', role: 'admin' },
+            params: { id: txId },
+            body: { reviewNote: 'Try to approve reversed reward' }
+        };
+        const res = createMockRes();
+        await approveOfferwallRiskReview(req, res);
+
+        assert.ok(res.statusCode === 404 || res.statusCode === 409, 'Approval must be rejected with 404 or 409');
+        assert.equal(res.body.success, false);
+        assert.equal(user.taskEarningsBalance, 50.00, 'User balance must not be credited');
+        assert.equal(origTx.status, 'Rejected', 'Original transaction remains Rejected');
+    });
+
+    await runTest('T111: Reversal after successful admin approval uses normal credited-reversal behavior', async () => {
+        const uId = makeHexUserId(111);
+        const user = {
+            _id: uId,
+            username: 'User111',
+            taskEarningsBalance: 10.00,
+            taskWalletBalance: 10.00,
+            chargebackLiabilityUSD: 0,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_111_' + Date.now();
+        const extId = 'ext_111_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            grossAmount: 1.00,
+            platformRevenueAmount: 0.30,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        // 1. Admin approves the reward
+        const approveReq = {
+            user: { id: 'admin_1', role: 'admin' },
+            params: { id: txId },
+            body: { reviewNote: 'Approved legitimate earnings' }
+        };
+        const approveRes = createMockRes();
+        await approveOfferwallRiskReview(approveReq, approveRes);
+        assert.equal(approveRes.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 11.00, 'User balance credited on approval');
+
+        // 2. Reversal arrives for approved reward
+        const revParams = {
+            userId: uId,
+            transactionId: extId,
+            currencyAmount: '-70',
+            status: 'reversed',
+            signature: crypto.createHmac('sha256', TEST_SECRET).update(`${uId}:${extId}:-70`).digest('hex')
+        };
+        const revReq = {
+            method: 'POST',
+            params: { provider: 'offerwall_gg' },
+            query: revParams,
+            body: {},
+            headers: { 'x-forwarded-for': '127.0.0.1' }
+        };
+        const revRes = createMockRes();
+        await handlePostback(revReq, revRes);
+
+        assert.equal(revRes.statusCode, 200);
+        assert.equal(revRes.body, 'OK');
+        assert.equal(user.taskEarningsBalance, 10.00, 'User balance deducted by 1.00 on credited reversal');
+        assert.equal(user.taskWalletBalance, 10.00, 'User taskWalletBalance deducted by 1.00');
+    });
+
+    await runTest('T112: Approved reward with stale/legacy riskStatus: REVIEW is never treated as uncredited Pending', async () => {
+        const uId = makeHexUserId(112);
+        const user = {
+            _id: uId,
+            username: 'User112',
+            taskEarningsBalance: 15.00,
+            taskWalletBalance: 15.00,
+            chargebackLiabilityUSD: 0,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_legacy_112_' + Date.now();
+        const extId = 'ext_112_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            grossAmount: 1.00,
+            platformRevenueAmount: 0.30,
+            status: 'Approved',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const revParams = {
+            userId: uId,
+            transactionId: extId,
+            currencyAmount: '-70',
+            status: 'reversed',
+            signature: crypto.createHmac('sha256', TEST_SECRET).update(`${uId}:${extId}:-70`).digest('hex')
+        };
+        const revReq = {
+            method: 'POST',
+            params: { provider: 'offerwall_gg' },
+            query: revParams,
+            body: {},
+            headers: { 'x-forwarded-for': '127.0.0.1' }
+        };
+        const revRes = createMockRes();
+        await handlePostback(revReq, revRes);
+
+        assert.equal(revRes.statusCode, 200);
+        assert.equal(revRes.body, 'OK');
+        assert.equal(user.taskEarningsBalance, 14.00, 'User balance must be deducted because reward was Approved');
+        assert.equal(user.taskWalletBalance, 14.00);
+    });
+
+    await runTest('T113: Repeated/concurrent approval cannot double-credit', async () => {
+        const uId = makeHexUserId(113);
+        const user = {
+            _id: uId,
+            username: 'User113',
+            taskEarningsBalance: 10.00,
+            taskWalletBalance: 10.00,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_113_' + Date.now();
+        const extId = 'ext_113_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            grossAmount: 1.00,
+            platformRevenueAmount: 0.30,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const req = {
+            user: { id: 'admin_1', role: 'admin' },
+            params: { id: txId },
+            body: { reviewNote: 'Valid approval note' }
+        };
+
+        const res1 = createMockRes();
+        await approveOfferwallRiskReview(req, res1);
+        assert.equal(res1.statusCode, 200);
+        assert.equal(user.taskEarningsBalance, 11.00);
+
+        const res2 = createMockRes();
+        await approveOfferwallRiskReview(req, res2);
+        assert.ok(res2.statusCode === 404 || res2.statusCode === 409);
+        assert.equal(user.taskEarningsBalance, 11.00, 'User balance must not be double credited');
+    });
+
+    await runTest('T114: Wallet update failure rolls back transaction status', async () => {
+        const uId = makeHexUserId(114);
+        const user = {
+            _id: uId,
+            username: 'User114',
+            taskEarningsBalance: 10.00,
+            taskWalletBalance: 10.00,
+            status: 'Active',
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_114_' + Date.now();
+        const extId = 'ext_114_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            grossAmount: 1.00,
+            platformRevenueAmount: 0.30,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const req = {
+            user: { id: 'admin_1', role: 'admin' },
+            params: { id: txId },
+            body: { reviewNote: 'Attempt to approve' }
+        };
+
+        const origUserFindOneAndUpdate = User.findOneAndUpdate;
+        User.findOneAndUpdate = async () => null; // Simulate wallet update failure
+
+        try {
+            const res = createMockRes();
+            await approveOfferwallRiskReview(req, res);
+            assert.equal(res.statusCode, 500);
+        } finally {
+            User.findOneAndUpdate = origUserFindOneAndUpdate;
+        }
+
+        const freshOrig = db.transactions.get(txId);
+        assert.equal(freshOrig.status, 'Pending', 'Status must be rolled back to Pending on wallet update failure');
+        assert.equal(freshOrig.riskStatus, 'REVIEW', 'RiskStatus must remain REVIEW');
+    });
+
+    await runTest('T115: Provider metrics update exactly once on successful approval', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.totalGrossPayoutUSD = 0;
+        owProvider.totalUserPayoutUSD = 0;
+        owProvider.totalPlatformRevenueUSD = 0;
+        owProvider.totalPostbackCount = 0;
+
+        const uId = makeHexUserId(115);
+        const user = {
+            _id: uId,
+            username: 'User115',
+            taskEarningsBalance: 10.00,
+            taskWalletBalance: 10.00,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_115_' + Date.now();
+        const extId = 'ext_115_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 140,
+            amountUSD: 1.40,
+            userRewardAmount: 1.40,
+            grossAmount: 2.00,
+            platformRevenueAmount: 0.60,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const req = {
+            user: { id: 'admin_1', role: 'admin' },
+            params: { id: txId },
+            body: { reviewNote: 'Approve and verify metrics increment' }
+        };
+        const res = createMockRes();
+        await approveOfferwallRiskReview(req, res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(owProvider.totalGrossPayoutUSD, 2.00, 'totalGrossPayoutUSD must be 2.00');
+        assert.equal(owProvider.totalUserPayoutUSD, 1.40, 'totalUserPayoutUSD must be 1.40');
+        assert.equal(owProvider.totalPlatformRevenueUSD, 0.60, 'totalPlatformRevenueUSD must be 0.60');
+        assert.equal(owProvider.totalPostbackCount, 1, 'totalPostbackCount must be 1');
+    });
+
+    await runTest('T116: Metrics update failure does not commit partial approval', async () => {
+        const uId = makeHexUserId(116);
+        const user = {
+            _id: uId,
+            username: 'User116',
+            taskEarningsBalance: 10.00,
+            taskWalletBalance: 10.00,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_116_' + Date.now();
+        const extId = 'ext_116_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            grossAmount: 1.00,
+            platformRevenueAmount: 0.30,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'unknown_nonexistent_provider',
+            externalTransactionId: extId,
+            idempotencyKey: `unknown_provider_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        const req = {
+            user: { id: 'admin_1', role: 'admin' },
+            params: { id: txId },
+            body: { reviewNote: 'Approval with unknown provider' }
+        };
+        const res = createMockRes();
+        await approveOfferwallRiskReview(req, res);
+
+        assert.equal(res.statusCode, 500);
+        const freshUser = db.users.get(uId);
+        assert.equal(freshUser.taskEarningsBalance, 10.00, 'User balance must not be committed');
+        const freshOrig = db.transactions.get(txId);
+        assert.equal(freshOrig.status, 'Pending', 'Transaction status must remain Pending');
+        assert.equal(freshOrig.riskStatus, 'REVIEW');
+    });
+
+    await runTest('T117: Pending and rejected rewards do not increment credited metrics', async () => {
+        const owProvider = db.providers.get('offerwall_gg');
+        owProvider.totalGrossPayoutUSD = 0;
+        owProvider.totalUserPayoutUSD = 0;
+        owProvider.totalPlatformRevenueUSD = 0;
+        owProvider.totalPostbackCount = 0;
+
+        const uId = makeHexUserId(117);
+        const user = {
+            _id: uId,
+            username: 'User117',
+            taskEarningsBalance: 10.00,
+            taskWalletBalance: 10.00,
+            save: async function() { return this; }
+        };
+        db.users.set(uId, user);
+
+        const txId = 'tx_pending_117_' + Date.now();
+        const extId = 'ext_117_' + Date.now();
+        const origTx = {
+            _id: txId,
+            userId: uId,
+            userName: user.username,
+            type: 'Offerwall Reward',
+            amount: 70,
+            amountUSD: 1.00,
+            userRewardAmount: 1.00,
+            grossAmount: 1.00,
+            platformRevenueAmount: 0.30,
+            status: 'Pending',
+            riskStatus: 'REVIEW',
+            offerwallProvider: 'offerwall_gg',
+            externalTransactionId: extId,
+            idempotencyKey: `offerwall_gg_${extId}_credit`,
+            save: async function() { return this; }
+        };
+        db.transactions.set(txId, origTx);
+        db.transactions.set(origTx.idempotencyKey, origTx);
+
+        // Admin rejects the pending reward
+        const rejectReq = {
+            user: { id: 'admin_1', role: 'admin' },
+            params: { id: txId },
+            body: { reviewNote: 'Fraudulent activity detected' }
+        };
+        const rejectRes = createMockRes();
+        await rejectOfferwallRiskReview(rejectReq, rejectRes);
+
+        assert.equal(rejectRes.statusCode, 200);
+        assert.equal(owProvider.totalGrossPayoutUSD, 0, 'totalGrossPayoutUSD must remain 0 on rejection');
+        assert.equal(owProvider.totalUserPayoutUSD, 0, 'totalUserPayoutUSD must remain 0 on rejection');
+        assert.equal(owProvider.totalPostbackCount, 0, 'totalPostbackCount must remain 0 on rejection');
+    });
+
+    await runTest('T118: Exact signed URL HMAC test vector is correct', async () => {
+        const origEnvSecret = process.env.OFFERWALL_GG_SECRET_KEY;
+        const testSecret = 'secret_test_vector_hex_456';
+        process.env.OFFERWALL_GG_SECRET_KEY = testSecret;
+        try {
+            const publicKey = '1234567890abcdef1234567890abcdef';
+            const provider = {
+                secretKey: 'fallback_secret',
+                iframeUrlTemplate: `https://offerwall.gg/wall/${publicKey}`
+            };
+
+            const userId = 'smx_user_999';
+            const ts = 1700000000;
+            const res = constructOfferwallGgEntryUrl(provider, userId, { ts, enableExpiry: true });
+
+            assert.equal(res.error, null);
+            assert.equal(res.publicKey, publicKey);
+            assert.equal(res.canonicalString, `appId=${publicKey}&ts=${ts}&userId=${userId}`);
+
+            const expectedSig = crypto.createHmac('sha256', testSecret).update(`appId=${publicKey}&ts=${ts}&userId=${userId}`).digest('hex');
+            assert.equal(res.signature, expectedSig);
+
+            const expectedUrl = `https://offerwall.gg/wall/${publicKey}?signature=${expectedSig}&ts=${ts}&userId=${userId}`;
+            assert.equal(res.url, expectedUrl);
+            assert.equal(res.url.includes('appId='), false, 'appId must not be present in url query string');
+        } finally {
+            if (origEnvSecret !== undefined) {
+                process.env.OFFERWALL_GG_SECRET_KEY = origEnvSecret;
+            } else {
+                delete process.env.OFFERWALL_GG_SECRET_KEY;
+            }
+        }
+    });
+
+    await runTest('T119: Existing CPX Research and TheoremReach normal callback behavior remains unchanged', async () => {
+        // 1. CPX Research Credit
+        const cpxProvider = db.providers.get('cpx_research') || {};
+        cpxProvider.providerKey = 'cpx_research';
+        cpxProvider.name = 'CPX Research';
+        cpxProvider.enabled = true;
+        cpxProvider.status = 'ACTIVE';
+        cpxProvider.secretKey = 'cpx_secret_999';
+        cpxProvider.commissionMode = 'smartexn_managed';
+        cpxProvider.userRevenueSharePercent = 70;
+        db.providers.set('cpx_research', cpxProvider);
+
+        const cpxUserId = makeHexUserId(1191);
+        const cpxUser = {
+            _id: cpxUserId,
+            username: 'CpxUser119',
+            taskEarningsBalance: 5.00,
+            taskWalletBalance: 5.00,
+            chargebackLiabilityUSD: 0,
+            save: async function() { return this; }
+        };
+        db.users.set(cpxUserId, cpxUser);
+
+        const cpxTransId = 'cpx_tx_119_' + Date.now();
+        const cpxHash = crypto.createHash('md5').update(`${cpxTransId}-cpx_secret_999`).digest('hex');
+        const cpxReq = {
+            method: 'GET',
+            params: { provider: 'cpx_research' },
+            query: {
+                user_id: cpxUserId,
+                trans_id: cpxTransId,
+                amount_usd: '1.00',
+                status: '1',
+                secure_hash: cpxHash
+            },
+            body: {},
+            headers: {}
+        };
+        const cpxRes = createMockRes();
+        await handlePostback(cpxReq, cpxRes);
+
+        assert.equal(cpxRes.statusCode, 200);
+        assert.equal(cpxRes.body, '1');
+        assert.equal(cpxUser.taskEarningsBalance, 5.70, 'CPX 70% share credited');
+
+        // 2. CPX Research Reversal
+        const cpxRevHash = crypto.createHash('md5').update(`${cpxTransId}-cpx_secret_999`).digest('hex');
+        const cpxRevReq = {
+            method: 'GET',
+            params: { provider: 'cpx_research' },
+            query: {
+                user_id: cpxUserId,
+                trans_id: cpxTransId,
+                amount_usd: '1.00',
+                status: '2',
+                secure_hash: cpxRevHash
+            },
+            body: {},
+            headers: {}
+        };
+        const cpxRevRes = createMockRes();
+        await handlePostback(cpxRevReq, cpxRevRes);
+
+        assert.equal(cpxRevRes.statusCode, 200);
+        assert.equal(cpxRevRes.body, '1');
+        assert.equal(cpxUser.taskEarningsBalance, 5.00, 'CPX user deducted correctly on reversal');
+
+        // 3. TheoremReach Credit
+        const trProvider = db.providers.get('theoremreach') || {};
+        trProvider.providerKey = 'theoremreach';
+        trProvider.name = 'TheoremReach';
+        trProvider.enabled = true;
+        trProvider.status = 'ACTIVE';
+        trProvider.secretKey = 'tr_secret_888';
+        trProvider.rewardCallbackUrl = 'https://smartexn.com/api/v1/postbacks/theoremreach';
+        trProvider.exchangeRateMultiplier = 70;
+        trProvider.commissionMode = 'smartexn_managed';
+        trProvider.userRevenueSharePercent = 100;
+        db.providers.set('theoremreach', trProvider);
+
+        const trUserId = makeHexUserId(1192);
+        const trUser = {
+            _id: trUserId,
+            username: 'TrUser119',
+            taskEarningsBalance: 10.00,
+            taskWalletBalance: 10.00,
+            chargebackLiabilityUSD: 0,
+            save: async function() { return this; }
+        };
+        db.users.set(trUserId, trUser);
+
+        const trTxId = 'tr_tx_119_' + Date.now();
+        const trUrlPart = `https://smartexn.com/api/v1/postbacks/theoremreach?user_id=${trUserId}&tx_id=${trTxId}&reward=70`;
+        const trHmac = crypto.createHmac('sha1', 'tr_secret_888').update(trUrlPart).digest('base64');
+        const trHash = trHmac.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const trReq = {
+            method: 'GET',
+            params: { provider: 'theoremreach' },
+            query: { user_id: trUserId, tx_id: trTxId, reward: '70', hash: trHash },
+            rawUrl: `${trUrlPart}&hash=${trHash}`,
+            originalUrl: `/api/v1/postbacks/theoremreach?user_id=${trUserId}&tx_id=${trTxId}&reward=70&hash=${trHash}`,
+            body: {},
+            headers: {}
+        };
+        const trRes = createMockRes();
+        await handlePostback(trReq, trRes);
+
+        assert.equal(trRes.statusCode, 200);
+        assert.equal(trRes.body, 'OK');
+        assert.equal(trUser.taskEarningsBalance, 11.00, 'TheoremReach 70 reward credited at $1.00');
     });
 
     console.log(`\n========================================================`);

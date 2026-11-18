@@ -8,6 +8,7 @@ import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
 import OfferwallPostbackLog from '../models/OfferwallPostbackLog.js';
 import Notification from '../models/Notification.js';
+import OfferwallProvider from '../models/OfferwallProvider.js';
 
 export const getTransactions = async (req, res) => {
     try {
@@ -275,6 +276,7 @@ export const approveOfferwallRiskReview = async (req, res) => {
             {
                 $set: {
                     status: 'Approved',
+                    riskStatus: 'APPROVED',
                     balanceBefore,
                     balanceAfter,
                     reviewedBy: req.user?._id || req.user?.id,
@@ -320,21 +322,29 @@ export const approveOfferwallRiskReview = async (req, res) => {
 
         // Update provider metrics exactly once in the same transaction
         if (existingTx.offerwallProvider) {
-            try {
-                await OfferwallProvider.findOneAndUpdate(
-                    { providerKey: existingTx.offerwallProvider },
-                    {
-                        $inc: {
-                            totalGrossPayoutUSD: existingTx.grossAmount || 0,
-                            totalUserPayoutUSD: rewardToCredit,
-                            totalPlatformRevenueUSD: existingTx.platformRevenueAmount || 0,
-                            totalPostbackCount: 1
-                        }
-                    },
-                    { session }
-                );
-            } catch (metricsErr) {
-                console.warn('[Offerwall Metrics Warning] Failed to update provider statistics on approval:', metricsErr.message);
+            const providerFilter = (existingTx.offerwallProvider === 'offerwall_gg' || existingTx.offerwallProvider === 'offerwallgg')
+                ? { providerKey: { $in: ['offerwall_gg', 'offerwallgg'] } }
+                : { providerKey: existingTx.offerwallProvider };
+
+            const updatedProvider = await OfferwallProvider.findOneAndUpdate(
+                providerFilter,
+                {
+                    $inc: {
+                        totalGrossPayoutUSD: existingTx.grossAmount || 0,
+                        totalUserPayoutUSD: rewardToCredit,
+                        totalPlatformRevenueUSD: existingTx.platformRevenueAmount || 0,
+                        totalPostbackCount: 1
+                    }
+                },
+                { session }
+            );
+
+            if (!updatedProvider) {
+                await session.abortTransaction();
+                return res.status(500).json({
+                    success: false,
+                    error: `Failed to update provider metrics: provider '${existingTx.offerwallProvider}' not found; transaction aborted.`
+                });
             }
         }
 
