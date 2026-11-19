@@ -1952,11 +1952,26 @@ export const handlePostback = async (req, res) => {
                 }
 
                 // If original reward is Pending (e.g. held in Risk Review), funds were never credited.
-                // Do not deduct user spendable balance, do not create liability, close pending reward,
-                // and persist linked reversal record with 0 user deduction atomically using MongoDB transaction.
+                // Only Pending + REVIEW rewards are eligible for the atomic zero-deduction reversal path.
+                // Other pending states (e.g. HELD, BLOCKED, NORMAL) must fail closed without deducting
+                // uncredited funds and must NEVER be falsely acknowledged as Duplicate.
                 if (origTx && origTx.status === 'Pending') {
+                    if (origTx.riskStatus !== 'REVIEW') {
+                        log.status = 'Error';
+                        log.errorMessage = `Unsupported or anomalous pending reward riskStatus '${origTx.riskStatus || 'UNKNOWN'}' during reversal; failing closed without deducting uncredited funds.`;
+                        try { await saveLogSafely(log); } catch (_) {}
+                        if (providerKey === 'cpx_research' || providerKey === 'torox') {
+                            return res.status(400).send('0');
+                        }
+                        if (providerKey === 'lootably') {
+                            return res.status(400).send('ERROR');
+                        }
+                        return res.status(409).send('UNSUPPORTED_PENDING_REWARD_STATE');
+                    }
+
                     let pendingRevSession = null;
                     let pendingRevSessionStarted = false;
+                    let txSettled = false;
                     try {
                         pendingRevSession = await mongoose.startSession();
                         pendingRevSession.startTransaction();
@@ -1973,6 +1988,9 @@ export const handlePostback = async (req, res) => {
                         if (providerKey === 'cpx_research' || providerKey === 'torox') {
                             return res.status(400).send('0');
                         }
+                        if (providerKey === 'lootably') {
+                            return res.status(400).send('ERROR');
+                        }
                         return res.status(503).send('POSTBACK_ERROR: Database transaction support unavailable');
                     }
 
@@ -1985,6 +2003,7 @@ export const handlePostback = async (req, res) => {
 
                         if (existingReversalInSession) {
                             await pendingRevSession.abortTransaction();
+                            txSettled = true;
                             log.status = 'Duplicate';
                             log.errorMessage = 'Duplicate reversal callback received; already reversed.';
                             try { await saveLogSafely(log); } catch (_) {}
@@ -2010,10 +2029,28 @@ export const handlePostback = async (req, res) => {
                         );
 
                         if (!updatedPending) {
-                            // Approval or rejection already won concurrently
+                            // Conditional update failed: approval won, reversal already won, or state became non-REVIEW
                             await pendingRevSession.abortTransaction();
+                            txSettled = true;
 
-                            // Re-read final transaction state to follow correct path
+                            // Check if a concurrent reversal already persisted the reversal marker
+                            const existingReversalAfterRace = isOfferwallGg
+                                ? (await findOfferwallGgTx(normalized.externalTxId, 'Offerwall Reversal', 'reversal'))
+                                : ((await Transaction.findOne({ idempotencyKey: reversalKey }))
+                                    || (await Transaction.findOne({
+                                        offerwallProvider: providerKey,
+                                        externalTransactionId: normalized.externalTxId,
+                                        type: 'Offerwall Reversal'
+                                    })));
+
+                            if (existingReversalAfterRace) {
+                                log.status = 'Duplicate';
+                                log.errorMessage = 'Duplicate reversal callback received; already reversed.';
+                                try { await saveLogSafely(log); } catch (_) {}
+                                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
+                            }
+
+                            // Re-read final transaction state to follow the correct path
                             const latestOrig = isOfferwallGg
                                 ? (await findOfferwallGgTx(normalized.externalTxId, 'Offerwall Reward', 'credit'))
                                 : await Transaction.findOne({
@@ -2027,11 +2064,18 @@ export const handlePostback = async (req, res) => {
                                 origTx = latestOrig;
                                 shouldProceedToCreditedReversal = true;
                             } else {
-                                // Already rejected or closed
-                                log.status = 'Duplicate';
-                                log.errorMessage = 'Original pending transaction was already closed or modified concurrently.';
+                                // Pending with non-REVIEW riskStatus, Rejected without reversal marker, or missing:
+                                // Never silently acknowledge as Duplicate and never deduct uncredited funds.
+                                log.status = 'Error';
+                                log.errorMessage = `Pending reward in state '${latestOrig?.status || 'Missing'}/${latestOrig?.riskStatus || 'Unknown'}' could not be reversed atomically; failing closed without deducting uncredited funds.`;
                                 try { await saveLogSafely(log); } catch (_) {}
-                                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
+                                if (providerKey === 'cpx_research' || providerKey === 'torox') {
+                                    return res.status(400).send('0');
+                                }
+                                if (providerKey === 'lootably') {
+                                    return res.status(400).send('ERROR');
+                                }
+                                return res.status(409).send('UNSUPPORTED_PENDING_REWARD_STATE');
                             }
                         }
 
@@ -2064,6 +2108,7 @@ export const handlePostback = async (req, res) => {
                                 revTx = Array.isArray(revDocs) ? revDocs[0] : revDocs;
                             } catch (revErr) {
                                 await pendingRevSession.abortTransaction();
+                                txSettled = true;
                                 if (revErr.code === 11000) {
                                     log.status = 'Duplicate';
                                     log.errorMessage = 'Duplicate reversal callback received; already reversed.';
@@ -2074,6 +2119,7 @@ export const handlePostback = async (req, res) => {
                             }
 
                             await pendingRevSession.commitTransaction();
+                            txSettled = true;
 
                             log.status = 'Reversed';
                             log.transactionId = revTx._id;
@@ -2088,8 +2134,9 @@ export const handlePostback = async (req, res) => {
                             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' || providerKey === 'lootably' ? '1' : 'OK');
                         }
                     } catch (pendingErr) {
-                        if (pendingRevSessionStarted) {
+                        if (pendingRevSessionStarted && !txSettled) {
                             try { await pendingRevSession.abortTransaction(); } catch (_) {}
+                            txSettled = true;
                         }
                         throw pendingErr;
                     } finally {
@@ -2117,6 +2164,19 @@ export const handlePostback = async (req, res) => {
                             deductionToApply = currentEarnings;
                         }
                     }
+                } else if (origTx && origTx.status === 'Rejected') {
+                    // Already rejected without reversal marker: funds were never credited.
+                    // Fail closed without deducting user spendable balance or creating liability.
+                    log.status = 'Error';
+                    log.errorMessage = `Original transaction is already in Rejected status without reversal marker; failing closed without deducting uncredited funds.`;
+                    try { await saveLogSafely(log); } catch (_) {}
+                    if (providerKey === 'cpx_research' || providerKey === 'torox') {
+                        return res.status(400).send('0');
+                    }
+                    if (providerKey === 'lootably') {
+                        return res.status(400).send('ERROR');
+                    }
+                    return res.status(409).send('UNSUPPORTED_REWARD_STATE_FOR_REVERSAL');
                 }
 
                 // Re-verify lock ownership immediately before reversal balance deduction

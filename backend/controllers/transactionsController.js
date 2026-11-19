@@ -276,7 +276,7 @@ export const approveOfferwallRiskReview = async (req, res) => {
             {
                 $set: {
                     status: 'Approved',
-                    riskStatus: 'APPROVED',
+                    riskStatus: 'NORMAL',
                     balanceBefore,
                     balanceAfter,
                     reviewedBy: req.user?._id || req.user?.id,
@@ -348,20 +348,23 @@ export const approveOfferwallRiskReview = async (req, res) => {
             }
         }
 
-        // Update linked OfferwallPostbackLog
-        try {
-            await OfferwallPostbackLog.findOneAndUpdate(
-                { transactionId: updatedTx._id },
-                {
-                    $set: {
-                        status: 'Processed',
-                        userBalanceBefore: balanceBefore,
-                        userBalanceAfter: balanceAfter
-                    }
-                },
-                { session }
-            );
-        } catch (_) {}
+        // Update linked OfferwallPostbackLog inside the same transaction.
+        // Missing linked log is handled explicitly without fabricating a log record;
+        // database errors throw to abort the entire approval transaction.
+        const updatedPostbackLog = await OfferwallPostbackLog.findOneAndUpdate(
+            { transactionId: updatedTx._id },
+            {
+                $set: {
+                    status: 'Processed',
+                    userBalanceBefore: balanceBefore,
+                    userBalanceAfter: balanceAfter
+                }
+            },
+            { new: true, session }
+        );
+        if (!updatedPostbackLog) {
+            // Missing linked postback log is permitted without creating a synthetic record
+        }
 
         await session.commitTransaction();
 
