@@ -34,6 +34,7 @@ const Register: React.FC = () => {
     const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
     const [emailMarketingConsent, setEmailMarketingConsent] = useState(false);
     const [whatsappMarketingConsent, setWhatsappMarketingConsent] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleCustomFieldChange = (id: string, value: string) => {
         setCustomFieldsValues(prev => ({ ...prev, [id]: value }));
@@ -256,6 +257,8 @@ const Register: React.FC = () => {
             whatsappMarketingConsent,
         };
 
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         try {
             const res = await apiCreateUser(newUserPayload);
             const createdUser = res.data;
@@ -306,6 +309,8 @@ const Register: React.FC = () => {
             console.error("Registration failed:", error);
             const errorMessage = error instanceof Error ? error.message : String(error);
             alert(`Registration failed: ${errorMessage}`);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -751,8 +756,8 @@ const Register: React.FC = () => {
                      </div>
 
                      <div className="pt-4">
-                        <Button type="submit" size="lg" className="w-full">
-                            Create Account
+                        <Button type="submit" size="lg" className="w-full" isLoading={isSubmitting}>
+                            {isSubmitting ? 'Creating Account...' : 'Create Account'}
                         </Button>
                      </div>
                 </form>

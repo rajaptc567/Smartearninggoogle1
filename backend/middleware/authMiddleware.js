@@ -1,12 +1,13 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Setting from '../models/Setting.js';
+import { isTokenSessionIdleExpired, touchTokenActivity } from '../utils/sessionActivity.js';
 
 /**
  * PASSIVE AUTH MIDDLEWARE
  * Attempts to identify the user via JWT.
- * Does NOT block requests (does not return 401).
- * Attaches user to req.user if found.
+ * Enforces 10-minute sliding inactivity expiration without slowing down requests with DB writes.
+ * Does NOT block public routes; authorize() rejects expired/unauthorized requests.
  */
 export const authMiddleware = (req, res, next) => {
     let token;
@@ -24,13 +25,30 @@ export const authMiddleware = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
+
+        if (isTokenSessionIdleExpired(token)) {
+            req.user = null;
+            req.sessionIdleExpired = true;
+            return next();
+        }
+
+        const isBackgroundSync = req.headers['x-background-sync'] === '1';
+        const reqPath = req.originalUrl || req.path || '';
+        const isPassiveRead =
+            req.method === 'GET' &&
+            (isBackgroundSync || reqPath.includes('/settings/version') || reqPath.includes('/settings/public'));
+
+        if (!isPassiveRead) {
+            touchTokenActivity(token);
+        }
+
+        req.authToken = token;
         req.user = {
             id: decoded.id || decoded._id || decoded.userId,
             role: decoded.role ? String(decoded.role).trim().toLowerCase() : 'user',
             email: decoded.email
         };
-        
+
         next();
     } catch (err) {
         req.user = null;
@@ -48,6 +66,14 @@ export const authorize = (allowedRoles = []) => {
         // 1. If no roles are specified, allow by default (unprotected route)
         if (allowedRoles.length === 0) {
             return next();
+        }
+
+        if (req.sessionIdleExpired) {
+            return res.status(401).json({
+                success: false,
+                code: 'SESSION_IDLE_EXPIRED',
+                error: 'Session expired due to inactivity. Please sign in again.'
+            });
         }
 
         // 2. Check if user was identified by authMiddleware

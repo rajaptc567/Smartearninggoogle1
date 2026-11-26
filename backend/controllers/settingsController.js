@@ -9,6 +9,33 @@ import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendEmail, APPROVED_SENDERS } from '../services/emailService.js';
 import { emitRealtimeChange } from '../utils/socketRealtime.js';
 
+const PAGE_EXPERIENCE_KEYS = ['dashboardAvailableTasks', 'otherTasks', 'offerwall'];
+const VALID_PAGE_EXPERIENCE_MODES = ['legacy', 'new'];
+const VALID_OTHER_TASKS_NAV_STYLES = ['tabs', 'icons', 'cards'];
+
+export const normalizeWorkAndEarnPageExperience = (raw, fallback = null) => {
+    const base = (fallback && typeof fallback === 'object' && !Array.isArray(fallback)) ? fallback : {};
+    const src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+    const normalized = {};
+    for (const key of PAGE_EXPERIENCE_KEYS) {
+        const candidate = typeof src[key] === 'string' ? src[key].trim().toLowerCase() : null;
+        if (candidate && VALID_PAGE_EXPERIENCE_MODES.includes(candidate)) {
+            normalized[key] = candidate;
+        } else {
+            const fbCandidate = typeof base[key] === 'string' ? base[key].trim().toLowerCase() : null;
+            normalized[key] = (fbCandidate && VALID_PAGE_EXPERIENCE_MODES.includes(fbCandidate)) ? fbCandidate : 'new';
+        }
+    }
+    const navCandidate = typeof src.otherTasksNavStyle === 'string' ? src.otherTasksNavStyle.trim().toLowerCase() : null;
+    if (navCandidate && VALID_OTHER_TASKS_NAV_STYLES.includes(navCandidate)) {
+        normalized.otherTasksNavStyle = navCandidate;
+    } else {
+        const fbNav = typeof base.otherTasksNavStyle === 'string' ? base.otherTasksNavStyle.trim().toLowerCase() : null;
+        normalized.otherTasksNavStyle = (fbNav && VALID_OTHER_TASKS_NAV_STYLES.includes(fbNav)) ? fbNav : 'tabs';
+    }
+    return normalized;
+};
+
 // Clean standard fallback logos map for popular gateways
 const STANDARD_FALLBACK_LOGOS = {
     'easypaisa': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Easypaisa_logo.png/320px-Easypaisa_logo.png',
@@ -190,6 +217,7 @@ export const getPublicSettings = async (req, res) => {
             hubDepositMethods: settings.hubDepositMethods || [],
             modulePagesConfig: settings.modulePagesConfig || null,
             workAndEarnConfig: settings.workAndEarnConfig || null,
+            workAndEarnPageExperience: normalizeWorkAndEarnPageExperience(settings.workAndEarnPageExperience),
             customEarnTabs: settings.customEarnTabs !== undefined ? settings.customEarnTabs : [],
             userQuickActionsConfig: settings.userQuickActionsConfig || null,
             myCampaignActionsConfig: settings.myCampaignActionsConfig || { deposit: true, transfer: true, analytics: true, convert: true },
@@ -269,6 +297,8 @@ export const getSettings = async (req, res) => {
             settingsObj.canAccessInvestment = settings.investmentModuleEnabled !== false && settings.isInvestmentModuleEnabled !== false;
         }
 
+        settingsObj.workAndEarnPageExperience = normalizeWorkAndEarnPageExperience(settingsObj.workAndEarnPageExperience);
+
         res.status(200).json({ success: true, data: settingsObj });
     } catch (err) {
         res.status(200).json({ success: false, data: {}, error: err.message });
@@ -330,6 +360,43 @@ export const updateSettings = async (req, res) => {
 
         if (req.body.campaignConvertEnabled !== undefined) {
             req.body.campaignConvertEnabled = Boolean(req.body.campaignConvertEnabled);
+        }
+
+        // Validate and safely merge Work & Earn Page Experience Settings ('legacy' | 'new')
+        if (req.body.workAndEarnPageExperience !== undefined) {
+            const incomingExp = req.body.workAndEarnPageExperience;
+            if (!incomingExp || typeof incomingExp !== 'object' || Array.isArray(incomingExp)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'workAndEarnPageExperience must be a valid configuration object.'
+                });
+            }
+            for (const key of PAGE_EXPERIENCE_KEYS) {
+                if (incomingExp[key] !== undefined && incomingExp[key] !== null) {
+                    const val = typeof incomingExp[key] === 'string' ? incomingExp[key].trim().toLowerCase() : '';
+                    if (!VALID_PAGE_EXPERIENCE_MODES.includes(val)) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `Invalid page experience mode for ${key}. Expected 'legacy' or 'new'.`
+                        });
+                    }
+                }
+            }
+            if (incomingExp.otherTasksNavStyle !== undefined && incomingExp.otherTasksNavStyle !== null) {
+                const navVal = typeof incomingExp.otherTasksNavStyle === 'string'
+                    ? incomingExp.otherTasksNavStyle.trim().toLowerCase()
+                    : '';
+                if (!VALID_OTHER_TASKS_NAV_STYLES.includes(navVal)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: "Invalid Other Tasks navigation style. Expected 'tabs', 'icons', or 'cards'."
+                    });
+                }
+            }
+            req.body.workAndEarnPageExperience = normalizeWorkAndEarnPageExperience(
+                incomingExp,
+                prevSettings?.workAndEarnPageExperience
+            );
         }
 
         // Validate Mandatory Withdrawal Requirement Configuration
@@ -608,7 +675,10 @@ export const updateSettings = async (req, res) => {
             });
         }
         
-        res.status(200).json({ success: true, data: settings });
+        const responseSettings = settings?.toObject ? settings.toObject() : { ...settings };
+        responseSettings.workAndEarnPageExperience = normalizeWorkAndEarnPageExperience(responseSettings.workAndEarnPageExperience);
+
+        res.status(200).json({ success: true, data: responseSettings });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

@@ -144,25 +144,25 @@ const UserTasks: React.FC = () => {
     };
 
     return (
-        <div className="space-y-8 max-w-7xl mx-auto pb-20">
-            <div className="bg-slate-900/90 p-6 sm:p-8 rounded-3xl text-white shadow-xl border border-slate-800 relative overflow-hidden group">
-                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-4 sm:space-y-8 max-w-7xl mx-auto pb-20">
+            <div className="bg-slate-900/90 p-4 sm:p-8 rounded-2xl sm:rounded-3xl text-white shadow-xl border border-slate-800 relative overflow-hidden group">
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                     <div>
-                        <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+                        <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-1.5 sm:mb-2">
                             <span>⚡ System Engagement Missions</span>
                         </div>
-                        <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white">Engagement HQ</h1>
+                        <h1 className="text-xl sm:text-3xl font-black uppercase tracking-tight text-white">Engagement HQ</h1>
                         <p className="mt-1 text-slate-400 font-medium text-xs sm:text-sm">Unlock rewards and eligibility through quick social tasks</p>
                     </div>
-                    <div className="bg-slate-950/80 px-4 py-2.5 rounded-2xl border border-slate-800 text-right self-start sm:self-auto">
+                    <div className="bg-slate-950/80 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl border border-slate-800 text-right self-start sm:self-auto">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Available Tasks</span>
-                        <span className="text-lg font-extrabold text-amber-300 font-mono">{visibleTasks.length} Missions</span>
+                        <span className="text-base sm:text-lg font-extrabold text-amber-300 font-mono">{visibleTasks.length} Missions</span>
                     </div>
                 </div>
             </div>
 
             {/* Tab Navigation */}
-            <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-xl border border-slate-800">
+            <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-2.5 sm:p-5 shadow-xl border border-slate-800">
                 <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar">
                     <button
                         onClick={() => setActiveTab('missions')}

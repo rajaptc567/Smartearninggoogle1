@@ -52,11 +52,27 @@ import {
     Home as HomeIcon,
     TrendingUp as TrendingUpIcon,
     Users as UsersIcon,
-    Megaphone as MegaphoneIcon
+    Megaphone as MegaphoneIcon,
+    RefreshCw as RefreshIcon
 } from 'lucide-react';
 import { useWorkAndEarnConfig } from '../../hooks/useWorkAndEarnConfig';
 import OtherTasksCard from '../../components/OtherTasksCard';
+import ProviderNavRow, { ProviderNavItem } from '../../components/ProviderNavRow';
 import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
+import { getVerifiedProviderOfferCount } from '../../utils/providerCountHelper';
+import { resolvePageExperience } from '../../utils/pageExperienceHelper';
+import {
+    ProviderPlacement,
+    TabOfferCountsPayload,
+    getCachedAvailablePlacements,
+    fetchAndCacheAvailablePlacements,
+    getCachedAllTabOfferCounts,
+    getCachedTabOfferCounts,
+    fetchAndCacheTabOfferCounts,
+    subscribeOfferCountUpdates,
+    syncPlacementCacheUser,
+    launchPlacement
+} from '../../services/providerPlacementService';
 import { useOtherTasksPrefetch } from '../../hooks/useOtherTasksPrefetch';
 import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
 import { getEffectiveModulePageControl } from '../../data/modulePagesDefaults';
@@ -160,6 +176,9 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     // Referral Copy State
     const [copiedReferral, setCopiedReferral] = useState(false);
 
+    // Mobile inline search synced with Available Jobs browse list
+    const [availableJobsSearch, setAvailableJobsSearch] = useState('');
+
     // Phase 3: Pending Mandatory Surveys
     const [pendingMandatorySurveys, setPendingMandatorySurveys] = useState<UserTask[]>([]);
     const [isLoadingMandatory, setIsLoadingMandatory] = useState(false);
@@ -244,6 +263,292 @@ const UserWorkAndEarnDashboard: React.FC = () => {
         userId: currentUser?._id,
         tabIds: visibleEarnTabs.map(t => t.id)
     });
+
+    // Resolve authoritative Page Experience Mode ('legacy' | 'new') from backend Settings
+    const pageExperience = resolvePageExperience(state.settings);
+    const availableTasksExperience = pageExperience.dashboardAvailableTasks;
+
+    // External Provider Discovery for Dashboard -> Available Tasks ('available_jobs')
+    const AVAILABLE_JOBS_IFRAME_WAIT_SEC = 20;
+    const [availableJobPlacements, setAvailableJobPlacements] = useState<ProviderPlacement[]>([]);
+    const [tabOfferCountsMap, setTabOfferCountsMap] = useState<Record<string, TabOfferCountsPayload>>({});
+    const [isLoadingJobPlacements, setIsLoadingJobPlacements] = useState<boolean>(false);
+    const [jobPlacementsError, setJobPlacementsError] = useState<string | null>(null);
+    const [selectedJobPlacementId, setSelectedJobPlacementId] = useState<string | null>(null);
+    const [launchingJobPlacementId, setLaunchingJobPlacementId] = useState<string | null>(null);
+    const [jobLaunchError, setJobLaunchError] = useState<string | null>(null);
+    const [activeJobLaunchSession, setActiveJobLaunchSession] = useState<{
+        sessionId: number;
+        placementId: string;
+        displayName: string;
+        launchUrl: string;
+        providerKey: string;
+    } | null>(null);
+    const [jobIframeLoaded, setJobIframeLoaded] = useState<boolean>(false);
+    const [jobIframeTimedOut, setJobIframeTimedOut] = useState<boolean>(false);
+    const [jobSecondsRemaining, setJobSecondsRemaining] = useState<number>(AVAILABLE_JOBS_IFRAME_WAIT_SEC);
+
+    const jobPlacementReqSeqRef = useRef<number>(0);
+    const activeJobPlacementUserRef = useRef<string | undefined>(currentUser?._id);
+    const jobSessionCounterRef = useRef<number>(0);
+    const activeJobSessionIdRef = useRef<number | null>(null);
+    const loadedJobSessionIdRef = useRef<number | null>(null);
+    const jobTimeoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const jobCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const clearJobIframeWaitTimers = () => {
+        if (jobTimeoutTimerRef.current !== null) {
+            clearTimeout(jobTimeoutTimerRef.current);
+            jobTimeoutTimerRef.current = null;
+        }
+        if (jobCountdownIntervalRef.current !== null) {
+            clearInterval(jobCountdownIntervalRef.current);
+            jobCountdownIntervalRef.current = null;
+        }
+    };
+
+    const closeJobLaunchSession = () => {
+        clearJobIframeWaitTimers();
+        activeJobSessionIdRef.current = null;
+        loadedJobSessionIdRef.current = null;
+        setActiveJobLaunchSession(null);
+        setJobIframeLoaded(false);
+        setJobIframeTimedOut(false);
+        setJobSecondsRemaining(AVAILABLE_JOBS_IFRAME_WAIT_SEC);
+    };
+
+    useEffect(() => {
+        return () => {
+            activeJobSessionIdRef.current = null;
+            loadedJobSessionIdRef.current = null;
+            clearJobIframeWaitTimers();
+        };
+    }, []);
+
+    useEffect(() => {
+        clearJobIframeWaitTimers();
+        if (!activeJobLaunchSession) {
+            activeJobSessionIdRef.current = null;
+            loadedJobSessionIdRef.current = null;
+            setJobIframeLoaded(false);
+            setJobIframeTimedOut(false);
+            setJobSecondsRemaining(AVAILABLE_JOBS_IFRAME_WAIT_SEC);
+            return;
+        }
+
+        const currentSessionId = activeJobLaunchSession.sessionId;
+        activeJobSessionIdRef.current = currentSessionId;
+        if (loadedJobSessionIdRef.current === currentSessionId) {
+            setJobIframeLoaded(true);
+            setJobIframeTimedOut(false);
+            return;
+        }
+
+        setJobIframeLoaded(false);
+        setJobIframeTimedOut(false);
+        setJobSecondsRemaining(AVAILABLE_JOBS_IFRAME_WAIT_SEC);
+        const startedAt = Date.now();
+
+        jobCountdownIntervalRef.current = setInterval(() => {
+            if (
+                !isMountedRef.current ||
+                activeJobSessionIdRef.current !== currentSessionId ||
+                loadedJobSessionIdRef.current === currentSessionId
+            ) {
+                clearJobIframeWaitTimers();
+                return;
+            }
+            const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+            const nextRemaining = Math.max(1, AVAILABLE_JOBS_IFRAME_WAIT_SEC - elapsedSec);
+            setJobSecondsRemaining(prev => (prev === nextRemaining ? prev : nextRemaining));
+        }, 250);
+
+        jobTimeoutTimerRef.current = setTimeout(() => {
+            if (
+                !isMountedRef.current ||
+                activeJobSessionIdRef.current !== currentSessionId ||
+                loadedJobSessionIdRef.current === currentSessionId
+            ) {
+                clearJobIframeWaitTimers();
+                return;
+            }
+            clearJobIframeWaitTimers();
+            setJobIframeTimedOut(true);
+        }, AVAILABLE_JOBS_IFRAME_WAIT_SEC * 1000);
+
+        return () => {
+            clearJobIframeWaitTimers();
+        };
+    }, [activeJobLaunchSession?.sessionId, activeJobLaunchSession?.launchUrl]);
+
+    const loadAvailableJobPlacements = async (options?: { isBackgroundRefresh?: boolean }) => {
+        const targetUserId = currentUser?._id;
+        syncPlacementCacheUser(targetUserId);
+
+        if (!targetUserId) {
+            setAvailableJobPlacements([]);
+            setIsLoadingJobPlacements(false);
+            setJobPlacementsError(null);
+            return;
+        }
+
+        const reqSeq = ++jobPlacementReqSeqRef.current;
+        const isBackgroundRefresh = Boolean(options?.isBackgroundRefresh);
+        if (!isBackgroundRefresh) {
+            setIsLoadingJobPlacements(true);
+            setJobPlacementsError(null);
+        }
+
+        try {
+            const data = await fetchAndCacheAvailablePlacements(targetUserId, 'available_jobs');
+            if (
+                !isMountedRef.current ||
+                reqSeq !== jobPlacementReqSeqRef.current ||
+                activeJobPlacementUserRef.current !== targetUserId
+            ) {
+                return;
+            }
+            setAvailableJobPlacements(Array.isArray(data) ? data : []);
+            setJobPlacementsError(null);
+        } catch (err: any) {
+            if (
+                !isMountedRef.current ||
+                reqSeq !== jobPlacementReqSeqRef.current ||
+                activeJobPlacementUserRef.current !== targetUserId
+            ) {
+                return;
+            }
+            if (!isBackgroundRefresh) {
+                setJobPlacementsError(err?.message || 'Unable to load external task providers.');
+            }
+        } finally {
+            if (
+                isMountedRef.current &&
+                reqSeq === jobPlacementReqSeqRef.current &&
+                activeJobPlacementUserRef.current === targetUserId
+            ) {
+                setIsLoadingJobPlacements(false);
+            }
+        }
+    };
+
+    useEffect(() => {
+        activeJobPlacementUserRef.current = currentUser?._id;
+        setSelectedJobPlacementId(null);
+        setJobLaunchError(null);
+        closeJobLaunchSession();
+
+        if (!currentUser?._id || dashboardTab !== 'available_jobs' || availableTasksExperience !== 'new') {
+            jobPlacementReqSeqRef.current += 1;
+            if (!currentUser?._id || availableTasksExperience !== 'new') {
+                setAvailableJobPlacements([]);
+                setIsLoadingJobPlacements(false);
+                setJobPlacementsError(null);
+            }
+            return;
+        }
+
+        syncPlacementCacheUser(currentUser._id);
+        const cached = getCachedAvailablePlacements(currentUser._id, 'available_jobs');
+        if (cached !== null) {
+            setAvailableJobPlacements(cached);
+            setIsLoadingJobPlacements(false);
+            setJobPlacementsError(null);
+            void loadAvailableJobPlacements({ isBackgroundRefresh: true });
+        } else {
+            setAvailableJobPlacements([]);
+            void loadAvailableJobPlacements({ isBackgroundRefresh: false });
+        }
+    }, [currentUser?._id, dashboardTab, availableTasksExperience]);
+
+    useEffect(() => {
+        if (
+            selectedJobPlacementId &&
+            !isLoadingJobPlacements &&
+            !availableJobPlacements.some(p => p._id === selectedJobPlacementId)
+        ) {
+            setSelectedJobPlacementId(null);
+            closeJobLaunchSession();
+        }
+    }, [selectedJobPlacementId, availableJobPlacements, isLoadingJobPlacements]);
+
+    // Sync cached background offer counts & subscribe to live background updates
+    useEffect(() => {
+        const uid = currentUser?._id;
+        if (!uid) {
+            setTabOfferCountsMap({});
+            return;
+        }
+        const syncMap = () => {
+            setTabOfferCountsMap(getCachedAllTabOfferCounts(uid));
+        };
+        syncMap();
+        return subscribeOfferCountUpdates(syncMap);
+    }, [currentUser?._id]);
+
+    // Fetch live offer counts for external placements on Available Jobs non-blockingly after placements finish loading
+    useEffect(() => {
+        const uid = currentUser?._id;
+        if (
+            !uid ||
+            dashboardTab !== 'available_jobs' ||
+            availableTasksExperience !== 'new' ||
+            isLoadingJobPlacements ||
+            availableJobPlacements.length === 0
+        ) {
+            return;
+        }
+        if (!getCachedTabOfferCounts(uid, 'available_jobs')) {
+            void fetchAndCacheTabOfferCounts(uid, ['available_jobs'], { backgroundSync: true });
+        }
+    }, [currentUser?._id, dashboardTab, availableTasksExperience, isLoadingJobPlacements, availableJobPlacements.length]);
+
+    const handleLaunchJobPlacement = async (placement: ProviderPlacement) => {
+        const launchUserId = currentUser?._id;
+        closeJobLaunchSession();
+        setSelectedJobPlacementId(placement._id);
+        setLaunchingJobPlacementId(placement._id);
+        setJobLaunchError(null);
+
+        try {
+            const res = await launchPlacement(placement._id);
+            if (!isMountedRef.current || activeJobPlacementUserRef.current !== launchUserId) {
+                return;
+            }
+            clearJobIframeWaitTimers();
+            const nextSessionId = ++jobSessionCounterRef.current;
+            activeJobSessionIdRef.current = nextSessionId;
+            loadedJobSessionIdRef.current = null;
+            setJobIframeLoaded(false);
+            setJobIframeTimedOut(false);
+            setJobSecondsRemaining(AVAILABLE_JOBS_IFRAME_WAIT_SEC);
+            setActiveJobLaunchSession({
+                sessionId: nextSessionId,
+                placementId: placement._id,
+                displayName: res.displayName || placement.displayName,
+                launchUrl: res.launchUrl,
+                providerKey: res.providerKey || placement.providerKey
+            });
+        } catch (err: any) {
+            if (!isMountedRef.current || activeJobPlacementUserRef.current !== launchUserId) {
+                return;
+            }
+            setJobLaunchError(err?.message || 'Failed to initialize provider session. Please try again.');
+        } finally {
+            if (isMountedRef.current) {
+                setLaunchingJobPlacementId(null);
+            }
+        }
+    };
+
+    const handleSelectSmartExnTasks = () => {
+        setSelectedJobPlacementId(null);
+        setJobLaunchError(null);
+        closeJobLaunchSession();
+        if (typeof document !== 'undefined') {
+            document.getElementById('smartexn-internal-tasks-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    };
 
     // Session-scoped dismissal state for popups
     const [dismissedPopupIds, setDismissedPopupIds] = useState<string[]>(() => {
@@ -1267,7 +1572,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     }, [dashboardTab, activeSubTab, searchQuery, difficultyFilter]);
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 pb-24 md:pb-12 px-3 sm:px-6 pt-2">
+        <div className="max-w-7xl mx-auto space-y-3.5 sm:space-y-6 pb-24 md:pb-12 px-2.5 sm:px-6 pt-2">
             
             {/* PERSISTENT DASHBOARD REMINDER & POPUP MODAL FOR MANDATORY SURVEYS */}
             {pendingMandatorySurveys.length > 0 && (
@@ -2356,7 +2661,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             )}
 
             {/* Primary Navigation Bar */}
-            <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-xl border border-slate-800">
+            <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-2.5 sm:p-5 shadow-xl border border-slate-800">
                 <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar">
                     <button
                         onClick={() => setDashboardTab('available_jobs')}
@@ -2375,20 +2680,35 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                         </span>
                     </button>
 
-                    {visibleEarnTabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setDashboardTab(tab.id)}
-                            className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
-                                dashboardTab === tab.id
-                                    ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
-                                    : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                            }`}
-                        >
-                            <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            <span>{tab.title}</span>
-                        </button>
-                    ))}
+                    {visibleEarnTabs.map(tab => {
+                        const tabOfferBadge = tabOfferCountsMap[tab.id]?.summary?.displayBadge || null;
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setDashboardTab(tab.id)}
+                                className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                                    dashboardTab === tab.id
+                                        ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
+                                        : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                }`}
+                            >
+                                <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                <span>{tab.title}</span>
+                                {tabOfferBadge !== null && (
+                                    <span
+                                        data-testid={`earn-tab-offer-badge-${tab.id}`}
+                                        className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold font-mono ${
+                                            dashboardTab === tab.id
+                                                ? 'bg-slate-950/80 text-amber-300'
+                                                : 'bg-slate-950/60 text-amber-300 border border-amber-500/20'
+                                        }`}
+                                    >
+                                        {tabOfferBadge}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
 
                     {customDashboardTabs.map((ct: any) => (
                         <button
@@ -2407,48 +2727,255 @@ const UserWorkAndEarnDashboard: React.FC = () => {
 
             {/* TAB 1: AVAILABLE JOBS */}
             {dashboardTab === 'available_jobs' && (
-                <div className="space-y-4">
+                <div className="space-y-2.5 sm:space-y-4" data-page-experience={availableTasksExperience}>
+                    {availableTasksExperience === 'new' &&
+                        (isLoadingJobPlacements || Boolean(jobPlacementsError) || availableJobPlacements.length > 0) &&
+                        (() => {
+                            const navItems: ProviderNavItem[] = [
+                                {
+                                    id: '__smartexn_internal__',
+                                    label: 'SmartExn Tasks',
+                                    icon: '💼',
+                                    verifiedOfferCount: availableHubTasks.length,
+                                    isSelected: selectedJobPlacementId === null,
+                                    onSelect: handleSelectSmartExnTasks
+                                },
+                                ...availableJobPlacements.map(p => {
+                                    const countOverride = tabOfferCountsMap['available_jobs']?.placements?.[String(p._id)];
+                                    const enrichedPlacement = countOverride ? { ...p, ...countOverride } : p;
+                                    const countMeta = getVerifiedProviderOfferCount(enrichedPlacement);
+                                    return {
+                                        id: p._id,
+                                        label: p.displayName,
+                                        icon: p.icon,
+                                        badge: p.badge,
+                                        verifiedOfferCount: countMeta.count,
+                                        countLabel: countMeta.isVerifiedNumeric ? undefined : 'Available',
+                                        isSelected: selectedJobPlacementId === p._id,
+                                        isLaunching: launchingJobPlacementId === p._id,
+                                        onSelect: () => {
+                                            void handleLaunchJobPlacement(p);
+                                        }
+                                    };
+                                })
+                            ];
 
+                            return (
+                                <ProviderNavRow
+                                    variant="cards"
+                                    ariaLabel="Available tasks provider navigation"
+                                    title="Task & Offer Providers"
+                                    subtitle="SmartExn internal tasks remain active below; select any external partner card to open its offers."
+                                    items={navItems}
+                                    isLoading={isLoadingJobPlacements && availableJobPlacements.length === 0}
+                                    error={jobPlacementsError}
+                                    onRetry={() => void loadAvailableJobPlacements()}
+                                />
+                            );
+                        })()}
 
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-800 pb-3 sm:pb-4">
-                        <div className="flex items-start sm:items-center gap-2 sm:gap-2.5">
-                            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
-                                <TaskIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    {/* SmartExn Internal Micro-Tasks List: ALWAYS visible in both Legacy and New modes */}
+                    <div id="smartexn-internal-tasks-section" className="space-y-2.5 sm:space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 border-b border-slate-800 pb-2.5 sm:pb-4">
+                            <div className="flex items-start sm:items-center gap-2 sm:gap-2.5">
+                                <div className="p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+                                    <TaskIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="text-xs sm:text-base font-bold text-white uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 truncate">
+                                        Browse & Complete Micro-Tasks
+                                    </h3>
+                                    <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
+                                        Pick active jobs, follow step-by-step instructions, submit proof, and receive earnings to your Task Wallet.
+                                    </p>
+                                </div>
                             </div>
-                            <div className="min-w-0">
-                                <h3 className="text-xs sm:text-base font-bold text-white uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 truncate">
-                                    Browse & Complete Micro-Tasks
-                                </h3>
-                                <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
-                                    Pick active jobs, follow step-by-step instructions, submit proof, and receive earnings to your Task Wallet.
-                                </p>
+                            <div className="flex flex-nowrap items-center gap-2 w-full sm:w-auto shrink-0">
+                                <span className="text-[10px] sm:text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 sm:px-3 py-1.5 sm:py-1 rounded-lg sm:rounded-xl shrink-0 whitespace-nowrap">
+                                    {availableHubTasks.length} Jobs Available
+                                </span>
+                                <div className="relative flex-1 min-w-0 sm:hidden">
+                                    <SearchIcon className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search tasks..."
+                                        value={availableJobsSearch}
+                                        onChange={(e) => setAvailableJobsSearch(e.target.value)}
+                                        className="w-full bg-slate-950/80 border border-slate-800 rounded-lg pl-8 pr-2.5 py-1.5 text-[11px] font-medium text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+                                    />
+                                </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-                            <span className="text-[10px] sm:text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-lg sm:rounded-xl">
-                                {availableHubTasks.length} Jobs Available
-                            </span>
-                        </div>
+
+                        <UserTasksSubmit
+                            initialTab="browse"
+                            hideHeaderAndTabs={true}
+                            hideHeroBanner={true}
+                            hideSubTabs={true}
+                            externalBrowseSearch={availableJobsSearch}
+                            onExternalBrowseSearchChange={setAvailableJobsSearch}
+                            hideBrowseSearchOnMobile={true}
+                            sharedMandatoryState={{
+                                pendingMandatorySurveys,
+                                mandatoryCheckCompleted,
+                                isLoadingMandatory,
+                                onRefreshMandatorySurveys: fetchPendingMandatorySurveys
+                            }}
+                        />
                     </div>
 
-                    <UserTasksSubmit
-                        initialTab="browse"
-                        hideHeaderAndTabs={true}
-                        hideHeroBanner={true}
-                        hideSubTabs={true}
-                        sharedMandatoryState={{
-                            pendingMandatorySurveys,
-                            mandatoryCheckCompleted,
-                            isLoadingMandatory,
-                            onRefreshMandatorySurveys: fetchPendingMandatorySurveys
-                        }}
-                    />
+                    {/* External Provider Launch Dialog (never hides or replaces SmartExn internal tasks) */}
+                    {availableTasksExperience === 'new' && selectedJobPlacementId !== null && (() => {
+                        const selectedPlacement = availableJobPlacements.find(p => p._id === selectedJobPlacementId) || null;
+                        const elapsedSec = Math.min(
+                            AVAILABLE_JOBS_IFRAME_WAIT_SEC,
+                            Math.max(0, AVAILABLE_JOBS_IFRAME_WAIT_SEC - jobSecondsRemaining)
+                        );
+                        const elapsedPct = Math.round((elapsedSec / AVAILABLE_JOBS_IFRAME_WAIT_SEC) * 100);
+
+                        return (
+                            <Modal
+                                isOpen={true}
+                                onClose={handleSelectSmartExnTasks}
+                                title={`🚀 ${activeJobLaunchSession?.displayName || selectedPlacement?.displayName || 'External Provider'}`}
+                            >
+                                <div className="space-y-4 p-1">
+                                    {launchingJobPlacementId === selectedJobPlacementId ? (
+                                        <div className="p-10 text-center bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3">
+                                            <RefreshIcon className="w-7 h-7 animate-spin mx-auto text-amber-400" />
+                                            <p className="text-xs font-bold text-slate-300">
+                                                Initializing {selectedPlacement?.displayName || 'provider'} session...
+                                            </p>
+                                        </div>
+                                    ) : jobLaunchError ? (
+                                        <div className="p-5 bg-rose-500/10 border border-rose-500/30 rounded-2xl space-y-3 text-rose-200">
+                                            <div className="flex items-center gap-2 text-xs font-bold">
+                                                <AlertIcon className="w-5 h-5 text-rose-400 shrink-0" />
+                                                <span>{jobLaunchError}</span>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {selectedPlacement && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleLaunchJobPlacement(selectedPlacement)}
+                                                        className="px-4 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-white rounded-xl text-xs font-bold transition-colors"
+                                                    >
+                                                        Retry Connection
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSelectSmartExnTasks}
+                                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors"
+                                                >
+                                                    Close
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : activeJobLaunchSession ? (
+                                        <>
+                                            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                                <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                                                    <SparklesIcon className="w-4 h-4" />
+                                                    <span>Authenticated Server Session Active</span>
+                                                </div>
+                                                <a
+                                                    href={activeJobLaunchSession.launchUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-amber-400 hover:underline font-bold flex items-center gap-1"
+                                                >
+                                                    <span>Open in New Tab</span>
+                                                    <LaunchIcon className="w-3.5 h-3.5" />
+                                                </a>
+                                            </div>
+
+                                            <div className="relative w-full h-[600px] bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-inner">
+                                                {!jobIframeLoaded && !jobIframeTimedOut && (
+                                                    <div className="absolute inset-x-3 top-3 z-10 pointer-events-none flex justify-center">
+                                                        <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-sm border border-amber-500/30 rounded-2xl px-3.5 py-2.5 shadow-xl space-y-1.5">
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    <RefreshIcon className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
+                                                                    <span className="text-xs text-slate-200 font-semibold truncate">
+                                                                        Connecting to {activeJobLaunchSession.displayName}...
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-[11px] font-mono text-amber-300 font-bold shrink-0">
+                                                                    {jobSecondsRemaining}s
+                                                                </span>
+                                                            </div>
+                                                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                                <div
+                                                                    className="h-full bg-amber-400 transition-all duration-300 ease-linear"
+                                                                    style={{ width: `${elapsedPct}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {!jobIframeLoaded && jobIframeTimedOut && (
+                                                    <div className="absolute inset-x-3 top-3 z-10 flex justify-center">
+                                                        <div className="w-full max-w-xl bg-slate-900/95 border border-amber-500/40 rounded-2xl p-3.5 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                            <p className="text-xs font-semibold text-slate-100 leading-snug">
+                                                                {activeJobLaunchSession.displayName} is taking longer than expected. Please continue waiting or open in a new tab.
+                                                            </p>
+                                                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleSelectSmartExnTasks}
+                                                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold rounded-xl"
+                                                                >
+                                                                    Close
+                                                                </button>
+                                                                <a
+                                                                    href={activeJobLaunchSession.launchUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-black uppercase rounded-xl flex items-center gap-1"
+                                                                >
+                                                                    <span>Open in New Tab</span>
+                                                                    <LaunchIcon className="w-3 h-3" />
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                <iframe
+                                                    key={activeJobLaunchSession.sessionId}
+                                                    src={activeJobLaunchSession.launchUrl}
+                                                    title={activeJobLaunchSession.displayName}
+                                                    className="w-full h-full border-0"
+                                                    allow="fullscreen; camera; microphone"
+                                                    onLoad={() => {
+                                                        const sid = activeJobLaunchSession.sessionId;
+                                                        if (isMountedRef.current && activeJobSessionIdRef.current === sid) {
+                                                            loadedJobSessionIdRef.current = sid;
+                                                            clearJobIframeWaitTimers();
+                                                            setJobIframeLoaded(true);
+                                                            setJobIframeTimedOut(false);
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div className="text-[11px] text-slate-400 text-center">
+                                                Completed tasks from {activeJobLaunchSession.displayName} credit automatically to your Task Earnings balance.
+                                            </div>
+                                        </>
+                                    ) : null}
+                                </div>
+                            </Modal>
+                        );
+                    })()}
                 </div>
             )}
 
             {/* TAB 2+: DYNAMIC WORK & EARN TABS */}
             {dashboardTab !== 'available_jobs' && (
-                <div className="space-y-4">
+                <div className="space-y-2.5 sm:space-y-4">
 
                     <OtherTasksCard hideHeader={false} tabId={dashboardTab} />
                 </div>

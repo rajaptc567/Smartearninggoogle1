@@ -495,6 +495,12 @@ export interface Settings {
         convert?: boolean;
     };
     campaignConvertEnabled?: boolean;
+    workAndEarnPageExperience?: {
+        dashboardAvailableTasks: 'legacy' | 'new';
+        otherTasks: 'legacy' | 'new';
+        offerwall: 'legacy' | 'new';
+        otherTasksNavStyle?: 'tabs' | 'icons' | 'cards';
+    };
 }
 
 export interface ModulePageControl {

@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import { authorize } from '../middleware/authMiddleware.js';
 import {
     getAvailablePlacements,
+    getTabOfferCounts,
     launchProviderPlacement,
     getAllAdminPlacements,
     getAdminCatalog,
@@ -49,6 +50,10 @@ const requireAdmin = async (req, res, next) => {
 
 // Get placements eligible for the authenticated user under a specific parent tab
 router.get('/available/:parentTabId', authorize(['user', 'admin', 'super_admin']), getAvailablePlacements);
+
+// Non-blocking verified live offer counts across requested tabs
+router.get('/offer-counts', authorize(['user', 'admin', 'super_admin']), getTabOfferCounts);
+router.get('/offer-counts/:parentTabId', authorize(['user', 'admin', 'super_admin']), getTabOfferCounts);
 
 // Re-evaluate eligibility & launch provider session
 router.post('/:placementId/launch', authorize(['user', 'admin', 'super_admin']), launchProviderPlacement);

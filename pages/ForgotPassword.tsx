@@ -75,7 +75,7 @@ const ForgotPassword = () => {
                                 />
                             </div>
                             <div>
-                                <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+                                <Button type="submit" size="lg" className="w-full" isLoading={isLoading}>
                                     {isLoading ? 'Sending Request...' : 'Request Reset from Admin'}
                                 </Button>
                             </div>

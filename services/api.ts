@@ -34,12 +34,15 @@ export function getUploadsBaseUrl() {
 const API_BASE_URL = getApiBaseUrl();
 
 // Helper to get Auth Headers
-export const getHeaders = (isMultipart = false) => {
+export const getHeaders = (isMultipart = false, backgroundSync = false) => {
     const headers: any = {};
     if (!isMultipart) {
         headers['Content-Type'] = 'application/json';
     }
-    
+    if (backgroundSync) {
+        headers['X-Background-Sync'] = '1';
+    }
+
     const token = localStorage.getItem('authToken');
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
@@ -64,6 +67,14 @@ const handleResponse = async (response: Response) => {
     if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         if (!response.ok) {
+            if (
+                response.status === 401 &&
+                data?.code === 'SESSION_IDLE_EXPIRED' &&
+                typeof window !== 'undefined' &&
+                typeof window.dispatchEvent === 'function'
+            ) {
+                window.dispatchEvent(new CustomEvent('smartexn:session-idle-expired'));
+            }
             const error = (data && (data.error || data.message)) || response.statusText || 'An unexpected error occurred.';
             throw new ApiError(error, response.status, data);
         }
@@ -113,20 +124,24 @@ export const getDataVersion = async (): Promise<number | null> => {
 };
 
 // --- [User API Functions] ---
-export const getUsers = async (): Promise<User[]> => {
+export interface SyncReadOptions {
+    backgroundSync?: boolean;
+}
+
+export const getUsers = async (options?: SyncReadOptions): Promise<User[]> => {
     const response = await fetch(`${API_BASE_URL}/users`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
 };
 
-export const getUser = async (id: string): Promise<User | null> => {
+export const getUser = async (id: string, options?: SyncReadOptions): Promise<User | null> => {
     if (!id || typeof id !== 'string' || !id.trim()) {
         return null;
     }
     const response = await fetch(`${API_BASE_URL}/users/${encodeURIComponent(id.trim())}`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     if (!result || result.success === false || !result.data || !result.data._id) {
@@ -202,6 +217,32 @@ export const login = async (email: string, password: string): Promise<{ token: s
     });
     const result = await handleResponse(response);
     return { token: result.token, data: result.data };
+};
+
+export const sendSessionHeartbeat = async (): Promise<{ success: boolean; active?: boolean }> => {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
+    if (!token) return { success: false };
+    const response = await fetch(`${API_BASE_URL}/users/session-heartbeat`, {
+        method: 'POST',
+        headers: getHeaders()
+    });
+    return handleResponse(response);
+};
+
+export const logoutSession = async (explicitToken?: string | null): Promise<void> => {
+    try {
+        const token = explicitToken ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null);
+        if (!token) return;
+        await fetch(`${API_BASE_URL}/users/logout`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`
+            }
+        });
+    } catch {
+        // Best-effort backend session invalidation
+    }
 };
 
 export const verifyEmail = async (token: string | null | undefined, code: string): Promise<{ success: boolean; data: User; message: string; token?: string }> => {
@@ -311,9 +352,9 @@ export const resetPasswordWithToken = async (token: string, password: string): P
 };
 
 // --- [Deposit API Functions] ---
-export const getDeposits = async (): Promise<Deposit[]> => {
+export const getDeposits = async (options?: SyncReadOptions): Promise<Deposit[]> => {
     const response = await fetch(`${API_BASE_URL}/deposits`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -340,9 +381,9 @@ export const updateDeposit = async (id: string, updateData: any): Promise<{ depo
 };
 
 // --- [Withdrawal API Functions] ---
-export const getWithdrawals = async (): Promise<Withdrawal[]> => {
+export const getWithdrawals = async (options?: SyncReadOptions): Promise<Withdrawal[]> => {
     const response = await fetch(`${API_BASE_URL}/withdrawals`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -369,18 +410,18 @@ export const updateWithdrawal = async (id: string, updateData: any): Promise<{ w
 };
 
 // --- [Transaction API Functions] ---
-export const getTransactions = async (): Promise<Transaction[]> => {
+export const getTransactions = async (options?: SyncReadOptions): Promise<Transaction[]> => {
     const response = await fetch(`${API_BASE_URL}/transactions`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
 };
 
 // --- [Notification API Functions] ---
-export const getNotifications = async (): Promise<Notification[]> => {
+export const getNotifications = async (options?: SyncReadOptions): Promise<Notification[]> => {
     const response = await fetch(`${API_BASE_URL}/notifications`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -456,9 +497,9 @@ export const getPublicPaymentMethods = async (): Promise<PaymentMethod[]> => {
     }
 };
 
-export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
+export const getPaymentMethods = async (options?: SyncReadOptions): Promise<PaymentMethod[]> => {
     const response = await fetch(`${API_BASE_URL}/payment-methods`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -494,9 +535,9 @@ export const deletePaymentMethod = async (id: string): Promise<{}> => {
 };
 
 // --- [Investment Plan API Functions] ---
-export const getInvestmentPlans = async (): Promise<InvestmentPlan[]> => {
+export const getInvestmentPlans = async (options?: SyncReadOptions): Promise<InvestmentPlan[]> => {
     const response = await fetch(`${API_BASE_URL}/investment-plans`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -532,9 +573,9 @@ export const deleteInvestmentPlan = async (id: string): Promise<{}> => {
 };
 
 // --- [Rule API Functions] ---
-export const getRules = async (): Promise<Rule[]> => {
+export const getRules = async (options?: SyncReadOptions): Promise<Rule[]> => {
     const response = await fetch(`${API_BASE_URL}/rules`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -581,9 +622,9 @@ export const getPublicSettings = async (): Promise<Settings> => {
     }
 };
 
-export const getSettings = async (): Promise<Settings> => {
+export const getSettings = async (options?: SyncReadOptions): Promise<Settings> => {
     const response = await fetch(`${API_BASE_URL}/settings`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -617,9 +658,9 @@ export const getEmailLogs = async (): Promise<any[]> => {
 };
 
 // --- [Transfer API Functions] ---
-export const getTransfers = async (): Promise<Transfer[]> => {
+export const getTransfers = async (options?: SyncReadOptions): Promise<Transfer[]> => {
     const response = await fetch(`${API_BASE_URL}/transfers`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -646,9 +687,9 @@ export const updateTransfer = async (id: string, updateData: any): Promise<{ tra
 };
 
 // --- [Log API Functions] ---
-export const getLogs = async (): Promise<Log[]> => {
+export const getLogs = async (options?: SyncReadOptions): Promise<Log[]> => {
     const response = await fetch(`${API_BASE_URL}/logs`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -664,9 +705,9 @@ export const clearLogs = async (): Promise<{}> => {
 };
 
 // --- [Password Reset Request API Functions] ---
-export const getPasswordResetRequests = async (): Promise<PasswordResetRequest[]> => {
+export const getPasswordResetRequests = async (options?: SyncReadOptions): Promise<PasswordResetRequest[]> => {
     const response = await fetch(`${API_BASE_URL}/password-reset-requests`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -692,9 +733,9 @@ export const deletePasswordResetRequest = async (id: string): Promise<{}> => {
 };
 
 // --- [User Tasks API Functions] ---
-export const getUserTasks = async (): Promise<UserTask[]> => {
+export const getUserTasks = async (options?: SyncReadOptions): Promise<UserTask[]> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -787,9 +828,9 @@ export const pauseAdminCampaign = async (id: string): Promise<{ task: UserTask }
     };
 };
 
-export const getUserTaskSubmissions = async (): Promise<any[]> => {
+export const getUserTaskSubmissions = async (options?: SyncReadOptions): Promise<any[]> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks/submissions`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -941,9 +982,9 @@ export const adminResetWorkAndEarnData = async (payload: {
 };
 
 // --- [Dispute API Functions] ---
-export const getDisputes = async (): Promise<Dispute[]> => {
+export const getDisputes = async (options?: SyncReadOptions): Promise<Dispute[]> => {
     const response = await fetch(`${API_BASE_URL}/disputes`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;
@@ -1002,9 +1043,9 @@ export const markDisputeAsRead = async (id: string, role: 'admin' | 'user'): Pro
 };
 
 // --- [Task API Functions] ---
-export const getTasks = async (): Promise<Task[]> => {
+export const getTasks = async (options?: SyncReadOptions): Promise<Task[]> => {
     const response = await fetch(`${API_BASE_URL}/tasks`, {
-        headers: getHeaders()
+        headers: getHeaders(false, Boolean(options?.backgroundSync))
     });
     const result = await handleResponse(response);
     return result.data;

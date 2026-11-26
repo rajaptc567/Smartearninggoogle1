@@ -140,7 +140,12 @@ const ResetPassword = () => {
     const renderContent = () => {
         switch (status) {
             case 'verifying':
-                return <p className="text-center">Verifying reset credentials...</p>;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-2 py-4">
+                        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                        <p className="text-center text-sm text-gray-600 dark:text-gray-300">Verifying reset credentials...</p>
+                    </div>
+                );
             case 'enter_code':
                 return (
                     <form className="space-y-4" onSubmit={handleVerifyManualCode}>
@@ -165,7 +170,7 @@ const ResetPassword = () => {
                                 <strong>Error:</strong> {error}
                             </div>
                         )}
-                        <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+                        <Button type="submit" size="lg" className="w-full" isLoading={isLoading}>
                             {isLoading ? 'Verifying OTP...' : 'Verify OTP & Set Password'}
                         </Button>
                         <div className="text-center pt-2">
@@ -223,7 +228,7 @@ const ResetPassword = () => {
                                 <input id="confirmPassword" name="confirmPassword" type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600"/>
                             </div>
                             <div>
-                                <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+                                <Button type="submit" size="lg" className="w-full" isLoading={isLoading}>
                                     {isLoading ? 'Resetting...' : 'Reset Password'}
                                 </Button>
                             </div>

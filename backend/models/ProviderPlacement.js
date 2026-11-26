@@ -45,6 +45,11 @@ const ProviderPlacementSchema = new mongoose.Schema({
         default: '',
         trim: true
     },
+    iconOverride: {
+        type: String,
+        default: '',
+        trim: true
+    },
     displayOrder: {
         type: Number,
         default: 0

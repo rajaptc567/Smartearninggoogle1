@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { isTokenSessionIdleExpired } from './sessionActivity.js';
 
 export const ALLOWED_REALTIME_DATASETS = new Set([
     'currentUser',
@@ -79,6 +80,10 @@ export const createSocketAuthMiddleware = (deps = {}) => {
                 decoded = verifyJwt(token, secret);
             } catch {
                 return next(createSocketAuthError('Invalid or expired token', 'AUTH_INVALID_TOKEN'));
+            }
+
+            if (isTokenSessionIdleExpired(token)) {
+                return next(createSocketAuthError('Session expired due to inactivity.', 'AUTH_IDLE_EXPIRED'));
             }
 
             const userId = decoded?.id || decoded?._id || decoded?.userId;

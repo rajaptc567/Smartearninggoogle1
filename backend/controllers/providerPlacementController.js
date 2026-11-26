@@ -6,6 +6,12 @@ import User from '../models/User.js';
 import Setting from '../models/Setting.js';
 import { evaluatePlacementEligibility } from '../utils/providerPlacementEligibility.js';
 import { constructTheoremReachEntryUrl, constructCpxEntryUrl, constructAdGemEntryUrl, constructOfferwallGgEntryUrl } from './postbackController.js';
+import {
+    extractClientIp,
+    fetchVerifiedOfferCountForProvider,
+    normalizeOfferCountProviderKey,
+    summarizeTabOfferCounts
+} from '../utils/providerOfferCountService.js';
 
 /**
  * Validates and normalizes a hostname entry.
@@ -50,6 +56,73 @@ export const validateAndNormalizeHostname = (domain) => {
 export const isDomainTrusted = (launchHost, trustedDomain) => {
     if (!launchHost || !trustedDomain) return false;
     return launchHost === trustedDomain || launchHost.endsWith('.' + trustedDomain);
+};
+
+/**
+ * Validates and sanitizes an optional placement iconOverride.
+ * Supports empty string (Auto / provider default), short safe emoji/text (<= 32 chars),
+ * https/http URL, root-relative image path, or raster data URI (png/jpeg/webp/gif <= 280KB).
+ * Strictly rejects HTML brackets, SVG data URIs, and javascript:/vbscript: schemes.
+ */
+export const validateAndNormalizeIconOverride = (raw) => {
+    if (raw === undefined || raw === null) {
+        return { valid: true, value: '' };
+    }
+    if (typeof raw !== 'string') {
+        return { valid: false, error: 'Custom icon must be a valid emoji, image URL, or empty string for Auto.' };
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) {
+        return { valid: true, value: '' };
+    }
+
+    if (/[<>]/.test(trimmed) || /[\r\n\t]/.test(trimmed)) {
+        return { valid: false, error: 'Custom icon contains disallowed characters.' };
+    }
+
+    const lower = trimmed.toLowerCase();
+    if (lower.startsWith('javascript:') || lower.startsWith('vbscript:') || lower.startsWith('data:text/') || lower.startsWith('data:image/svg+xml')) {
+        return { valid: false, error: 'Unsafe icon URI or SVG data URL is not permitted.' };
+    }
+
+    if (lower.startsWith('data:')) {
+        if (trimmed.length > 280000 || !/^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
+            return { valid: false, error: 'Uploaded icon image must be a valid PNG, JPEG, WEBP, or GIF under 200KB.' };
+        }
+        return { valid: true, value: trimmed };
+    }
+
+    if (lower.startsWith('https://') || lower.startsWith('http://')) {
+        if (trimmed.length > 2048 || /\s/.test(trimmed)) {
+            return { valid: false, error: 'Custom icon URL must be a valid HTTP(S) URL without spaces (max 2048 characters).' };
+        }
+        try {
+            const parsed = new URL(trimmed);
+            if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+                return { valid: false, error: 'Custom icon URL must use HTTPS or HTTP.' };
+            }
+            if (parsed.username || parsed.password) {
+                return { valid: false, error: 'Custom icon URL cannot contain embedded credentials.' };
+            }
+            return { valid: true, value: trimmed };
+        } catch {
+            return { valid: false, error: 'Custom icon URL is malformed.' };
+        }
+    }
+
+    if (trimmed.startsWith('/')) {
+        if (trimmed.startsWith('//') || trimmed.length > 512 || /\s/.test(trimmed) || trimmed.includes(':')) {
+            return { valid: false, error: 'Custom icon path must be a valid relative asset path.' };
+        }
+        return { valid: true, value: trimmed };
+    }
+
+    // Short emoji or text badge icon
+    if (trimmed.includes(':') || /["']/.test(trimmed) || trimmed.length > 32) {
+        return { valid: false, error: 'Manual text/emoji icon must be 32 characters or less and cannot contain URL schemes or quotes.' };
+    }
+
+    return { valid: true, value: trimmed };
 };
 
 /**
@@ -201,7 +274,8 @@ export const getAvailablePlacements = async (req, res) => {
                 displayName: placement.displayName || provider.name,
                 description: placement.descriptionOverride || provider.description || '',
                 badge: placement.badgeOverride || provider.badge || subTabConfig?.badge || '',
-                icon: provider.icon || '⚡',
+                icon: (placement.iconOverride && placement.iconOverride.trim()) || provider.icon || '⚡',
+                iconOverride: placement.iconOverride || '',
                 displayOrder: placement.displayOrder || 0,
                 providerStatus: provider.status || 'ACTIVE'
             });
@@ -217,6 +291,204 @@ export const getAvailablePlacements = async (req, res) => {
         });
     } catch (err) {
         console.error('[getAvailablePlacements Error]:', err.message);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+/**
+ * USER ENDPOINT: GET /offer-counts?tabIds=other_tasks,... or GET /offer-counts/:parentTabId
+ * Non-blocking background endpoint that fetches live verified offer/survey counts
+ * for API-capable providers eligible for the authenticated worker.
+ */
+export const getTabOfferCounts = async (req, res) => {
+    try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user || user.status === 'Blocked' || user.restrictions?.loginBlocked) {
+            return res.status(403).json({ success: false, error: 'Account restricted or user not found' });
+        }
+        if (user.restrictions?.earning === true) {
+            return res.status(403).json({ success: false, error: 'Account earning features are restricted' });
+        }
+
+        const rawParamTab = req.params?.parentTabId ? String(req.params.parentTabId).trim() : '';
+        const rawQueryTabs = req.query?.tabIds ? String(req.query.tabIds) : '';
+        const requestedTabIds = Array.from(
+            new Set(
+                [rawParamTab, ...rawQueryTabs.split(',')]
+                    .map(t => String(t || '').trim())
+                    .filter(Boolean)
+            )
+        ).slice(0, 12);
+
+        if (requestedTabIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'At least one tab ID is required' });
+        }
+
+        const settings = await Setting.getSettings();
+        const customTabs = Array.isArray(settings.customEarnTabs) ? settings.customEarnTabs : [];
+
+        const validTabIds = [];
+        const activeSubTabIdsByParent = new Map();
+
+        for (const tabId of requestedTabIds) {
+            const targetMainTab = tabId === 'available_jobs'
+                ? { id: 'available_jobs', enabled: true, subTabs: [] }
+                : customTabs.find(t => t.id === tabId || (tabId === 'other_tasks' && t.id === 'other_tasks'));
+
+            if (!targetMainTab || targetMainTab.enabled === false || targetMainTab.isHiddenInNav === true) {
+                continue;
+            }
+            if (tabId === 'other_tasks') {
+                const otherTasksControl = settings.modulePagesConfig?.workAndEarn?.otherTasks;
+                if (otherTasksControl && (otherTasksControl.isEnabled === false || otherTasksControl.isHiddenInNav === true)) {
+                    continue;
+                }
+            }
+            const activeSubTabs = Array.isArray(targetMainTab.subTabs)
+                ? targetMainTab.subTabs.filter(st => st && st.enabled !== false && st.isHiddenInNav !== true)
+                : [];
+            validTabIds.push(tabId);
+            activeSubTabIdsByParent.set(tabId, activeSubTabs.map(st => st.id));
+        }
+
+        const emptyTabsResult = {};
+        for (const tabId of requestedTabIds) {
+            emptyTabsResult[tabId] = {
+                placements: {},
+                summary: summarizeTabOfferCounts([])
+            };
+        }
+
+        if (validTabIds.length === 0) {
+            return res.status(200).json({ success: true, tabs: emptyTabsResult });
+        }
+
+        const placements = await ProviderPlacement.find({
+            parentTabId: { $in: validTabIds },
+            placementEnabled: true,
+            availableTasksVisibility: true
+        }).lean();
+
+        if (placements.length === 0) {
+            return res.status(200).json({ success: true, tabs: emptyTabsResult });
+        }
+
+        const requestedKeys = placements.map(p => p.providerKey);
+        const canonicalKeys = requestedKeys.map(k => (k === 'offerwallgg' ? 'offerwall_gg' : k));
+        const providerKeys = [...new Set([...requestedKeys, ...canonicalKeys])];
+
+        // Server-side projection includes credentials ONLY in memory to query provider count APIs (never sent to client)
+        const providers = await OfferwallProvider.find({
+            providerKey: { $in: providerKeys },
+            enabled: true,
+            status: 'ACTIVE'
+        }).select('providerKey name status enabled approvalStatus appId apiKey secretKey iframeUrlTemplate customConfig').lean();
+
+        const providerMap = new Map();
+        for (const p of providers) {
+            providerMap.set(p.providerKey, p);
+            if (p.providerKey === 'offerwall_gg') {
+                providerMap.set('offerwallgg', p);
+            }
+        }
+
+        const eligibleByTab = new Map();
+        for (const tabId of validTabIds) {
+            eligibleByTab.set(tabId, []);
+        }
+
+        const providersToFetch = new Map();
+
+        for (const placement of placements) {
+            const tabSubIds = activeSubTabIdsByParent.get(placement.parentTabId) || [];
+            const hasSubTab = Boolean(placement.subTabId && String(placement.subTabId).trim() !== '');
+            if (hasSubTab && !tabSubIds.includes(placement.subTabId)) {
+                continue;
+            }
+
+            const provider = providerMap.get(placement.providerKey);
+            if (!provider || provider.enabled !== true || provider.status !== 'ACTIVE') {
+                continue;
+            }
+            if (placement.providerKey === 'adgem' && provider.approvalStatus !== 'Approved') {
+                continue;
+            }
+            if ((placement.providerKey === 'offerwall_gg' || placement.providerKey === 'offerwallgg') && provider.approvalStatus !== 'Approved') {
+                continue;
+            }
+            if (placement.providerKey === 'adgem' && (user.adgemSuspended === true || user.restrictions?.adgemSuspended === true)) {
+                continue;
+            }
+
+            const evalResult = evaluatePlacementEligibility(user, placement);
+            if (!evalResult.eligible) {
+                continue;
+            }
+
+            eligibleByTab.get(placement.parentTabId)?.push({ placement, provider });
+            const normKey = normalizeOfferCountProviderKey(provider.providerKey);
+            if (!providersToFetch.has(normKey)) {
+                providersToFetch.set(normKey, provider);
+            }
+        }
+
+        const clientIp = extractClientIp(req);
+        const userAgent = String(req.headers?.['user-agent'] || '');
+
+        const countResultsMap = new Map();
+        await Promise.allSettled(
+            Array.from(providersToFetch.entries()).map(async ([normKey, provider]) => {
+                const result = await fetchVerifiedOfferCountForProvider({
+                    provider,
+                    userId: String(user._id),
+                    clientIp,
+                    userAgent
+                });
+                countResultsMap.set(normKey, result);
+            })
+        );
+
+        const tabsResponse = { ...emptyTabsResult };
+        for (const tabId of validTabIds) {
+            const entries = eligibleByTab.get(tabId) || [];
+            const placementsMap = {};
+            const summaryItems = [];
+
+            for (const { placement } of entries) {
+                const normKey = normalizeOfferCountProviderKey(placement.providerKey);
+                const countInfo = countResultsMap.get(normKey) || {
+                    providerKey: normKey,
+                    offerCountSource: 'unavailable',
+                    verifiedOfferCount: null
+                };
+                const placementIdStr = String(placement._id);
+                const sanitizedItem = {
+                    providerKey: placement.providerKey,
+                    subTabId: placement.subTabId || '',
+                    offerCountSource: countInfo.offerCountSource,
+                    verifiedOfferCount: countInfo.verifiedOfferCount,
+                    ...(Array.isArray(countInfo.verifiedOfferIds) ? { verifiedOfferIds: countInfo.verifiedOfferIds } : {})
+                };
+                placementsMap[placementIdStr] = sanitizedItem;
+                summaryItems.push(sanitizedItem);
+            }
+
+            tabsResponse[tabId] = {
+                placements: placementsMap,
+                summary: summarizeTabOfferCounts(summaryItems)
+            };
+        }
+
+        return res.status(200).json({
+            success: true,
+            tabs: tabsResponse
+        });
+    } catch (err) {
+        console.error('[getTabOfferCounts Error]:', err.message);
         return res.status(500).json({ success: false, error: err.message });
     }
 };
@@ -502,6 +774,7 @@ export const createAdminPlacement = async (req, res) => {
             displayName,
             descriptionOverride,
             badgeOverride,
+            iconOverride,
             displayOrder,
             targetingMode,
             selectedUserIds,
@@ -569,6 +842,11 @@ export const createAdminPlacement = async (req, res) => {
             }
         }
 
+        const iconValidation = validateAndNormalizeIconOverride(iconOverride);
+        if (!iconValidation.valid) {
+            return res.status(400).json({ success: false, error: iconValidation.error });
+        }
+
         const newPlacementData = {
             providerKey: String(providerKey).toLowerCase().trim(),
             parentTabId: String(parentTabId).trim(),
@@ -576,6 +854,7 @@ export const createAdminPlacement = async (req, res) => {
             displayName: String(displayName).trim(),
             descriptionOverride: descriptionOverride ? String(descriptionOverride).trim() : '',
             badgeOverride: badgeOverride ? String(badgeOverride).trim() : '',
+            iconOverride: iconValidation.value,
             displayOrder: Number(displayOrder) || 0,
             placementEnabled: false, // CRITICAL DEFAULT: Always default to OFF
             targetingMode: targetingMode || 'all',
@@ -628,7 +907,7 @@ export const updateAdminPlacement = async (req, res) => {
         }
 
         const allowedFields = [
-            'displayName', 'descriptionOverride', 'badgeOverride', 'displayOrder',
+            'displayName', 'descriptionOverride', 'badgeOverride', 'iconOverride', 'displayOrder',
             'placementEnabled', 'targetingMode', 'selectedUserIds', 'testUserIds',
             'allowedCountries', 'excludedCountries', 'rolloutPercentage', 'rolloutSalt',
             'launchDisplayMode', 'subTabId', 'offerwallVisibility', 'availableTasksVisibility',
@@ -701,6 +980,12 @@ export const updateAdminPlacement = async (req, res) => {
                     updates.launchDisplayMode = ['inline', 'modal'].includes(req.body.launchDisplayMode)
                         ? req.body.launchDisplayMode
                         : 'modal';
+                } else if (field === 'iconOverride') {
+                    const iconValidation = validateAndNormalizeIconOverride(req.body.iconOverride);
+                    if (!iconValidation.valid) {
+                        return res.status(400).json({ success: false, error: iconValidation.error });
+                    }
+                    updates.iconOverride = iconValidation.value;
                 } else {
                     updates[field] = req.body[field];
                 }

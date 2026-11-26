@@ -33,6 +33,9 @@ export interface UserTasksSubmitProps {
     isAdminMode?: boolean;
     onCampaignCreated?: () => void;
     sharedMandatoryState?: SharedMandatoryState;
+    externalBrowseSearch?: string;
+    onExternalBrowseSearchChange?: (value: string) => void;
+    hideBrowseSearchOnMobile?: boolean;
 }
 
 export const getRemainingTimeString = (targetDate?: string | Date) => {
@@ -234,7 +237,7 @@ export const renderDisputeTimerBox = (sub: any, settings: any) => {
     return null;
 };
 
-const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false, hideSubTabs = false, isAdminMode = false, onCampaignCreated, sharedMandatoryState }) => {
+const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false, hideSubTabs = false, isAdminMode = false, onCampaignCreated, sharedMandatoryState, externalBrowseSearch, onExternalBrowseSearchChange, hideBrowseSearchOnMobile = false }) => {
     const { state, dispatch, refreshData } = useData();
     const { currentUser, userTasks, userTaskSubmissions, settings } = state;
     const rates = settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
@@ -886,7 +889,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     } | null>(null);
 
     // Browse Tasks Filter & Pagination State
-    const [browseSearch, setBrowseSearch] = useState('');
+    const [internalBrowseSearch, setInternalBrowseSearch] = useState('');
+    const browseSearch = externalBrowseSearch !== undefined ? externalBrowseSearch : internalBrowseSearch;
+    const setBrowseSearch = (value: string) => {
+        if (onExternalBrowseSearchChange) {
+            onExternalBrowseSearchChange(value);
+        } else {
+            setInternalBrowseSearch(value);
+        }
+    };
     const [browseCategory, setBrowseCategory] = useState('All');
     const [browseSort, setBrowseSort] = useState('latest');
     const [browsePage, setBrowsePage] = useState(1);
@@ -4250,9 +4261,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                     {/* 2. Navigation Tabs (Available Jobs vs Other Tasks) - Placed below description card and above search bar */}
                     {!hideSubTabs && (
-                        <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-xl border border-slate-800 space-y-3 sm:space-y-4">
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-                                <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                        <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-2.5 sm:p-5 shadow-xl border border-slate-800 space-y-2 sm:space-y-4">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-4">
+                                <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
                                     <button
                                         type="button"
                                         onClick={() => setAvailableTasksSubTab('available_jobs')}
@@ -4294,24 +4305,24 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                     {availableTasksSubTab !== 'available_jobs' && visibleEarnTabs.some(t => t.id === availableTasksSubTab) ? (
                         <OtherTasksCard hideHeader={false} tabId={availableTasksSubTab} />
                     ) : (
-                        <div className="space-y-6">
+                        <div className="space-y-3 sm:space-y-6">
                             {!hideHeaderAndTabs && (
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-4">
                                     <div>
-                                        <h3 className="text-xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
+                                        <h3 className="text-base sm:text-xl font-bold text-white uppercase tracking-tight flex flex-wrap items-center gap-2 sm:gap-3">
                                             Available Tasks to Complete & Earn USD
-                                            <span className="px-3 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-full text-xs font-mono font-bold">
+                                            <span className="px-2.5 sm:px-3 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-full text-[11px] sm:text-xs font-mono font-bold">
                                                 {filteredBrowseableTasks.length} Total
                                             </span>
                                         </h3>
-                                        <p className="text-xs text-slate-400 mt-1">Browse active micro-tasks approved by admin, follow instructions carefully, and earn rewards paid in USD.</p>
+                                        <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1">Browse active micro-tasks approved by admin, follow instructions carefully, and earn rewards paid in USD.</p>
                                     </div>
                                 </div>
                             )}
 
                             {/* Filter & Search Bar */}
-                    <div className="bg-slate-950/80 p-4 md:p-5 rounded-2xl shadow-md border border-slate-800 flex flex-col md:flex-row gap-4 items-center justify-between">
-                        <div className="relative w-full md:w-96">
+                    <div className="bg-slate-950/80 p-2.5 sm:p-4 md:p-5 rounded-2xl shadow-md border border-slate-800 flex flex-col md:flex-row gap-2 sm:gap-4 items-center justify-between">
+                        <div className={`relative w-full md:w-96 ${hideBrowseSearchOnMobile ? 'hidden sm:block' : ''}`}>
                             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs">🔍</span>
                             <input 
                                 type="text"
@@ -4324,10 +4335,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         seoAnalytics.trackSearchTasks('tasks');
                                     }
                                 }}
-                                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-medium focus:border-amber-500 focus:outline-none text-slate-200 placeholder:text-slate-500"
+                                className="w-full pl-9 pr-4 py-2 sm:py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-medium focus:border-amber-500 focus:outline-none text-slate-200 placeholder:text-slate-500"
                             />
                         </div>
-                        <div className="grid grid-cols-3 gap-2 w-full md:flex md:items-center md:gap-3 md:w-auto">
+                        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 w-full md:flex md:items-center md:gap-3 md:w-auto">
                             <div className="flex items-center gap-1.5 w-full sm:w-auto">
                                 <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Show:</span>
                                 <select 
@@ -4390,8 +4401,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             No active user task campaigns match your search filters. Check back soon!
                         </div>
                     ) : (
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                        <div className="space-y-3.5 sm:space-y-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3 md:gap-4">
                                 {paginatedBrowseTasks.map(task => {
                                     const alreadySubmitted = mySubmissions.some(s => s.taskId.toString() === task._id.toString());
                                     const isUnlimited = Boolean(task.isUnlimitedResponses);

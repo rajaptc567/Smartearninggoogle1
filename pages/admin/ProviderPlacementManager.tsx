@@ -12,6 +12,20 @@ import {
     previewPlacementEligibility,
     fetchAdminAuditLogs
 } from '../../services/providerPlacementService';
+import { isSafeImageIcon } from '../../utils/pageExperienceHelper';
+
+const PlacementAdminIcon: React.FC<{ icon?: string; label: string }> = ({ icon, label }) => {
+    if (icon && isSafeImageIcon(icon)) {
+        return (
+            <img
+                src={icon.trim()}
+                alt={label}
+                className="w-8 h-8 rounded-xl object-cover shrink-0 border border-slate-700 bg-slate-950"
+            />
+        );
+    }
+    return <span className="text-2xl shrink-0">{icon && !isSafeImageIcon(icon) ? icon : '⚡'}</span>;
+};
 
 export const ProviderPlacementManager: React.FC = () => {
     const { state } = useData();
@@ -39,6 +53,7 @@ export const ProviderPlacementManager: React.FC = () => {
     const [displayName, setDisplayName] = useState<string>('');
     const [descriptionOverride, setDescriptionOverride] = useState<string>('');
     const [badgeOverride, setBadgeOverride] = useState<string>('');
+    const [iconOverride, setIconOverride] = useState<string>('');
     const [displayOrder, setDisplayOrder] = useState<number>(0);
     const [targetingMode, setTargetingMode] = useState<'all' | 'selected_users' | 'test_users'>('all');
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -146,7 +161,37 @@ export const ProviderPlacementManager: React.FC = () => {
             setDisplayName(item.name);
             setDescriptionOverride(item.description || '');
             setBadgeOverride(item.badge || '');
+            setIconOverride('');
         }
+    };
+
+    const handleIconFileUpload = (
+        file: File | undefined,
+        onSuccess: (dataUrl: string) => void
+    ) => {
+        if (!file) return;
+        const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
+        if (!allowedMimeTypes.includes(file.type.toLowerCase())) {
+            setErrorMessage('Please upload a PNG, JPEG, WEBP, or GIF image (SVG is not allowed).');
+            return;
+        }
+        if (file.size > 200 * 1024) {
+            setErrorMessage('Uploaded provider icon image must be 200KB or smaller.');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            if (typeof reader.result === 'string' && isSafeImageIcon(reader.result)) {
+                setErrorMessage(null);
+                onSuccess(reader.result);
+            } else {
+                setErrorMessage('Invalid or unsafe image file.');
+            }
+        };
+        reader.onerror = () => {
+            setErrorMessage('Failed to read uploaded image file.');
+        };
+        reader.readAsDataURL(file);
     };
 
     const handleCreatePlacement = async (e: React.FormEvent) => {
@@ -179,6 +224,7 @@ export const ProviderPlacementManager: React.FC = () => {
                 displayName,
                 descriptionOverride,
                 badgeOverride,
+                iconOverride: iconOverride.trim(),
                 displayOrder,
                 placementEnabled: false, // CRITICAL: Always default OFF
                 targetingMode,
@@ -244,6 +290,7 @@ export const ProviderPlacementManager: React.FC = () => {
                 displayName: editingPlacement.displayName,
                 descriptionOverride: editingPlacement.descriptionOverride,
                 badgeOverride: editingPlacement.badgeOverride,
+                iconOverride: (editingPlacement.iconOverride || '').trim(),
                 displayOrder: editingPlacement.displayOrder,
                 placementEnabled: editingPlacement.placementEnabled,
                 targetingMode: editingPlacement.targetingMode,
@@ -383,7 +430,10 @@ export const ProviderPlacementManager: React.FC = () => {
                                         <div className="space-y-3">
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-2xl">{prov?.icon || '⚡'}</span>
+                                                    <PlacementAdminIcon
+                                                        icon={(p.iconOverride && p.iconOverride.trim()) || prov?.icon || '⚡'}
+                                                        label={p.displayName}
+                                                    />
                                                     <div>
                                                         <h3 className="text-sm font-black text-white line-clamp-1">{p.displayName}</h3>
                                                         <span className="text-[10px] text-slate-400 font-mono">key: {p.providerKey}</span>
@@ -597,6 +647,70 @@ export const ProviderPlacementManager: React.FC = () => {
                                 onChange={(e) => setDisplayOrder(Number(e.target.value))}
                                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
                             />
+                        </div>
+
+                        {/* Icon / Picture Override (Auto vs Manual) */}
+                        <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-amber-300">
+                                        Provider Icon / Picture
+                                    </label>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">
+                                        Choose Auto (provider default) or set a custom emoji, image URL, or uploaded picture.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <PlacementAdminIcon
+                                        icon={
+                                            iconOverride.trim() ||
+                                            catalog.find(c => c.providerKey === selectedProviderKey)?.icon ||
+                                            '⚡'
+                                        }
+                                        label={displayName || selectedProviderKey || 'Provider'}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setIconOverride('')}
+                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border transition-all ${
+                                            !iconOverride.trim()
+                                                ? 'bg-amber-500 border-amber-400 text-slate-950'
+                                                : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                                        }`}
+                                    >
+                                        Auto (Default)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                                        Manual Emoji or Image URL (Leave blank for Auto)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={iconOverride}
+                                        onChange={(e) => setIconOverride(e.target.value)}
+                                        placeholder="e.g. 🎯 or https://example.com/logo.png"
+                                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                                        Upload Picture (PNG/JPG/WEBP/GIF, max 200KB)
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp,image/gif"
+                                        onChange={(e) => {
+                                            handleIconFileUpload(e.target.files?.[0], (dataUrl) => setIconOverride(dataUrl));
+                                            e.target.value = '';
+                                        }}
+                                        className="w-full bg-slate-800 border border-slate-700 text-slate-300 rounded-xl p-2 text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-amber-500 file:text-slate-950 file:font-bold file:text-[10px]"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         <div>
@@ -898,6 +1012,68 @@ export const ProviderPlacementManager: React.FC = () => {
                                         onChange={(e) => setEditingPlacement({ ...editingPlacement, rolloutPercentage: Number(e.target.value) })}
                                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold font-mono text-emerald-400"
                                     />
+                                </div>
+                            </div>
+
+                            {/* Edit Modal: Icon / Picture Override (Auto vs Manual) */}
+                            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <label className="block text-xs font-black uppercase text-amber-300">
+                                            Provider Icon / Picture
+                                        </label>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                            Use Auto (provider default) or customize with an emoji, HTTPS URL, or uploaded image.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <PlacementAdminIcon
+                                            icon={(editingPlacement.iconOverride && editingPlacement.iconOverride.trim()) || editingPlacement.providerInfo?.icon || '⚡'}
+                                            label={editingPlacement.displayName}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingPlacement({ ...editingPlacement, iconOverride: '' })}
+                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border transition-all ${
+                                                !(editingPlacement.iconOverride && editingPlacement.iconOverride.trim())
+                                                    ? 'bg-amber-500 border-amber-400 text-slate-950'
+                                                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                                            }`}
+                                        >
+                                            Auto (Default)
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                                            Manual Emoji or Image URL (Leave blank for Auto)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editingPlacement.iconOverride || ''}
+                                            onChange={(e) => setEditingPlacement({ ...editingPlacement, iconOverride: e.target.value })}
+                                            placeholder="e.g. 🎯 or https://example.com/logo.png"
+                                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs font-bold"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                                            Upload Picture (PNG/JPG/WEBP/GIF, max 200KB)
+                                        </label>
+                                        <input
+                                            type="file"
+                                            accept="image/png,image/jpeg,image/webp,image/gif"
+                                            onChange={(e) => {
+                                                handleIconFileUpload(e.target.files?.[0], (dataUrl) => {
+                                                    setEditingPlacement({ ...editingPlacement, iconOverride: dataUrl });
+                                                });
+                                                e.target.value = '';
+                                            }}
+                                            className="w-full bg-slate-800 border border-slate-700 text-slate-300 rounded-xl p-2 text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-amber-500 file:text-slate-950 file:font-bold file:text-[10px]"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

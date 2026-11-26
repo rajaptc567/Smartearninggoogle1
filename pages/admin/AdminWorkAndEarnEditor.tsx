@@ -4,6 +4,7 @@ import { WorkAndEarnModuleConfig, WorkAndEarnPageEditableConfig } from '../../ty
 import { getWorkAndEarnConfig, saveWorkAndEarnConfig, resetWorkAndEarnConfig, defaultWorkAndEarnConfig } from '../../services/workAndEarnConfigService';
 import { useData } from '../../hooks/useData';
 import { updateSettings } from '../../services/api';
+import WorkAndEarnPageExperienceSettings from '../../components/WorkAndEarnPageExperienceSettings';
 
 type SubmenuKey = keyof WorkAndEarnModuleConfig['submenus'];
 
@@ -245,6 +246,9 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Work & Earn -> Page Experience Settings (Legacy vs New) */}
+            <WorkAndEarnPageExperienceSettings />
 
             {/* Main Layout: Submenu Tabs & Editor Form */}
             <div className="space-y-4">

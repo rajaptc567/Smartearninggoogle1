@@ -1,5 +1,27 @@
 import { getHeaders } from './api';
 
+export interface PlacementOfferCountItem {
+    providerKey: string;
+    subTabId?: string;
+    offerCountSource: 'verified_api' | 'unsupported_no_api' | 'credentials_missing' | 'api_error' | 'unavailable' | string;
+    verifiedOfferCount: number | null;
+    verifiedOfferIds?: string[];
+}
+
+export interface TabOfferCountSummaryDto {
+    verifiedTotal: number;
+    verifiedProvidersCount: number;
+    unverifiedProvidersCount: number;
+    totalProvidersCount: number;
+    hasPartialCoverage: boolean;
+    displayBadge: string | null;
+}
+
+export interface TabOfferCountsPayload {
+    placements: Record<string, PlacementOfferCountItem>;
+    summary: TabOfferCountSummaryDto;
+}
+
 export interface ProviderPlacement {
     _id: string;
     providerKey: string;
@@ -11,6 +33,7 @@ export interface ProviderPlacement {
     displayName: string;
     descriptionOverride?: string;
     badgeOverride?: string;
+    iconOverride?: string;
     displayOrder: number;
     targetingMode: 'all' | 'selected_users' | 'test_users';
     selectedUserIds?: any[];
@@ -36,6 +59,9 @@ export interface ProviderPlacement {
     icon?: string;
     badge?: string;
     description?: string;
+    offerCountSource?: string;
+    verifiedOfferCount?: number | null;
+    verifiedOfferIds?: string[];
     createdAt?: string;
     updatedAt?: string;
 }
@@ -91,13 +117,42 @@ interface InFlightPlacementRequest {
     controller: AbortController | null;
 }
 
+export interface OfferCountCacheEntry {
+    userId: string;
+    tabId: string;
+    data: TabOfferCountsPayload;
+    updatedAt: number;
+}
+
 const placementCache = new Map<string, PlacementCacheEntry>();
 const inFlightPlacementRequests = new Map<string, InFlightPlacementRequest>();
+const offerCountCache = new Map<string, OfferCountCacheEntry>();
+const inFlightOfferCountRequests = new Map<string, { promise: Promise<Record<string, TabOfferCountsPayload>>; epoch: number }>();
+const offerCountListeners = new Set<() => void>();
+const OFFER_COUNT_CLIENT_TTL_MS = 150000; // 2.5 minutes
+
 let activeCacheUserId: string | null = null;
 let cacheEpoch = 0;
 let requestCounter = 0;
 let sawBrowserAuthToken = false;
 let activePrefetchCancel: (() => void) | null = null;
+
+const notifyOfferCountListeners = () => {
+    offerCountListeners.forEach(listener => {
+        try {
+            listener();
+        } catch {
+            // Ignore listener errors
+        }
+    });
+};
+
+export const subscribeOfferCountUpdates = (listener: () => void): (() => void) => {
+    offerCountListeners.add(listener);
+    return () => {
+        offerCountListeners.delete(listener);
+    };
+};
 
 export const getPlacementCacheKey = (userId: string, parentTabId: string): string => {
     return `${String(userId)}::${String(parentTabId)}`;
@@ -123,8 +178,11 @@ export const clearPlacementCache = (): void => {
     });
     inFlightPlacementRequests.clear();
     placementCache.clear();
+    inFlightOfferCountRequests.clear();
+    offerCountCache.clear();
     activeCacheUserId = null;
     sawBrowserAuthToken = false;
+    notifyOfferCountListeners();
 };
 
 export const syncPlacementCacheUser = (userId?: string | null): void => {
@@ -275,6 +333,126 @@ export const fetchAndCacheAvailablePlacements = async (
     return promise;
 };
 
+export const getCachedTabOfferCounts = (
+    userId: string | null | undefined,
+    tabId: string
+): TabOfferCountsPayload | null => {
+    syncPlacementCacheUser(userId);
+    const normalizedUserId = userId ? String(userId).trim() : '';
+    const normalizedTabId = tabId ? String(tabId).trim() : '';
+    if (!normalizedUserId || !normalizedTabId) {
+        return null;
+    }
+    const entry = offerCountCache.get(getPlacementCacheKey(normalizedUserId, normalizedTabId));
+    if (!entry || entry.userId !== normalizedUserId) {
+        return null;
+    }
+    return entry.data;
+};
+
+export const getCachedAllTabOfferCounts = (
+    userId: string | null | undefined
+): Record<string, TabOfferCountsPayload> => {
+    syncPlacementCacheUser(userId);
+    const normalizedUserId = userId ? String(userId).trim() : '';
+    if (!normalizedUserId) {
+        return {};
+    }
+    const result: Record<string, TabOfferCountsPayload> = {};
+    offerCountCache.forEach((entry) => {
+        if (entry.userId === normalizedUserId) {
+            result[entry.tabId] = entry.data;
+        }
+    });
+    return result;
+};
+
+export const fetchAndCacheTabOfferCounts = async (
+    userId: string | null | undefined,
+    tabIds: string[],
+    options?: { backgroundSync?: boolean; forceRefresh?: boolean }
+): Promise<Record<string, TabOfferCountsPayload>> => {
+    syncPlacementCacheUser(userId);
+    const normalizedUserId = userId ? String(userId).trim() : '';
+    const uniqueTabs = Array.from(
+        new Set((tabIds || []).map(id => (id ? String(id).trim() : '')).filter(Boolean))
+    );
+
+    if (!normalizedUserId || uniqueTabs.length === 0) {
+        return {};
+    }
+
+    const now = Date.now();
+    const tabsToFetch = options?.forceRefresh
+        ? uniqueTabs
+        : uniqueTabs.filter(tabId => {
+            const existing = offerCountCache.get(getPlacementCacheKey(normalizedUserId, tabId));
+            return !existing || existing.userId !== normalizedUserId || now - existing.updatedAt >= OFFER_COUNT_CLIENT_TTL_MS;
+        });
+
+    if (tabsToFetch.length === 0) {
+        const snapshot: Record<string, TabOfferCountsPayload> = {};
+        for (const tabId of uniqueTabs) {
+            const cached = offerCountCache.get(getPlacementCacheKey(normalizedUserId, tabId));
+            if (cached) snapshot[tabId] = cached.data;
+        }
+        return snapshot;
+    }
+
+    const batchKey = `${normalizedUserId}::${[...tabsToFetch].sort().join(',')}`;
+    const existingReq = inFlightOfferCountRequests.get(batchKey);
+    if (existingReq && existingReq.epoch === cacheEpoch) {
+        return existingReq.promise;
+    }
+
+    const requestEpoch = cacheEpoch;
+    const isBackgroundSync = options?.backgroundSync !== false;
+
+    const promise = (async (): Promise<Record<string, TabOfferCountsPayload>> => {
+        try {
+            const res = await fetch(
+                `${API_BASE}/offer-counts?tabIds=${encodeURIComponent(tabsToFetch.join(','))}`,
+                {
+                    headers: getHeaders(false, isBackgroundSync)
+                }
+            );
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data?.success || !data?.tabs || typeof data.tabs !== 'object') {
+                return {};
+            }
+
+            const tabsMap = data.tabs as Record<string, TabOfferCountsPayload>;
+            if (requestEpoch === cacheEpoch && activeCacheUserId === normalizedUserId) {
+                const updatedAt = Date.now();
+                for (const [tabId, payload] of Object.entries(tabsMap)) {
+                    if (payload && typeof payload === 'object') {
+                        offerCountCache.set(getPlacementCacheKey(normalizedUserId, tabId), {
+                            userId: normalizedUserId,
+                            tabId,
+                            data: payload,
+                            updatedAt
+                        });
+                    }
+                }
+                notifyOfferCountListeners();
+            }
+
+            return tabsMap;
+        } catch {
+            // Non-blocking background count failure must never disrupt placements
+            return {};
+        } finally {
+            const current = inFlightOfferCountRequests.get(batchKey);
+            if (current && current.promise === promise) {
+                inFlightOfferCountRequests.delete(batchKey);
+            }
+        }
+    })();
+
+    inFlightOfferCountRequests.set(batchKey, { promise, epoch: requestEpoch });
+    return promise;
+};
+
 export const scheduleOtherTasksPrefetch = ({
     userId,
     tabIds,
@@ -352,6 +530,7 @@ export const scheduleOtherTasksPrefetch = ({
     };
 
     let index = 0;
+    let countsPrefetched = false;
     const runNextTab = async () => {
         if (shouldAbort()) return;
         while (index < uniqueTabs.length) {
@@ -375,12 +554,24 @@ export const scheduleOtherTasksPrefetch = ({
                 // Background prefetch must stay silent and never block active views
             }
 
-            if (!shouldAbort() && index < uniqueTabs.length) {
+            if (!shouldAbort()) {
                 scheduleStep(() => {
                     void runNextTab();
                 });
             }
             return;
+        }
+
+        // After front & placement prefetches complete, fetch live offer counts in the background
+        if (!countsPrefetched && !shouldAbort()) {
+            countsPrefetched = true;
+            try {
+                await fetchAndCacheTabOfferCounts(normalizedUserId, uniqueTabs, {
+                    backgroundSync: true
+                });
+            } catch {
+                // Keep background offer count fetch completely silent
+            }
         }
     };
 

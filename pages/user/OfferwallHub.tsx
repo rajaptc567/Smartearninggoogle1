@@ -4,6 +4,8 @@ import { useData } from '../../hooks/useData';
 import { getHeaders } from '../../services/api';
 import { getVisibleEarnTabs } from '../../utils/earnTabsHelper';
 import { useOtherTasksPrefetch } from '../../hooks/useOtherTasksPrefetch';
+import { getVerifiedProviderOfferCount } from '../../utils/providerCountHelper';
+import { resolvePageExperience } from '../../utils/pageExperienceHelper';
 
 interface OfferwallProvider {
     _id: string;
@@ -33,6 +35,7 @@ export const OfferwallHub: React.FC = () => {
     const [selectedProvider, setSelectedProvider] = useState<OfferwallProvider | null>(null);
     const [activeTab, setActiveTab] = useState<'all' | 'offerwall' | 'survey' | 'gaming' | 'microtask'>('all');
     const [isLoading, setIsLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const [iframeLoading, setIframeLoading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -58,6 +61,8 @@ export const OfferwallHub: React.FC = () => {
     const exchangeRate = settings?.exchangeRates?.[currentUser?.currency || 'USD'] || 1;
     const taskEarningsUSD = currentUser?.taskEarningsBalance ?? 0;
     const userLocalEarnings = taskEarningsUSD * exchangeRate;
+    const offerwallExperience = resolvePageExperience(settings).offerwall;
+    const isNewOfferwallExperience = offerwallExperience === 'new';
 
     const fetchToroxSession = async () => {
         setToroxSessionLoading(true);
@@ -191,29 +196,36 @@ export const OfferwallHub: React.FC = () => {
         }
     }, [selectedProvider?.providerKey]);
 
-    useEffect(() => {
-        const fetchProviders = async () => {
-            try {
-                const res = await fetch('/api/v1/postbacks/providers', {
-                    headers: getHeaders()
-                });
-                const data = await res.json();
-                if (data.success && Array.isArray(data.data)) {
-                    setProviders(data.data);
-                    // Select first enabled provider by default
-                    const firstLive = data.data.find((p: OfferwallProvider) => p.enabled);
-                    if (firstLive) {
-                        setSelectedProvider(firstLive);
+    const fetchProviders = async () => {
+        setIsLoading(true);
+        setFetchError(null);
+        try {
+            const res = await fetch('/api/v1/postbacks/providers', {
+                headers: getHeaders()
+            });
+            const data = await res.json().catch(() => null);
+            if (res.ok && data?.success && Array.isArray(data.data)) {
+                setProviders(data.data);
+                setSelectedProvider(prev => {
+                    if (prev) {
+                        const matched = data.data.find((p: OfferwallProvider) => p.providerKey === prev.providerKey);
+                        if (matched) return matched;
                     }
-                }
-            } catch (err) {
-                console.error('Failed to load offerwall providers:', err);
-            } finally {
-                setIsLoading(false);
+                    return data.data.find((p: OfferwallProvider) => p.enabled) || null;
+                });
+            } else {
+                setFetchError(data?.error || data?.message || `Unable to load offerwall providers (HTTP ${res.status})`);
             }
-        };
+        } catch (err: any) {
+            console.error('Failed to load offerwall providers:', err);
+            setFetchError(err?.message || 'Network error while loading offerwall providers.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-        fetchProviders();
+    useEffect(() => {
+        void fetchProviders();
     }, []);
 
     const prefetchEarnTabIds = React.useMemo(() => {
@@ -413,18 +425,43 @@ export const OfferwallHub: React.FC = () => {
                 </button>
             </div>
 
-            {/* Network Selection Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {/* Network Selection Grid / Swipe Bar (Controlled by Admin Offerwall Page Experience) */}
+            <div
+                data-page-experience={offerwallExperience}
+                className={
+                    isNewOfferwallExperience
+                        ? 'flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 sm:gap-3 sm:overflow-visible sm:pb-0'
+                        : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3'
+                }
+            >
                 {isLoading ? (
-                    <div className="col-span-full py-12 text-center text-slate-400 font-semibold">
+                    <div className="col-span-full w-full py-12 text-center text-slate-400 font-semibold">
                         <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
                         Loading partner networks...
                     </div>
+                ) : fetchError ? (
+                    <div className="col-span-full w-full p-5 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-200">
+                        <span className="text-xs font-bold">{fetchError}</span>
+                        <button
+                            type="button"
+                            onClick={() => void fetchProviders()}
+                            className="px-4 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-white rounded-xl text-xs font-bold transition-colors shrink-0 self-start sm:self-auto"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                ) : filteredProviders.length === 0 ? (
+                    <div className="col-span-full w-full py-10 text-center bg-slate-900/70 border border-dashed border-slate-800 rounded-2xl space-y-2">
+                        <p className="text-sm font-bold text-slate-300">No providers available in this category yet</p>
+                        <p className="text-xs text-slate-400">Select another category tab above or check back shortly.</p>
+                    </div>
                 ) : filteredProviders.map((prov) => {
                     const isSelected = selectedProvider?.providerKey === prov.providerKey;
+                    const verifiedCountMeta = getVerifiedProviderOfferCount(prov, prov.enabled ? 'Available' : 'Sandbox');
                     return (
                         <button
                             key={prov.providerKey}
+                            type="button"
                             onClick={() => {
                                 setSelectedProvider(prov);
                                 setIframeLoading(true);
@@ -432,7 +469,11 @@ export const OfferwallHub: React.FC = () => {
                                 setIframeTimeoutError(null);
                                 setIframeKey(0);
                             }}
-                            className={`p-3.5 rounded-2xl border transition-all text-left flex flex-col justify-between relative group ${
+                            className={`${
+                                isNewOfferwallExperience
+                                    ? 'min-w-[126px] max-w-[148px] shrink-0 snap-start sm:min-w-0 sm:max-w-none '
+                                    : ''
+                            }p-3.5 rounded-2xl border transition-all text-left flex flex-col justify-between relative group ${
                                 isSelected
                                     ? 'bg-indigo-950/80 border-indigo-500 shadow-lg shadow-indigo-500/20 ring-2 ring-indigo-500/40'
                                     : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 hover:bg-slate-800/60'
@@ -455,7 +496,9 @@ export const OfferwallHub: React.FC = () => {
                                     {prov.name}
                                 </h3>
                                 <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
-                                    {prov.badge || prov.category.toUpperCase()}
+                                    {isNewOfferwallExperience && verifiedCountMeta.isVerifiedNumeric
+                                        ? `${verifiedCountMeta.count} Live Offers`
+                                        : (prov.badge || prov.category.toUpperCase())}
                                 </p>
                             </div>
 

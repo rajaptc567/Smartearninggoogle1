@@ -741,6 +741,12 @@ const SettingSchema = new mongoose.Schema({
     ruleEvaluationLogs: { type: mongoose.Schema.Types.Mixed, default: [] },
     modulePagesConfig: { type: mongoose.Schema.Types.Mixed, default: null },
     workAndEarnConfig: { type: mongoose.Schema.Types.Mixed, default: null },
+    workAndEarnPageExperience: {
+        dashboardAvailableTasks: { type: String, enum: ['legacy', 'new'], default: 'new' },
+        otherTasks: { type: String, enum: ['legacy', 'new'], default: 'new' },
+        offerwall: { type: String, enum: ['legacy', 'new'], default: 'new' },
+        otherTasksNavStyle: { type: String, enum: ['tabs', 'icons', 'cards'], default: 'tabs' }
+    },
     userQuickActionsConfig: {
         type: mongoose.Schema.Types.Mixed,
         default: () => ({
@@ -945,6 +951,18 @@ SettingSchema.statics.getSettings = async function() {
             analytics: true,
             convert: true
         };
+        needsSave = true;
+    }
+    if (!settings.workAndEarnPageExperience) {
+        settings.workAndEarnPageExperience = {
+            dashboardAvailableTasks: 'new',
+            otherTasks: 'new',
+            offerwall: 'new',
+            otherTasksNavStyle: 'tabs'
+        };
+        needsSave = true;
+    } else if (!settings.workAndEarnPageExperience.otherTasksNavStyle) {
+        settings.workAndEarnPageExperience.otherTasksNavStyle = 'tabs';
         needsSave = true;
     }
     if (!settings.surveyConfig) {

@@ -23,7 +23,9 @@ import {
     verifyEmailCode,
     verifyWhatsappCode,
     resendEmailCode,
-    resendWhatsappCode
+    resendWhatsappCode,
+    sessionHeartbeat,
+    logoutSession
 } from '../controllers/usersController.js';
 
 const router = express.Router();
@@ -36,6 +38,8 @@ router.post('/resend-whatsapp', authorize(['user', 'admin', 'super_admin']), ver
 
 // Public/Auth routes with rate limiting
 router.post('/login', authLimiter, loginUser);
+router.post('/logout', logoutSession);
+router.post('/session-heartbeat', authorize(['user', 'admin', 'super_admin', 'finance', 'support']), sessionHeartbeat);
 router.post('/request-password-reset', authLimiter, userRequestPasswordReset);
 router.post('/verify-reset-token/:token', authLimiter, verifyAndStartResetTimer);
 router.put('/reset-password/:token', authLimiter, resetPasswordWithToken);

@@ -14,6 +14,12 @@ import Transfer from '../models/Transfer.js';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { emitRealtimeChange, revokeUserSockets } from '../utils/socketRealtime.js';
+import {
+    IDLE_TIMEOUT_MS,
+    registerTokenActivity,
+    touchTokenActivity,
+    invalidateTokenSession
+} from '../utils/sessionActivity.js';
 
 const escapeHtml = (str) => {
     if (typeof str !== 'string') return '';
@@ -634,6 +640,8 @@ export const createUser = async (req, res) => {
             whatsappVerificationEnforced: user.whatsappVerificationEnforced
         }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
+        registerTokenActivity(token);
+
         res.status(201).json({ 
             success: true, 
             token, 
@@ -662,9 +670,39 @@ export const loginUser = async (req, res) => {
             emailVerificationEnforced: user.emailVerificationEnforced,
             whatsappVerificationEnforced: user.whatsappVerificationEnforced
         }, process.env.JWT_SECRET, { expiresIn: '24h' });
-        
+
+        registerTokenActivity(token);
+
         res.status(200).json({ success: true, token, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const sessionHeartbeat = async (req, res) => {
+    const token = req.authToken;
+    if (token && !touchTokenActivity(token)) {
+        return res.status(401).json({
+            success: false,
+            code: 'SESSION_IDLE_EXPIRED',
+            error: 'Session expired due to inactivity. Please sign in again.'
+        });
+    }
+    return res.status(200).json({
+        success: true,
+        active: true,
+        idleTimeoutMs: IDLE_TIMEOUT_MS
+    });
+};
+
+export const logoutSession = async (req, res) => {
+    const authHeader = req.headers.authorization || req.headers['x-auth-token'];
+    if (authHeader && typeof authHeader === 'string') {
+        const match = authHeader.match(/^Bearer\s+(.+)$/i);
+        const token = match ? match[1].trim() : authHeader.trim();
+        if (token) {
+            invalidateTokenSession(token);
+        }
+    }
+    return res.status(200).json({ success: true });
 };
 
 export const updateUser = async (req, res) => {
@@ -1386,6 +1424,8 @@ export const verifyEmailCode = async (req, res) => {
             whatsappVerificationEnforced: updatedUser.whatsappVerificationEnforced
         }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
+        registerTokenActivity(newToken);
+
         res.status(200).json({ success: true, token: newToken, data: updatedUser, message: 'Email verified successfully.' });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -1454,6 +1494,8 @@ export const verifyWhatsappCode = async (req, res) => {
             emailVerificationEnforced: updatedUser.emailVerificationEnforced,
             whatsappVerificationEnforced: updatedUser.whatsappVerificationEnforced
         }, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+        registerTokenActivity(newToken);
 
         res.status(200).json({ success: true, token: newToken, data: updatedUser, message: 'WhatsApp verified successfully.' });
     } catch (err) {

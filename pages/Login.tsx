@@ -12,6 +12,7 @@ const Login: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isRedirecting, setIsRedirecting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
     // Inactivity notice check
@@ -55,8 +56,10 @@ const Login: React.FC = () => {
             // Trigger non-financial GA4 login event with no PII
             seoAnalytics.trackLogin('platform_login');
 
+            setIsRedirecting(true);
             navigate('/member');
         } catch (err) {
+            setIsRedirecting(false);
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
             setError(errorMessage);
         } finally {
@@ -147,10 +150,15 @@ const Login: React.FC = () => {
                         </div>
                     </div>
                     
-                    <div>
-                        <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
-                            {isLoading ? 'Signing In...' : 'Sign In'}
+                    <div className="space-y-3">
+                        <Button type="submit" size="lg" className="w-full" isLoading={isLoading || isRedirecting}>
+                            {isRedirecting ? 'Opening Dashboard...' : isLoading ? 'Signing In...' : 'Sign In'}
                         </Button>
+                        {(isLoading || isRedirecting) && (
+                            <p className="text-xs text-center text-blue-600 dark:text-blue-400 font-medium animate-pulse">
+                                {isRedirecting ? 'Login verified. Loading your workspace...' : 'Verifying your credentials...'}
+                            </p>
+                        )}
                     </div>
                 </form>
                 <div className="text-sm text-center text-gray-600 dark:text-gray-400 space-y-2">

@@ -15,6 +15,7 @@ import {
     X as CloseIcon
 } from 'lucide-react';
 import { ProviderPlacementPanel } from './ProviderPlacementPanel';
+import { formatPartnerCountLabel } from '../utils/providerCountHelper';
 
 export interface JobGig {
     id: string;
@@ -52,6 +53,7 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
     const [searchQuery, setSearchQuery] = useState('');
     const [difficultyFilter] = useState<string>('all');
     const [placementsCount, setPlacementsCount] = useState<number>(0);
+    const [verifiedOfferBadge, setVerifiedOfferBadge] = useState<string | null>(null);
 
     const [selectedGig, setSelectedGig] = useState<JobGig | null>(null);
     const [proofInput, setProofInput] = useState('');
@@ -108,6 +110,7 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
     // Reset placement count whenever selection changes to prevent stale count display
     useEffect(() => {
         setPlacementsCount(0);
+        setVerifiedOfferBadge(null);
     }, [activeSubTab, tabId]);
 
     // Filter Native Offerwall Gigs according to activeSubTab, Search, and Difficulty
@@ -220,10 +223,10 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
         ? (currentMainTab?.title || 'Main / All Categories')
         : (subTabs.find(s => s.id === activeSubTab)?.name || 'Partner');
 
-    const totalOffersCount = filteredOfferwallGigs.length + placementsCount;
+    const headerStatusLabel = formatPartnerCountLabel(placementsCount, filteredOfferwallGigs.length, verifiedOfferBadge);
 
     return (
-        <div className={`space-y-4 ${className}`}>
+        <div className={`space-y-2.5 sm:space-y-4 ${className}`}>
             {/* Top Toast Notice */}
             {successMessage && (
                 <div className="bg-emerald-500 text-white p-4 rounded-2xl shadow-xl flex items-center justify-between animate-fade-in border border-emerald-400/50">
@@ -237,101 +240,89 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
                 </div>
             )}
 
-            {/* Sub-Tabs (Networks) and Search Controls */}
-            <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-xl border border-slate-800 space-y-3 sm:space-y-4">
-                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4 border-b border-slate-800 pb-3 sm:pb-4">
-                    <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
-                            <GlobeIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                        <div>
-                            <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-                                {currentMainTab?.title || 'Partner Networks & External Tasks'}
-                            </h4>
-                            <p className="text-[10px] sm:text-xs text-slate-400">
-                                Select a category or provider to browse available opportunities.
-                            </p>
+            {/* UNIFIED OTHER TASKS CARD (Single Header, Search Bar, Conditional Sub-Tabs, Provider Content) */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl sm:rounded-3xl p-2.5 sm:p-5 md:p-6 shadow-xl space-y-2.5 sm:space-y-4">
+                <div className="border-b border-slate-800 pb-2.5 sm:pb-4 space-y-2 sm:space-y-3">
+                    <div className={`flex flex-col lg:flex-row lg:items-center gap-2 sm:gap-3 ${hideHeader ? 'justify-end' : 'justify-between'}`}>
+                        {!hideHeader && (
+                            <div className="flex items-start sm:items-center gap-2 sm:gap-2.5 min-w-0">
+                                <div className="p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+                                    <GlobeIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="text-xs sm:text-base font-bold text-white uppercase tracking-wider truncate">
+                                        {activeNetworkName} Offers & External Tasks
+                                    </h3>
+                                    <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
+                                        Complete surveys, app installs, and partner activities across available offer networks.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex flex-nowrap items-center gap-2 sm:gap-2.5 shrink-0 w-full lg:w-auto">
+                            {!hideHeader && (
+                                <span className="text-[10px] sm:text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 sm:px-3 py-1.5 rounded-lg sm:rounded-xl shrink-0 whitespace-nowrap">
+                                    {headerStatusLabel}
+                                </span>
+                            )}
+
+                            {/* Search Field */}
+                            <div className="relative flex-1 min-w-0 lg:w-64">
+                                <SearchIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-2.5 sm:left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search tasks..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-slate-950/80 border border-slate-800 rounded-xl sm:rounded-2xl pl-8 sm:pl-9 pr-2.5 sm:pr-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-medium text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+                                />
+                            </div>
                         </div>
                     </div>
 
-                    {/* Search Field */}
-                    <div className="relative w-full md:w-64">
-                        <SearchIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Search tasks..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-slate-950/80 border border-slate-800 rounded-xl sm:rounded-2xl pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-medium text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
-                        />
-                    </div>
-                </div>
+                    {/* Sub-Tabs Navigation (Rendered strictly when sub-tabs exist) */}
+                    {subTabs.length > 0 && (
+                        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pt-0.5 sm:pt-1">
+                            <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 sm:mr-2 shrink-0">Categories:</span>
 
-                {/* Sub-Tabs Navigation for "Other Tasks" */}
-                {subTabs.length > 0 && (
-                    <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pt-0.5 sm:pt-1">
-                        <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 sm:mr-2 shrink-0">Categories:</span>
-                        
-                        {/* Explicit Main / All Categories selection button */}
-                        <button
-                            onClick={() => setActiveSubTab('')}
-                            className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 shrink-0 ${
-                                activeSubTab === ''
-                                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-extrabold'
-                                    : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                            }`}
-                        >
-                            <span>Main / All Categories</span>
-                        </button>
-
-                        {subTabs.map(sub => (
+                            {/* Explicit Main / All Categories selection button */}
                             <button
-                                key={sub.id}
-                                onClick={() => setActiveSubTab(sub.id)}
+                                type="button"
+                                onClick={() => setActiveSubTab('')}
                                 className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 shrink-0 ${
-                                    activeSubTab === sub.id
+                                    activeSubTab === ''
                                         ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-extrabold'
                                         : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                                 }`}
                             >
-                                <span>{sub.name}</span>
-                                {sub.badge && (
-                                    <span className={`text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.2 rounded-md font-mono ${
-                                        activeSubTab === sub.id ? 'bg-slate-950/80 text-amber-300 font-bold' : 'bg-slate-950/60 text-slate-400'
-                                    }`}>
-                                        {sub.badge}
-                                    </span>
-                                )}
+                                <span>Main / All Categories</span>
                             </button>
-                        ))}
-                    </div>
-                )}
-            </div>
 
-            {/* TAB CONTENT CARD: OTHER TASKS GRID */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl sm:rounded-3xl p-3 sm:p-5 md:p-6 shadow-xl space-y-3 sm:space-y-4">
-                {!hideHeader && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-800 pb-3 sm:pb-4">
-                        <div className="flex items-start sm:items-center gap-2 sm:gap-2.5">
-                            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
-                                <GlobeIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </div>
-                            <div className="min-w-0">
-                                <h3 className="text-xs sm:text-base font-bold text-white uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 truncate">
-                                    {activeNetworkName} Offers & External Tasks
-                                </h3>
-                                <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
-                                    Complete surveys, app installs, and partner activities across selected offer networks.
-                                </p>
-                            </div>
+                            {subTabs.map(sub => (
+                                <button
+                                    type="button"
+                                    key={sub.id}
+                                    onClick={() => setActiveSubTab(sub.id)}
+                                    className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 shrink-0 ${
+                                        activeSubTab === sub.id
+                                            ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-extrabold'
+                                            : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                    }`}
+                                >
+                                    <span>{sub.name}</span>
+                                    {sub.badge && (
+                                        <span className={`text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.2 rounded-md font-mono ${
+                                            activeSubTab === sub.id ? 'bg-slate-950/80 text-amber-300 font-bold' : 'bg-slate-950/60 text-slate-400'
+                                        }`}>
+                                            {sub.badge}
+                                        </span>
+                                    )}
+                                </button>
+                            ))}
                         </div>
-                        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-                            <span className="text-[10px] sm:text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-lg sm:rounded-xl">
-                                {totalOffersCount} Offers Available
-                            </span>
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 {/* Single unified content panel containing native offer gigs and provider placement cards */}
                 <ProviderPlacementPanel
@@ -343,6 +334,7 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
                     exchangeRate={exchangeRate}
                     userCurrency={currentUser?.currency || 'USD'}
                     onCountChange={(count) => setPlacementsCount(count)}
+                    onVerifiedBadgeChange={(badge) => setVerifiedOfferBadge(badge)}
                 />
             </div>
 

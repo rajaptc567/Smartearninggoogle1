@@ -1,11 +1,11 @@
 
-import React, { createContext, useReducer, ReactNode, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useReducer, ReactNode, useEffect, useRef, useCallback, useState } from 'react';
 import { io } from 'socket.io-client';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent, UserTask, UserTaskSubmission } from '../types';
 import { 
     getUser, getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods,
     getInvestmentPlans, getRules, getSettings, getPublicSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks, getUserTasks, getUserTaskSubmissions,
-    getDataVersion
+    getDataVersion, sendSessionHeartbeat, logoutSession
 } from '../services/api';
 
 interface AppState {
@@ -669,23 +669,23 @@ export interface SyncApiAdapters {
 
 const defaultSyncApiAdapters: SyncApiAdapters = {
     getDataVersion,
-    getUser,
-    getUsers,
-    getDeposits,
-    getWithdrawals,
-    getTransactions,
-    getNotifications,
-    getPaymentMethods,
-    getInvestmentPlans,
-    getRules,
-    getSettings,
-    getTransfers,
-    getLogs,
-    getPasswordResetRequests,
-    getDisputes,
-    getTasks,
-    getUserTasks,
-    getUserTaskSubmissions,
+    getUser: (id: string) => getUser(id, { backgroundSync: true }),
+    getUsers: () => getUsers({ backgroundSync: true }),
+    getDeposits: () => getDeposits({ backgroundSync: true }),
+    getWithdrawals: () => getWithdrawals({ backgroundSync: true }),
+    getTransactions: () => getTransactions({ backgroundSync: true }),
+    getNotifications: () => getNotifications({ backgroundSync: true }),
+    getPaymentMethods: () => getPaymentMethods({ backgroundSync: true }),
+    getInvestmentPlans: () => getInvestmentPlans({ backgroundSync: true }),
+    getRules: () => getRules({ backgroundSync: true }),
+    getSettings: () => getSettings({ backgroundSync: true }),
+    getTransfers: () => getTransfers({ backgroundSync: true }),
+    getLogs: () => getLogs({ backgroundSync: true }),
+    getPasswordResetRequests: () => getPasswordResetRequests({ backgroundSync: true }),
+    getDisputes: () => getDisputes({ backgroundSync: true }),
+    getTasks: () => getTasks({ backgroundSync: true }),
+    getUserTasks: () => getUserTasks({ backgroundSync: true }),
+    getUserTaskSubmissions: () => getUserTaskSubmissions({ backgroundSync: true }),
 };
 
 export interface SyncRuntimeRefs {
@@ -1265,7 +1265,8 @@ const DEFINITIVE_SOCKET_AUTH_CODES = new Set([
     'AUTH_MISSING_TOKEN',
     'AUTH_INVALID_TOKEN',
     'AUTH_USER_NOT_FOUND',
-    'AUTH_ACCOUNT_BLOCKED'
+    'AUTH_ACCOUNT_BLOCKED',
+    'AUTH_IDLE_EXPIRED'
 ]);
 
 export const isDefinitiveSocketAuthRejection = (error: unknown): boolean => {
@@ -1350,6 +1351,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const activeUserIdRef = useRef<string | null>(currentUserId);
     const datasetSeqRef = useRef<Partial<Record<SyncDatasetKey, number>>>({});
     const retryTimersRef = useRef<Map<SyncDatasetKey, ReturnType<typeof setTimeout>>>(new Map());
+    const activeSocketRef = useRef<ReturnType<typeof io> | null>(null);
+    const [idleWarningSecondsLeft, setIdleWarningSecondsLeft] = useState<number | null>(null);
+    const [idleLockState, setIdleLockState] = useState<{ redirectTo: string } | null>(null);
+    const idleLockRef = useRef<{ redirectTo: string } | null>(null);
+    const lastServerHeartbeatRef = useRef<number>(0);
 
     const clearAllRetryTimers = useCallback(() => {
         retryTimersRef.current.forEach(timer => clearTimeout(timer));
@@ -1575,6 +1581,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             }
         });
 
+        activeSocketRef.current = socket;
+
         socket.on('connect', () => {
             console.log(`Socket syncer successfully connected to server: ${socketUrl}`);
             if (hasConnectedOnce && sawDisconnect) {
@@ -1591,6 +1599,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 reason === 'io server disconnect' &&
                 !isCleaningUp &&
                 !didInvalidateSession &&
+                !idleLockRef.current &&
                 isCurrentSocketSession() &&
                 typeof localStorage !== 'undefined' &&
                 Boolean(localStorage.getItem('authToken'))
@@ -1620,6 +1629,17 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         socket.on('connect_error', (error) => {
             console.warn("Connection difficulty detected. Socket-client will auto-retry.", error.message);
+            const errCode = (error as { data?: { code?: unknown } })?.data?.code;
+            if (errCode === 'AUTH_IDLE_EXPIRED') {
+                if (didInvalidateSession) return;
+                didInvalidateSession = true;
+                scheduler.clear();
+                socket.disconnect();
+                if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+                    window.dispatchEvent(new CustomEvent('smartexn:session-idle-expired'));
+                }
+                return;
+            }
             if (isDefinitiveSocketAuthRejection(error)) {
                 if (didInvalidateSession) return;
                 didInvalidateSession = true;
@@ -1635,10 +1655,14 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         });
 
         // Sync active data when tab is focused or became visible (different tabs/returned users)
-        // Throttled to prevent spamming the backend (at most once every 15 seconds)
+        // Always checks 10-minute inactivity BEFORE syncing so expired sessions never run stale background requests.
         let lastTabReturnTime = 0;
         const handleTabReturn = () => {
             if (document.visibilityState === 'visible' || !document.hidden) {
+                const storedActivity = typeof localStorage !== 'undefined' ? localStorage.getItem('lastActivityTime') : null;
+                if (idleLockRef.current || (storedActivity && Date.now() - Number(storedActivity) >= 10 * 60 * 1000)) {
+                    return;
+                }
                 const now = Date.now();
                 if (now - lastTabReturnTime > 15000) {
                     lastTabReturnTime = now;
@@ -1655,70 +1679,202 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             console.log('Cleaning up active socket connection and focus listeners...');
             isCleaningUp = true;
             scheduler.clear();
+            if (activeSocketRef.current === socket) {
+                activeSocketRef.current = null;
+            }
             socket.disconnect();
             window.removeEventListener('focus', handleTabReturn);
             document.removeEventListener('visibilitychange', handleTabReturn);
         };
     }, [state.currentUser?._id, masterDataSync]);
 
-    // --- CROSS-TAB AUTOMATIC LOGOUT AFTER 10-12 MINUTES OF INACTIVITY ---
-    useEffect(() => {
-        if (!state.currentUser) return;
+    const lockSessionForInactivity = useCallback(() => {
+        if (idleLockRef.current) return;
 
-        // Set initial activity time when user session is active
-        localStorage.setItem('lastActivityTime', Date.now().toString());
+        const pathname = typeof window !== 'undefined' && window.location ? window.location.pathname : '';
+        const isAuthPage =
+            pathname === '/login' ||
+            pathname === '/secure-admin-login56' ||
+            pathname === '/register' ||
+            pathname === '/forgot-password' ||
+            pathname === '/reset-password';
+
+        const capturedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
+        if (capturedToken) {
+            void logoutSession(capturedToken);
+        }
+
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('inactivityLogout', 'true');
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('token');
+            localStorage.removeItem('currentUser');
+            try {
+                const rawCache = localStorage.getItem('app_cache');
+                if (rawCache) {
+                    const parsed = JSON.parse(rawCache);
+                    if (parsed && typeof parsed === 'object') {
+                        parsed.currentUser = null;
+                        localStorage.setItem('app_cache', JSON.stringify(parsed));
+                    }
+                }
+            } catch {}
+        }
+
+        syncSessionEpochRef.current += 1;
+        clearAllRetryTimers();
+        if (activeSocketRef.current) {
+            activeSocketRef.current.disconnect();
+            activeSocketRef.current = null;
+        }
+        setIdleWarningSecondsLeft(null);
+
+        if (isAuthPage) {
+            dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
+            return;
+        }
+
+        const redirectTo = pathname.startsWith('/admin') ? '/secure-admin-login56' : '/login';
+        const lockObj = { redirectTo };
+        idleLockRef.current = lockObj;
+        setIdleLockState(lockObj);
+    }, [clearAllRetryTimers]);
+
+    const handleStayActive = useCallback(() => {
+        if (idleLockRef.current) return;
+        const now = Date.now();
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('lastActivityTime', now.toString());
+        }
+        setIdleWarningSecondsLeft(null);
+        lastServerHeartbeatRef.current = now;
+        void sendSessionHeartbeat().catch(() => {});
+    }, []);
+
+    const handleSignInAgain = useCallback(() => {
+        const target = idleLockRef.current?.redirectTo || '/login';
+        idleLockRef.current = null;
+        setIdleLockState(null);
+        setIdleWarningSecondsLeft(null);
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('inactivityLogout', 'true');
+        }
+        dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
+        if (typeof window !== 'undefined' && window.location) {
+            window.location.href = target;
+        }
+    }, []);
+
+    // --- 10-MINUTE CROSS-TAB & MOBILE-SAFE INACTIVITY SYSTEM (9-MIN WARNING + 10-MIN SAME-SCREEN LOCK) ---
+    useEffect(() => {
+        const hasAuthToken = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('authToken'));
+        if (!state.currentUser || !hasAuthToken) {
+            return;
+        }
+
+        const INACTIVITY_WARNING_MS = 9 * 60 * 1000; // 9 minutes -> 60s countdown warning
+        const INACTIVITY_LIMIT_MS = 10 * 60 * 1000;  // 10 minutes -> hard lock + backend expiry
+        const HEARTBEAT_THROTTLE_MS = 60 * 1000;     // Sync active user heartbeat at most once per minute
+
+        // Fresh login / session start: clear any stale lock & start timer
+        idleLockRef.current = null;
+        setIdleLockState(null);
+        setIdleWarningSecondsLeft(null);
+        const startNow = Date.now();
+        localStorage.setItem('lastActivityTime', startNow.toString());
+        lastServerHeartbeatRef.current = startNow;
+
+        const evaluateInactivity = (): boolean => {
+            if (idleLockRef.current) return true;
+            const storedTime = localStorage.getItem('lastActivityTime');
+            if (!storedTime) return false;
+
+            const elapsed = Date.now() - Number(storedTime);
+            if (elapsed >= INACTIVITY_LIMIT_MS) {
+                console.log("Inactivity limit exceeded (10 minutes). Locking session...");
+                lockSessionForInactivity();
+                return true;
+            }
+            if (elapsed >= INACTIVITY_WARNING_MS) {
+                const secsRemaining = Math.max(1, Math.ceil((INACTIVITY_LIMIT_MS - elapsed) / 1000));
+                setIdleWarningSecondsLeft(secsRemaining);
+            } else {
+                setIdleWarningSecondsLeft(prev => (prev !== null ? null : prev));
+            }
+            return false;
+        };
 
         let lastWrite = 0;
         const handleUserActivity = () => {
+            if (idleLockRef.current) return;
+            // CRITICAL: Check 10-minute expiration BEFORE resetting timer so waking a locked phone/tab cannot bypass timeout
+            const storedTime = localStorage.getItem('lastActivityTime');
+            if (storedTime && Date.now() - Number(storedTime) >= INACTIVITY_LIMIT_MS) {
+                lockSessionForInactivity();
+                return;
+            }
+
             const now = Date.now();
-            // Throttle storage writes to avoid unnecessary overhead
             if (now - lastWrite > 1500) {
                 lastWrite = now;
                 localStorage.setItem('lastActivityTime', now.toString());
+                setIdleWarningSecondsLeft(prev => (prev !== null ? null : prev));
             }
+            if (now - lastServerHeartbeatRef.current >= HEARTBEAT_THROTTLE_MS) {
+                lastServerHeartbeatRef.current = now;
+                void sendSessionHeartbeat().catch(() => {});
+            }
+        };
+
+        const handleVisibilityOrFocus = () => {
+            if (document.visibilityState === 'visible' || !document.hidden) {
+                evaluateInactivity();
+            }
+        };
+
+        const handleBackendIdleExpired = () => {
+            lockSessionForInactivity();
         };
 
         const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
         activityEvents.forEach(eventType => {
             window.addEventListener(eventType, handleUserActivity, { passive: true });
         });
+        window.addEventListener('focus', handleVisibilityOrFocus);
+        document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+        window.addEventListener('smartexn:session-idle-expired', handleBackendIdleExpired);
 
-        const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutes of inactivity
-
-        const checkInactivity = () => {
-            const storedTime = localStorage.getItem('lastActivityTime');
-            if (!storedTime) return;
-
-            const elapsedSinceActivity = Date.now() - Number(storedTime);
-            if (elapsedSinceActivity >= INACTIVITY_LIMIT) {
-                console.log("Inactivity limit exceeded (10 minutes). Logging out...");
-                localStorage.setItem('inactivityLogout', 'true');
-                dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
-                if (window.location.pathname.startsWith('/member') || window.location.pathname.startsWith('/admin')) {
-                    window.location.href = '/login';
-                }
-            }
-        };
-
-        // Check inactivity status every 5 seconds
-        const checkInterval = setInterval(checkInactivity, 5000);
+        const checkInterval = setInterval(evaluateInactivity, 1000);
 
         return () => {
             activityEvents.forEach(eventType => {
                 window.removeEventListener(eventType, handleUserActivity);
             });
+            window.removeEventListener('focus', handleVisibilityOrFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+            window.removeEventListener('smartexn:session-idle-expired', handleBackendIdleExpired);
             clearInterval(checkInterval);
         };
-    }, [state.currentUser]);
+    }, [state.currentUser?._id, lockSessionForInactivity]);
 
     // --- CROSS-TAB AUTHENTICATION STATE SYNCHRONIZATION ---
     useEffect(() => {
         const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === 'authToken' && !e.newValue && localStorage.getItem('inactivityLogout') === 'true') {
+                lockSessionForInactivity();
+                return;
+            }
             if (e.key === 'currentUser' || e.key === 'authToken') {
+                if (idleLockRef.current && e.key === 'authToken' && e.newValue) {
+                    idleLockRef.current = null;
+                    setIdleLockState(null);
+                    setIdleWarningSecondsLeft(null);
+                }
                 const updatedUser = localStorage.getItem('currentUser');
                 const token = localStorage.getItem('authToken');
                 
                 if (!updatedUser || !token) {
+                    if (idleLockRef.current) return;
                     // Session destroyed on another tab, align state & log out immediately
                     console.log("Authentication credentials removed on another tab. Synchronizing logout...");
                     dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
@@ -1740,12 +1896,76 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         window.addEventListener('storage', handleStorageChange);
         return () => window.removeEventListener('storage', handleStorageChange);
-    }, [state.currentUser?._id]);
+    }, [state.currentUser?._id, lockSessionForInactivity]);
 
     return (
         <div id="data-state-container">
             <DataContext.Provider value={{ state, dispatch, refreshSettings, refreshData }}>
-                {children}
+                <div
+                    className={idleLockState ? 'pointer-events-none select-none blur-[2px] opacity-50 transition-all' : undefined}
+                    aria-hidden={idleLockState ? true : undefined}
+                >
+                    {children}
+                </div>
+
+                {/* 9-Minute Warning Banner (60s Countdown) */}
+                {idleWarningSecondsLeft !== null && !idleLockState && (
+                    <div
+                        role="alertdialog"
+                        aria-live="assertive"
+                        aria-label="Session expiring soon"
+                        className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-[90] bg-slate-900 border border-amber-500/50 text-white rounded-2xl p-4 shadow-2xl flex items-center justify-between gap-3"
+                    >
+                        <div className="min-w-0 space-y-0.5">
+                            <p className="text-xs font-extrabold text-amber-300 uppercase tracking-wider">
+                                Inactivity Warning
+                            </p>
+                            <p className="text-xs text-slate-200 leading-snug">
+                                Session expires in <span className="font-mono font-bold text-amber-300">{idleWarningSecondsLeft}s</span>.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleStayActive}
+                            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shrink-0 transition-colors"
+                        >
+                            Stay Active
+                        </button>
+                    </div>
+                )}
+
+                {/* 10-Minute Same-Screen Session Expired Overlay */}
+                {idleLockState && (
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="session-idle-expired-title"
+                        className="fixed inset-0 z-[100] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
+                    >
+                        <div className="w-full max-w-sm bg-slate-900 border border-slate-700/90 rounded-2xl p-6 shadow-2xl text-center space-y-4">
+                            <div className="mx-auto w-12 h-12 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div className="space-y-1.5">
+                                <h2 id="session-idle-expired-title" className="text-lg font-extrabold text-white">
+                                    Session Expired
+                                </h2>
+                                <p className="text-xs text-slate-300 leading-relaxed">
+                                    You were inactive for 10 minutes. Please sign in again to continue.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleSignInAgain}
+                                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-colors"
+                            >
+                                Sign In Again
+                            </button>
+                        </div>
+                    </div>
+                )}
             </DataContext.Provider>
         </div>
     );
